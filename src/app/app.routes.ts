@@ -78,6 +78,14 @@ export const routes: Routes = [
       {
         path: 'compliance/dot',
         loadComponent: () => import('./features/compliance/document-management/document-management.component').then(m => m.DocumentManagementComponent)
+      },
+      {
+        path: 'profile',
+        loadComponent: () => import('./features/admin-security/profile/profile.component').then(m => m.ProfileComponent)
+      },
+      {
+        path: 'hr/my-profile',
+        loadComponent: () => import('./features/hr/my-hr-profile/my-hr-profile.component').then(m => m.MyHrProfileComponent)
       }
     ]
   },

@@ -43,6 +43,23 @@ export class VanTacApiService {
     return this.http.post(`${this.baseUrl}${environment.api.invitations}`, data);
   }
 
+  // Profile
+  getMe(): Observable<any> {
+    return this.http.get(`${this.baseUrl}${environment.api.auth}/me`);
+  }
+  updateProfile(data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}${environment.api.auth}/profile`, data);
+  }
+  uploadAvatar(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}${environment.api.auth}/avatar`, data);
+  }
+  deleteAvatar(): Observable<any> {
+    return this.http.delete(`${this.baseUrl}${environment.api.auth}/avatar`);
+  }
+  changePassword(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}${environment.api.password}/change`, data);
+  }
+
   // Organization CRUD
   createOrganization(data: any): Observable<any> {
     return this.http.post(`${this.baseUrl}${environment.api.organizations}`, data);

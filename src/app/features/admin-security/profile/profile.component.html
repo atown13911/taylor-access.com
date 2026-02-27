@@ -1,0 +1,300 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-content">
+      <h1><i class="bx bx-user-circle"></i> My Profile</h1>
+      <p class="subtitle">Manage your account settings and preferences</p>
+    </div>
+  </header>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <i class="bx bx-loader-alt bx-spin"></i>
+      <p>Loading profile...</p>
+    </div>
+  } @else {
+    <div class="profile-layout">
+      <!-- Sidebar -->
+      <aside class="profile-sidebar">
+        <div class="avatar-section">
+          <div class="avatar-wrapper">
+            @if (avatarPreview()) {
+              <img [src]="avatarPreview()" alt="Profile" class="avatar-image" (error)="onAvatarError()">
+            } @else {
+              <div class="avatar-placeholder">
+                <span>{{ getInitials() }}</span>
+              </div>
+            }
+            <label class="avatar-upload-btn" for="avatarInput">
+              <i class="bx bx-camera"></i>
+            </label>
+            <input 
+              type="file" 
+              id="avatarInput" 
+              accept="image/*" 
+              (change)="onAvatarSelected($event)" 
+              hidden>
+          </div>
+          
+          @if (selectedAvatarFile) {
+            <div class="avatar-actions">
+              <button class="btn btn-primary btn-sm" (click)="uploadAvatar()" [disabled]="uploadingAvatar()">
+                @if (uploadingAvatar()) {
+                  <i class="bx bx-loader-alt bx-spin"></i>
+                } @else {
+                  <i class="bx bx-upload"></i>
+                }
+                Save Photo
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="selectedAvatarFile = null; avatarPreview.set(profile()?.avatarUrl || null)">
+                Cancel
+              </button>
+            </div>
+          } @else if (avatarPreview()) {
+            <button class="btn btn-secondary btn-sm remove-photo-btn" (click)="removeAvatar()">
+              <i class="bx bx-trash"></i> Remove Photo
+            </button>
+          }
+
+          <h3 class="user-name">{{ profile()?.name }}</h3>
+          <span class="role-badge" [ngClass]="getRoleBadgeClass()">{{ profile()?.role }}</span>
+          <p class="user-email">{{ profile()?.email }}</p>
+        </div>
+
+        <nav class="profile-nav">
+          <button 
+            class="nav-item" 
+            [class.active]="activeTab() === 'profile'"
+            (click)="setActiveTab('profile')">
+            <i class="bx bx-user"></i>
+            Profile Information
+          </button>
+          <button 
+            class="nav-item" 
+            [class.active]="activeTab() === 'security'"
+            (click)="setActiveTab('security')">
+            <i class="bx bx-lock-alt"></i>
+            Security
+          </button>
+          <button 
+            class="nav-item" 
+            [class.active]="activeTab() === 'preferences'"
+            (click)="setActiveTab('preferences')">
+            <i class="bx bx-cog"></i>
+            Preferences
+          </button>
+        </nav>
+
+        <div class="account-info">
+          <div class="info-item">
+            <span class="info-label">Member Since</span>
+            <span class="info-value">{{ formatDate(profile()?.createdAt) }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Last Login</span>
+            <span class="info-value">{{ formatDate(profile()?.lastLoginAt) }}</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="profile-content">
+        @switch (activeTab()) {
+          @case ('profile') {
+            <div class="content-section">
+              <h2>Profile Information</h2>
+              <p class="section-description">Update your personal information and contact details.</p>
+
+              <form class="profile-form" (ngSubmit)="saveProfile()">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Full Name <span class="required">*</span></label>
+                    <input 
+                      type="text" 
+                      [(ngModel)]="profileForm.name" 
+                      name="name"
+                      placeholder="Enter your full name">
+                  </div>
+                  <div class="form-group">
+                    <label>Email Address <span class="required">*</span></label>
+                    <input 
+                      type="email" 
+                      [(ngModel)]="profileForm.email" 
+                      name="email"
+                      placeholder="Enter your email">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Phone Number</label>
+                    <input 
+                      type="tel" 
+                      [(ngModel)]="profileForm.phone" 
+                      name="phone"
+                      placeholder="(555) 123-4567">
+                  </div>
+                  <div class="form-group">
+                    <label>Position</label>
+                    <input 
+                      type="text" 
+                      [(ngModel)]="profileForm.jobTitle" 
+                      name="jobTitle"
+                      placeholder="e.g., Dispatcher, Fleet Manager">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Department</label>
+                    <input 
+                      type="text" 
+                      [(ngModel)]="profileForm.department" 
+                      name="department"
+                      placeholder="e.g., Operations, Finance">
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" [disabled]="saving()">
+                    @if (saving()) {
+                      <i class="bx bx-loader-alt bx-spin"></i> Saving...
+                    } @else {
+                      <i class="bx bx-save"></i> Save Changes
+                    }
+                  </button>
+                </div>
+              </form>
+            </div>
+          }
+
+          @case ('security') {
+            <div class="content-section">
+              <h2>Security Settings</h2>
+              <p class="section-description">Manage your password and account security.</p>
+
+              <div class="security-card">
+                <div class="security-header">
+                  <div class="security-icon">
+                    <i class="bx bx-lock"></i>
+                  </div>
+                  <div class="security-info">
+                    <h3>Change Password</h3>
+                    <p>Update your password to keep your account secure.</p>
+                  </div>
+                </div>
+
+                <form class="password-form" (ngSubmit)="changePassword()">
+                  <div class="form-group">
+                    <label>Current Password <span class="required">*</span></label>
+                    <div class="password-input-wrapper">
+                      <input 
+                        [type]="showCurrentPassword() ? 'text' : 'password'" 
+                        [(ngModel)]="passwordForm.currentPassword" 
+                        name="currentPassword"
+                        placeholder="Enter current password">
+                      <button type="button" class="toggle-password" (click)="togglePasswordVisibility('current')">
+                        <i class="bx" [class.bx-show]="!showCurrentPassword()" [class.bx-hide]="showCurrentPassword()"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>New Password <span class="required">*</span></label>
+                    <div class="password-input-wrapper">
+                      <input 
+                        [type]="showNewPassword() ? 'text' : 'password'" 
+                        [(ngModel)]="passwordForm.newPassword" 
+                        name="newPassword"
+                        placeholder="Enter new password">
+                      <button type="button" class="toggle-password" (click)="togglePasswordVisibility('new')">
+                        <i class="bx" [class.bx-show]="!showNewPassword()" [class.bx-hide]="showNewPassword()"></i>
+                      </button>
+                    </div>
+                    <small class="help-text">Password must be at least 8 characters long</small>
+                  </div>
+
+                  <div class="form-group">
+                    <label>Confirm New Password <span class="required">*</span></label>
+                    <div class="password-input-wrapper">
+                      <input 
+                        [type]="showConfirmPassword() ? 'text' : 'password'" 
+                        [(ngModel)]="passwordForm.confirmPassword" 
+                        name="confirmPassword"
+                        placeholder="Confirm new password">
+                      <button type="button" class="toggle-password" (click)="togglePasswordVisibility('confirm')">
+                        <i class="bx" [class.bx-show]="!showConfirmPassword()" [class.bx-hide]="showConfirmPassword()"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" [disabled]="changingPassword()">
+                      @if (changingPassword()) {
+                        <i class="bx bx-loader-alt bx-spin"></i> Updating...
+                      } @else {
+                        <i class="bx bx-lock"></i> Update Password
+                      }
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="security-card">
+                <div class="security-header">
+                  <div class="security-icon">
+                    <i class="bx bx-shield-quarter"></i>
+                  </div>
+                  <div class="security-info">
+                    <h3>Two-Factor Authentication</h3>
+                    <p>Add an extra layer of security to your account.</p>
+                  </div>
+                </div>
+                <a routerLink="/settings/2fa" class="btn btn-secondary">
+                  <i class="bx bx-cog"></i> Configure 2FA
+                </a>
+              </div>
+            </div>
+          }
+
+          @case ('preferences') {
+            <div class="content-section">
+              <h2>Preferences</h2>
+              <p class="section-description">Customize your experience.</p>
+
+              <form class="preferences-form" (ngSubmit)="saveProfile()">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Timezone</label>
+                    <select [(ngModel)]="profileForm.timezone" name="timezone">
+                      @for (tz of timezones; track tz.value) {
+                        <option [value]="tz.value">{{ tz.label }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Language</label>
+                    <select [(ngModel)]="profileForm.language" name="language">
+                      @for (lang of languages; track lang.value) {
+                        <option [value]="lang.value">{{ lang.label }}</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" [disabled]="saving()">
+                    @if (saving()) {
+                      <i class="bx bx-loader-alt bx-spin"></i> Saving...
+                    } @else {
+                      <i class="bx bx-save"></i> Save Preferences
+                    }
+                  </button>
+                </div>
+              </form>
+            </div>
+          }
+        }
+      </main>
+    </div>
+  }
+</div>

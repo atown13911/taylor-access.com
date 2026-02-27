@@ -34,7 +34,7 @@
 
     <div class="sidebar-footer">
       @if (currentUser()) {
-        <div class="user-info">
+        <a routerLink="/profile" class="user-info" title="View Profile">
           <i class="bx bx-user-circle"></i>
           @if (!sidebarCollapsed()) {
             <div class="user-details">
@@ -42,7 +42,7 @@
               <span class="user-role">{{ currentUser()?.role }}</span>
             </div>
           }
-        </div>
+        </a>
       }
       <button class="logout-btn" (click)="logout()" title="Logout">
         <i class="bx bx-log-out"></i>
