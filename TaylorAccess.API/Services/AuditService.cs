@@ -13,23 +13,17 @@ public interface IAuditService
 
 public class AuditService : IAuditService
 {
-    private readonly TaylorAccessDbContext _context;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuditService> _logger;
-    private readonly IServiceProvider _serviceProvider;
     private readonly IMongoDbService _mongoDbService;
 
     public AuditService(
-        TaylorAccessDbContext context, 
         IHttpContextAccessor httpContextAccessor, 
         ILogger<AuditService> logger,
-        IServiceProvider serviceProvider,
         IMongoDbService mongoDbService)
     {
-        _context = context;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
-        _serviceProvider = serviceProvider;
         _mongoDbService = mongoDbService;
     }
 
@@ -74,7 +68,7 @@ public class AuditService : IAuditService
 
     public async Task LogAsync(AuditLog log)
     {
-        // Write to MongoDB (primary audit store)
+        // MongoDB only -- no PostgreSQL
         try
         {
             await _mongoDbService.LogAuditAsync(new MongoAuditLog
@@ -105,39 +99,43 @@ public class AuditService : IAuditService
         {
             _logger.LogError(ex, "Failed to write audit log to MongoDB");
         }
-
-        // Also write to PostgreSQL (backup)
-        try
-        {
-            _context.AuditLogs.Add(log);
-            await _context.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to write audit log to PostgreSQL");
-        }
     }
 
     public async Task<List<AuditLog>> GetLogsAsync(string? entityType = null, int? entityId = null, int? userId = null, DateTime? from = null, DateTime? to = null, int limit = 100)
     {
-        var query = _context.AuditLogs.AsQueryable();
-
-        if (!string.IsNullOrEmpty(entityType))
-            query = query.Where(l => l.EntityType == entityType);
-        if (entityId.HasValue)
-            query = query.Where(l => l.EntityId == entityId);
-        if (userId.HasValue)
-            query = query.Where(l => l.UserId == userId);
-        if (from.HasValue)
-            query = query.Where(l => l.Timestamp >= from.Value);
-        if (to.HasValue)
-            query = query.Where(l => l.Timestamp <= to.Value);
-
-        return await Task.FromResult(
-            query.OrderByDescending(l => l.Timestamp)
-                 .Take(limit)
-                 .ToList()
-        );
+        // Read from MongoDB, convert to AuditLog format
+        try
+        {
+            var mongoLogs = await _mongoDbService.GetAuditLogsAsync(entityType, entityId, userId, null, from, to, limit);
+            return mongoLogs.Select(m => new AuditLog
+            {
+                OrganizationId = m.OrganizationId,
+                UserId = m.UserId,
+                UserName = m.UserName,
+                UserEmail = m.UserEmail,
+                IpAddress = m.IpAddress,
+                UserAgent = m.UserAgent,
+                Action = m.Action,
+                EntityType = m.EntityType,
+                EntityId = m.EntityId,
+                EntityName = m.EntityName,
+                OldValues = m.OldValues,
+                NewValues = m.NewValues,
+                Changes = m.Changes,
+                Description = m.Description,
+                Module = m.Module,
+                Endpoint = m.Endpoint,
+                HttpMethod = m.HttpMethod,
+                HttpStatusCode = m.HttpStatusCode,
+                Timestamp = m.Timestamp,
+                Severity = m.Severity
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to read audit logs from MongoDB");
+            return new List<AuditLog>();
+        }
     }
 
     private string CalculateChanges(object oldValues, object newValues)
