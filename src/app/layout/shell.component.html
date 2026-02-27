@@ -1,0 +1,52 @@
+<div class="app-shell" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <i class="bx bx-shield-quarter"></i>
+        @if (!sidebarCollapsed()) {
+          <span class="logo-text">Taylor Access</span>
+        }
+      </div>
+      <button class="toggle-btn" (click)="toggleSidebar()">
+        <i class="bx" [class.bx-chevron-left]="!sidebarCollapsed()" [class.bx-chevron-right]="sidebarCollapsed()"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      @for (item of navItems; track item.route) {
+        <a [routerLink]="item.route" routerLinkActive="active" class="nav-item">
+          <i [class]="item.icon"></i>
+          @if (!sidebarCollapsed()) {
+            <span>{{ item.label }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <div class="sidebar-footer">
+      @if (currentUser()) {
+        <div class="user-info">
+          <i class="bx bx-user-circle"></i>
+          @if (!sidebarCollapsed()) {
+            <div class="user-details">
+              <span class="user-name">{{ currentUser()?.name }}</span>
+              <span class="user-role">{{ currentUser()?.role }}</span>
+            </div>
+          }
+        </div>
+      }
+      <button class="logout-btn" (click)="logout()" title="Logout">
+        <i class="bx bx-log-out"></i>
+        @if (!sidebarCollapsed()) {
+          <span>Logout</span>
+        }
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

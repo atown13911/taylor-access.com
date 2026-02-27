@@ -1,0 +1,6 @@
+@TaylorAccess.API_HostAddress = http://localhost:5216
+
+GET {{TaylorAccess.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

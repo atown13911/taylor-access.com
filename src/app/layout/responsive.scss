@@ -1,0 +1,122 @@
+/* ========================================
+   RESPONSIVE DESIGN SYSTEM
+   Breakpoints for mobile, tablet, desktop
+   ======================================== */
+
+// Mobile First - Responsive Shell Layout
+@media (max-width: 768px) {
+  // Hide sidebar by default on mobile
+  .sidebar:not(.mobile-open) {
+    transform: translateX(-100%);
+    position: fixed;
+    z-index: 9999;
+  }
+  
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  
+  // Full width content on mobile
+  .main-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  
+  // Stack topbar elements vertically
+  .topbar {
+    flex-wrap: wrap;
+    padding: 12px !important;
+  }
+  
+  .topbar-left {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  
+  // Hide ticker on mobile (takes too much space)
+  .tracking-ticker {
+    display: none !important;
+  }
+  
+  // Compact org switcher
+  .org-switcher {
+    max-width: 200px;
+  }
+  
+  // Stack action buttons
+  .header-actions {
+    flex-direction: column;
+    gap: 8px !important;
+  }
+  
+  // Full width modals on mobile
+  .modal-content {
+    width: 95% !important;
+    max-width: none !important;
+    max-height: 95vh !important;
+  }
+  
+  // Single column grids
+  .stats-grid,
+  .settings-grid,
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+// Tablet (768px - 1024px)
+@media (min-width: 769px) and (max-width: 1024px) {
+  // Narrower sidebar
+  .sidebar:not(.collapsed) {
+    width: 200px;
+  }
+  
+  .main-content {
+    margin-left: 200px;
+  }
+  
+  // 2-column grids
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  
+  // Smaller modals
+  .modal-content {
+    max-width: 700px !important;
+  }
+}
+
+// Desktop (1025px - 1920px) - Default styles apply
+
+// Ultrawide (>1920px)
+@media (min-width: 1921px) {
+  // Constrain max widths for readability
+  .page-container {
+    max-width: 1800px;
+    margin: 0 auto;
+  }
+  
+  .modal-content {
+    max-width: 1200px;
+  }
+  
+  // 4-column stats on ultrawide
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+// Print styles
+@media print {
+  .sidebar,
+  .topbar,
+  .header-actions,
+  button {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+}
