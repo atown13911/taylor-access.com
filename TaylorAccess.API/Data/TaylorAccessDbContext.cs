@@ -37,6 +37,13 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<DocumentCategory> DocumentCategories => Set<DocumentCategory>();
     public DbSet<DocumentCategoryItem> DocumentCategoryItems => Set<DocumentCategoryItem>();
 
+    // Drivers
+    public DbSet<Driver> Drivers => Set<Driver>();
+    public DbSet<DriverDocument> DriverDocuments => Set<DriverDocument>();
+    public DbSet<DriverPaySheet> DriverPaySheets => Set<DriverPaySheet>();
+    public DbSet<DriverTerminal> DriverTerminals => Set<DriverTerminal>();
+    public DbSet<DriverPayment> DriverPayments => Set<DriverPayment>();
+
     // Addresses & Places
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<Place> Places => Set<Place>();
