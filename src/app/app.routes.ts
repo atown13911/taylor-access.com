@@ -86,6 +86,18 @@ export const routes: Routes = [
       {
         path: 'hr/my-profile',
         loadComponent: () => import('./features/hr/my-hr-profile/my-hr-profile.component').then(m => m.MyHrProfileComponent)
+      },
+      {
+        path: 'admin/roles',
+        loadComponent: () => import('./features/admin-security/admin/role-management/role-management.component').then(m => m.RoleManagementComponent)
+      },
+      {
+        path: 'admin/audit',
+        loadComponent: () => import('./features/admin-security/admin/audit-log/audit-log.component').then(m => m.AuditLogComponent)
+      },
+      {
+        path: 'admin/invite',
+        loadComponent: () => import('./features/admin-security/admin/invite-users/invite-users.component').then(m => m.InviteUsersComponent)
       }
     ]
   },

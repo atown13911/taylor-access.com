@@ -1,0 +1,543 @@
+<div class="role-management">
+  <header class="page-header">
+    <div class="header-content">
+      <h1><i class="bx bx-lock-alt"></i> Role Management</h1>
+      <p>Manage user roles and permissions across your organization</p>
+    </div>
+    @if (isProductOwnerUser()) {
+      <div class="header-actions">
+        <button class="btn-danger-outline" (click)="forceLogoutAll()" type="button" [disabled]="saving()">
+          <i class="bx bx-log-out"></i> Force Logout All
+        </button>
+        <button class="btn-primary" (click)="openCreateModal()" type="button">
+          <i class="bx bx-plus"></i> Create Role
+        </button>
+      </div>
+    }
+  </header>
+
+  <!-- Organization Filter (Product Owner Only) -->
+  @if (currentUserIsProductOwner()) {
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Organization</label>
+        <select [(ngModel)]="selectedOrgId" (ngModelChange)="onOrgFilterChange()">
+          <option [ngValue]="null">All Organizations (System + Custom)</option>
+          @for (org of organizations(); track org.id) {
+            <option [ngValue]="org.id">{{ org.name }}</option>
+          }
+        </select>
+      </div>
+      <div class="filter-toggle">
+        <label>
+          <input type="checkbox" [(ngModel)]="showSystemRoles" (ngModelChange)="toggleSystemRoles()">
+          <span>Show System Roles</span>
+        </label>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p>Loading roles...</p>
+    </div>
+  } @else {
+    <!-- Roles Table -->
+    <div class="roles-section">
+      <div class="section-header">
+        <h2><i class="bx bx-user-check"></i> Roles Overview</h2>
+      </div>
+      <div class="roles-table-container">
+        <table class="roles-table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Description</th>
+              <th class="center">Permissions</th>
+              <th class="center">Users</th>
+              <th class="center">Type</th>
+              <th class="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (role of filteredRoles(); track role.id) {
+              <tr [class.selected]="selectedRoleForEdit()?.id === role.id" 
+                  [class.product-owner-row]="isProductOwner(role)"
+                  [class.superadmin-row]="isSuperAdmin(role)"
+                  (click)="selectRoleForEdit(role)">
+                <td class="role-name-cell">
+                  <span class="role-name">
+                    @if (isProductOwner(role)) {
+                      <i class="bx bx-crown"></i>
+                    } @else if (isSuperAdmin(role)) {
+                      <i class="bx bxs-crown"></i>
+                    }
+                    {{ role.name | titlecase }}
+                  </span>
+                </td>
+                <td class="description-cell">{{ role.description || 'No description' }}</td>
+                <td class="center">
+                  @if (isProductOwner(role) || isSuperAdmin(role)) {
+                    <span class="count-badge gold" title="All permissions">ALL</span>
+                  } @else {
+                    <span class="count-badge cyan">{{ getPermissionCount(role) }}</span>
+                  }
+                </td>
+                <td class="center">
+                  @if (canAssignUsersToRole(role)) {
+                    <button class="count-badge purple clickable" (click)="openUserModal(role); $event.stopPropagation()" title="Manage Users">
+                      {{ role.userCount || 0 }} <i class="bx bx-user-plus"></i>
+                    </button>
+                  } @else {
+                    <span class="count-badge purple">{{ role.userCount || 0 }}</span>
+                  }
+                </td>
+                <td class="center">
+                  @if (isProductOwner(role)) {
+                    <span class="badge owner"><i class="bx bx-lock-alt"></i> OWNER</span>
+                  } @else if (isSuperAdmin(role)) {
+                    <span class="badge superadmin"><i class="bx bx-shield-alt-2"></i> SYSTEM</span>
+                  } @else if (role.isSystem) {
+                    <span class="badge system">SYSTEM</span>
+                  } @else {
+                    <span class="badge custom">CUSTOM</span>
+                  }
+                </td>
+                <td class="actions-col">
+                  @if (!canAssignUsersToRole(role)) {
+                    <span class="locked-text"><i class="bx bx-lock"></i></span>
+                  } @else {
+                    <button class="btn-icon" (click)="cloneRole(role); $event.stopPropagation()" title="Clone">
+                      <i class="bx bx-copy"></i>
+                    </button>
+                    @if (!role.isSystem && isProductOwnerUser()) {
+                      <button class="btn-icon danger" (click)="confirmDelete(role); $event.stopPropagation()" title="Delete">
+                        <i class="bx bx-trash"></i>
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Error Banner -->
+    @if (saveError()) {
+      <div class="save-error-banner">
+        <i class="bx bx-error-circle"></i>
+        <span>{{ saveError() }}</span>
+      </div>
+    }
+
+    <!-- Permission Editor Panel -->
+    <div class="permissions-editor" 
+         [class.product-owner-panel]="isProductOwner(selectedRoleForEdit())"
+         [class.superadmin-panel]="isSuperAdmin(selectedRoleForEdit())">
+      <div class="section-header">
+        <h2>
+          @if (isProductOwner(selectedRoleForEdit())) {
+            <i class="bx bx-crown"></i>
+          } @else if (isSuperAdmin(selectedRoleForEdit())) {
+            <i class="bx bxs-crown"></i>
+          } @else {
+            <i class="bx bx-shield-quarter"></i>
+          }
+          @if (selectedRoleForEdit()) {
+            Permissions for {{ selectedRoleForEdit()!.name | titlecase }}
+            @if (isProductOwner(selectedRoleForEdit())) {
+              <span class="badge owner"><i class="bx bx-lock-alt"></i> Protected</span>
+            } @else if (isSuperAdmin(selectedRoleForEdit()) && !canEditSelectedRole()) {
+              <span class="badge superadmin"><i class="bx bx-lock-alt"></i> Protected</span>
+            } @else if (selectedRoleForEdit()!.isSystem && !canEditSelectedRole()) {
+              <span class="badge system">Read-only</span>
+            }
+          } @else {
+            Select a role to edit permissions
+          }
+        </h2>
+        @if (canEditSelectedRole()) {
+          <div class="quick-actions">
+            <button class="btn-sm" type="button" (click)="selectAllPermissions()">Select All</button>
+            <button class="btn-sm" type="button" (click)="clearAllPermissions()">Clear All</button>
+          </div>
+        }
+      </div>
+
+      @if (selectedRoleForEdit()) {
+        @if (isProductOwner(selectedRoleForEdit())) {
+          <!-- Product Owner Special Message -->
+          <div class="product-owner-message">
+            <div class="owner-icon"><i class="bx bx-crown"></i></div>
+            <h3>Product Owner</h3>
+            <p>This role has unrestricted access to all system features. All current and future permissions are automatically granted.</p>
+            <div class="owner-features">
+              <span><i class="bx bx-check-circle"></i> All permissions enabled</span>
+              <span><i class="bx bx-check-circle"></i> Auto-updates with new features</span>
+              <span><i class="bx bx-lock-alt"></i> Cannot be modified or deleted</span>
+            </div>
+          </div>
+        } @else if (isSuperAdmin(selectedRoleForEdit()) && !canEditSelectedRole()) {
+          <!-- Superadmin Special Message (shown when user can't edit superadmin) -->
+          <div class="superadmin-message">
+            <div class="superadmin-icon"><i class="bx bxs-crown"></i></div>
+            <h3>Super Administrator</h3>
+            <p>Full unrestricted access to all system features. Cannot modify or delete Product Owner accounts.</p>
+            <div class="superadmin-features">
+              <span><i class="bx bx-check-circle"></i> All permissions enabled</span>
+              <span><i class="bx bx-check-circle"></i> Auto-updates with new features</span>
+              <span><i class="bx bx-lock-alt"></i> Cannot be modified or deleted</span>
+              <span class="restriction"><i class="bx bx-block"></i> Cannot affect Product Owner</span>
+            </div>
+          </div>
+        } @else {
+          <!-- Role Details Section -->
+          <div class="role-details-section">
+            <div class="role-detail-row">
+              <div class="detail-field">
+                <label>Role Name</label>
+                @if (!canEditSelectedRole()) {
+                  <div class="readonly-value">
+                    {{ selectedRoleForEdit()!.name | titlecase }}
+                    @if (selectedRoleForEdit()!.isSystem) {
+                      <span class="badge system small">System</span>
+                    }
+                  </div>
+                } @else {
+                  <input 
+                    type="text" 
+                    [value]="selectedRoleForEdit()!.name"
+                    (blur)="updateRoleName($event)"
+                    (keyup.enter)="updateRoleName($event)"
+                    placeholder="Role name"
+                  >
+                }
+              </div>
+              <div class="detail-field description-field">
+                <label>Description</label>
+                @if (!canEditSelectedRole()) {
+                  <div class="readonly-value">{{ selectedRoleForEdit()!.description || 'No description' }}</div>
+                } @else {
+              <input 
+                type="text" 
+                [value]="selectedRoleForEdit()!.description || ''"
+                (blur)="updateRoleDescription($event)"
+                (keyup.enter)="updateRoleDescription($event)"
+                placeholder="Describe what this role can do..."
+              >
+                }
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Switcher -->
+        <div class="permission-tabs">
+          <button 
+            class="tab-btn" 
+            [class.active]="activePermissionTab() === 'permissions'"
+            (click)="activePermissionTab.set('permissions')"
+          >
+            <i class="bx bx-shield-quarter"></i>
+            <span>Permissions</span>
+            <span class="tab-badge">{{ permissionCategories().length }}</span>
+          </button>
+          <button 
+            class="tab-btn" 
+            [class.active]="activePermissionTab() === 'navigation'"
+            (click)="activePermissionTab.set('navigation')"
+          >
+            <i class="bx bx-navigation"></i>
+            <span>Navigation</span>
+            <span class="tab-badge">{{ getTotalNavSelectedCount(selectedRoleForEdit()!) }}/{{ getTotalNavItemCount() }}</span>
+          </button>
+        </div>
+
+        <!-- ===== Permissions Tab ===== -->
+        @if (activePermissionTab() === 'permissions') {
+          <div class="permissions-grid-container">
+            @for (category of permissionCategories(); track category) {
+              <div class="permission-category-card">
+                <div class="category-header">
+                  <h3>{{ category | titlecase }}</h3>
+                  <span class="category-count">
+                    {{ getCategorySelectedCountForRole(category, selectedRoleForEdit()!) }}/{{ getPermissionsByCategory(category).length }}
+                  </span>
+                  @if (canEditSelectedRole()) {
+                    <button class="toggle-all-btn" (click)="toggleCategoryForRole(category)">
+                      {{ isCategoryFullySelectedForRole(category, selectedRoleForEdit()!) ? 'None' : 'All' }}
+                    </button>
+                  }
+                </div>
+                <div class="permission-list">
+                  @for (perm of getPermissionsByCategory(category); track perm.value) {
+                    <label class="permission-item" [class.disabled]="!canEditSelectedRole()">
+                      <input 
+                        type="checkbox"
+                        [checked]="roleHasPermission(selectedRoleForEdit()!, perm.value)"
+                        (change)="toggleRolePermission(selectedRoleForEdit()!, perm.value)"
+                        [disabled]="!canEditSelectedRole()"
+                      >
+                      <span class="checkbox-custom"></span>
+                      <span class="permission-info">
+                        <span class="perm-action">{{ getPermissionShortName(perm.value) }}</span>
+                        @if (perm.description) {
+                          <span class="perm-desc">{{ perm.description }}</span>
+                        }
+                      </span>
+                    </label>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- ===== Navigation Tab ===== -->
+        @if (activePermissionTab() === 'navigation') {
+          <div class="nav-visibility-section">
+            <div class="nav-visibility-header">
+              <div class="nav-header-left">
+                <span class="nav-total-count">
+                  {{ getTotalNavSelectedCount(selectedRoleForEdit()!) }}/{{ getTotalNavItemCount() }} items visible
+                </span>
+              </div>
+              <div class="nav-header-right">
+                <div class="nav-search-box">
+                  <i class="bx bx-search"></i>
+                  <input 
+                    type="text" 
+                    placeholder="Filter nav items..."
+                    [ngModel]="navSearchTerm()"
+                    (ngModelChange)="navSearchTerm.set($event)"
+                  >
+                  @if (navSearchTerm()) {
+                    <button class="nav-search-clear" (click)="navSearchTerm.set('')">
+                      <i class="bx bx-x"></i>
+                    </button>
+                  }
+                </div>
+                @if (canEditSelectedRole()) {
+                  <button class="btn-sm nav-btn" type="button" (click)="selectAllNavPermissions()">Show All</button>
+                  <button class="btn-sm nav-btn" type="button" (click)="clearAllNavPermissions()">Hide All</button>
+                }
+              </div>
+            </div>
+            <p class="nav-hint">Control which sidebar menu items are visible for this role. Items with no navigation permissions set will show all items by default.</p>
+            <div class="nav-sections-grid">
+              @for (section of filteredNavSections(); track section.name) {
+                <div class="nav-section-card" [class.collapsed]="isNavSectionCollapsed(section.name)">
+                  <div class="nav-section-header" (click)="toggleNavSectionCollapse(section.name)">
+                    <i class="bx bx-chevron-right nav-collapse-icon" [class.expanded]="!isNavSectionCollapsed(section.name)"></i>
+                    <h4>{{ section.name }}</h4>
+                    <span class="nav-section-count">
+                      {{ getNavSectionSelectedCount(section, selectedRoleForEdit()!) }}/{{ section.items.length }}
+                    </span>
+                    @if (canEditSelectedRole()) {
+                      <button class="toggle-all-btn" type="button" (click)="$event.stopPropagation(); toggleNavSection(section)">
+                        {{ isNavSectionFullySelected(section, selectedRoleForEdit()!) ? 'None' : 'All' }}
+                      </button>
+                    }
+                  </div>
+                  @if (!isNavSectionCollapsed(section.name)) {
+                    <div class="nav-items-list">
+                      @for (item of section.items; track item.route) {
+                        <label class="nav-item-row" [class.disabled]="!canEditSelectedRole()">
+                          <input 
+                            type="checkbox"
+                            [checked]="roleHasNavPermission(selectedRoleForEdit()!, item)"
+                            (change)="toggleNavPermission(selectedRoleForEdit()!, item)"
+                            [disabled]="!canEditSelectedRole()"
+                          >
+                          <span class="checkbox-custom"></span>
+                          <i class="bx {{ item.icon }} nav-item-icon"></i>
+                          <span class="nav-item-label">{{ item.label }}</span>
+                          <span class="nav-item-route">{{ item.route }}</span>
+                        </label>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+        } <!-- End of @else (non-product-owner) -->
+      } @else {
+        <div class="no-selection">
+          <i class="bx bx-pointer"></i>
+          <p>Click on a role in the table above to view and edit its permissions</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Create Role Modal -->
+  @if (showCreateModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Create New Role</h2>
+          <button class="btn-close" (click)="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Role Name</label>
+            <input 
+              type="text" 
+              [(ngModel)]="formData.name"
+              placeholder="e.g., dispatcher, fleet_manager"
+            >
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea 
+              [(ngModel)]="formData.description"
+              placeholder="Describe what this role can do..."
+              rows="2"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+          <button 
+            class="btn-primary" 
+            (click)="createNewRole()"
+            [disabled]="saving() || !formData.name"
+          >
+            @if (saving()) {
+              <i class="bx bx-loader-alt bx-spin"></i> Creating...
+            } @else {
+              <i class="bx bx-plus"></i> Create Role
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- User Assignment Modal -->
+  @if (showUserModal()) {
+    <div class="modal-overlay" (click)="closeUserModal()">
+      <div class="modal modal-large" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class="bx bx-user-plus"></i> Manage Users - {{ userModalRole()?.name | titlecase }}</h2>
+          <button class="btn-close" (click)="closeUserModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="user-assignment-layout">
+            <!-- Assigned Users -->
+            <div class="user-panel">
+              <h3><i class="bx bx-check-circle"></i> Assigned Users ({{ roleUsers().length }})</h3>
+              <div class="user-list">
+                @for (user of roleUsers(); track user.id) {
+                  <div class="user-item">
+                    <div class="user-avatar">{{ user.name.charAt(0) }}</div>
+                    <div class="user-info">
+                      <span class="user-name">{{ user.name }}</span>
+                      <span class="user-email">{{ user.email }}</span>
+                    </div>
+                    <button class="btn-remove" (click)="removeUserFromRole(user)" [disabled]="saving()" title="Remove from role">
+                      <i class="bx bx-x"></i>
+                    </button>
+                  </div>
+                } @empty {
+                  <p class="empty-message">No users assigned to this role</p>
+                }
+              </div>
+            </div>
+
+            <!-- Available Users -->
+            <div class="user-panel">
+              <h3><i class="bx bx-user"></i> Available Users</h3>
+              <div class="search-box">
+                <i class="bx bx-search"></i>
+                <input 
+                  type="text" 
+                  placeholder="Search users..." 
+                  [ngModel]="userSearchQuery()"
+                  (ngModelChange)="userSearchQuery.set($event)"
+                >
+              </div>
+              <div class="user-list">
+                @for (user of filteredAvailableUsers(); track user.id) {
+                  <div class="user-item">
+                    <div class="user-avatar">{{ user.name.charAt(0) }}</div>
+                    <div class="user-info">
+                      <span class="user-name">{{ user.name }}</span>
+                      <span class="user-email">{{ user.email }}</span>
+                      <span class="user-current-role">Current: {{ user.role | titlecase }}</span>
+                    </div>
+                    <button class="btn-add" (click)="assignUserToRole(user)" [disabled]="saving()" title="Add to role">
+                      <i class="bx bx-plus"></i>
+                    </button>
+                  </div>
+                } @empty {
+                  <p class="empty-message">No available users found</p>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeUserModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Delete Confirmation Modal -->
+  @if (deleteConfirmRole()) {
+    <div class="modal-overlay" (click)="deleteConfirmRole.set(null)">
+      <div class="modal modal-small" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Delete Role</h2>
+          <button class="btn-close" (click)="deleteConfirmRole.set(null)">×</button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to delete the role <strong>{{ deleteConfirmRole()?.name | titlecase }}</strong>?</p>
+          <p class="warning-text">⚠️ This action cannot be undone. Users with this role will lose these permissions.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="deleteConfirmRole.set(null)">Cancel</button>
+          <button class="btn-danger" (click)="deleteRole()" [disabled]="saving()">
+            @if (saving()) {
+              <i class="bx bx-loader-alt bx-spin"></i> Deleting...
+            } @else {
+              <i class="bx bx-trash"></i> Delete Role
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Force Logout Confirmation Modal -->
+  @if (showForceLogoutConfirm()) {
+    <div class="modal-overlay" (click)="showForceLogoutConfirm.set(false)">
+      <div class="modal modal-small" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class="bx bx-log-out"></i> Force Logout All Users</h2>
+          <button class="btn-close" (click)="showForceLogoutConfirm.set(false)">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>This will immediately invalidate all user sessions across the entire system.</p>
+          <p>Every user (except you) will be logged out on their next action and will need to sign back in to receive updated permissions.</p>
+          <p style="color: var(--cyan); font-size: 0.85rem;">You will remain logged in as Product Owner.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="showForceLogoutConfirm.set(false)">Cancel</button>
+          <button class="btn-danger" (click)="confirmForceLogout()" [disabled]="saving()">
+            @if (saving()) {
+              <i class="bx bx-loader-alt bx-spin"></i> Processing...
+            } @else {
+              <i class="bx bx-log-out"></i> Logout Everyone
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

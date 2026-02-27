@@ -1,0 +1,259 @@
+<div class="audit-log-container">
+  <header class="page-header">
+    <div class="header-content">
+      <h1>Audit Log</h1>
+      <p>Track all system activities and changes</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-secondary" (click)="loadLogs()" [disabled]="loading()">
+        🔄 Refresh
+      </button>
+      <button class="btn-secondary" (click)="exportLogs()">
+        📥 Export CSV
+      </button>
+    </div>
+  </header>
+
+  <!-- Summary Cards -->
+  @if (summary()) {
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="label">Total Events</span>
+        <span class="value">{{ summary()?.totalEvents | number }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="label">Create Actions</span>
+        <span class="value">{{ summary()?.byAction?.['create'] || 0 }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="label">Update Actions</span>
+        <span class="value">{{ summary()?.byAction?.['update'] || 0 }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="label">Logins</span>
+        <span class="value">{{ summary()?.byAction?.['login'] || 0 }}</span>
+      </div>
+    </div>
+  }
+
+  <!-- Search -->
+  <div class="search-bar">
+    <i class="bx bx-search"></i>
+    <input type="search" [(ngModel)]="searchTerm" placeholder="Search by user, description, entity, IP address..." autocomplete="off">
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-section">
+    <div class="filter-group">
+      <label>User</label>
+      <select [(ngModel)]="userFilter">
+        <option value="">All Users</option>
+        @for (user of uniqueUsers(); track user) {
+          <option [value]="user">{{ user }}</option>
+        }
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Entity Type</label>
+      <select [(ngModel)]="filters.entityType" (change)="loadLogs()">
+        <option value="">All Types</option>
+        <option value="Order">Orders</option>
+        <option value="Load">Loads</option>
+        <option value="Invoice">Invoices</option>
+        <option value="User">Users</option>
+        <option value="Driver">Drivers</option>
+        <option value="Vehicle">Vehicles</option>
+        <option value="IntegrationConfig">Integrations</option>
+        <option value="TimeOffRequest">Time Off</option>
+        <option value="RecruitingLead">Recruiting</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Action</label>
+      <select [(ngModel)]="filters.action" (change)="loadLogs()">
+        <option value="">All Actions</option>
+        <option value="create">Create</option>
+        <option value="update">Update</option>
+        <option value="delete">Delete</option>
+        <option value="login">Login</option>
+        <option value="logout">Logout</option>
+        <option value="status_change">Status Change</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Severity</label>
+      <select [(ngModel)]="filters.severity" (change)="loadLogs()">
+        <option value="">All</option>
+        <option value="info">Info</option>
+        <option value="warning">Warning</option>
+        <option value="error">Error</option>
+        <option value="critical">Critical</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Date Range</label>
+      <select [(ngModel)]="dateRange" (change)="updateDateRange()">
+        <option value="today">Today</option>
+        <option value="week">Last 7 Days</option>
+        <option value="month">Last 30 Days</option>
+        <option value="all">All Time</option>
+      </select>
+    </div>
+    <button class="btn-text" (click)="clearFilters()">Clear Filters</button>
+    <span class="filter-count">{{ filteredLogs().length }} of {{ logs().length }}</span>
+  </div>
+
+  <!-- Logs Table -->
+  @if (loading()) {
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p>Loading audit logs...</p>
+    </div>
+  } @else {
+    <div class="logs-table-container">
+      <table class="logs-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Entity</th>
+            <th>Description</th>
+            <th>IP Address</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (log of filteredLogs(); track log.id) {
+            <tr [class.warning]="log.severity === 'warning'" [class.error]="log.severity === 'error'">
+              <td class="timestamp">
+                <span class="date">{{ log.timestamp | date:'MMM d, yyyy' }}</span>
+                <span class="time">{{ log.timestamp | date:'h:mm:ss a' }}</span>
+              </td>
+              <td class="user">
+                <div class="user-info">
+                  <span class="user-name">{{ log.userName || log.userEmail || 'System' }}</span>
+                  @if (log.userId) {
+                    <span class="user-id">ID: {{ log.userId }}</span>
+                  }
+                </div>
+              </td>
+              <td>
+                <span class="action-badge" [class]="log.action">
+                  {{ log.action }}
+                </span>
+              </td>
+              <td class="entity">
+                <span class="entity-type">{{ log.entityType }}</span>
+                @if (log.entityName) {
+                  <span class="entity-name">{{ log.entityName }}</span>
+                }
+              </td>
+              <td class="description">{{ log.description || '-' }}</td>
+              <td class="ip">{{ log.ipAddress || '-' }}</td>
+              <td>
+                <button class="btn-icon" (click)="viewDetails(log)" title="View Details">
+                  👁
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty-state">
+                <p>No audit logs found</p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    @if (meta()) {
+      <div class="pagination">
+        <span class="page-info">
+          Showing {{ ((meta()?.page || 1) - 1) * (meta()?.limit || 25) + 1 }} - 
+          {{ Math.min((meta()?.page || 1) * (meta()?.limit || 25), meta()?.total || 0) }} 
+          of {{ meta()?.total | number }}
+        </span>
+        <div class="page-buttons">
+          <button 
+            [disabled]="filters.page === 1"
+            (click)="changePage(filters.page - 1)"
+          >Previous</button>
+          <button 
+            [disabled]="filters.page >= (meta()?.pages || 1)"
+            (click)="changePage(filters.page + 1)"
+          >Next</button>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Detail Modal -->
+  @if (selectedLog()) {
+    <div class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Audit Log Details</h2>
+          <button class="btn-close" (click)="selectedLog.set(null)">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="detail-grid">
+            <div class="detail-item">
+              <label>Timestamp</label>
+              <span>{{ selectedLog()?.timestamp | date:'medium' }}</span>
+            </div>
+              <div class="detail-item">
+                <label>User</label>
+                <span>
+                  {{ selectedLog()?.userName || selectedLog()?.userEmail || 'System' }}
+                  @if (selectedLog()?.userId) {
+                    <span class="user-id-detail">(ID: {{ selectedLog()?.userId }})</span>
+                  }
+                </span>
+              </div>
+            <div class="detail-item">
+              <label>Action</label>
+              <span class="action-badge" [class]="selectedLog()?.action">
+                {{ selectedLog()?.action }}
+              </span>
+            </div>
+            <div class="detail-item">
+              <label>Entity Type</label>
+              <span>{{ selectedLog()?.entityType }}</span>
+            </div>
+            <div class="detail-item">
+              <label>Entity ID</label>
+              <span class="mono">{{ selectedLog()?.entityId || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label>IP Address</label>
+              <span>{{ selectedLog()?.ipAddress || '-' }}</span>
+            </div>
+            <div class="detail-item full-width">
+              <label>Description</label>
+              <span>{{ selectedLog()?.description || '-' }}</span>
+            </div>
+            <div class="detail-item full-width">
+              <label>Endpoint</label>
+              <span class="mono">{{ selectedLog()?.httpMethod }} {{ selectedLog()?.endpoint }}</span>
+            </div>
+            @if (selectedLog()?.changes) {
+              <div class="detail-item full-width">
+                <label>Changes</label>
+                <pre class="changes-json">{{ selectedLog()?.changes | json }}</pre>
+              </div>
+            }
+            @if (selectedLog()?.userAgent) {
+              <div class="detail-item full-width">
+                <label>User Agent</label>
+                <span class="small">{{ selectedLog()?.userAgent }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

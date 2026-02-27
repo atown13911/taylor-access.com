@@ -1,0 +1,151 @@
+<div class="invite-container">
+  <div class="page-header">
+    <h1><i class='bx bx-user-plus'></i> Invite Users</h1>
+    <p>Invite new team members to join your organization</p>
+  </div>
+
+  <!-- Invite Form -->
+  <div class="card invite-form-card">
+    <h3>Send New Invitation</h3>
+    <form (ngSubmit)="sendInvitation()" class="invite-form">
+      <div class="form-row">
+        <div class="input-group">
+          <label>Email Address *</label>
+          <input 
+            type="email" 
+            [(ngModel)]="newInvite.email" 
+            name="email"
+            placeholder="colleague@company.com"
+            required
+          >
+        </div>
+        <div class="input-group">
+          <label>Full Name</label>
+          <input 
+            type="text" 
+            [(ngModel)]="newInvite.name" 
+            name="name"
+            placeholder="John Doe"
+          >
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="input-group">
+          <label>Role</label>
+          <select [(ngModel)]="newInvite.roleId" name="roleId">
+            <option value="">Select a role...</option>
+            <option value="admin">Administrator</option>
+            <option value="dispatcher">Dispatcher</option>
+            <option value="driver">Driver</option>
+            <option value="accountant">Accountant</option>
+            <option value="viewer">View Only</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Personal Message (optional)</label>
+        <textarea 
+          [(ngModel)]="newInvite.personalMessage" 
+          name="personalMessage"
+          placeholder="Welcome to the team! Looking forward to working with you."
+          rows="3"
+        ></textarea>
+      </div>
+
+      @if (successMessage()) {
+        <div class="alert success">
+          <i class='bx bx-check-circle'></i>
+          {{ successMessage() }}
+        </div>
+      }
+
+      @if (errorMessage()) {
+        <div class="alert error">
+          <i class='bx bx-error-circle'></i>
+          {{ errorMessage() }}
+        </div>
+      }
+
+      <button type="submit" class="btn btn-primary" [disabled]="sending()">
+        @if (sending()) {
+          <i class='bx bx-loader-alt bx-spin'></i>
+          Sending...
+        } @else {
+          <i class='bx bx-send'></i>
+          Send Invitation
+        }
+      </button>
+    </form>
+  </div>
+
+  <!-- Pending Invitations -->
+  <div class="card invitations-list">
+    <div class="card-header">
+      <h3>Pending Invitations</h3>
+      <button class="btn btn-secondary btn-sm" (click)="loadInvitations()">
+        <i class='bx bx-refresh'></i>
+        Refresh
+      </button>
+    </div>
+
+    @if (loading()) {
+      <div class="loading">
+        <i class='bx bx-loader-alt bx-spin'></i>
+        Loading invitations...
+      </div>
+    } @else if (invitations().length === 0) {
+      <div class="empty-state">
+        <i class='bx bx-mail-send'></i>
+        <p>No pending invitations</p>
+      </div>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Expires</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (invite of invitations(); track invite.id) {
+            <tr [class.expired]="invite.isExpired" [class.accepted]="invite.status === 'accepted'">
+              <td>{{ invite.email }}</td>
+              <td>{{ invite.name || '-' }}</td>
+              <td>{{ invite.role || 'Default' }}</td>
+              <td>
+                <span class="status-badge" [class]="invite.status">
+                  {{ invite.status }}
+                </span>
+              </td>
+              <td>
+                @if (invite.status === 'accepted') {
+                  {{ invite.acceptedAt | date:'short' }}
+                } @else if (invite.isExpired) {
+                  Expired
+                } @else {
+                  {{ invite.expiresAt | date:'short' }}
+                }
+              </td>
+              <td class="actions">
+                @if (invite.status === 'pending' && !invite.isExpired) {
+                  <button class="btn-icon" title="Resend" (click)="resendInvitation(invite.id)">
+                    <i class='bx bx-refresh'></i>
+                  </button>
+                  <button class="btn-icon danger" title="Revoke" (click)="revokeInvitation(invite.id)">
+                    <i class='bx bx-trash'></i>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

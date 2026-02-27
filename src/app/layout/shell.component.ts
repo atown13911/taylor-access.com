@@ -49,6 +49,9 @@ export class ShellComponent implements OnInit {
       label: 'Admin',
       items: [
         { label: 'Users', icon: 'bx bx-user', route: '/users' },
+        { label: 'Roles & Permissions', icon: 'bx bx-lock-alt', route: '/admin/roles' },
+        { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit' },
+        { label: 'Invite Users', icon: 'bx bx-user-plus', route: '/admin/invite' },
         { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
         { label: 'Database', icon: 'bx bx-data', route: '/database' },
       ]
