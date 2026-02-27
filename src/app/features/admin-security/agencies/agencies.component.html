@@ -1,0 +1,269 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-text">
+      <h1><i class="bx bx-buildings"></i> {{ t.t('agencies.title') }}</h1>
+      <p>{{ t.t('agencies.subtitle') }}</p>
+    </div>
+    <button class="btn btn-primary" (click)="openCreateModal()" [title]="t.t('agencies.newAgency')">
+      <i class="bx bx-plus"></i>
+    </button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <div class="search-box">
+      <i class="bx bx-search"></i>
+      <input 
+        type="text" 
+        placeholder="Search agencies..." 
+        [(ngModel)]="searchTerm">
+    </div>
+    
+    <select [(ngModel)]="orgFilter">
+      <option value="all">All Organizations</option>
+      @for (org of organizations(); track org.id) {
+        <option [value]="org.id">{{ org.name }}</option>
+      }
+    </select>
+    
+    <select [(ngModel)]="statusFilter">
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+      <option value="closed">Closed</option>
+    </select>
+  </div>
+
+  <!-- Dashboard Stats -->
+  @if (!loading()) {
+    <div class="stats-grid">
+      <div class="stat-card">
+        <i class="bx bx-buildings stat-icon"></i>
+        <div>
+          <span class="stat-value">{{ agencies().length }}</span>
+          <span class="stat-label">Total Agencies</span>
+        </div>
+      </div>
+        <div class="stat-card">
+          <i class="bx bx-check-circle stat-icon active"></i>
+          <div>
+            <span class="stat-value">{{ activeCount() }}</span>
+            <span class="stat-label">Active</span>
+          </div>
+        </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading-state">
+      <i class="bx bx-loader-alt bx-spin"></i>
+      <p>{{ t.t('common.loading') }}...</p>
+    </div>
+  }
+
+  @if (!loading() && filteredAgencies().length > 0) {
+    <div class="agencies-grid">
+      @for (agency of filteredAgencies(); track agency.id) {
+        <div class="agency-card">
+          <div class="card-header">
+            <div class="agency-info">
+              <h3>{{ agency.name }}</h3>
+              @if (agency.division) {
+                <span class="division-badge">{{ agency.division }}</span>
+              }
+            </div>
+            <span class="status-badge" [class]="agency.status">{{ agency.status }}</span>
+          </div>
+
+          <div class="card-body">
+            @if ($any(agency).organizationName || $any(agency).organization?.name) {
+              <div class="detail-row">
+                <i class="bx bx-briefcase"></i>
+                <span class="org-name-badge">{{ $any(agency).organizationName || $any(agency).organization?.name }}</span>
+              </div>
+            }
+            @if (agency.code) {
+              <div class="detail-row">
+                <i class="bx bx-barcode"></i>
+                <span>{{ agency.code }}</span>
+              </div>
+            }
+            
+            @if (agency.city && agency.state) {
+              <div class="detail-row">
+                <i class="bx bx-map"></i>
+                <span>{{ agency.city }}, {{ agency.state }}</span>
+              </div>
+            }
+            
+            @if (agency.manager) {
+              <div class="detail-row">
+                <i class="bx bx-user"></i>
+                <span>Manager: {{ agency.manager.name }}</span>
+              </div>
+            }
+            
+            @if (agency.employeeCount) {
+              <div class="detail-row">
+                <i class="bx bx-group"></i>
+                <span>{{ agency.employeeCount }} employees</span>
+              </div>
+            }
+          </div>
+
+          <div class="card-actions">
+            <button class="btn-icon" (click)="editAgency(agency)" title="Edit">
+              <i class="bx bx-edit"></i>
+            </button>
+            <button class="btn-icon btn-danger" (click)="deleteAgency(agency.id)" title="Delete">
+              <i class="bx bx-trash"></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+  
+  @if (!loading() && agencies().length === 0) {
+    <div class="empty-state">
+      <i class="bx bx-buildings"></i>
+      <h3>{{ t.t('agencies.noAgenciesFound') }}</h3>
+      <p>{{ t.t('agencies.createFirstAgency') }}</p>
+      <button class="btn btn-primary" (click)="openCreateModal()" [title]="t.t('agencies.createAgency')">
+        <i class="bx bx-plus"></i>
+      </button>
+    </div>
+  }
+  
+  <!-- Create/Edit Modal -->
+  @if (showModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>
+            <i class="bx bx-buildings"></i>
+            {{ modalMode() === 'create' ? 'Create Agency' : 'Edit Agency' }}
+          </h2>
+          <button class="btn-close" (click)="closeModal()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>Organization *</label>
+              <select [(ngModel)]="form.organizationId" (ngModelChange)="form.division = ''" required>
+                <option [ngValue]="null">Select Organization</option>
+                @for (org of organizations(); track org.id) {
+                  <option [ngValue]="org.id">{{ org.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label>Agency Name *</label>
+              <input type="text" [(ngModel)]="form.name" placeholder="Regional Sales Division">
+            </div>
+
+            <div class="form-group">
+              <label>Code</label>
+              <input type="text" [(ngModel)]="form.code" placeholder="AGY-001">
+            </div>
+
+            <div class="form-group">
+              <label>Division</label>
+              <select [(ngModel)]="form.division" [disabled]="!form.organizationId">
+                <option value="">{{ form.organizationId ? 'Select Division' : 'Select Organization first' }}</option>
+                @for (dept of getFilteredDivisions(); track dept.id) {
+                  <option [value]="dept.name">{{ dept.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label>Point of Contact</label>
+              <input type="text" [(ngModel)]="form.contactName" placeholder="Contact person name">
+            </div>
+
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" [(ngModel)]="form.phone" placeholder="+1 (555) 123-4567">
+            </div>
+
+            <div class="form-group">
+              <label>Email</label>
+              <input type="email" [(ngModel)]="form.email" placeholder="contact@agency.com">
+            </div>
+
+            <div class="form-group full-width">
+              <label>Country *</label>
+              <select [(ngModel)]="form.country">
+                <option value="">Select Country</option>
+                <option value="US">United States</option>
+                <option value="BA">Bosnia & Herzegovina</option>
+                <option value="CA">Canada</option>
+                <option value="MX">Mexico</option>
+                <option value="GB">United Kingdom</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label>{{ getAddressLabels().address }} <span class="hint">(Start typing to search)</span></label>
+              <app-address-autocomplete
+                [placeholder]="getAddressLabels().addressPlaceholder"
+                [value]="form.address"
+                (addressSelected)="onAddressSelected($event)"
+                (valueChange)="form.address = $event"
+              ></app-address-autocomplete>
+            </div>
+
+            <div class="form-group">
+              <label>{{ getAddressLabels().city }}</label>
+              <input type="text" [(ngModel)]="form.city" [placeholder]="getAddressLabels().cityPlaceholder">
+            </div>
+
+            <div class="form-group">
+              <label>{{ getAddressLabels().state }}</label>
+              @if (form.country === 'US' || form.country === 'CA' || !form.country) {
+                <select [(ngModel)]="form.state">
+                  <option value="">{{ getAddressLabels().statePlaceholder }}</option>
+                  @for (state of states; track state.code) {
+                    <option [value]="state.code">{{ state.name }} ({{ state.code }})</option>
+                  }
+                </select>
+              } @else {
+                <input type="text" [(ngModel)]="form.state" [placeholder]="getAddressLabels().statePlaceholder">
+              }
+            </div>
+
+            <div class="form-group">
+              <label>{{ getAddressLabels().zip }}</label>
+              <input type="text" [(ngModel)]="form.zipCode" [placeholder]="getAddressLabels().zipPlaceholder">
+            </div>
+
+            <div class="form-group">
+              <label>Status</label>
+              <select [(ngModel)]="form.status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+          <button class="btn btn-primary" (click)="save()">
+            <i class="bx bx-save"></i>
+            {{ modalMode() === 'create' ? 'Create' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

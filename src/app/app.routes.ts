@@ -22,6 +22,14 @@ export const routes: Routes = [
       {
         path: 'users',
         loadComponent: () => import('./features/admin-security/users/users.component').then(m => m.UsersComponent)
+      },
+      {
+        path: 'structure',
+        loadComponent: () => import('./features/admin-security/structure/structure.component').then(m => m.StructureComponent)
+      },
+      {
+        path: 'database',
+        loadComponent: () => import('./features/system/database/database.component').then(m => m.DatabaseComponent)
       }
     ]
   },

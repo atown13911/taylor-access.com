@@ -33,6 +33,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Position> Positions => Set<Position>();
     public DbSet<PositionDocumentRequirement> PositionDocumentRequirements => Set<PositionDocumentRequirement>();
+    public DbSet<JobTitle> JobTitles => Set<JobTitle>();
 
     // Addresses & Places
     public DbSet<Address> Addresses => Set<Address>();

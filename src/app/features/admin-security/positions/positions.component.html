@@ -1,0 +1,243 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-title">
+      <h1><i class='bx bx-id-card'></i> Positions</h1>
+      <p class="subtitle">Manage job positions and roles across departments</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="refreshData()" [disabled]="loading()">
+        <i class='bx bx-refresh' [class.bx-spin]="loading()"></i> Refresh
+      </button>
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <i class='bx bx-plus'></i> Create Position
+      </button>
+    </div>
+  </header>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    @if (isProductOwner()) {
+      <div class="filter-group">
+        <label>Organization</label>
+        <select [ngModel]="selectedOrgId()" (ngModelChange)="selectedOrgId.set($event); onOrgChange()">
+          <option [ngValue]="0">All Organizations</option>
+          @for (org of organizations(); track org.id) {
+            <option [ngValue]="org.id">{{ org.name }}</option>
+          }
+        </select>
+      </div>
+    }
+    <div class="filter-group">
+      <label>Department</label>
+      <select [ngModel]="selectedDeptId()" (ngModelChange)="selectedDeptId.set($event); onDeptChange()" [disabled]="selectedOrgId() === null">
+        <option [ngValue]="0">All Departments</option>
+        @for (dept of filteredDepartments(); track dept.id) {
+          <option [ngValue]="dept.id">{{ dept.name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading">
+      <i class='bx bx-loader-alt bx-spin'></i>
+      <p>Loading positions...</p>
+    </div>
+  } @else if (!selectedDeptId() && selectedDeptId() !== 0) {
+    <div class="empty-state">
+      <i class='bx bx-id-card'></i>
+      <h3>Select a Department</h3>
+      <p>Choose an organization and department to view positions</p>
+    </div>
+  } @else if (filteredPositions().length === 0) {
+    <div class="empty-state">
+      <i class='bx bx-id-card'></i>
+      <h3>No Positions in This Department</h3>
+      <p>Create positions to define roles in this department</p>
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <i class='bx bx-plus'></i> Create Position
+      </button>
+    </div>
+  } @else {
+    <div class="positions-table-container">
+      <table class="positions-table">
+        <thead>
+          <tr>
+            <th>Position Title</th>
+            <th>Code</th>
+            <th>Department</th>
+            <th>Employees</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (position of filteredPositions(); track position.id) {
+            <tr>
+              <td>{{ position.title }}</td>
+              <td>
+                @if (position.code) {
+                  <span class="position-code">{{ position.code }}</span>
+                } @else {
+                  <span class="text-muted">-</span>
+                }
+              </td>
+              <td>{{ position.departmentName }}</td>
+              <td>
+                <span class="employee-count">{{ position.currentCount || 0 }}</span>
+              </td>
+              <td>
+                <div class="table-actions">
+                  <button class="btn-icon" (click)="editPosition(position)" title="Edit">
+                    <i class='bx bx-edit'></i>
+                  </button>
+                  <button class="btn-icon danger" (click)="deletePosition(position)" title="Delete">
+                    <i class='bx bx-trash'></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Add/Edit Modal -->
+  @if (showAddModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>{{ editingPosition() ? 'Edit Position' : 'New Position' }}</h2>
+          <button class="btn-close" (click)="closeModal()"><i class='bx bx-x'></i></button>
+        </div>
+
+        <form (ngSubmit)="savePosition()" class="position-form">
+          <div class="form-grid">
+            <div class="input-group full-width">
+              <label>Organization *</label>
+              <select [(ngModel)]="formData.organizationId" name="organizationId" (ngModelChange)="onFormOrgChange($event)">
+                <option [ngValue]="0">Select Organization</option>
+                @for (org of organizations(); track org.id) {
+                  <option [ngValue]="org.id">{{ org.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="input-group full-width">
+              <label>Position Title *</label>
+              <input type="text" [(ngModel)]="formData.title" name="title" required placeholder="Accounts Receivable">
+            </div>
+            <div class="input-group full-width">
+              <label>Description</label>
+              <textarea [(ngModel)]="formData.description" name="description" rows="2" placeholder="Role responsibilities..."></textarea>
+            </div>
+            <div class="input-group">
+              <label>Division</label>
+              <select [(ngModel)]="formData.divisionId" name="divisionId">
+                <option [ngValue]="0">{{ formData.organizationId ? 'Select Division' : 'Select Organization first' }}</option>
+                @for (div of formDivisions(); track div.id) {
+                  <option [ngValue]="div.id">{{ div.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Department *</label>
+              <select [(ngModel)]="formData.departmentId" name="departmentId" required>
+                <option [ngValue]="0">{{ formData.organizationId ? 'Select Department' : 'Select Organization first' }}</option>
+                @for (dept of formFilteredDepts(); track dept.id) {
+                  <option [ngValue]="dept.id">{{ dept.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Position Code</label>
+              <input type="text" [(ngModel)]="formData.code" name="code" placeholder="AR" maxlength="20">
+            </div>
+          </div>
+
+          @if (formError()) {
+            <div class="form-error">
+              <i class='bx bx-error-circle'></i>
+              <span>{{ formError() }}</span>
+            </div>
+          }
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <i class='bx bx-loader-alt bx-spin'></i> Saving...
+              } @else {
+                <i class='bx bx-check'></i> {{ editingPosition() ? 'Update' : 'Create' }}
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+  
+  <!-- Access Control Modal -->
+  @if (showAccessControl()) {
+    <div class="modal-overlay" (click)="showAccessControl.set(false)">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class='bx bx-shield-alt-2'></i> View Access Control</h2>
+          <button class="btn-close" (click)="showAccessControl.set(false)">
+            <i class='bx bx-x'></i>
+          </button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="info-box">
+            <i class='bx bx-info-circle'></i>
+            <p>Configure which roles and positions can access the "All Organizations" and "All Departments" views</p>
+          </div>
+          
+          <div class="access-section">
+            <h3>Roles with Full Access</h3>
+            <div class="role-list">
+              <div class="role-item">
+                <i class='bx bx-check-circle'></i>
+                <span>Product Owner</span>
+                <span class="badge">Always Enabled</span>
+              </div>
+              <div class="role-item">
+                <i class='bx bx-check-circle'></i>
+                <span>Superadmin</span>
+                <span class="badge">Always Enabled</span>
+              </div>
+              <div class="role-item">
+                <label class="checkbox-label">
+                  <input type="checkbox" checked>
+                  <span>Admin</span>
+                </label>
+              </div>
+              <div class="role-item">
+                <label class="checkbox-label">
+                  <input type="checkbox">
+                  <span>Manager</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <div class="access-section">
+            <h3>Specific Positions with Access</h3>
+            <p class="section-desc">Select job positions that can view all organizations/departments</p>
+            <div class="coming-soon">
+              <i class='bx bx-time-five'></i>
+              <p>Position-based access control coming soon</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="showAccessControl.set(false)">Close</button>
+          <button type="button" class="btn btn-primary">
+            <i class='bx bx-save'></i> Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

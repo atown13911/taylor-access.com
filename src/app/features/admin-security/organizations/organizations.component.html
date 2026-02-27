@@ -1,0 +1,483 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-title">
+      <h1><i class='bx bxs-buildings'></i> Organizations</h1>
+      <p class="subtitle">Manage organizations and tenants</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="toggleAdvancedInfo()">
+        <i class='bx bx-data'></i> {{ showAdvancedInfo() ? 'Hide' : 'Show' }} Database IDs
+      </button>
+      <button class="btn btn-secondary" (click)="toggleDatabasePanel()">
+        <i class='bx bx-server'></i> Database Tools
+      </button>
+      <button class="btn btn-primary new-org-btn" (click)="showAddModal.set(true)" title="New Organization">
+        <i class='bx bx-plus'></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Database Admin Panel -->
+  @if (showDatabasePanel()) {
+    <div class="database-panel">
+      <div class="panel-header">
+        <h3><i class='bx bx-data'></i> Database Administration</h3>
+        <button class="btn-icon" (click)="showDatabasePanel.set(false)">
+          <i class='bx bx-x'></i>
+        </button>
+      </div>
+      
+      @if (loadingDbStats()) {
+        <div class="panel-loading">
+          <i class='bx bx-loader-alt bx-spin'></i> Loading database statistics...
+        </div>
+      } @else if (databaseStats()) {
+        <div class="panel-content">
+          <div class="stats-section">
+            <h4>Organization Data Distribution</h4>
+            <div class="db-stats-grid">
+              @for (stat of databaseStats() | keyvalue; track stat.key) {
+                <div class="stat-item">
+                  <span class="stat-label">{{ stat.key }}:</span>
+                  <span class="stat-value">{{ stat.value | json }}</span>
+                </div>
+              }
+            </div>
+          </div>
+          
+          <div class="panel-actions">
+            <button class="btn btn-warning" (click)="fixOrganizationData()">
+              <i class='bx bx-wrench'></i> Fix OrganizationId Mismatches
+            </button>
+            <button class="btn btn-secondary" (click)="loadDatabaseStats()">
+              <i class='bx bx-refresh'></i> Refresh Stats
+            </button>
+          </div>
+          
+          <div class="info-box" style="margin-top: 1rem;">
+            <i class='bx bx-info-circle'></i>
+            <p><strong>Fix OrganizationId Mismatches:</strong> Automatically updates all entities (Orders, Loads, Drivers, Vehicles, AuditLogs) to match the correct OrganizationId from existing Shipments.</p>
+          </div>
+        </div>
+      } @else {
+        <div class="panel-empty">
+          <p>Click "Refresh Stats" to load database statistics</p>
+          <button class="btn btn-primary" (click)="loadDatabaseStats()">
+            <i class='bx bx-refresh'></i> Load Stats
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Search -->
+  <div class="filters-bar">
+    <div class="search-box">
+      <i class='bx bx-search'></i>
+      <input 
+        type="text" 
+        placeholder="Search organizations..." 
+        [(ngModel)]="searchTerm"
+        (ngModelChange)="applyFilters()"
+      >
+    </div>
+    <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+      <option value="suspended">Suspended</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <i class='bx bx-loader-alt bx-spin'></i>
+      <p>Loading organizations...</p>
+    </div>
+  } @else if (filteredOrgs().length === 0) {
+    <div class="empty-state">
+      <i class='bx bxs-buildings'></i>
+      <h3>No organizations found</h3>
+      <p>Create your first organization to get started</p>
+      <button class="btn btn-primary new-org-btn" (click)="showAddModal.set(true)" title="Create Organization">
+        <i class='bx bx-plus'></i>
+      </button>
+    </div>
+  } @else {
+    <div class="orgs-grid">
+      @for (org of filteredOrgs(); track org.id) {
+        <div class="org-card">
+          <div class="org-header">
+            <div class="org-icon">
+              <i class='bx bxs-buildings'></i>
+            </div>
+            <span class="status-badge" [ngClass]="org.status">{{ org.status }}</span>
+          </div>
+
+          <div class="org-info">
+            <h3>{{ org.name }}</h3>
+            <p class="org-desc">{{ org.description || 'No description' }}</p>
+            @if (showAdvancedInfo()) {
+              <div class="db-id-badge">
+                <i class='bx bx-data'></i> Database ID: <strong>{{ org.id }}</strong>
+              </div>
+            }
+          </div>
+
+          <div class="org-meta">
+            @if (org.email) {
+              <div class="meta-row">
+                <i class='bx bx-envelope'></i>
+                <span>{{ org.email }}</span>
+              </div>
+            }
+            @if (org.phone) {
+              <div class="meta-row">
+                <i class='bx bx-phone'></i>
+                <span>{{ org.phone }}</span>
+              </div>
+            }
+            @if (org.city && org.state) {
+              <div class="meta-row">
+                <i class='bx bx-map'></i>
+                <span>{{ org.city }}, {{ org.state }}</span>
+              </div>
+            }
+            <div class="meta-row">
+              <i class='bx bx-user'></i>
+              <span>{{ org.userCount || 0 }} users</span>
+            </div>
+            <div class="org-counts">
+              <span class="count-chip" title="Divisions"><i class='bx bx-git-branch'></i> {{ getOrgDivCount(org.id) }}</span>
+              <span class="count-chip" title="Departments"><i class='bx bx-briefcase'></i> {{ getOrgDeptCount(org.id) }}</span>
+              <span class="count-chip" title="Positions"><i class='bx bx-id-card'></i> {{ getOrgPosCount(org.id) }}</span>
+            </div>
+            @if (showAdvancedInfo()) {
+              <div class="meta-row advanced">
+                <i class='bx bx-calendar'></i>
+                <span>Created: {{ org.createdAt | date:'short' }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="org-actions">
+            <button class="btn-icon" title="Edit" (click)="editOrg(org)">
+              <i class='bx bx-edit'></i>
+            </button>
+            <button class="btn-icon" title="View Users" (click)="viewUsers(org)">
+              <i class='bx bx-group'></i>
+            </button>
+            <button class="btn-icon" title="Org Chart" (click)="viewOrgChart(org)">
+              <i class='bx bx-sitemap'></i>
+            </button>
+            <button class="btn-icon" title="Settings" (click)="openSettings(org)">
+              <i class='bx bx-cog'></i>
+            </button>
+            <button class="btn-icon danger" title="Delete" (click)="openDeleteModal(org)">
+              <i class='bx bx-trash'></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Add/Edit Modal -->
+  @if (showAddModal()) {
+    <div class="modal-overlay">
+      <div class="modal-content" >
+        <div class="modal-header">
+          <h2>{{ editingOrg() ? 'Edit Organization' : 'New Organization' }}</h2>
+          <button class="btn-close" (click)="closeModal()"><i class='bx bx-x'></i></button>
+        </div>
+
+        <form (ngSubmit)="saveOrg()" class="org-form">
+          <div class="form-grid">
+            <div class="input-group full-width">
+              <label>Organization Name *</label>
+              <input type="text" [(ngModel)]="formData.name" name="name" required placeholder="Acme Logistics">
+            </div>
+            <div class="input-group full-width">
+              <label>Description</label>
+              <textarea [(ngModel)]="formData.description" name="description" rows="2" placeholder="Brief description..."></textarea>
+            </div>
+            <div class="input-group">
+              <label>Email</label>
+              <input type="email" [(ngModel)]="formData.email" name="email" placeholder="contact@company.com">
+            </div>
+            <div class="input-group">
+              <label>Phone</label>
+              <input type="tel" [(ngModel)]="formData.phone" name="phone" placeholder="(555) 123-4567">
+            </div>
+            <div class="input-group full-width">
+              <label>{{ formLabels().address }}</label>
+              <input type="text" [(ngModel)]="formData.address" name="address" placeholder="123 Main St">
+            </div>
+            <div class="input-group">
+              <label>{{ formLabels().city }}</label>
+              <input type="text" [(ngModel)]="formData.city" name="city">
+            </div>
+            <div class="input-group">
+              <label>{{ formLabels().state }}</label>
+              <input type="text" [(ngModel)]="formData.state" name="state">
+            </div>
+            <div class="input-group">
+              <label>{{ formLabels().postalCode }}</label>
+              <input type="text" [(ngModel)]="formData.postalCode" name="postalCode">
+            </div>
+            <div class="input-group">
+              <label>{{ formLabels().country }} *</label>
+              <select [(ngModel)]="formData.country" name="country" (ngModelChange)="onCountryChange($event)" required>
+                <optgroup label="North America">
+                  <option value="USA">United States (USA)</option>
+                  <option value="Canada">Canada (Français)</option>
+                  <option value="Mexico">Mexico (México)</option>
+                </optgroup>
+                <optgroup label="Western Europe">
+                  <option value="UK">United Kingdom (UK)</option>
+                  <option value="France">France (République française)</option>
+                  <option value="Germany">Germany (Deutschland)</option>
+                  <option value="Spain">Spain (España)</option>
+                  <option value="Italy">Italy (Italia)</option>
+                  <option value="Netherlands">Netherlands (Nederland)</option>
+                  <option value="Belgium">Belgium (België / Belgique)</option>
+                  <option value="Switzerland">Switzerland (Schweiz / Suisse)</option>
+                  <option value="Austria">Austria (Österreich)</option>
+                </optgroup>
+                <optgroup label="Eastern Europe">
+                  <option value="Bosnia">Bosnia and Herzegovina (Bosna i Hercegovina)</option>
+                  <option value="Croatia">Croatia (Hrvatska)</option>
+                  <option value="Serbia">Serbia (Srbija)</option>
+                  <option value="Poland">Poland (Polska)</option>
+                  <option value="Romania">Romania (România)</option>
+                  <option value="Greece">Greece (Ελλάδα)</option>
+                  <option value="Turkey">Turkey (Türkiye)</option>
+                  <option value="Russia">Russia (Россия)</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option value="Other">Other / International</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>{{ formLabels().timezone }} *</label>
+              <select [(ngModel)]="formData.timezone" name="timezone" required>
+                @for (tz of timezoneOptions(); track tz.value) {
+                  <option [value]="tz.value">{{ tz.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Status</label>
+              <select [(ngModel)]="formData.status" name="status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+
+          @if (formError()) {
+            <div class="form-error">
+              <i class='bx bx-error-circle'></i>
+              <span>{{ formError() }}</span>
+            </div>
+          }
+          
+          <div class="form-hint">
+            <i class='bx bx-info-circle'></i>
+            <span>Fields marked with * are required</span>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <i class='bx bx-loader-alt bx-spin'></i> Saving...
+              } @else {
+                <i class='bx bx-check'></i> {{ editingOrg() ? 'Update' : 'Create' }}
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Users Modal -->
+  @if (showUsersModal() && selectedOrg()) {
+    <div class="modal-overlay">
+      <div class="modal-content large" >
+        <div class="modal-header">
+          <h2><i class='bx bx-group'></i> {{ selectedOrg()?.name }} - Users</h2>
+          <button class="btn-close" (click)="closeUsersModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="users-content">
+          @if (orgUsers().length === 0) {
+            <div class="empty-state">
+              <i class='bx bx-user-x'></i>
+              <p>No users found for this organization</p>
+            </div>
+          } @else {
+            <table class="users-table">
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                @for (user of orgUsers(); track user.id) {
+                  <tr>
+                    <td>{{ user.name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td><span class="role-badge">{{ user.role || 'User' }}</span></td>
+                    <td><span class="status-badge" [class]="user.status || 'active'">{{ user.status || 'Active' }}</span></td>
+                    <td>
+                      <button class="btn-icon" title="Edit User" (click)="editUserFromOrg(user)">
+                        <i class='bx bx-edit'></i>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Settings Modal -->
+  @if (showSettingsModal() && selectedOrg()) {
+    <div class="modal-overlay">
+      <div class="modal-content" >
+        <div class="modal-header">
+          <h2><i class='bx bx-cog'></i> {{ selectedOrg()?.name }} - Settings</h2>
+          <button class="btn-close" (click)="closeSettingsModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="settings-content">
+          <div class="settings-section">
+            <h3>Organization Details</h3>
+            <div class="setting-row"><span>Name:</span><strong>{{ selectedOrg()?.name }}</strong></div>
+            <div class="setting-row"><span>Type:</span><strong>{{ selectedOrg()?.type || 'Standard' }}</strong></div>
+            <div class="setting-row"><span>Status:</span><span class="status-badge" [class]="selectedOrg()?.status || 'active'">{{ selectedOrg()?.status || 'Active' }}</span></div>
+            <div class="setting-row"><span>Created:</span><strong>{{ selectedOrg()?.createdAt | date:'mediumDate' }}</strong></div>
+          </div>
+          <div class="settings-section">
+            <h3>Contact Information</h3>
+            <div class="setting-row"><span>Email:</span><strong>{{ selectedOrg()?.email || 'Not set' }}</strong></div>
+            <div class="setting-row"><span>Phone:</span><strong>{{ selectedOrg()?.phone || 'Not set' }}</strong></div>
+            <div class="setting-row"><span>Address:</span><strong>{{ selectedOrg()?.address || 'Not set' }}</strong></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" (click)="closeSettingsModal()">Close</button>
+            <button class="btn btn-primary" (click)="editOrg(selectedOrg()!); closeSettingsModal()"><i class='bx bx-edit'></i> Edit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+  
+  <!-- Org Chart Modal -->
+  @if (showOrgChartModal()) {
+    <div class="modal-overlay" (click)="closeOrgChartModal()">
+      <div class="modal-content org-chart-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class='bx bx-sitemap'></i> Organization Chart - {{ selectedOrg()?.name }}</h2>
+          <button class="btn-close" (click)="closeOrgChartModal()"><i class='bx bx-x'></i></button>
+        </div>
+        
+        <div class="modal-body">
+          @if (loadingOrgChart()) {
+            <div class="loading-state">
+              <i class='bx bx-loader-alt bx-spin'></i>
+              <p>Loading org chart...</p>
+            </div>
+          } @else if (orgChartData()) {
+            <div class="org-chart">
+              @for (dept of orgChartData()?.departments; track dept.id) {
+                <div class="dept-card">
+                  <div class="dept-header">
+                    <h3><i class='bx bx-briefcase'></i> {{ dept.name }}</h3>
+                    <span class="user-count">{{ dept.users?.length || 0 }} users</span>
+                  </div>
+                  @if (dept.users && dept.users.length > 0) {
+                    <div class="dept-users">
+                      @for (user of dept.users; track user.id) {
+                        <div class="user-chip">
+                          <i class='bx bx-user-circle'></i>
+                          <span>{{ user.name }}</span>
+                          <span class="role-badge">{{ user.role }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+              @if (orgChartData()?.unassignedUsers?.length > 0) {
+                <div class="dept-card unassigned">
+                  <div class="dept-header">
+                    <h3><i class='bx bx-user'></i> Unassigned Users</h3>
+                    <span class="user-count">{{ orgChartData()?.unassignedUsers?.length }}</span>
+                  </div>
+                  <div class="dept-users">
+                    @for (user of orgChartData()?.unassignedUsers; track user.id) {
+                      <div class="user-chip">
+                        <i class='bx bx-user-circle'></i>
+                        <span>{{ user.name }}</span>
+                        <span class="role-badge">{{ user.role }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        
+        <div class="modal-actions">
+          <button class="btn btn-secondary" (click)="closeOrgChartModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Delete Confirmation Modal -->
+  @if (showDeleteModal()) {
+    <div class="modal-backdrop" (click)="closeDeleteModal()">
+      <div class="modal delete-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header danger-header">
+          <h2><i class='bx bx-error-circle'></i> Delete Organization</h2>
+          <button class="btn-close" (click)="closeDeleteModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <i class='bx bx-shield-x'></i>
+            <div>
+              <p><strong>This action is permanent and cannot be undone.</strong></p>
+              <p>Deleting <strong>{{ deleteTarget()?.name }}</strong> will remove all associated data including users, departments, positions, and records.</p>
+            </div>
+          </div>
+          <div class="delete-confirm-input">
+            <label>Type <strong>{{ deleteTarget()?.name }}</strong> to confirm:</label>
+            <input
+              type="text"
+              [placeholder]="deleteTarget()?.name || ''"
+              [ngModel]="deleteConfirmName()"
+              (ngModelChange)="deleteConfirmName.set($event)"
+              autocomplete="off"
+              data-form-type="other"
+              [class.match]="deleteNameMatches()"
+            >
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeDeleteModal()">Cancel</button>
+          <button class="btn btn-danger" (click)="confirmDelete()" [disabled]="!deleteNameMatches() || deleting()">
+            @if (deleting()) {
+              <i class='bx bx-loader-alt bx-spin'></i> Deleting...
+            } @else {
+              <i class='bx bx-trash'></i> Permanently Delete
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

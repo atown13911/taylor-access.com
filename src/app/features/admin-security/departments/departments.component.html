@@ -1,0 +1,306 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-title">
+      <h1><i class='bx bx-briefcase'></i> Departments</h1>
+      <p class="subtitle">Manage departments and organizational structure</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="refreshData()">
+        <i class='bx bx-refresh'></i> Refresh
+      </button>
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <i class='bx bx-plus'></i> Create Department
+      </button>
+    </div>
+  </header>
+
+  <!-- Organization Filter (Product Owner Only) -->
+  @if (isProductOwner()) {
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Organization</label>
+        <select [ngModel]="selectedOrgId()" (ngModelChange)="selectedOrgId.set($event); onOrgChange()">
+          <option [ngValue]="null">All Organizations</option>
+          @for (org of organizations(); track org.id) {
+            <option [ngValue]="org.id">{{ org.name }}</option>
+          }
+        </select>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading">
+      <i class='bx bx-loader-alt bx-spin'></i>
+      <p>Loading departments...</p>
+    </div>
+  } @else if (filteredDepartments().length === 0) {
+    <div class="empty-state">
+      <i class='bx bx-briefcase'></i>
+      <h3>No Departments in This Organization</h3>
+      <p>Create departments to organize your team</p>
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <i class='bx bx-plus'></i> Create Department
+      </button>
+    </div>
+  } @else {
+    <div class="departments-grid">
+      @for (dept of filteredDepartments(); track dept.id) {
+        <div class="dept-card" 
+             [class.selected]="selectedDept()?.id === dept.id"
+             (click)="selectDepartment(dept)">
+          <div class="dept-header">
+            <div class="dept-icon">
+              <i class='bx bx-briefcase'></i>
+            </div>
+            <div class="dept-info">
+              <h3>{{ dept.name }}</h3>
+              @if (dept.code) {
+                <span class="dept-code">{{ dept.code }}</span>
+              }
+            </div>
+          </div>
+          
+          @if (dept.organizationName) {
+            <div class="dept-org">
+              <i class='bx bx-buildings'></i>
+              <span>{{ dept.organizationName }}</span>
+            </div>
+          }
+          @if (dept.divisionName) {
+            <div class="dept-org">
+              <i class='bx bx-git-branch'></i>
+              <span>{{ dept.divisionName }}</span>
+            </div>
+          }
+
+          <p class="dept-desc">{{ dept.description || 'No description' }}</p>
+          
+          <div class="dept-meta">
+            @if (dept.managerName) {
+              <div class="meta-row">
+                <i class='bx bx-user-check'></i>
+                <span>Manager: {{ dept.managerName }}</span>
+                @if (dept.managerRole) {
+                  <span class="meta-role">({{ dept.managerRole }})</span>
+                }
+              </div>
+            }
+            <div class="meta-row">
+              <i class='bx bx-group'></i>
+              <span>{{ dept.employeeCount || 0 }} employees</span>
+            </div>
+            <div class="meta-row">
+              <i class='bx bx-id-card'></i>
+              <span>{{ dept.positionCount || 0 }} positions</span>
+            </div>
+          </div>
+          
+          <div class="dept-actions" (click)="$event.stopPropagation()">
+            <button class="btn-icon" (click)="editDepartment(dept)" title="Edit">
+              <i class='bx bx-edit'></i>
+            </button>
+            <button class="btn-icon danger" (click)="deleteDepartment(dept)" title="Delete">
+              <i class='bx bx-trash'></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Department Dashboard (Below Departments) -->
+  @if (selectedDept()) {
+    <div class="dept-dashboard">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <i class='bx bx-briefcase'></i>
+          <h2>{{ selectedDept()!.name }}</h2>
+          @if (selectedDept()!.code) {
+            <span class="dept-code">{{ selectedDept()!.code }}</span>
+          }
+        </div>
+        <button class="btn-close" (click)="closeDashboard()">
+          <i class='bx bx-x'></i>
+        </button>
+      </div>
+      
+      <div class="dashboard-stats">
+        <div class="stat-card">
+          <i class='bx bx-group'></i>
+          <div class="stat-info">
+            <span class="stat-value">{{ deptEmployees().length }}</span>
+            <span class="stat-label">Total Employees</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <i class='bx bx-user-check'></i>
+          <div class="stat-info">
+            <span class="stat-value">{{ activeEmployeeCount() }}</span>
+            <span class="stat-label">Active</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <i class='bx bx-user-badge'></i>
+          <div class="stat-info">
+            <span class="stat-value">{{ selectedDept()!.managerName || 'None' }}</span>
+            <span class="stat-label">Manager</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="dashboard-content">
+        <div class="section-header">
+          <h3>Department Employees</h3>
+          <button class="btn btn-primary btn-sm" (click)="openAssignModal()">
+            <i class='bx bx-user-plus'></i> Assign Employee
+          </button>
+        </div>
+          @if (loadingEmployees()) {
+            <div class="loading-small">
+              <i class='bx bx-loader-alt bx-spin'></i> Loading employees...
+            </div>
+          } @else if (deptEmployees().length === 0) {
+            <div class="empty-message">
+              <i class='bx bx-user'></i>
+              <p>No employees in this department yet</p>
+            </div>
+          } @else {
+            <div class="employees-list">
+              @for (emp of deptEmployees(); track emp.id) {
+                <div class="employee-item">
+                  <div class="employee-info">
+                    <span class="employee-name">{{ emp.name }}</span>
+                    <span class="employee-title">{{ emp.jobTitle || emp.role }}</span>
+                  </div>
+                  <span class="employee-email">{{ emp.email }}</span>
+                  <button class="btn-icon danger" title="Remove from department" (click)="unassignEmployee(emp.id)">
+                    <i class='bx bx-x'></i>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+      </div>
+    </div>
+  }
+
+  <!-- Add/Edit Modal -->
+  @if (showAddModal()) {
+    <div class="modal-overlay" (click)="closeModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>{{ editingDept() ? 'Edit Department' : 'New Department' }}</h2>
+          <button class="btn-close" (click)="closeModal()"><i class='bx bx-x'></i></button>
+        </div>
+
+        <form (ngSubmit)="saveDepartment()" class="dept-form">
+          <div class="form-grid">
+            <div class="input-group full-width">
+              <label>Department Name *</label>
+              <input type="text" [(ngModel)]="formData.name" name="name" required placeholder="Operations">
+            </div>
+            <div class="input-group full-width">
+              <label>Description</label>
+              <textarea [(ngModel)]="formData.description" name="description" rows="2" placeholder="Brief description..."></textarea>
+            </div>
+            <div class="input-group">
+              <label>Division</label>
+              <select [(ngModel)]="formData.divisionId" name="divisionId">
+                <option [ngValue]="null">No Division</option>
+                @for (div of filteredFormDivisions(); track div.id) {
+                  <option [ngValue]="div.id">{{ div.name }} ({{ div.divisionType | titlecase }})</option>
+                }
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Department Code</label>
+              <input type="text" [(ngModel)]="formData.code" name="code" placeholder="OPS" maxlength="10">
+            </div>
+            <div class="input-group">
+              <label>Department Manager</label>
+              <select [(ngModel)]="formData.managerUserId" name="managerUserId">
+                <option [ngValue]="null">No Manager</option>
+                @for (user of users(); track user.id) {
+                  <option [ngValue]="user.id">{{ user.name }} ({{ user.role }})</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (formError()) {
+            <div class="form-error">
+              <i class='bx bx-error-circle'></i>
+              <span>{{ formError() }}</span>
+            </div>
+          }
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <i class='bx bx-loader-alt bx-spin'></i> Saving...
+              } @else {
+                <i class='bx bx-check'></i> {{ editingDept() ? 'Update' : 'Create' }}
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Assign Employee Modal -->
+  @if (showAssignModal()) {
+    <div class="modal-overlay" (click)="showAssignModal.set(false)">
+      <div class="modal-content modal-lg" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class='bx bx-user-plus'></i> Assign Employee to {{ selectedDept()?.name }}</h2>
+          <button class="btn-close" (click)="showAssignModal.set(false)"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="assign-search">
+            <i class='bx bx-search'></i>
+            <input type="text" placeholder="Search by name, email, role..." [ngModel]="assignSearch()" (ngModelChange)="assignSearch.set($event)">
+            <span class="assign-count">{{ filteredAvailableEmployees().length }} available</span>
+          </div>
+          @if (filteredAvailableEmployees().length === 0) {
+            <div class="empty-message">
+              <i class='bx bx-user'></i>
+              <p>{{ availableEmployees().length === 0 ? 'All employees in this organization are already assigned' : 'No employees match your search' }}</p>
+            </div>
+          } @else {
+            <div class="assign-table-wrap">
+              <table class="assign-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Title</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (emp of filteredAvailableEmployees(); track emp.id) {
+                    <tr>
+                      <td><strong>{{ emp.name }}</strong></td>
+                      <td class="text-muted">{{ emp.email }}</td>
+                      <td><span class="role-badge">{{ emp.role }}</span></td>
+                      <td class="text-muted">{{ emp.jobTitle || '—' }}</td>
+                      <td>
+                        <button class="btn btn-primary btn-xs" (click)="assignEmployeeById(emp.id)">
+                          <i class='bx bx-plus'></i> Add
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,491 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="header-text">
+      <h1><i class="bx bx-building"></i> {{ t.t('satellites.title') }}</h1>
+      <p>{{ t.t('satellites.subtitle') }}</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="loadSatellites()" title="Refresh">
+        <i class="bx bx-refresh"></i> Refresh
+      </button>
+      <button class="btn btn-primary" (click)="openCreateModal()" [title]="t.t('satellites.newSatellite')">
+        <i class="bx bx-plus"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Dashboard Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <i class="bx bx-building stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ satellites().length }}</span>
+        <span class="stat-label">Total Satellites</span>
+      </div>
+    </div>
+      <div class="stat-card">
+        <i class="bx bx-check-circle stat-icon active"></i>
+        <div>
+          <span class="stat-value">{{ activeCount() }}</span>
+          <span class="stat-label">Active</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <i class="bx bx-user stat-icon"></i>
+        <div>
+          <span class="stat-value">{{ totalEmployees() }}</span>
+          <span class="stat-label">Total Employees</span>
+        </div>
+      </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <div class="search-box">
+      <i class="bx bx-search"></i>
+      <input 
+        type="text" 
+        placeholder="Search satellites..." 
+        [(ngModel)]="searchTerm"
+        (ngModelChange)="onSearch()">
+    </div>
+    
+    <select [(ngModel)]="orgFilter" (ngModelChange)="onSearch()">
+      <option value="all">All Organizations</option>
+      @for (org of organizations(); track org.id) {
+        <option [value]="org.id">{{ org.name }}</option>
+      }
+    </select>
+    
+    <select [(ngModel)]="statusFilter" (ngModelChange)="onStatusFilter()">
+      <option value="all">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+      <option value="suspended">Suspended</option>
+    </select>
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <i class="bx bx-loader-alt bx-spin"></i>
+      <p>{{ t.t('common.loading') }}...</p>
+    </div>
+  }
+
+  <!-- Satellites Grid -->
+  @if (!loading() && satellites().length > 0) {
+    <div class="satellites-grid">
+      @for (satellite of satellites(); track satellite.id) {
+        <div class="satellite-card" [class]="satellite.status">
+          <div class="card-header">
+            <div class="satellite-info">
+              <h3>{{ satellite.name }}</h3>
+              @if (satellite.dbaName) {
+                <span class="dba">DBA: {{ satellite.dbaName }}</span>
+              }
+            </div>
+            <span class="status-badge" [class]="satellite.status">{{ satellite.status }}</span>
+          </div>
+
+          <div class="card-body">
+            @if (satellite.code) {
+              <div class="detail-row">
+                <i class="bx bx-barcode"></i>
+                <span>{{ satellite.code }}</span>
+              </div>
+            }
+            
+            @if (satellite.city && satellite.state) {
+              <div class="detail-row">
+                <i class="bx bx-map"></i>
+                <span>{{ satellite.city }}, {{ satellite.state }}</span>
+              </div>
+            }
+            
+            @if (satellite.contactPhone) {
+              <div class="detail-row">
+                <i class="bx bx-phone"></i>
+                <span>{{ satellite.contactPhone }}</span>
+              </div>
+            }
+            
+            @if (satellite.manager) {
+              <div class="detail-row">
+                <i class="bx bx-user"></i>
+                <span>Manager: {{ satellite.manager.name }}</span>
+              </div>
+            }
+            
+            @if (satellite.employeeCount) {
+              <div class="detail-row">
+                <i class="bx bx-group"></i>
+                <span>{{ satellite.employeeCount }} employees</span>
+              </div>
+            }
+          </div>
+
+          <div class="card-actions">
+            <button class="btn-icon" (click)="openEditModal(satellite)" title="Edit">
+              <i class="bx bx-edit"></i>
+            </button>
+            <button class="btn-icon btn-danger" (click)="deleteSatellite(satellite.id)" title="Delete">
+              <i class="bx bx-trash"></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <button (click)="previousPage()" [disabled]="currentPage() === 1">
+        <i class="bx bx-chevron-left"></i> Previous
+      </button>
+      <span class="page-info">Page {{ currentPage() }} of {{ totalPages() }}</span>
+      <button (click)="nextPage()" [disabled]="currentPage() === totalPages()">
+        Next <i class="bx bx-chevron-right"></i>
+      </button>
+    </div>
+  }
+
+  <!-- Empty State -->
+  @if (!loading() && satellites().length === 0) {
+    <div class="empty-state">
+      <i class="bx bx-building"></i>
+      <h3>{{ t.t('satellites.noSatellitesFound') }}</h3>
+      <p>{{ t.t('satellites.createFirstSatellite') }}</p>
+      <button class="btn btn-primary" (click)="openCreateModal()" [title]="t.t('satellites.createSatellite')">
+        <i class="bx bx-plus"></i>
+      </button>
+    </div>
+  }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal()) {
+  <div class="modal-overlay" (click)="closeModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>
+          <i class="bx bx-building"></i>
+          {{ modalMode() === 'create' ? 'Create Satellite' : 'Edit Satellite' }}
+        </h2>
+        <button class="btn-close" (click)="closeModal()">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- WIZARD STEP 1: Select Organization -->
+        @if (modalMode() === 'create' && wizardStep() === 1) {
+          <div class="wizard-step">
+            <h3 class="wizard-title"><i class="bx bx-buildings"></i> Step 1: Select Organization</h3>
+            <p class="wizard-desc">Choose which organization this satellite will belong to. Business fields will adapt to the organization's country.</p>
+            <div class="org-cards">
+              @for (org of organizations(); track org.id) {
+                <button class="org-card" [class.selected]="selectedOrgId() === org.id" (click)="selectOrgAndNext(org.id)">
+                  <i class="bx bx-buildings"></i>
+                  <span class="org-name">{{ org.name }}</span>
+                  <span class="org-country">{{ org.country || 'USA' }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- WIZARD STEP 2: Satellite Details -->
+        @if (wizardStep() === 2) {
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Satellite Name *</label>
+            <input type="text" [(ngModel)]="form.name" placeholder="Chicago Satellite">
+          </div>
+
+          <div class="form-group">
+            <label>Code</label>
+            <input type="text" [(ngModel)]="form.code" placeholder="SAT-CHI">
+          </div>
+
+          <div class="form-group">
+            <label>DBA Name</label>
+            <input type="text" [(ngModel)]="form.dbaName" placeholder="Doing Business As">
+          </div>
+
+          <div class="form-group">
+            <label>Status</label>
+            <select [(ngModel)]="form.status">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+
+          <div class="form-section-divider"><span><i class="bx bx-id-card"></i> Business Registration</span></div>
+
+          <div class="form-group full-width">
+            <label>Legal Business Name</label>
+            <input type="text" [(ngModel)]="form.legalBusinessName">
+          </div>
+
+          @if (selectedOrgCountry() === 'BA') {
+            <!-- Bosnia Business Fields -->
+            <div class="form-group">
+              <label>JIB (Tax ID)</label>
+              <input type="text" [(ngModel)]="form.jib" placeholder="4200000000000" maxlength="13">
+            </div>
+
+            <div class="form-group">
+              <label>PDV Number (VAT)</label>
+              <input type="text" [(ngModel)]="form.pdvNumber" placeholder="200000000000">
+            </div>
+
+            <div class="form-group">
+              <label>Court Registration</label>
+              <input type="text" [(ngModel)]="form.courtRegistration" placeholder="Court registration number">
+            </div>
+
+            <div class="form-group">
+              <label>Activity Code</label>
+              <input type="text" [(ngModel)]="form.activityCode" placeholder="49.41">
+            </div>
+
+            <div class="form-group">
+              <label>Registration Number</label>
+              <input type="text" [(ngModel)]="form.registrationNumber" placeholder="Company reg number">
+            </div>
+          } @else {
+            <!-- USA Business Fields -->
+            <div class="form-group">
+              <label>EIN/Tax ID</label>
+              <input type="text" [(ngModel)]="form.einTaxId" placeholder="XX-XXXXXXX">
+            </div>
+
+            <div class="form-group">
+              <label>DOT Number</label>
+              <input type="text" [(ngModel)]="form.dotNumber">
+            </div>
+
+            <div class="form-group">
+              <label>MC Number</label>
+              <input type="text" [(ngModel)]="form.mcNumber">
+            </div>
+          }
+
+          <div class="form-section-divider"><span><i class="bx bx-map"></i> Location</span></div>
+
+          <div class="form-group full-width">
+            <label>Address <span class="hint">(Start typing to search)</span></label>
+            <app-address-autocomplete
+              [placeholder]="'Start typing address (e.g., 1717 McKinney)'"
+              [value]="form.address"
+              (addressSelected)="onAddressSelected($event)"
+              (valueChange)="form.address = $event"
+            ></app-address-autocomplete>
+          </div>
+
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" [(ngModel)]="form.city" placeholder="Auto-filled from address">
+          </div>
+
+          <div class="form-group">
+            <label>State</label>
+            <select [(ngModel)]="form.state">
+              <option value="">Select State</option>
+              @for (state of states; track state.code) {
+                <option [value]="state.code">{{ state.name }} ({{ state.code }})</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>ZIP Code</label>
+            <input type="text" [(ngModel)]="form.zipCode" placeholder="Auto-filled from address">
+          </div>
+
+          <div class="form-section-divider"><span><i class="bx bx-user"></i> Contact</span></div>
+
+          <div class="form-group">
+            <label>Contact Name</label>
+            <input type="text" [(ngModel)]="form.contactName">
+          </div>
+
+          <div class="form-group">
+            <label>Contact Email</label>
+            <input type="email" [(ngModel)]="form.contactEmail">
+          </div>
+
+          <div class="form-group">
+            <label>Contact Phone</label>
+            <input type="tel" [(ngModel)]="form.contactPhone">
+          </div>
+          <!-- Banking / Financial -->
+          <div class="form-section-divider"><span><i class="bx bx-credit-card"></i> Banking & Financial</span></div>
+
+          <div class="form-group">
+            <label>Bank Name</label>
+            <input type="text" [(ngModel)]="form.bankName" placeholder="Bank name">
+          </div>
+
+          @if (selectedOrgCountry() === 'BA') {
+            <div class="form-group">
+              <label>IBAN</label>
+              <input type="text" [(ngModel)]="form.iban" placeholder="BA39 1290 0794 0102 8494" maxlength="34">
+            </div>
+            <div class="form-group">
+              <label>SWIFT / BIC</label>
+              <input type="text" [(ngModel)]="form.swiftBic" placeholder="RAABORBA" maxlength="11">
+            </div>
+          } @else {
+            <div class="form-group">
+              <label>Routing Number</label>
+              <input type="text" [(ngModel)]="form.routingNumber" placeholder="021000021" maxlength="9">
+            </div>
+            <div class="form-group">
+              <label>Account Number</label>
+              <input type="text" [(ngModel)]="form.accountNumber" placeholder="1234567890">
+            </div>
+          }
+
+          <div class="form-group">
+            <label>Payment Terms</label>
+            <select [(ngModel)]="form.paymentTerms">
+              <option value="">Select Terms</option>
+              <option value="Net15">Net 15</option>
+              <option value="Net30">Net 30</option>
+              <option value="Net45">Net 45</option>
+              <option value="Net60">Net 60</option>
+              <option value="Prepaid">Prepaid</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Commission Rate (%)</label>
+            <input type="number" [(ngModel)]="form.commissionRate" min="0" max="100" step="0.5" placeholder="0">
+          </div>
+
+          <div class="form-group">
+            <label>Revenue Share (%)</label>
+            <input type="number" [(ngModel)]="form.revenueSharePercent" min="0" max="100" step="0.5" placeholder="0">
+          </div>
+
+          <!-- Satellite Owners (edit mode) -->
+          @if (modalMode() === 'edit') {
+            <div class="form-section-divider"><span><i class="bx bx-group"></i> Satellite Owners</span></div>
+
+            <div class="form-group full-width">
+              @if (satelliteOwners().length > 0) {
+                <div class="owners-list">
+                  @for (owner of satelliteOwners(); track owner.id) {
+                    <div class="owner-row">
+                      <i class="bx bx-user owner-icon"></i>
+                      <span class="owner-name">{{ owner.name }}</span>
+                      <span class="owner-role-tag">{{ owner.role }}</span>
+                      <span class="owner-pct">{{ owner.ownershipPercent }}%</span>
+                      <button class="btn-icon btn-danger" (click)="deleteOwner(owner.id)" title="Remove owner">
+                        <i class="bx bx-trash"></i>
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (showOwnerForm()) {
+                <div class="owner-form">
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label>Owner Name *</label>
+                      <input type="text" [(ngModel)]="ownerForm.name" placeholder="Full name">
+                    </div>
+                    <div class="form-group">
+                      <label>Or Select Employee</label>
+                      <select [(ngModel)]="ownerForm.userId" (ngModelChange)="onOwnerUserSelect($event)">
+                        <option [ngValue]="null">— External Owner —</option>
+                        @for (emp of satelliteEmployees(); track emp.id) {
+                          <option [ngValue]="emp.id">{{ emp.name }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Role</label>
+                      <select [(ngModel)]="ownerForm.role">
+                        <option value="owner">Owner</option>
+                        <option value="partner">Partner</option>
+                        <option value="member">Member</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Ownership %</label>
+                      <input type="number" [(ngModel)]="ownerForm.ownershipPercent" min="0" max="100" step="0.5">
+                    </div>
+                  </div>
+                  <div class="owner-form-actions">
+                    <button class="btn btn-secondary" (click)="showOwnerForm.set(false)">Cancel</button>
+                    <button class="btn btn-primary" (click)="saveOwner()"><i class="bx bx-save"></i> Add Owner</button>
+                  </div>
+                </div>
+              } @else {
+                <button class="btn-add-owner" (click)="showOwnerForm.set(true)">
+                  <i class="bx bx-plus"></i> Add Owner
+                </button>
+              }
+            </div>
+          }
+
+          <!-- Attached Employees (edit mode only) -->
+          @if (modalMode() === 'edit' && satelliteEmployees().length > 0) {
+            <div class="form-group full-width" style="margin-top:16px">
+              <label style="font-size:0.9rem;font-weight:700;color:var(--cyan,#00d4ff);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                <i class="bx bx-group"></i> Attached Employees ({{ satelliteEmployees().length }})
+              </label>
+              <div class="emp-table-wrap">
+                <table class="emp-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (emp of satelliteEmployees(); track emp.id) {
+                      <tr>
+                        <td class="emp-name">{{ emp.name }}</td>
+                        <td class="emp-email">{{ emp.email }}</td>
+                        <td><span class="role-tag">{{ emp.role }}</span></td>
+                        <td><span class="status-tag" [class]="emp.status">{{ emp.status }}</span></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+        </div>
+        } <!-- end step 2 -->
+      </div>
+
+      <div class="modal-footer">
+        @if (wizardStep() === 1) {
+          <button class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+          <span class="wizard-hint">Select an organization to continue</span>
+        } @else {
+          @if (modalMode() === 'create') {
+            <button class="btn btn-secondary" (click)="wizardStep.set(1)">
+              <i class="bx bx-chevron-left"></i> Back
+            </button>
+          } @else {
+            <button class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+          }
+          <button class="btn btn-primary" (click)="save()">
+            <i class="bx bx-save"></i>
+            {{ modalMode() === 'create' ? 'Create' : 'Save Changes' }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+}

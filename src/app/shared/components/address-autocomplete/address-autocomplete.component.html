@@ -1,0 +1,32 @@
+<div class="address-autocomplete">
+  <div class="input-wrapper">
+    <i class="bx bx-map-pin input-icon"></i>
+    <input 
+      type="text"
+      [value]="searchQuery()"
+      (input)="onInput($any($event.target).value)"
+      (focus)="onFocus()"
+      (blur)="onBlur()"
+      [placeholder]="placeholder"
+      class="address-input">
+    @if (loading()) {
+      <i class="bx bx-loader-alt bx-spin loading-icon"></i>
+    }
+  </div>
+  
+  @if (showSuggestions() && suggestions().length > 0) {
+    <div class="suggestions-dropdown">
+      @for (suggestion of suggestions(); track $index) {
+        <div class="suggestion-item" (click)="selectAddress(suggestion)">
+          <i class="bx bx-map"></i>
+          <div class="suggestion-content">
+            <div class="suggestion-address">{{ suggestion.formattedAddress }}</div>
+            <div class="suggestion-details">
+              {{ suggestion.city }}, {{ suggestion.state }} {{ suggestion.zipCode }}
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

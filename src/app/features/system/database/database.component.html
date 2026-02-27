@@ -1,0 +1,356 @@
+<div class="database">
+  <!-- Header -->
+  <header class="db-header">
+    <div class="header-text">
+      <h1>Database</h1>
+      <p class="subtitle">View and manage database tables and records</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn" (click)="createBackup()">
+        <i class="bx bx-data"></i>
+        Create Backup
+      </button>
+    </div>
+  </header>
+
+  <!-- Stats Bar -->
+  <section class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-value">{{ tables().length }}</span>
+      <span class="stat-label">Tables</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item cyan">
+      <span class="stat-value">{{ formatNumber(totalRecords()) }}</span>
+      <span class="stat-label">Total Records</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item green">
+      <span class="stat-value">{{ totalSize() }}</span>
+      <span class="stat-label">Database Size</span>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-item purple">
+      <span class="stat-value">{{ backups().length }}</span>
+      <span class="stat-label">Backups</span>
+    </div>
+  </section>
+
+  <!-- Main Tabs -->
+  <nav class="main-tabs">
+    <button 
+      class="tab-btn" 
+      [class.active]="selectedTab() === 'tables'"
+      (click)="selectedTab.set('tables'); selectedTable.set(null)"
+    >
+      <i class="bx bx-table"></i>
+      Tables
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="selectedTab() === 'query'"
+      (click)="selectedTab.set('query')"
+    >
+      <i class="bx bx-code-alt"></i>
+      Query
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="selectedTab() === 'backups'"
+      (click)="selectedTab.set('backups')"
+    >
+      <i class="bx bx-cloud-download"></i>
+      Backups
+    </button>
+  </nav>
+
+  <!-- Tables Tab -->
+  @if (selectedTab() === 'tables') {
+    @if (!selectedTable()) {
+      <!-- Table Search -->
+      <section class="search-bar">
+        <div class="search-box">
+          <i class="bx bx-search"></i>
+          <input 
+            type="text" 
+            placeholder="Search tables..."
+            [ngModel]="tableSearchQuery()"
+            (ngModelChange)="tableSearchQuery.set($event)"
+          >
+        </div>
+      </section>
+
+      <!-- Tables Grid -->
+      <section class="tables-grid">
+        @for (table of filteredTables(); track table.id) {
+          <div class="table-card" (click)="selectTable(table)">
+            <div class="table-icon">
+              <i class="bx {{ table.icon }}"></i>
+            </div>
+            <div class="table-info">
+              <h3>{{ table.displayName }}</h3>
+              <span class="table-name">{{ table.name }}</span>
+              <p class="table-desc">{{ table.description }}</p>
+            </div>
+            <div class="table-stats">
+              <div class="stat">
+                <span class="value">{{ formatNumber(table.recordCount) }}</span>
+                <span class="label">Records</span>
+              </div>
+              <div class="stat">
+                <span class="value">{{ table.size }}</span>
+                <span class="label">Size</span>
+              </div>
+            </div>
+            <div class="table-footer">
+              <span class="last-modified">
+                <i class="bx bx-time"></i>
+                {{ formatDate(table.lastModified) }}
+              </span>
+              <button class="action-btn" title="Export" (click)="exportTable(table); $event.stopPropagation()">
+                <i class="bx bx-export"></i>
+              </button>
+            </div>
+          </div>
+        }
+      </section>
+    } @else {
+      <!-- Table Record Browser -->
+      <section class="record-browser">
+        <div class="browser-header">
+          <button class="back-btn" (click)="backToTables()">
+            <i class="bx bx-arrow-back"></i>
+            Back to Tables
+          </button>
+          <div class="table-title">
+            <i class="bx {{ selectedTable()!.icon }}"></i>
+            <div>
+              <h2>{{ selectedTable()!.displayName }}</h2>
+              <span class="record-count">{{ formatNumber(selectedTable()!.recordCount) }} records</span>
+            </div>
+          </div>
+          <div class="browser-actions">
+            <button class="btn" (click)="exportTable(selectedTable()!)">
+              <i class="bx bx-export"></i>
+              Export
+            </button>
+            <button class="btn btn-primary">
+              <i class="bx bx-plus"></i>
+              Add Record
+            </button>
+          </div>
+        </div>
+
+        <!-- Record Search -->
+        <div class="search-bar">
+          <div class="search-box">
+            <i class="bx bx-search"></i>
+            <input 
+              type="text" 
+              placeholder="Search records..."
+              [ngModel]="searchQuery()"
+              (ngModelChange)="searchQuery.set($event)"
+            >
+          </div>
+        </div>
+
+        <!-- Records Table -->
+        <div class="records-table">
+          <div class="table-header">
+            @for (col of currentColumns(); track col.key) {
+              <span class="col">{{ col.label }}</span>
+            }
+            <span class="col col-actions">Actions</span>
+          </div>
+          @for (record of currentRecords(); track record['id']) {
+            <div class="table-row" (click)="viewRecord(record)">
+              @for (col of currentColumns(); track col.key) {
+                <div class="col">
+                  @if (col.type === 'status') {
+                    <span class="status-badge" [class]="record[col.key]">{{ record[col.key] }}</span>
+                  } @else {
+                    {{ record[col.key] }}
+                  }
+                </div>
+              }
+              <div class="col col-actions" >
+                <button class="action-btn" title="View" (click)="viewRecord(record)">
+                  <i class="bx bx-show"></i>
+                </button>
+                <button class="action-btn" title="Edit">
+                  <i class="bx bx-edit"></i>
+                </button>
+                <button class="action-btn delete" title="Delete">
+                  <i class="bx bx-trash"></i>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="pagination">
+          <span class="page-info">Showing 1-5 of {{ formatNumber(selectedTable()!.recordCount) }}</span>
+          <div class="page-controls">
+            <button class="page-btn" disabled><i class="bx bx-chevron-left"></i></button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <span class="ellipsis">...</span>
+            <button class="page-btn">{{ Math.ceil(selectedTable()!.recordCount / 5) }}</button>
+            <button class="page-btn"><i class="bx bx-chevron-right"></i></button>
+          </div>
+        </div>
+      </section>
+    }
+  }
+
+  <!-- Query Tab -->
+  @if (selectedTab() === 'query') {
+    <section class="query-section">
+      <div class="query-editor">
+        <div class="editor-header">
+          <h3><i class="bx bx-code-alt"></i> SQL Query</h3>
+          <button class="btn btn-primary" (click)="runQuery()">
+            <i class="bx bx-play"></i>
+            Execute
+          </button>
+        </div>
+        <textarea 
+          class="query-input"
+          [ngModel]="sqlQuery()"
+          (ngModelChange)="sqlQuery.set($event)"
+          placeholder="Enter SQL query..."
+          rows="6"
+        ></textarea>
+      </div>
+
+      <div class="query-help">
+        <h4>Quick Queries</h4>
+        <div class="quick-queries">
+          <button class="quick-query" (click)="sqlQuery.set('SELECT * FROM shipments LIMIT 100;')">
+            All Shipments
+          </button>
+          <button class="quick-query" (click)="sqlQuery.set('SELECT * FROM shipments WHERE status = \'in-transit\';')">
+            In-Transit Shipments
+          </button>
+          <button class="quick-query" (click)="sqlQuery.set('SELECT * FROM customers WHERE status = \'active\';')">
+            Active Customers
+          </button>
+          <button class="quick-query" (click)="sqlQuery.set('SELECT COUNT(*) as total, status FROM shipments GROUP BY status;')">
+            Shipment Status Count
+          </button>
+          <button class="quick-query" (click)="sqlQuery.set('SELECT * FROM edi_transactions WHERE status = \'failed\' ORDER BY created_at DESC;')">
+            Failed EDI Transactions
+          </button>
+        </div>
+      </div>
+
+      <div class="query-results">
+        <div class="results-header">
+          <h4><i class="bx bx-table"></i> Results</h4>
+          <span class="result-info">Query results will appear here</span>
+        </div>
+        <div class="results-placeholder">
+          <i class="bx bx-data"></i>
+          <p>Execute a query to see results</p>
+        </div>
+      </div>
+    </section>
+  }
+
+  <!-- Backups Tab -->
+  @if (selectedTab() === 'backups') {
+    <section class="backups-section">
+      <div class="backups-header">
+        <h3><i class="bx bx-cloud-download"></i> Database Backups</h3>
+        <button class="btn btn-primary" (click)="createBackup()">
+          <i class="bx bx-plus"></i>
+          Create Backup
+        </button>
+      </div>
+
+      <div class="backups-list">
+        @for (backup of backups(); track backup.id) {
+          <div class="backup-item">
+            <div class="backup-icon">
+              <i class="bx bx-data"></i>
+            </div>
+            <div class="backup-info">
+              <span class="backup-name">{{ backup.name }}</span>
+              <span class="backup-date">{{ formatDate(backup.timestamp) }}</span>
+            </div>
+            <div class="backup-meta">
+              <span class="backup-size">{{ backup.size }}</span>
+              <span class="backup-type" [class]="backup.type">{{ backup.type }}</span>
+            </div>
+            <div class="backup-status">
+              <span class="status-badge" [class]="backup.status">
+                <i class="bx bx-check-circle"></i>
+                {{ backup.status }}
+              </span>
+            </div>
+            <div class="backup-actions">
+              <button class="action-btn" title="Download" (click)="downloadBackup(backup)">
+                <i class="bx bx-download"></i>
+              </button>
+              <button class="action-btn" title="Restore" (click)="restoreBackup(backup)">
+                <i class="bx bx-revision"></i>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="backup-settings">
+        <h4><i class="bx bx-cog"></i> Backup Settings</h4>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <span class="setting-label">Automatic Backups</span>
+            <span class="setting-value enabled">Enabled - Daily at 2:00 AM</span>
+          </div>
+          <div class="setting-item">
+            <span class="setting-label">Retention Period</span>
+            <span class="setting-value">30 days</span>
+          </div>
+          <div class="setting-item">
+            <span class="setting-label">Storage Location</span>
+            <span class="setting-value">AWS S3 - us-east-1</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  }
+
+  <!-- Record Detail Modal -->
+  @if (showRecordModal() && selectedRecord()) {
+    <div class="modal-overlay">
+      <div class="modal-content" >
+        <div class="modal-header">
+          <h2>Record Details</h2>
+          <button class="close-btn" (click)="closeRecordModal()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="record-fields">
+            @for (col of currentColumns(); track col.key) {
+              <div class="field-item">
+                <span class="field-label">{{ col.label }}</span>
+                <span class="field-value" [class]="col.type === 'status' ? selectedRecord()![col.key] : ''">
+                  {{ selectedRecord()![col.key] }}
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" (click)="closeRecordModal()">Close</button>
+          <button class="btn btn-primary">
+            <i class="bx bx-edit"></i>
+            Edit Record
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

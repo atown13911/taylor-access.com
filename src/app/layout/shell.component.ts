@@ -20,6 +20,8 @@ export class ShellComponent implements OnInit {
   navItems = [
     { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
     { label: 'Users', icon: 'bx bx-user', route: '/users' },
+    { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
+    { label: 'Database', icon: 'bx bx-data', route: '/database' },
   ];
 
   ngOnInit(): void {

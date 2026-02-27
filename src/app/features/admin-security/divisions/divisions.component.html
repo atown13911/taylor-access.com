@@ -1,0 +1,209 @@
+<div class="divisions-page">
+  <header class="page-header">
+    <div class="header-left">
+      <h1><i class="bx bx-git-branch"></i> Divisions</h1>
+      <p class="subtitle">Manage divisions within your organizational structure</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline" (click)="loadAll()"><i class="bx bx-refresh"></i> Refresh</button>
+      <button class="btn btn-primary" (click)="openAdd()"><i class="bx bx-plus"></i> Create Division</button>
+    </div>
+  </header>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    @if (isElevated()) {
+      <div class="filter-group">
+        <label>Organization</label>
+        <select [ngModel]="selectedOrgId()" (ngModelChange)="selectedOrgId.set($event); onOrgChange()">
+          <option [ngValue]="null">All Organizations</option>
+          @for (org of organizations(); track org.id) {
+            <option [ngValue]="org.id">{{ org.name }}</option>
+          }
+        </select>
+      </div>
+    }
+    <div class="filter-group">
+      <label>Type</label>
+      <select [ngModel]="selectedType()" (ngModelChange)="selectedType.set($event)">
+        <option value="">All Types</option>
+        <option value="operational">Operational</option>
+        <option value="fleet">Fleet</option>
+      </select>
+    </div>
+    @if (selectedType() === 'fleet') {
+      <div class="filter-group">
+        <label>Fleet</label>
+        <select [ngModel]="selectedFleetId()" (ngModelChange)="selectedFleetId.set($event)">
+          <option [ngValue]="null">All Fleets</option>
+          @for (fleet of filteredFleets(); track fleet.id) {
+            <option [ngValue]="fleet.id">{{ fleet.name }}</option>
+          }
+        </select>
+      </div>
+    }
+    <div class="filter-group search">
+      <label>Search</label>
+      <div class="search-input">
+        <i class="bx bx-search"></i>
+        <input type="search" placeholder="Search divisions..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" autocomplete="off">
+      </div>
+    </div>
+    <div class="filter-count">{{ filteredDivisions().length }} divisions</div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading"><i class="bx bx-loader-alt bx-spin"></i> Loading divisions...</div>
+  } @else if (filteredDivisions().length < 1) {
+    <div class="empty-state">
+      <i class="bx bx-git-branch"></i>
+      <h3>No Divisions Found</h3>
+      <p>Create divisions to organize your fleet structure</p>
+      <button class="btn btn-primary" (click)="openAdd()"><i class="bx bx-plus"></i> Create Division</button>
+    </div>
+  } @else {
+    <div class="divisions-grid">
+      @for (div of filteredDivisions(); track div.id) {
+        <div class="division-card" [class.inactive]="div.status !== 'active'">
+          <div class="card-header">
+            <div class="card-icon" [class]="div.divisionType">
+              <i class="bx" [ngClass]="div.divisionType === 'fleet' ? 'bx-car' : 'bx-git-branch'"></i>
+            </div>
+            <div class="card-title">
+              <h3>{{ div.name }}</h3>
+              <div class="card-badges">
+                <span class="type-tag" [class]="div.divisionType">{{ div.divisionType | titlecase }}</span>
+                <span class="status-badge" [class]="div.status">{{ div.status }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-details">
+            @if (div.divisionType === 'fleet' && div.fleetName) {
+              <div class="detail-row">
+                <i class="bx bx-car"></i>
+                <span>Fleet: <strong>{{ div.fleetName }}</strong></span>
+              </div>
+            }
+            @if (isElevated()) {
+              <div class="detail-row">
+                <i class="bx bx-buildings"></i>
+                <span>Org: <strong>{{ getOrgName(div.organizationId) }}</strong></span>
+              </div>
+            }
+            @if (div.managerName) {
+              <div class="detail-row">
+                <i class="bx bx-user"></i>
+                <span>Manager: <strong>{{ div.managerName }}</strong></span>
+              </div>
+            }
+            @if (div.location) {
+              <div class="detail-row">
+                <i class="bx bx-map"></i>
+                <span>{{ div.location }}</span>
+              </div>
+            }
+            @if (div.description) {
+              <div class="detail-row desc">
+                <span>{{ div.description }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="card-stats">
+            <div class="stat"><i class="bx bx-briefcase"></i> {{ div.departmentCount || 0 }} depts</div>
+            <div class="stat"><i class="bx bx-group"></i> {{ div.driverCount || 0 }} drivers</div>
+          </div>
+
+          <div class="card-actions">
+            <button class="btn-icon" title="Edit" (click)="openEdit(div)"><i class="bx bx-edit"></i></button>
+            <button class="btn-icon danger" title="Delete" (click)="deleteDivision(div)"><i class="bx bx-trash"></i></button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal()) {
+  <div class="modal-overlay" (click)="closeModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ editing() ? 'Edit Division' : 'Create Division' }}</h2>
+        <button class="btn-close" (click)="closeModal()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" [ngModel]="form().name" (ngModelChange)="updateField('name', $event)" placeholder="Division name">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Division Type *</label>
+            <select [ngModel]="form().divisionType" (ngModelChange)="updateField('divisionType', $event)">
+              <option value="operational">Operational</option>
+              <option value="fleet">Fleet</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Organization *</label>
+            <select [ngModel]="form().organizationId" (ngModelChange)="updateField('organizationId', $event ? +$event : null)">
+              <option [ngValue]="null">— Select —</option>
+              @for (org of organizations(); track org.id) {
+                <option [ngValue]="org.id">{{ org.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        @if (form().divisionType === 'fleet') {
+          <div class="form-group">
+            <label>Fleet *</label>
+            <select [ngModel]="form().fleetId" (ngModelChange)="updateField('fleetId', $event ? +$event : null)">
+              <option [ngValue]="null">— Select Fleet —</option>
+              @for (fleet of filteredFleets(); track fleet.id) {
+                <option [ngValue]="fleet.id">{{ fleet.name }}</option>
+              }
+            </select>
+          </div>
+        }
+        <div class="form-row">
+          <div class="form-group">
+            <label>Manager</label>
+            <select [ngModel]="form().managerName" (ngModelChange)="updateField('managerName', $event)">
+              <option value="">— No Manager —</option>
+              @for (emp of employees(); track emp.id) {
+                <option [value]="emp.name">{{ emp.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select [ngModel]="form().status" (ngModelChange)="updateField('status', $event)">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" [ngModel]="form().location" (ngModelChange)="updateField('location', $event)" placeholder="City, State">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea [ngModel]="form().description" (ngModelChange)="updateField('description', $event)" rows="3" placeholder="Division description..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="save()" [disabled]="saving()">
+          @if (saving()) {
+            <i class="bx bx-loader-alt bx-spin"></i>
+          } @else {
+            <i class="bx bx-check"></i> {{ editing() ? 'Update' : 'Create' }}
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
