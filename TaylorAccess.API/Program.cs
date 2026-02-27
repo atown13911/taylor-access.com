@@ -118,18 +118,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// CORS
+// CORS - allow taylor-access.com and all Cloudflare Pages preview URLs
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:4200",
-                "http://localhost:4300",
-                "https://taylor-access.com",
-                "https://www.taylor-access.com",
-                "https://taylor-access-com.pages.dev"
-            )
+        policy.SetIsOriginAllowed(origin =>
+            {
+                var uri = new Uri(origin);
+                return uri.Host == "localhost"
+                    || uri.Host == "taylor-access.com"
+                    || uri.Host == "www.taylor-access.com"
+                    || uri.Host.EndsWith(".taylor-access-com.pages.dev")
+                    || uri.Host == "taylor-access-com.pages.dev";
+            })
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
