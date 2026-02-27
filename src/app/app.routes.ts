@@ -33,7 +33,7 @@ export const routes: Routes = [
       },
       {
         path: 'drivers',
-        loadComponent: () => import('./features/fleet/drivers/drivers.component').then(m => m.DriversComponent)
+        loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
       }
     ]
   },
