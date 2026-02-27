@@ -1,0 +1,563 @@
+<div class="page-container">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-text">
+      <h1><i class='bx bx-folder-open'></i> HR Documents</h1>
+      <p class="subtitle">Setup required documents by organization, location, and job position</p>
+    </div>
+    <div class="header-actions">
+      @if (activeTab() === 'tab1') {
+        <button class="btn-restart" (click)="resetSelection()" [disabled]="!selectedOrganization()">
+          <i class='bx bx-refresh'></i>
+          <span>Restart Selection</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="doc-tabs">
+    <button class="doc-tab" [class.active]="activeTab() === 'tab1'" (click)="activeTab.set('tab1')">
+      <i class='bx bx-sitemap'></i> Document Structure
+    </button>
+    <button class="doc-tab" [class.active]="activeTab() === 'tab2'" (click)="activeTab.set('tab2')">
+      <i class='bx bx-file-find'></i> Required Docs
+    </button>
+  </div>
+
+  @if (activeTab() === 'tab1') {
+
+  <!-- Organizational Tree Navigator -->
+  <div class="org-tree-container">
+    
+    <!-- Step 1: Organization Selection -->
+    <div class="tree-level">
+      <h3 class="level-title">
+        <i class='bx bx-buildings'></i> Step 1: Select Organization
+      </h3>
+      <div class="tree-cards">
+        @for (org of organizations(); track org.id) {
+          <button 
+            class="tree-card"
+            [class.selected]="selectedOrganization()?.id === org.id"
+            (click)="selectOrganization(org)">
+            <i class='bx bx-buildings'></i>
+            <span>{{ org.name }}</span>
+            @if (selectedOrganization()?.id === org.id) {
+              <i class='bx bx-check-circle check-icon'></i>
+            }
+          </button>
+        }
+        @if (organizations().length === 0) {
+          <div class="empty-state">
+            <i class='bx bx-info-circle'></i>
+            <p>No organizations available</p>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Step 2: Category Selection -->
+    @if (selectedOrganization()) {
+      <div class="tree-level">
+        <h3 class="level-title">
+          <i class='bx bx-sitemap'></i> Step 2: Select Category Type
+        </h3>
+        
+        <div class="tree-cards">
+          <button 
+            class="tree-card"
+            [class.selected]="selectedCategory() === 'satellite'"
+            (click)="selectCategory('satellite')">
+            <i class='bx bx-buildings'></i>
+            <span>Satellite</span>
+            @if (selectedCategory() === 'satellite') {
+              <i class='bx bx-check-circle check-icon'></i>
+            }
+          </button>
+          
+          <button 
+            class="tree-card"
+            [class.selected]="selectedCategory() === 'agency'"
+            (click)="selectCategory('agency')">
+            <i class='bx bx-store-alt'></i>
+            <span>Agency</span>
+            @if (selectedCategory() === 'agency') {
+              <i class='bx bx-check-circle check-icon'></i>
+            }
+          </button>
+          
+          <button 
+            class="tree-card"
+            [class.selected]="selectedCategory() === 'department'"
+            (click)="selectCategory('department')">
+            <i class='bx bx-briefcase'></i>
+            <span>Department</span>
+            @if (selectedCategory() === 'department') {
+              <i class='bx bx-check-circle check-icon'></i>
+            }
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Step 3: Entity Instance Selection (based on category) -->
+    @if (selectedCategory()) {
+      <div class="tree-level">
+        <h3 class="level-title">
+          <i class='bx {{ getCategoryIcon(selectedCategory()) }}'></i> 
+          Step 3: Select {{ getCategoryName(selectedCategory()) }}
+        </h3>
+        
+        <!-- Show satellites if category is satellite -->
+        @if (selectedCategory() === 'satellite') {
+          <div class="tree-cards">
+            @for (sat of satellites(); track sat.id) {
+              <button 
+                class="tree-card small"
+                [class.selected]="selectedEntity()?.id === sat.id"
+                (click)="selectEntity(sat)">
+                <i class='bx bx-buildings'></i>
+                <span>{{ sat.name }}</span>
+                @if (selectedEntity()?.id === sat.id) {
+                  <i class='bx bx-check-circle check-icon'></i>
+                }
+              </button>
+            }
+            @if (satellites().length === 0) {
+              <div class="empty-state">
+                <i class='bx bx-info-circle'></i>
+                <p>No satellites available for this organization</p>
+              </div>
+            }
+          </div>
+        }
+        
+        <!-- Show agencies if category is agency -->
+        @if (selectedCategory() === 'agency') {
+          <div class="tree-cards">
+            @for (agency of agencies(); track agency.id) {
+              <button 
+                class="tree-card small"
+                [class.selected]="selectedEntity()?.id === agency.id"
+                (click)="selectEntity(agency)">
+                <i class='bx bx-store-alt'></i>
+                <span>{{ agency.name }}</span>
+                @if (selectedEntity()?.id === agency.id) {
+                  <i class='bx bx-check-circle check-icon'></i>
+                }
+              </button>
+            }
+            @if (agencies().length === 0) {
+              <div class="empty-state">
+                <i class='bx bx-info-circle'></i>
+                <p>No agencies available for this organization</p>
+              </div>
+            }
+          </div>
+        }
+        
+        <!-- Show departments if category is department -->
+        @if (selectedCategory() === 'department') {
+          <div class="tree-cards">
+            @for (dept of departments(); track dept.id) {
+              <button 
+                class="tree-card small"
+                [class.selected]="selectedEntity()?.id === dept.id"
+                (click)="selectEntity(dept)">
+                <i class='bx bx-briefcase'></i>
+                <span>{{ dept.name }}</span>
+                @if (selectedEntity()?.id === dept.id) {
+                  <i class='bx bx-check-circle check-icon'></i>
+                }
+              </button>
+            }
+            @if (departments().length === 0) {
+              <div class="empty-state">
+                <i class='bx bx-info-circle'></i>
+                <p>No departments available for this organization</p>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+    
+    <!-- Step 4: Job Position Selection (only for department category) -->
+    @if (selectedEntity() && selectedCategory() === 'department') {
+      <div class="tree-level">
+        <h3 class="level-title">
+          <i class='bx bx-user-pin'></i> Step 4: Select Position
+        </h3>
+        <div class="tree-cards">
+          @for (position of jobPositions(); track position.id) {
+            <button 
+              class="tree-card small"
+              [class.selected]="selectedPosition()?.id === position.id"
+              (click)="selectPosition(position)">
+              <i class='bx bx-user-pin'></i>
+              <span>{{ position.name || position.title }}</span>
+              @if (selectedPosition()?.id === position.id) {
+                <i class='bx bx-check-circle check-icon'></i>
+              }
+            </button>
+          }
+          @if (jobPositions().length === 0) {
+            <div class="empty-state">
+              <i class='bx bx-info-circle'></i>
+              <p>No job positions available</p>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Selected Path Display -->
+    @if (selectedOrganization()) {
+      <div class="breadcrumb">
+        <div class="breadcrumb-item">
+          <i class='bx bx-buildings'></i>
+          <span>{{ selectedOrganization()?.name }}</span>
+        </div>
+        @if (selectedCategory()) {
+          <i class='bx bx-chevron-right'></i>
+          <div class="breadcrumb-item">
+            <i class='bx {{ getCategoryIcon(selectedCategory()) }}'></i>
+            <span>{{ getCategoryName(selectedCategory()) }} Type</span>
+          </div>
+        }
+        @if (selectedEntity()) {
+          <i class='bx bx-chevron-right'></i>
+          <div class="breadcrumb-item">
+            <i class='bx {{ getCategoryIcon(selectedCategory()) }}'></i>
+            <span>{{ selectedEntity()?.name }}</span>
+          </div>
+        }
+        @if (selectedPosition()) {
+          <i class='bx bx-chevron-right'></i>
+          <div class="breadcrumb-item">
+            <i class='bx bx-user-pin'></i>
+            <span>{{ selectedPosition()?.name || selectedPosition()?.title }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Documents Checklist (shown when position is selected, or entity is selected for satellite/agency) -->
+    @if (selectedPosition() || (selectedEntity() && selectedCategory() !== 'department')) {
+      <div class="documents-section">
+        <div class="documents-header">
+          <h3><i class='bx bx-file-check'></i> Document Requirements for {{ selectedPosition()?.name || selectedPosition()?.title || selectedEntity()?.name }}</h3>
+          <span class="req-count">{{ requiredDocuments().length }} required</span>
+        </div>
+        
+        <div class="info-banner">
+          <i class='bx bx-info-circle'></i>
+          <div>
+            <strong>Select Required Documents</strong>
+            <p>Check which documents are required for {{ selectedPosition()?.name || selectedPosition()?.title }} positions at {{ selectedEntity()?.name }}</p>
+          </div>
+        </div>
+
+        @if (docCategories().length === 0) {
+          <div class="empty-message">
+            <i class='bx bx-folder-open'></i>
+            <p>No document templates available</p>
+            <small>Go to the "Required Docs" tab to create document categories first</small>
+          </div>
+        } @else {
+          <div class="checklist-section">
+            @for (cat of docCategories(); track cat.id) {
+              <div class="checklist-group">
+                <div class="checklist-group-header">
+                  <i class='bx bx-folder'></i> {{ cat.name }}
+                  <span class="checklist-group-count">{{ getCheckedCountForCat(cat) }}/{{ cat.docs.length }}</span>
+                </div>
+                <table class="checklist-table">
+                  <tbody>
+                    @for (doc of cat.docs; track doc.name) {
+                      <tr [class.checked]="isDocRequiredById(doc.id)">
+                        <td class="check-cell">
+                          <input type="checkbox" [checked]="isDocRequiredById(doc.id)" (change)="toggleDocRequired(doc, cat.name)">
+                        </td>
+                        <td class="doc-name-cell">
+                          <strong>{{ doc.name }}</strong>
+                        </td>
+                        <td class="desc-cell">{{ doc.description || '' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+  </div>
+  }
+
+  @if (activeTab() === 'tab2') {
+    <div class="tree-split">
+      <!-- Left: File Tree -->
+      <div class="tree-panel">
+        <div class="tree-header">
+          <span><i class='bx bx-folder-open'></i> Document Tree</span>
+        </div>
+        @if (treeLoading()) {
+          <div class="tree-loading"><i class='bx bx-loader-alt bx-spin'></i></div>
+        } @else {
+          <div class="tree-list">
+            <!-- Available Docs Category -->
+            <div class="tree-node">
+              <div class="tree-item category-item" [class.selected]="isSelected('available', 0)" (click)="selectNode('available', 0, 'Available Docs')">
+                <button class="tree-toggle" (click)="toggleNode('available'); $event.stopPropagation()">
+                  <i class='bx' [ngClass]="isExpanded('available') ? 'bx-chevron-down' : 'bx-chevron-right'"></i>
+                </button>
+                <i class='bx bx-folder tree-icon available'></i>
+                <span>Available Docs</span>
+                <button class="tree-add-btn" (click)="openAddCategory(); $event.stopPropagation()" title="Add subfolder">
+                  <i class='bx bx-plus'></i>
+                </button>
+              </div>
+              @if (isExpanded('available')) {
+                @for (cat of docCategories(); track cat.id) {
+                  <div class="tree-node" style="padding-left: 20px;">
+                    <div class="tree-item subfolder-item"
+                         [class.selected]="isSelected('cat', cat.id)"
+                         [class.drag-over]="dragOverCatId() === cat.id"
+                         (click)="selectNode('cat', cat.id, cat.name)"
+                         (dragover)="onDragOverFolder(cat.id, $event)"
+                         (dragleave)="onDragLeaveFolder($event)"
+                         (drop)="onDropOnFolder(cat.id, $event)">
+                      <button class="tree-toggle" (click)="toggleNode('cat_' + cat.id); $event.stopPropagation()">
+                        <i class='bx' [ngClass]="isExpanded('cat_' + cat.id) ? 'bx-chevron-down' : 'bx-chevron-right'"></i>
+                      </button>
+                      <i class='bx bx-folder tree-icon cat'></i>
+                      @if (editingCatId() === cat.id) {
+                        <input
+                          type="text"
+                          class="rename-input"
+                          [(ngModel)]="editingCatName"
+                          (blur)="finishRenameCategory(cat.id)"
+                          (keydown.enter)="finishRenameCategory(cat.id)"
+                          (keydown.escape)="cancelRename()"
+                          (click)="$event.stopPropagation()"
+                          autofocus>
+                      } @else {
+                        <span (dblclick)="startRenameCategory(cat.id, cat.name); $event.stopPropagation()">{{ cat.name }}</span>
+                        <span class="tree-count">{{ cat.docs.length }}</span>
+                        <button class="tree-add-btn" (click)="openAddDocToCategory(cat.id); $event.stopPropagation()" title="Add document">
+                          <i class='bx bx-plus'></i>
+                        </button>
+                        <button class="tree-remove-btn" (click)="removeCategory(cat.id); $event.stopPropagation()" title="Delete folder">
+                          <i class='bx bx-trash'></i>
+                        </button>
+                      }
+                    </div>
+                    @if (isExpanded('cat_' + cat.id)) {
+                      @for (doc of cat.docs; track di; let di = $index) {
+                        <div class="tree-node" style="padding-left: 20px;">
+                          <div class="tree-item leaf doc-item"
+                               draggable="true"
+                               (dragstart)="onDragStartDoc(cat.id, di, $event)"
+                               (dragend)="onDragEnd()">
+                            <i class='bx bx-grid-vertical drag-handle'></i>
+                            <i class='bx bx-file tree-icon doc'></i>
+                            @if (isEditingDoc(cat.id, di)) {
+                              <input
+                                type="text"
+                                class="rename-input"
+                                [(ngModel)]="editingDocName"
+                                (blur)="finishRenameDoc(cat.id, di)"
+                                (keydown.enter)="finishRenameDoc(cat.id, di)"
+                                (keydown.escape)="cancelRenameDoc(cat.id, di)"
+                                (click)="$event.stopPropagation()"
+                                autofocus>
+                            } @else {
+                              <span (dblclick)="startRenameDoc(cat.id, di, doc.name); $event.stopPropagation()">{{ doc.name }}</span>
+                            }
+                            <button class="tree-remove-btn" (click)="removeDocFromCategory(cat.id, di); $event.stopPropagation()" title="Remove">
+                              <i class='bx bx-x'></i>
+                            </button>
+                          </div>
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              }
+            </div>
+
+            <div class="tree-divider"></div>
+
+            @for (org of treeOrgs(); track org.id) {
+              <div class="tree-node org-node">
+                <div class="tree-item" [class.selected]="isSelected('org', org.id)" (click)="selectNode('org', org.id, org.name)">
+                  <button class="tree-toggle" (click)="toggleNode('org_' + org.id); $event.stopPropagation()">
+                    <i class='bx' [ngClass]="isExpanded('org_' + org.id) ? 'bx-chevron-down' : 'bx-chevron-right'"></i>
+                  </button>
+                  <i class='bx bx-buildings tree-icon org'></i>
+                  <span>{{ org.name }}</span>
+                </div>
+                @if (isExpanded('org_' + org.id)) {
+                  <!-- Divisions under org -->
+                  @for (div of getDivisionsForOrg(org.id); track div.id) {
+                    <div class="tree-node div-node" style="padding-left: 20px;">
+                      <div class="tree-item" [class.selected]="isSelected('div', div.id)" (click)="selectNode('div', div.id, div.name)">
+                        <button class="tree-toggle" (click)="toggleNode('div_' + div.id); $event.stopPropagation()">
+                          <i class='bx' [ngClass]="isExpanded('div_' + div.id) ? 'bx-chevron-down' : 'bx-chevron-right'"></i>
+                        </button>
+                        <i class='bx bx-git-branch tree-icon div'></i>
+                        <span>{{ div.name }}</span>
+                      </div>
+                    </div>
+                  }
+                  <!-- Departments under org -->
+                  @for (dept of getDepartmentsForOrg(org.id); track dept.id) {
+                    <div class="tree-node dept-node" style="padding-left: 20px;">
+                      <div class="tree-item" [class.selected]="isSelected('dept', dept.id)" (click)="selectNode('dept', dept.id, dept.name)">
+                        <button class="tree-toggle" (click)="toggleNode('dept_' + dept.id); $event.stopPropagation()">
+                          <i class='bx' [ngClass]="isExpanded('dept_' + dept.id) ? 'bx-chevron-down' : 'bx-chevron-right'"></i>
+                        </button>
+                        <i class='bx bx-briefcase tree-icon dept'></i>
+                        <span>{{ dept.name }}</span>
+                      </div>
+                      @if (isExpanded('dept_' + dept.id)) {
+                        @for (pos of getPositionsForDept(dept.id); track pos.id) {
+                          <div class="tree-node pos-node" style="padding-left: 40px;">
+                            <div class="tree-item leaf" [class.selected]="isSelected('pos', pos.id)" (click)="selectNode('pos', pos.id, pos.title || pos.name)">
+                              <i class='bx bx-id-card tree-icon pos'></i>
+                              <span>{{ pos.title || pos.name }}</span>
+                            </div>
+                          </div>
+                        }
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Right: Document Preview & Table -->
+      <div class="doc-panel">
+        @if (!selectedTreeNode()) {
+          <div class="doc-empty">
+            <i class='bx bx-pointer'></i>
+            <h3>Select an item</h3>
+            <p>Choose an organization, department, or position from the tree to view required documents</p>
+          </div>
+        } @else {
+          <div class="doc-header">
+            <div class="doc-breadcrumb">
+              <i class='bx' [ngClass]="selectedTreeNode()?.type === 'org' ? 'bx-buildings' : selectedTreeNode()?.type === 'div' ? 'bx-git-branch' : selectedTreeNode()?.type === 'dept' ? 'bx-briefcase' : selectedTreeNode()?.type === 'cat' ? 'bx-folder' : 'bx-id-card'"></i>
+              <h3>{{ selectedTreeNode()?.name }}</h3>
+              <span class="doc-type-badge">{{ selectedTreeNode()?.type | uppercase }}</span>
+            </div>
+            @if (selectedTreeNode()?.type === 'cat') {
+              <button class="btn btn-primary btn-sm" (click)="openAddDocToCategory(selectedTreeNode()!.id)">
+                <i class='bx bx-plus'></i> Create New Document
+              </button>
+            }
+          </div>
+
+          <!-- Documents Table -->
+          <div class="doc-table-section">
+            @if (selectedNodeDocs().length === 0) {
+              <div class="doc-empty-small">
+                <i class='bx bx-file'></i>
+                <p>No documents in this section</p>
+              </div>
+            } @else {
+              <table class="doc-table">
+                <thead>
+                  <tr>
+                    <th>Required Document</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (doc of selectedNodeDocs(); track doc.name) {
+                    <tr>
+                      <td>
+                        <div class="doc-name-cell">
+                          <i class='bx bx-file'></i>
+                          <strong>{{ doc.name }}</strong>
+                        </div>
+                      </td>
+                      <td class="desc-cell">{{ doc.description || '—' }}</td>
+                      <td><span class="cat-badge">{{ doc.categoryName }}</span></td>
+                      <td class="actions-cell popup-anchor">
+                        <button class="icon-btn settings" title="Settings" (click)="openDocSettings(doc); $event.stopPropagation()">
+                          <i class='bx bx-cog'></i>
+                        </button>
+                        @if (showDocSettings() && docSettingsForm.id === doc.id) {
+                          <div class="doc-popup" (click)="$event.stopPropagation()">
+                            <div class="popup-header">
+                              <span>Settings</span>
+                              <button class="popup-close" (click)="showDocSettings.set(false)"><i class='bx bx-x'></i></button>
+                            </div>
+                            <div class="popup-body">
+                              <label>Name</label>
+                              <input type="text" [(ngModel)]="docSettingsForm.name" class="popup-input">
+                              <label>Description</label>
+                              <input type="text" [(ngModel)]="docSettingsForm.description" class="popup-input" placeholder="Optional">
+                            </div>
+                            <div class="popup-footer">
+                              <button class="popup-btn danger" (click)="deleteDocFromSettings()"><i class='bx bx-trash'></i></button>
+                              <button class="popup-btn primary" (click)="saveDocSettings()"><i class='bx bx-check'></i> Save</button>
+                            </div>
+                          </div>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+</div>
+
+<!-- Create New Document Modal -->
+@if (showNewDocModal()) {
+  <div class="modal-overlay" (click)="showNewDocModal.set(false)">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class='bx bx-file-blank'></i> Create Required Document</h3>
+        <button class="btn-close" (click)="showNewDocModal.set(false)"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-target-info">
+          <i class='bx bx-folder'></i> Adding to: <strong>{{ getTargetCatName() }}</strong>
+        </div>
+        <div class="form-group">
+          <label>Document Name *</label>
+          <input type="text" [(ngModel)]="newDocForm.name" placeholder="e.g., Form I-9, CDL Copy, Employment Contract" autofocus>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea [(ngModel)]="newDocForm.description" rows="3" placeholder="What is this document for? When is it required?"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="showNewDocModal.set(false)">Cancel</button>
+        <button class="btn btn-primary" (click)="saveNewDoc()" [disabled]="!newDocForm.name.trim()">
+          <i class='bx bx-plus'></i> Create Document
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Document Settings Popup (inline) rendered inside table rows -->

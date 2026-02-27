@@ -34,6 +34,18 @@ export const routes: Routes = [
       {
         path: 'drivers',
         loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
+      },
+      {
+        path: 'hr/benefits',
+        loadComponent: () => import('./features/hr/benefits/benefits.component').then(m => m.BenefitsComponent)
+      },
+      {
+        path: 'hr/performance-reviews',
+        loadComponent: () => import('./features/hr/performance-reviews/performance-reviews.component').then(m => m.PerformanceReviewsComponent)
+      },
+      {
+        path: 'hr/documents',
+        loadComponent: () => import('./features/hr/documents/hr-documents.component').then(m => m.HrDocumentsComponent)
       }
     ]
   },
