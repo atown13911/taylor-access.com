@@ -145,6 +145,7 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<EncryptionService>();
+builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 builder.Services.AddScoped<ITotpService, TotpService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
