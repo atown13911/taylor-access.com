@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { AuthService } from '../core/services/auth.service';
 
+interface NavSection {
+  label?: string;
+  items: { label: string; icon: string; route: string }[];
+}
+
 @Component({
   selector: 'app-shell',
   standalone: true,
@@ -17,12 +22,21 @@ export class ShellComponent implements OnInit {
   sidebarCollapsed = signal(false);
   currentUser = this.authService.currentUser;
 
-  navItems = [
-    { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
-    { label: 'Users', icon: 'bx bx-user', route: '/users' },
-    { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
-    { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
-    { label: 'Database', icon: 'bx bx-data', route: '/database' },
+  navSections: NavSection[] = [
+    {
+      items: [
+        { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
+        { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
+      ]
+    },
+    {
+      label: 'Admin',
+      items: [
+        { label: 'Users', icon: 'bx bx-user', route: '/users' },
+        { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
+        { label: 'Database', icon: 'bx bx-data', route: '/database' },
+      ]
+    }
   ];
 
   ngOnInit(): void {

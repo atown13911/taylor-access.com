@@ -14,13 +14,21 @@
     </div>
 
     <nav class="sidebar-nav">
-      @for (item of navItems; track item.route) {
-        <a [routerLink]="item.route" routerLinkActive="active" class="nav-item">
-          <i [class]="item.icon"></i>
-          @if (!sidebarCollapsed()) {
-            <span>{{ item.label }}</span>
-          }
-        </a>
+      @for (section of navSections; track section.label) {
+        @if (section.label && !sidebarCollapsed()) {
+          <div class="nav-section-label">{{ section.label }}</div>
+        }
+        @if (section.label && sidebarCollapsed()) {
+          <div class="nav-section-divider"></div>
+        }
+        @for (item of section.items; track item.route) {
+          <a [routerLink]="item.route" routerLinkActive="active" class="nav-item">
+            <i [class]="item.icon"></i>
+            @if (!sidebarCollapsed()) {
+              <span>{{ item.label }}</span>
+            }
+          </a>
+        }
       }
     </nav>
 

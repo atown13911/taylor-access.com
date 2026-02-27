@@ -69,6 +69,22 @@
   overflow-y: auto;
 }
 
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #556;
+  padding: 16px 12px 6px;
+  margin-top: 4px;
+}
+
+.nav-section-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 8px 12px;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
