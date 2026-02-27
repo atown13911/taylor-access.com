@@ -1,0 +1,1042 @@
+<div class="fleet-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1><i class='bx bx-car'></i> Fleet Management</h1>
+      <p class="subtitle">Manage drivers, carriers, equipment, and compliance</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="refreshData()" title="Refresh data">
+        <i class='bx bx-refresh'></i>
+      </button>
+      <button class="btn btn-primary" (click)="addNew()">
+        <i class='bx bx-plus'></i>
+        Add New
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-icon drivers"><i class='bx bx-id-card'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().activeDrivers }}/{{ stats().totalDrivers }}</span>
+        <span class="stat-label">Active Drivers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon carriers"><i class='bx bx-building'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().activeCarriers }}/{{ stats().totalCarriers }}</span>
+        <span class="stat-label">Active Carriers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon equipment"><i class='bx bx-truck'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().activeEquipment }}/{{ stats().totalEquipment }}</span>
+        <span class="stat-label">Active Equipment</span>
+      </div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-icon expiring"><i class='bx bx-error'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().expiringDocs }}</span>
+        <span class="stat-label">Expiring Docs</span>
+      </div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-icon expired"><i class='bx bx-x-circle'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().expiredDocs }}</span>
+        <span class="stat-label">Expired Docs</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-container">
+    <div class="tabs">
+      <button class="tab" [class.active]="selectedTab() === 'drivers'" (click)="selectedTab.set('drivers')">
+        <i class='bx bx-id-card'></i> Drivers
+      </button>
+      <button class="tab" [class.active]="selectedTab() === 'carriers'" (click)="selectedTab.set('carriers')">
+        <i class='bx bx-building'></i> Carriers
+      </button>
+      <button class="tab" [class.active]="selectedTab() === 'equipment'" (click)="selectedTab.set('equipment')">
+        <i class='bx bx-truck'></i> Equipment
+      </button>
+      <button class="tab" [class.active]="selectedTab() === 'compliance'" (click)="selectedTab.set('compliance')">
+        <i class='bx bx-check-shield'></i> Compliance
+      </button>
+    </div>
+    <div class="search-box">
+      <i class='bx bx-search'></i>
+      <input type="text" placeholder="Search..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+    </div>
+  </div>
+
+  <!-- Drivers Tab -->
+  @if (selectedTab() === 'drivers') {
+    <div class="data-table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Unit</th>
+            <th>Phone</th>
+            <th>License #</th>
+            <th>License Exp</th>
+            <th>Type</th>
+            <th>Fleet</th>
+            <th>Trailer Assigned</th>
+            <th>Trailer Type</th>
+            <th>Hire Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (driver of drivers(); track driver.id) {
+            <tr class="clickable-row" (click)="viewDriver(driver)">
+              <td class="name-cell">
+                <div class="avatar purple">{{ driver.name.charAt(0) }}</div>
+                {{ driver.name }}
+              </td>
+              <td class="unit-cell">{{ driver.unit }}</td>
+              <td>{{ driver.phone }}</td>
+              <td>{{ driver.licenseNumber }}</td>
+              <td [class.expiring]="isExpiringSoon(driver.licenseExpiry)">{{ formatDate(driver.licenseExpiry) }}</td>
+              <td><span class="type-badge" [class]="driver.type">{{ driver.type }}</span></td>
+              <td>
+                @if (driver.fleet?.name) {
+                  <span class="fleet-badge">{{ driver.fleet!.name }}</span>
+                } @else {
+                  <span class="no-fleet">—</span>
+                }
+              </td>
+              <td>{{ getAssignedTrailer(driver.id) || '—' }}</td>
+              <td>
+                @if (getAssignedTrailerType(driver.id)) {
+                  <span class="type-badge trailer">{{ getAssignedTrailerType(driver.id) }}</span>
+                } @else {
+                  <span class="no-trailer">—</span>
+                }
+              </td>
+              <td>{{ formatDate(driver.hireDate) }}</td>
+              <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
+              <td class="actions-cell">
+                <button class="action-btn" title="Simulate GPS" (click)="openSimulateModal(driver); $event.stopPropagation()"><i class='bx bx-target-lock'></i></button>
+                <button class="action-btn" title="Switch Org" (click)="openOrgModal(driver); $event.stopPropagation()"><i class='bx bx-buildings'></i></button>
+                <button class="action-btn" title="Edit" (click)="edit(driver); $event.stopPropagation()"><i class='bx bx-edit'></i></button>
+                <button class="action-btn" title="View Profile" (click)="viewDriver(driver); $event.stopPropagation()"><i class='bx bx-user'></i></button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Carriers Tab -->
+  @if (selectedTab() === 'carriers') {
+    <div class="data-table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>MC #</th>
+            <th>DOT #</th>
+            <th>Contact</th>
+            <th>Phone</th>
+            <th>Insurance Exp</th>
+            <th>Rating</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (carrier of carriers(); track carrier.id) {
+            <tr>
+              <td class="code-cell">{{ carrier.code }}</td>
+              <td class="name-cell">
+                <div class="avatar cyan">{{ carrier.name.charAt(0) }}</div>
+                {{ carrier.name }}
+              </td>
+              <td>{{ carrier.mcNumber }}</td>
+              <td>{{ carrier.dotNumber }}</td>
+              <td>{{ carrier.contact }}</td>
+              <td>{{ carrier.phone }}</td>
+              <td [class.expiring]="isExpiringSoon(carrier.insuranceExpiry)">{{ formatDate(carrier.insuranceExpiry) }}</td>
+              <td>
+                <div class="rating">
+                  <i class='bx bxs-star'></i>
+                  {{ carrier.rating.toFixed(1) }}
+                </div>
+              </td>
+              <td><span class="status-badge" [class]="carrier.status">{{ carrier.status }}</span></td>
+              <td class="actions-cell">
+                <button class="action-btn" title="Edit" (click)="edit(carrier)"><i class='bx bx-edit'></i></button>
+                <button class="action-btn" title="View Documents"><i class='bx bx-folder'></i></button>
+                <button class="action-btn danger" title="Delete" (click)="deleteItem(carrier)"><i class='bx bx-trash'></i></button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Equipment Tab -->
+  @if (selectedTab() === 'equipment') {
+    <div class="data-table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Unit</th>
+            <th>Type</th>
+            <th>Year/Make/Model</th>
+            <th>VIN</th>
+            <th>Mileage</th>
+            <th>Next Inspection</th>
+            <th>Assigned Driver</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (eq of equipment(); track eq.id) {
+            <tr>
+              <td class="unit-cell">{{ eq.unit }}</td>
+              <td><span class="type-badge" [class]="eq.type.toLowerCase().replace(' ', '-')">{{ eq.type }}</span></td>
+              <td>{{ eq.year }} {{ eq.make }} {{ eq.model }}</td>
+              <td class="vin-cell">{{ eq.vin }}</td>
+              <td>{{ formatNumber(eq.mileage) }} mi</td>
+              <td [class.expiring]="isExpiringSoon(eq.nextInspection)">{{ formatDate(eq.nextInspection) }}</td>
+              <td>{{ eq.assignedDriver || '—' }}</td>
+              <td><span class="status-badge" [class]="eq.status">{{ eq.status }}</span></td>
+              <td class="actions-cell">
+                <button class="action-btn" title="Edit" (click)="edit(eq)"><i class='bx bx-edit'></i></button>
+                <button class="action-btn" title="View Details"><i class='bx bx-show'></i></button>
+                <button class="action-btn" title="Maintenance"><i class='bx bx-wrench'></i></button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Compliance Tab -->
+  @if (selectedTab() === 'compliance') {
+    <div class="compliance-container">
+      <div class="compliance-filters">
+        <button class="filter-btn active">All</button>
+        <button class="filter-btn">Expiring Soon</button>
+        <button class="filter-btn">Expired</button>
+        <button class="filter-btn">Valid</button>
+      </div>
+      
+      <div class="compliance-grid">
+        @for (item of complianceItems(); track item.id) {
+          <div class="compliance-card" [class]="item.status">
+            <div class="compliance-icon" [class]="item.entityType">
+              @switch (item.entityType) {
+                @case ('driver') { <i class='bx bx-id-card'></i> }
+                @case ('carrier') { <i class='bx bx-building'></i> }
+                @case ('equipment') { <i class='bx bx-truck'></i> }
+              }
+            </div>
+            <div class="compliance-info">
+              <h4>{{ item.entity }}</h4>
+              <p class="doc-type">{{ item.documentType }}</p>
+              <p class="expiry">
+                @if (item.status === 'expired') {
+                  Expired {{ Math.abs(item.daysUntilExpiry) }} days ago
+                } @else {
+                  Expires in {{ item.daysUntilExpiry }} days
+                }
+              </p>
+              <span class="date">{{ formatDate(item.expiryDate) }}</span>
+            </div>
+            <div class="compliance-status">
+              <span class="status-indicator" [class]="item.status">
+                @switch (item.status) {
+                  @case ('valid') { <i class='bx bx-check-circle'></i> Valid }
+                  @case ('expiring') { <i class='bx bx-error'></i> Expiring }
+                  @case ('expired') { <i class='bx bx-x-circle'></i> Expired }
+                }
+              </span>
+            </div>
+            <div class="compliance-actions">
+              <button class="action-btn" title="Upload Document"><i class='bx bx-upload'></i></button>
+              <button class="action-btn" title="View Details"><i class='bx bx-show'></i></button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
+
+<!-- Modal -->
+@if (showModal()) {
+  <div class="modal-overlay">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>{{ modalType() === 'add' ? 'Add New' : 'Edit' }} {{ selectedTab() | titlecase }}</h3>
+        <button class="close-btn" (click)="closeModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <!-- Driver Form -->
+        @if (selectedTab() === 'drivers') {
+          <div class="form-section">
+            <h4>Basic Information</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Full Name *</label>
+                <input type="text" [ngModel]="driverForm().name" (ngModelChange)="updateDriverField('name', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>Phone *</label>
+                <input type="tel" [ngModel]="driverForm().phone" (ngModelChange)="updateDriverField('phone', $event)" placeholder="(555) 123-4567">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Work Email</label>
+                <input type="email" [ngModel]="driverForm().email" (ngModelChange)="updateDriverField('email', $event)" placeholder="driver@vantac.com">
+              </div>
+              <div class="form-group">
+                <label>Personal Email</label>
+                <input type="email" [ngModel]="driverForm().personalEmail" (ngModelChange)="updateDriverField('personalEmail', $event)" placeholder="driver@gmail.com">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Date of Birth</label>
+                <input type="date" [ngModel]="driverForm().dateOfBirth" (ngModelChange)="updateDriverField('dateOfBirth', $event)">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>License Information</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>CDL Number</label>
+                <input type="text" [ngModel]="driverForm().licenseNumber" (ngModelChange)="updateDriverField('licenseNumber', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" list="us-states" [ngModel]="driverForm().licenseState" (ngModelChange)="updateDriverField('licenseState', $event.toUpperCase())" placeholder="Select state" maxlength="2" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label>Expiry Date</label>
+                <input type="date" [ngModel]="driverForm().licenseExpiry" (ngModelChange)="updateDriverField('licenseExpiry', $event)">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Address</h4>
+            <div class="form-group full-width">
+              <label>Street Address</label>
+              <input type="text" [ngModel]="driverForm().address" (ngModelChange)="updateDriverField('address', $event)" placeholder="">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" [ngModel]="driverForm().city" (ngModelChange)="updateDriverField('city', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" list="us-states" [ngModel]="driverForm().state" (ngModelChange)="updateDriverField('state', $event.toUpperCase())" placeholder="Select state" maxlength="2" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label>ZIP</label>
+                <input type="text" [ngModel]="driverForm().zip" (ngModelChange)="updateDriverField('zip', $event)" placeholder="">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Fleet & Division</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Assigned Fleet</label>
+                <select [ngModel]="driverForm().fleetId" (ngModelChange)="updateDriverField('fleetId', $event ? +$event : null)">
+                  <option [ngValue]="null">— No Fleet —</option>
+                  @for (fleet of availableFleets(); track fleet.id) {
+                    <option [ngValue]="fleet.id">{{ fleet.name }}</option>
+                  }
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Division</label>
+                <select [ngModel]="driverForm().divisionId" (ngModelChange)="updateDriverField('divisionId', $event ? +$event : null)" [disabled]="!driverForm().fleetId">
+                  <option [ngValue]="null">— No Division —</option>
+                  @for (div of availableDivisions(); track div.id) {
+                    <option [ngValue]="div.id">{{ div.name }}</option>
+                  }
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Terminal</label>
+                <select [ngModel]="driverForm().driverTerminalId" (ngModelChange)="updateDriverField('driverTerminalId', $event ? +$event : null)" [disabled]="!driverForm().divisionId">
+                  <option [ngValue]="null">— No Terminal —</option>
+                  @for (term of availableDriverTerminals(); track term.id) {
+                    <option [ngValue]="term.id">{{ term.name }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Employment</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Hire Date</label>
+                <input type="date" [ngModel]="driverForm().hireDate" (ngModelChange)="updateDriverField('hireDate', $event)">
+              </div>
+              <div class="form-group">
+                <label>Pay Type</label>
+                <select [ngModel]="driverForm().payType" (ngModelChange)="updateDriverField('payType', $event)">
+                  <option value="mile">Per Mile</option>
+                  <option value="hour">Hourly</option>
+                  <option value="percentage">Percentage</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Pay Rate</label>
+                <input type="number" [ngModel]="driverForm().payRate" (ngModelChange)="updateDriverField('payRate', +$event)" placeholder="" step="0.01">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Emergency Contact</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Contact Name</label>
+                <input type="text" [ngModel]="driverForm().emergencyContact" (ngModelChange)="updateDriverField('emergencyContact', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>Contact Phone</label>
+                <input type="tel" [ngModel]="driverForm().emergencyPhone" (ngModelChange)="updateDriverField('emergencyPhone', $event)" placeholder="(555) 987-6543">
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Carrier Form -->
+        @if (selectedTab() === 'carriers') {
+          <div class="form-section">
+            <h4>Company Information</h4>
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label>Carrier Name *</label>
+                <input type="text" [ngModel]="carrierForm().name" (ngModelChange)="updateCarrierField('name', $event)" placeholder="">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>MC Number</label>
+                <input type="text" [ngModel]="carrierForm().mcNumber" (ngModelChange)="updateCarrierField('mcNumber', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>DOT Number</label>
+                <input type="text" [ngModel]="carrierForm().dotNumber" (ngModelChange)="updateCarrierField('dotNumber', $event)" placeholder="">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Contact Information</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Contact Name</label>
+                <input type="text" [ngModel]="carrierForm().contactName" (ngModelChange)="updateCarrierField('contactName', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" [ngModel]="carrierForm().phone" (ngModelChange)="updateCarrierField('phone', $event)" placeholder="(555) 123-4567">
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" [ngModel]="carrierForm().email" (ngModelChange)="updateCarrierField('email', $event)" placeholder="">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Address</h4>
+            <div class="form-group full-width">
+              <label>Street Address</label>
+              <input type="text" [ngModel]="carrierForm().address" (ngModelChange)="updateCarrierField('address', $event)" placeholder="">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" [ngModel]="carrierForm().city" (ngModelChange)="updateCarrierField('city', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" list="us-states" [ngModel]="carrierForm().state" (ngModelChange)="updateCarrierField('state', $event.toUpperCase())" placeholder="Select state" maxlength="2" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label>ZIP</label>
+                <input type="text" [ngModel]="carrierForm().zip" (ngModelChange)="updateCarrierField('zip', $event)" placeholder="">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Compliance</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Insurance Expiry</label>
+                <input type="date" [ngModel]="carrierForm().insuranceExpiry" (ngModelChange)="updateCarrierField('insuranceExpiry', $event)">
+              </div>
+              <div class="form-group">
+                <label>Authority Expiry</label>
+                <input type="date" [ngModel]="carrierForm().authorityExpiry" (ngModelChange)="updateCarrierField('authorityExpiry', $event)">
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Equipment Form -->
+        @if (selectedTab() === 'equipment') {
+          <div class="form-section">
+            <h4>Equipment Details</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Unit Number *</label>
+                <input type="text" [ngModel]="equipmentForm().unitNumber" (ngModelChange)="updateEquipmentField('unitNumber', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>Type</label>
+                <select [ngModel]="equipmentForm().type" (ngModelChange)="updateEquipmentField('type', $event)">
+                  <option value="tractor">Tractor</option>
+                  <option value="trailer">Trailer</option>
+                  <option value="straight_truck">Straight Truck</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Make</label>
+                <input type="text" [ngModel]="equipmentForm().make" (ngModelChange)="updateEquipmentField('make', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>Model</label>
+                <input type="text" [ngModel]="equipmentForm().model" (ngModelChange)="updateEquipmentField('model', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>Year</label>
+                <input type="text" [ngModel]="equipmentForm().year" (ngModelChange)="updateEquipmentField('year', $event)" placeholder="" maxlength="4">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Registration</h4>
+            <div class="form-row">
+              <div class="form-group full-width">
+                <label>VIN</label>
+                <input type="text" [ngModel]="equipmentForm().vin" (ngModelChange)="updateEquipmentField('vin', $event)" placeholder="" maxlength="17">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>License Plate</label>
+                <input type="text" [ngModel]="equipmentForm().licensePlate" (ngModelChange)="updateEquipmentField('licensePlate', $event)" placeholder="">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" list="us-states" [ngModel]="equipmentForm().plateState" (ngModelChange)="updateEquipmentField('plateState', $event.toUpperCase())" placeholder="Select state" maxlength="2" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label>Color</label>
+                <input type="text" [ngModel]="equipmentForm().color" (ngModelChange)="updateEquipmentField('color', $event)" placeholder="">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Service</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Fuel Type</label>
+                <select [ngModel]="equipmentForm().fuelType" (ngModelChange)="updateEquipmentField('fuelType', $event)">
+                  <option value="diesel">Diesel</option>
+                  <option value="gasoline">Gasoline</option>
+                  <option value="electric">Electric</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Last Service Date</label>
+                <input type="date" [ngModel]="equipmentForm().lastServiceDate" (ngModelChange)="updateEquipmentField('lastServiceDate', $event)">
+              </div>
+              <div class="form-group">
+                <label>Next Service Due</label>
+                <input type="date" [ngModel]="equipmentForm().nextServiceDue" (ngModelChange)="updateEquipmentField('nextServiceDue', $event)">
+              </div>
+            </div>
+          </div>
+        }
+
+        <!-- Compliance Form -->
+        @if (selectedTab() === 'compliance') {
+          <div class="form-section">
+            <h4>Document Information</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Document Type *</label>
+                <select [ngModel]="complianceForm().documentType" (ngModelChange)="updateComplianceField('documentType', $event)">
+                  <option value="cdl">CDL License</option>
+                  <option value="medical_card">Medical Card</option>
+                  <option value="mvr">Motor Vehicle Record (MVR)</option>
+                  <option value="drug_test">Drug Test</option>
+                  <option value="insurance">Insurance Certificate</option>
+                  <option value="ifta">IFTA Permit</option>
+                  <option value="annual_inspection">Annual Inspection</option>
+                  <option value="registration">Vehicle Registration</option>
+                  <option value="hazmat">Hazmat Endorsement</option>
+                  <option value="twic">TWIC Card</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Document Number</label>
+                <input type="text" [ngModel]="complianceForm().documentNumber" (ngModelChange)="updateComplianceField('documentNumber', $event)" placeholder="">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Associated Entity</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Entity Type *</label>
+                <select [ngModel]="complianceForm().entityType" (ngModelChange)="updateComplianceField('entityType', $event)">
+                  <option value="driver">Driver</option>
+                  <option value="vehicle">Vehicle</option>
+                  <option value="carrier">Carrier</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Select Entity *</label>
+                <select [ngModel]="complianceForm().entityId" (ngModelChange)="updateComplianceField('entityId', $event)">
+                  <option value="">-- Select --</option>
+                  @if (complianceForm().entityType === 'driver') {
+                    @for (driver of drivers(); track driver.id) {
+                      <option [value]="driver.id">{{ driver.name }}</option>
+                    }
+                  }
+                  @if (complianceForm().entityType === 'vehicle') {
+                    @for (eq of equipment(); track eq.id) {
+                      <option [value]="eq.id">{{ eq.unit }} - {{ eq.make }} {{ eq.model }}</option>
+                    }
+                  }
+                  @if (complianceForm().entityType === 'carrier') {
+                    @for (carrier of carriers(); track carrier.id) {
+                      <option [value]="carrier.id">{{ carrier.name }}</option>
+                    }
+                  }
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Validity Dates</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Issue Date</label>
+                <input type="date" [ngModel]="complianceForm().issueDate" (ngModelChange)="updateComplianceField('issueDate', $event)">
+              </div>
+              <div class="form-group">
+                <label>Expiry Date *</label>
+                <input type="date" [ngModel]="complianceForm().expiryDate" (ngModelChange)="updateComplianceField('expiryDate', $event)">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h4>Notes</h4>
+            <div class="form-group full-width">
+              <textarea [ngModel]="complianceForm().notes" (ngModelChange)="updateComplianceField('notes', $event)" placeholder="Additional notes..." rows="3"></textarea>
+            </div>
+          </div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveItem()" [disabled]="saving()">
+          @if (saving()) {
+            <i class='bx bx-loader-alt bx-spin'></i> Saving...
+          } @else {
+            <i class='bx bx-check'></i> Save
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Simulate GPS Modal -->
+@if (showSimulateModal()) {
+  <div class="modal-overlay">
+    <div class="modal" >
+      <div class="modal-header">
+        <h3><i class='bx bx-target-lock'></i> Simulate GPS Location</h3>
+        <button class="close-btn" (click)="closeSimulateModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="simulate-info">Simulate GPS position for <strong>{{ simulateDriverName() }}</strong></p>
+        <div class="form-group">
+          <label>Latitude</label>
+          <input type="number" step="0.0001" [ngModel]="simulateLat()" (ngModelChange)="simulateLat.set($event)">
+        </div>
+        <div class="form-group">
+          <label>Longitude</label>
+          <input type="number" step="0.0001" [ngModel]="simulateLng()" (ngModelChange)="simulateLng.set($event)">
+        </div>
+        <div class="quick-locations">
+          <p>Quick Locations:</p>
+          <button class="location-btn" (click)="simulateLat.set(34.0522); simulateLng.set(-118.2437)">
+            <i class='bx bx-map-pin'></i> Los Angeles
+          </button>
+          <button class="location-btn" (click)="simulateLat.set(32.7157); simulateLng.set(-117.1611)">
+            <i class='bx bx-map-pin'></i> San Diego
+          </button>
+          <button class="location-btn" (click)="simulateLat.set(33.4484); simulateLng.set(-112.0740)">
+            <i class='bx bx-map-pin'></i> Phoenix
+          </button>
+          <button class="location-btn" (click)="simulateLat.set(32.7767); simulateLng.set(-96.7970)">
+            <i class='bx bx-map-pin'></i> Dallas
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeSimulateModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="simulateLocation()">
+          <i class='bx bx-broadcast'></i> Simulate
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Organization Switch Modal -->
+@if (showOrgModal()) {
+  <div class="modal-overlay">
+    <div class="modal" >
+      <div class="modal-header">
+        <h3><i class='bx bx-buildings'></i> Switch Organization</h3>
+        <button class="close-btn" (click)="closeOrgModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <p>Select the organization to assign this driver to:</p>
+        <div class="org-list">
+          @for (org of driverOrgs(); track org.id) {
+            <label class="org-option" [class.selected]="selectedOrgId() === org.id">
+              <input type="radio" name="org" [value]="org.id" 
+                     [checked]="selectedOrgId() === org.id"
+                     (change)="selectedOrgId.set(org.id)">
+              <i class='bx bx-building'></i>
+              <span>{{ org.name }}</span>
+            </label>
+          } @empty {
+            <div class="loading-orgs">
+              <i class='bx bx-loader-alt bx-spin'></i> Loading organizations...
+            </div>
+          }
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeOrgModal()">Cancel</button>
+        <button class="btn btn-primary" [disabled]="!selectedOrgId()" (click)="switchOrganization()">
+          <i class='bx bx-transfer'></i> Switch
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Driver Detail Modal -->
+@if (selectedDriver()) {
+  <div class="modal-overlay driver-detail-overlay" (click)="closeDriverDetail()">
+    <div class="modal driver-detail-modal" (click)="$event.stopPropagation()">
+      <!-- Header -->
+      <div class="dd-header">
+        <div class="dd-profile">
+          <div class="dd-avatar">{{ selectedDriver().name?.charAt(0) || 'D' }}</div>
+          <div class="dd-name-section">
+            <h2>{{ selectedDriver().name }}</h2>
+            <div class="dd-tags">
+              <span class="dd-type-tag" [class]="selectedDriver().type">{{ selectedDriver().type }}</span>
+              <span class="dd-status-tag" [class]="selectedDriver().status">{{ selectedDriver().status }}</span>
+              @if (selectedDriver().unit) {
+                <span class="dd-unit-tag">Unit {{ selectedDriver().unit }}</span>
+              }
+            </div>
+          </div>
+        </div>
+        <button class="dd-close" (click)="closeDriverDetail()"><i class="bx bx-x"></i></button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="dd-tabs">
+        <button class="dd-tab" [class.active]="driverDetailTab() === 'details'" (click)="driverDetailTab.set('details')">
+          <i class="bx bx-user"></i> Details
+        </button>
+        <button class="dd-tab" [class.active]="driverDetailTab() === 'documents'" (click)="driverDetailTab.set('documents')">
+          <i class="bx bx-file"></i> Documents
+        </button>
+        <button class="dd-tab" [class.active]="driverDetailTab() === 'compliance'" (click)="driverDetailTab.set('compliance')">
+          <i class="bx bx-shield-quarter"></i> Compliance
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="dd-content">
+        @if (driverDetailTab() === 'details') {
+          <!-- Contact Info -->
+          <div class="dd-section">
+            <h4><i class="bx bx-phone"></i> Contact Information</h4>
+            <div class="dd-grid">
+              <div class="dd-field">
+                <span class="dd-label">Phone</span>
+                <span class="dd-value">{{ selectedDriver().phone || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Work Email</span>
+                <span class="dd-value">{{ selectedDriver().email || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Personal Email</span>
+                <span class="dd-value">{{ selectedDriver().personalEmail || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Address</span>
+                <span class="dd-value">{{ selectedDriver().address || '—' }}{{ selectedDriver().city ? ', ' + selectedDriver().city : '' }}{{ selectedDriver().state ? ', ' + selectedDriver().state : '' }} {{ selectedDriver().zip || '' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Emergency Contact</span>
+                <span class="dd-value">{{ selectedDriver().emergencyContact || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Emergency Phone</span>
+                <span class="dd-value">{{ selectedDriver().emergencyPhone || '—' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- License & CDL -->
+          <div class="dd-section">
+            <h4><i class="bx bx-id-card"></i> License & CDL</h4>
+            <div class="dd-grid">
+              <div class="dd-field">
+                <span class="dd-label">License Number</span>
+                <span class="dd-value license">{{ selectedDriver().licenseNumber || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">License State</span>
+                <span class="dd-value">{{ selectedDriver().licenseState || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Expiration</span>
+                <span class="dd-value" [class]="getLicenseStatus(selectedDriver().licenseExpiry)">
+                  {{ formatDate(selectedDriver().licenseExpiry) }}
+                  <span class="dd-status-indicator" [class]="getLicenseStatus(selectedDriver().licenseExpiry)">
+                    {{ getLicenseStatus(selectedDriver().licenseExpiry) | titlecase }}
+                  </span>
+                </span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Date of Birth</span>
+                <span class="dd-value">{{ formatDate(selectedDriver().dateOfBirth) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Employment -->
+          <div class="dd-section">
+            <h4><i class="bx bx-briefcase"></i> Employment</h4>
+            <div class="dd-grid">
+              <div class="dd-field">
+                <span class="dd-label">Hire Date</span>
+                <span class="dd-value">{{ formatDate(selectedDriver().hireDate) }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Years of Service</span>
+                <span class="dd-value">{{ getDriverYearsOfService(selectedDriver().hireDate) }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Driver Type</span>
+                <span class="dd-value">{{ selectedDriver().type | titlecase }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Pay Rate</span>
+                <span class="dd-value">{{ selectedDriver().payRate ? ('$' + selectedDriver().payRate) : '—' }} {{ selectedDriver().payType ? '/ ' + selectedDriver().payType : '' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assignment -->
+          <div class="dd-section">
+            <h4><i class="bx bx-car"></i> Current Assignment</h4>
+            <div class="dd-grid">
+              <div class="dd-field">
+                <span class="dd-label">Fleet</span>
+                <span class="dd-value">{{ selectedDriver().fleet?.name || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Unit Number</span>
+                <span class="dd-value">{{ selectedDriver().unit || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Trailer Assigned</span>
+                <span class="dd-value">{{ getAssignedTrailer(selectedDriver().id) || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Trailer Type</span>
+                <span class="dd-value">{{ getAssignedTrailerType(selectedDriver().id) || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">Organization</span>
+                <span class="dd-value">{{ selectedDriver().currentOrg || '—' }}</span>
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (driverDetailTab() === 'documents') {
+          <div class="dd-section">
+            <h4><i class="bx bx-file"></i> Driver Documents</h4>
+            <div class="dd-doc-list">
+              <div class="dd-doc-item">
+                <i class="bx bx-id-card"></i>
+                <div class="dd-doc-info">
+                  <span class="dd-doc-name">Commercial Driver License (CDL)</span>
+                  <span class="dd-doc-status" [class]="getLicenseStatus(selectedDriver().licenseExpiry)">
+                    Exp: {{ formatDate(selectedDriver().licenseExpiry) }}
+                  </span>
+                </div>
+                <span class="dd-doc-badge" [class]="getLicenseStatus(selectedDriver().licenseExpiry)">
+                  {{ getLicenseStatus(selectedDriver().licenseExpiry) | titlecase }}
+                </span>
+              </div>
+              <div class="dd-doc-item">
+                <i class="bx bx-plus-medical"></i>
+                <div class="dd-doc-info">
+                  <span class="dd-doc-name">Medical Card (DOT Physical)</span>
+                  <span class="dd-doc-status">Not uploaded</span>
+                </div>
+                <label class="dd-upload-btn">
+                  <i class="bx bx-upload"></i> Upload
+                  <input type="file" hidden accept=".pdf,.jpg,.png">
+                </label>
+              </div>
+              <div class="dd-doc-item">
+                <i class="bx bx-car"></i>
+                <div class="dd-doc-info">
+                  <span class="dd-doc-name">Motor Vehicle Record (MVR)</span>
+                  <span class="dd-doc-status">Not uploaded</span>
+                </div>
+                <label class="dd-upload-btn">
+                  <i class="bx bx-upload"></i> Upload
+                  <input type="file" hidden accept=".pdf,.jpg,.png">
+                </label>
+              </div>
+              <div class="dd-doc-item">
+                <i class="bx bx-test-tube"></i>
+                <div class="dd-doc-info">
+                  <span class="dd-doc-name">Drug Test Results</span>
+                  <span class="dd-doc-status">Not uploaded</span>
+                </div>
+                <label class="dd-upload-btn">
+                  <i class="bx bx-upload"></i> Upload
+                  <input type="file" hidden accept=".pdf,.jpg,.png">
+                </label>
+              </div>
+              <div class="dd-doc-item">
+                <i class="bx bx-file"></i>
+                <div class="dd-doc-info">
+                  <span class="dd-doc-name">Employment Application</span>
+                  <span class="dd-doc-status">Not uploaded</span>
+                </div>
+                <label class="dd-upload-btn">
+                  <i class="bx bx-upload"></i> Upload
+                  <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx">
+                </label>
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (driverDetailTab() === 'compliance') {
+          <div class="dd-section">
+            <h4><i class="bx bx-shield-quarter"></i> Compliance Status</h4>
+            <div class="dd-compliance-grid">
+              <div class="dd-compliance-card" [class]="getLicenseStatus(selectedDriver().licenseExpiry)">
+                <i class="bx bx-id-card"></i>
+                <div>
+                  <span class="dd-comp-title">CDL</span>
+                  <span class="dd-comp-exp">{{ formatDate(selectedDriver().licenseExpiry) }}</span>
+                </div>
+                <span class="dd-comp-status">{{ getLicenseStatus(selectedDriver().licenseExpiry) | titlecase }}</span>
+              </div>
+              <div class="dd-compliance-card unknown">
+                <i class="bx bx-plus-medical"></i>
+                <div>
+                  <span class="dd-comp-title">Medical Card</span>
+                  <span class="dd-comp-exp">Not on file</span>
+                </div>
+                <span class="dd-comp-status">Missing</span>
+              </div>
+              <div class="dd-compliance-card unknown">
+                <i class="bx bx-car"></i>
+                <div>
+                  <span class="dd-comp-title">MVR</span>
+                  <span class="dd-comp-exp">Not on file</span>
+                </div>
+                <span class="dd-comp-status">Missing</span>
+              </div>
+              <div class="dd-compliance-card unknown">
+                <i class="bx bx-test-tube"></i>
+                <div>
+                  <span class="dd-comp-title">Drug Test</span>
+                  <span class="dd-comp-exp">Not on file</span>
+                </div>
+                <span class="dd-comp-status">Missing</span>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Footer -->
+      <div class="dd-footer">
+        <button class="btn btn-secondary" (click)="edit(selectedDriver()); closeDriverDetail()">
+          <i class="bx bx-edit"></i> Edit Driver
+        </button>
+        <button class="btn btn-secondary" (click)="closeDriverDetail()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- US States datalist for autocomplete -->
+<datalist id="us-states">
+  @for (s of usStates; track s.code) {
+    <option [value]="s.code">{{ s.name }}</option>
+  }
+</datalist>
