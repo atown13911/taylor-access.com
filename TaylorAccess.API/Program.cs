@@ -77,16 +77,16 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Host=localhost;Database=taylor_access;Username=postgres;Password=postgres";
 
 builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // JWT Authentication
-var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
-    ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+var jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+    ?? builder.Configuration["Jwt:SecretKey"]
     ?? "TaylorAccess-Super-Secret-Key-Change-In-Production-2026!";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
