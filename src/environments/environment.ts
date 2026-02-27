@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:5000',
+  apiUrl: 'https://taylor-accesscom-production.up.railway.app',
   appName: 'Taylor Access HR',
   version: '1.0.0',
   api: {

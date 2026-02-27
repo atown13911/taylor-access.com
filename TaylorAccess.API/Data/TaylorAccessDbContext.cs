@@ -21,6 +21,8 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<TwoFactorSettings> TwoFactorSettings => Set<TwoFactorSettings>();
 
     // Entity hierarchy
     public DbSet<Satellite> Satellites => Set<Satellite>();

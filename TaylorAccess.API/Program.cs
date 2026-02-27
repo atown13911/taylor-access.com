@@ -116,7 +116,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:4200",
                 "http://localhost:4300",
                 "https://taylor-access.com",
-                "https://www.taylor-access.com"
+                "https://www.taylor-access.com",
+                "https://taylor-access-com.pages.dev"
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -138,15 +139,22 @@ builder.Services.AddScoped<IStorageService, LocalStorageService>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<TaylorAccessDbContext>();
 
+builder.Services.AddSingleton<MetricCacheService>();
+
 var app = builder.Build();
 
 app.UseResponseCompression();
 
-if (app.Environment.IsDevelopment())
+// Resolve real client IPs behind Railway/Cloudflare proxy
+app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor 
+        | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+});
+
+// Always enable Swagger for Taylor Access
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseCors();
 app.UseAuthentication();
