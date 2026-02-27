@@ -1,0 +1,339 @@
+import { Component, OnInit, signal, computed, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
+import { environment } from '../../../../environments/environment';
+import { VanTacApiService } from '../../../core/services/vantac-api.service';
+
+@Component({
+  selector: 'app-driver-database',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  templateUrl: './driver-database.component.html',
+  styleUrls: ['./driver-database.component.scss']
+})
+export class DriverDatabaseComponent implements OnInit {
+  private http = inject(HttpClient);
+  private route = inject(ActivatedRoute);
+  private api = inject(VanTacApiService);
+  
+  loading = signal(false);
+  drivers = signal<any[]>([]);
+  selectedDriver = signal<any | null>(null);
+  showDetailsModal = signal(false);
+  
+  // Filters
+  searchTerm = '';
+  statusFilter = 'all';
+  complianceFilter = 'all';
+  activeStatusTab = signal<'active' | 'inactive' | 'archived'>('active');
+
+  filteredDrivers = computed(() => {
+    let list = this.drivers();
+    const tab = this.activeStatusTab();
+    if (tab === 'active') list = list.filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched');
+    else if (tab === 'inactive') list = list.filter((d: any) => d.status === 'inactive' || d.status === 'on-leave' || d.status === 'suspended');
+    else if (tab === 'archived') list = list.filter((d: any) => d.status === 'archived' || d.status === 'terminated');
+
+    if (this.searchTerm) {
+      const s = this.searchTerm.toLowerCase();
+      list = list.filter((d: any) =>
+        (d.name || '').toLowerCase().includes(s) ||
+        (d.email || '').toLowerCase().includes(s) ||
+        (d.phone || '').toLowerCase().includes(s) ||
+        (d.licenseNumber || '').toLowerCase().includes(s)
+      );
+    }
+    return list;
+  });
+
+  tabCounts = computed(() => {
+    const all = this.drivers();
+    return {
+      active: all.filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched').length,
+      inactive: all.filter((d: any) => d.status === 'inactive' || d.status === 'on-leave' || d.status === 'suspended').length,
+      archived: all.filter((d: any) => d.status === 'archived' || d.status === 'terminated').length
+    };
+  });
+  
+  // Detail tabs
+  activeTab = signal<'overview' | 'compliance' | 'documents' | 'history' | 'equipment' | 'financial'>('overview');
+
+  // Equipment data
+  driverTrailers = signal<any[]>([]);
+
+  // Financial data
+  driverPayment = signal<any>(null);
+  driverEnrollments = signal<any[]>([]);
+
+  totalMonthlyDeductions = computed(() => {
+    return this.driverEnrollments()
+      .filter((e: any) => e.status === 'active' && e.deductionAmount)
+      .reduce((sum: number, e: any) => {
+        const amount = e.deductionAmount || 0;
+        switch (e.deductionFrequency) {
+          case 'weekly': return sum + (amount * 4.33);
+          case 'biweekly': return sum + (amount * 2.17);
+          case 'per_load': return sum + amount; // estimate as 1x/month
+          default: return sum + amount; // monthly
+        }
+      }, 0);
+  });
+  
+  ngOnInit() {
+    this.loadDrivers().then(() => {
+      // Check for driverId query param to auto-open profile
+      this.route.queryParams.subscribe(params => {
+        const driverId = params['driverId'];
+        if (driverId) {
+          const driver = this.drivers().find((d: any) => d.id?.toString() === driverId.toString());
+          if (driver) {
+            this.viewDriverDetails(driver);
+          } else {
+            // Driver not in list, fetch directly
+            this.http.get(`${environment.apiUrl}/api/v1/drivers/${driverId}`).subscribe({
+              next: (res: any) => {
+                const d = res?.data || res;
+                if (d) this.viewDriverDetails(d);
+              }
+            });
+          }
+        }
+      });
+    });
+  }
+  
+  async loadDrivers() {
+    this.loading.set(true);
+    try {
+      const response: any = await this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=1000`).toPromise();
+      this.drivers.set(response?.data || []);
+    } catch (err) {
+      console.error('Failed to load drivers:', err);
+      this.drivers.set([]);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+  
+  getComplianceStatus(driver: any): 'compliant' | 'warning' | 'non-compliant' {
+    // TODO: Implement actual compliance checking logic
+    // Check: CDL expiration, medical cert, DQF completeness, drug test status
+    return 'compliant';
+  }
+  
+  getComplianceScore(driver: any): number {
+    // TODO: Calculate actual compliance score (0-100)
+    return 85;
+  }
+  
+  viewDriverDetails(driver: any) {
+    this.selectedDriver.set(driver);
+    this.showDetailsModal.set(true);
+    this.activeTab.set('overview');
+  }
+  
+  closeDriverDetails() {
+    this.selectedDriver.set(null);
+    this.showDetailsModal.set(false);
+  }
+  
+  setActiveTab(tab: 'overview' | 'compliance' | 'documents' | 'history' | 'equipment' | 'financial') {
+    this.activeTab.set(tab);
+  }
+
+  async loadDriverEquipment() {
+    const driver = this.selectedDriver();
+    if (!driver) return;
+    try {
+      const response: any = await this.http.get(`${environment.apiUrl}/api/v1/trailers?pageSize=1000`).toPromise();
+      const allTrailers = response?.data || [];
+      const assigned = allTrailers.filter((t: any) =>
+        t.driverAssignments?.some((a: any) => a.driverId === driver.id && a.status === 'active')
+      );
+      this.driverTrailers.set(assigned);
+    } catch {
+      this.driverTrailers.set([]);
+    }
+  }
+
+  loadDriverFinancial(): void {
+    const driver = this.selectedDriver();
+    if (!driver) return;
+    
+    // Load payment method for this driver
+    this.api.getDriverPayments({ driverId: driver.id }).subscribe({
+      next: (res: any) => {
+        const payments = res?.data || [];
+        this.driverPayment.set(payments.length > 0 ? payments[0] : null);
+      },
+      error: () => this.driverPayment.set(null)
+    });
+
+    // Load insurance enrollments for this driver
+    this.api.getInsurancePolicies().subscribe({
+      next: (res: any) => {
+        const policies = res?.data || [];
+        const allEnrollments: any[] = [];
+        let loaded = 0;
+        if (policies.length === 0) {
+          this.driverEnrollments.set([]);
+          return;
+        }
+        for (const policy of policies) {
+          this.api.getInsuranceEnrollments(policy.id.toString()).subscribe({
+            next: (eRes: any) => {
+              const enrollments = (eRes?.data || [])
+                .filter((e: any) => e.driverId?.toString() === driver.id?.toString())
+                .map((e: any) => ({
+                  ...e,
+                  policyType: this.getPolicyTypeLabel(policy.policyType),
+                  providerName: policy.providerName
+                }));
+              allEnrollments.push(...enrollments);
+              loaded++;
+              if (loaded === policies.length) {
+                this.driverEnrollments.set(allEnrollments);
+              }
+            },
+            error: () => {
+              loaded++;
+              if (loaded === policies.length) {
+                this.driverEnrollments.set(allEnrollments);
+              }
+            }
+          });
+        }
+      },
+      error: () => this.driverEnrollments.set([])
+    });
+  }
+
+  // ========== PAYMENT EDITOR ==========
+  showPaymentEditor = signal(false);
+  savingPaymentEdit = signal(false);
+  paymentEditForm = {
+    paymentMethod: '', bankName: '', routingNumber: '', accountNumber: '',
+    accountType: 'checking', cardType: '', cardLastFour: '', cardHolderName: '',
+    mailingAddress: ''
+  };
+
+  openPaymentEditor(): void {
+    const p = this.driverPayment();
+    if (p) {
+      this.paymentEditForm = {
+        paymentMethod: p.paymentMethod || '',
+        bankName: p.bankName || '', routingNumber: p.routingNumber || '',
+        accountNumber: p.accountNumber || '', accountType: p.accountType || 'checking',
+        cardType: p.cardType || '', cardLastFour: p.cardLastFour || '',
+        cardHolderName: p.cardHolderName || '', mailingAddress: p.mailingAddress || ''
+      };
+    } else {
+      this.paymentEditForm = {
+        paymentMethod: 'direct_deposit', bankName: '', routingNumber: '',
+        accountNumber: '', accountType: 'checking', cardType: '',
+        cardLastFour: '', cardHolderName: '', mailingAddress: ''
+      };
+    }
+    this.showPaymentEditor.set(true);
+  }
+
+  closePaymentEditor(): void { this.showPaymentEditor.set(false); }
+
+  onPaymentMethodEditChange(): void {
+    const m = this.paymentEditForm.paymentMethod;
+    if (m && m !== 'direct_deposit' && m !== 'paper_check') {
+      this.paymentEditForm.cardType = m;
+    }
+  }
+
+  savePaymentEdit(): void {
+    this.savingPaymentEdit.set(true);
+    const driver = this.selectedDriver();
+    const existing = this.driverPayment();
+    const payload = { ...this.paymentEditForm, driverId: driver?.id, status: 'active' };
+
+    const obs = existing
+      ? this.api.updateDriverPayment(existing.id.toString(), payload)
+      : this.api.createDriverPayment(payload);
+
+    obs.subscribe({
+      next: () => {
+        this.savingPaymentEdit.set(false);
+        this.closePaymentEditor();
+        this.loadDriverFinancial();
+      },
+      error: () => this.savingPaymentEdit.set(false)
+    });
+  }
+
+  // ========== ENROLLMENT EDITOR ==========
+  showEnrollmentEditor = signal(false);
+
+  openEnrollmentEditor(): void { this.showEnrollmentEditor.set(true); }
+  closeEnrollmentEditor(): void { this.showEnrollmentEditor.set(false); }
+
+  saveEnrollmentEdit(enrollment: any): void {
+    // Find the policy ID from enrollment data
+    this.api.getInsurancePolicies().subscribe({
+      next: (res: any) => {
+        const policies = res?.data || [];
+        // Find matching policy by type
+        for (const policy of policies) {
+          this.api.getInsuranceEnrollments(policy.id.toString()).subscribe({
+            next: (eRes: any) => {
+              const match = (eRes?.data || []).find((e: any) => e.id === enrollment.id);
+              if (match) {
+                this.api.updateInsuranceEnrollment(policy.id.toString(), enrollment.id.toString(), {
+                  coverageLevel: enrollment.coverageLevel,
+                  deductionAmount: enrollment.deductionAmount,
+                  deductionFrequency: enrollment.deductionFrequency,
+                  status: enrollment.status
+                }).subscribe({
+                  next: () => this.loadDriverFinancial()
+                });
+              }
+            }
+          });
+        }
+      }
+    });
+  }
+
+  getPaymentMethodLabel(method: string): string {
+    const labels: Record<string, string> = {
+      direct_deposit: 'Direct Deposit', comdata: 'Comdata', efs: 'EFS',
+      wex: 'WEX / Fleet One', tchek: 'T-Chek', rts: 'RTS',
+      stripe: 'Stripe', paper_check: 'Paper Check'
+    };
+    return labels[method] || method;
+  }
+
+  getPolicyTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      general_liability: 'General Liability', auto_liability: 'Auto Liability',
+      cargo: 'Cargo', workers_comp: 'Workers Comp', mcs90: 'MCS-90',
+      umbrella: 'Umbrella', physical_damage: 'Physical Damage',
+      bobtail: 'Bobtail', non_trucking: 'Non-Trucking Liability',
+      occupational_accident: 'Occupational Accident', supplemental: 'Supplemental',
+      trailer_interchange: 'Trailer Interchange'
+    };
+    return labels[type] || type;
+  }
+  
+  getDaysUntilExpiration(date: string): number {
+    if (!date) return 999;
+    const exp = new Date(date);
+    const now = new Date();
+    const diff = exp.getTime() - now.getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }
+  
+  getExpirationStatus(date: string): 'valid' | 'expiring' | 'expired' {
+    const days = this.getDaysUntilExpiration(date);
+    if (days < 0) return 'expired';
+    if (days < 30) return 'expiring';
+    return 'valid';
+  }
+}

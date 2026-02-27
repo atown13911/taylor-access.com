@@ -1,0 +1,227 @@
+<div class="compliance-container">
+  <div class="page-header">
+    <div class="header-text">
+      <h1><i class='bx bx-id-card'></i> Registrations & Authority</h1>
+      <p class="subtitle">Track USDOT, MC Authority, UCR, and IRP registrations</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-primary" (click)="openAddModal()">
+        <i class='bx bx-plus'></i> Add Registration
+      </button>
+    </div>
+  </div>
+
+  <!-- Info Banner -->
+  <div class="info-banner">
+    <h3><i class='bx bx-info-circle'></i> Federal Registration Requirements</h3>
+    <ul>
+      <li><strong>USDOT Number:</strong> Required for all CMVs in interstate commerce (renew every 2 years)</li>
+      <li><strong>MC Authority:</strong> For-hire carriers need operating authority from FMCSA</li>
+      <li><strong>UCR:</strong> Annual unified carrier registration covering all states</li>
+      <li><strong>IRP:</strong> Apportioned registration for multi-state operations (cab cards required in vehicle)</li>
+    </ul>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <i class='bx bx-loader-alt bx-spin'></i>
+      <p>Loading registrations...</p>
+    </div>
+  } @else {
+    <!-- Registration Cards Grid -->
+    <div class="registrations-grid">
+      @for (type of registrationTypes; track type.value) {
+        <div class="registration-type-card">
+          <div class="card-header" [style.border-left-color]="type.color">
+            <div class="type-info">
+              <i class='bx' [class]="type.icon" [style.color]="type.color"></i>
+              <div>
+                <h3>{{ type.label }}</h3>
+                <p class="type-desc">{{ type.desc }}</p>
+              </div>
+            </div>
+            <span class="count-badge">{{ getRegistrationsByType(type.value).length }}</span>
+          </div>
+          
+          <div class="card-body">
+            @if (getRegistrationsByType(type.value).length === 0) {
+              <div class="empty-message">
+                <i class='bx bx-error-circle'></i>
+                <p>No {{ type.label }} registered</p>
+                <button class="btn btn-sm btn-secondary" (click)="openAddModalWithType(type.value)">
+                  <i class='bx bx-plus'></i> Add
+                </button>
+              </div>
+            } @else {
+              @for (reg of getRegistrationsByType(type.value); track reg.id) {
+                <div class="registration-item" [class]="getExpirationStatus(reg.expirationDate)">
+                  <div class="reg-info">
+                    <strong>{{ reg.number }}</strong>
+                    <small>Expires: {{ reg.expirationDate | date:'MM/dd/yyyy' }}</small>
+                  </div>
+                  <div class="reg-status">
+                    <span class="status-badge" [class]="reg.status">{{ reg.status }}</span>
+                    <span class="days-badge" [class]="getExpirationStatus(reg.expirationDate)">
+                      {{ getDaysUntilExpiration(reg.expirationDate) }} days
+                    </span>
+                  </div>
+                  <div class="reg-actions">
+                    <button class="btn-icon" (click)="viewDetails(reg)" title="View Details">
+                      <i class='bx bx-show'></i>
+                    </button>
+                    <button class="btn-icon" title="Upload Document">
+                      <i class='bx bx-upload'></i>
+                    </button>
+                    <button class="btn-icon danger" (click)="deleteRegistration(reg)" title="Delete">
+                      <i class='bx bx-trash'></i>
+                    </button>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- Add Registration Modal -->
+@if (showAddModal()) {
+  <div class="modal-overlay" (click)="closeAddModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2><i class='bx bx-plus-circle'></i> Add Registration</h2>
+        <button class="btn-close" (click)="closeAddModal()">
+          <i class='bx bx-x'></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Registration Type *</label>
+          <select [(ngModel)]="formData.type">
+            @for (type of registrationTypes; track type.value) {
+              <option [value]="type.value">{{ type.label }}</option>
+            }
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Registration Number *</label>
+          <input type="text" [(ngModel)]="formData.number" placeholder="Enter number">
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label>Issue Date</label>
+            <input type="date" [(ngModel)]="formData.issueDate">
+          </div>
+          <div class="form-group">
+            <label>Expiration Date *</label>
+            <input type="date" [(ngModel)]="formData.expirationDate">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>Status</label>
+          <select [(ngModel)]="formData.status">
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="expired">Expired</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea [(ngModel)]="formData.notes" rows="3" placeholder="Additional notes..."></textarea>
+        </div>
+        
+        <div class="info-box">
+          <i class='bx bx-info-circle'></i>
+          <p><strong>{{ getRenewalFrequency(formData.type) }}</strong></p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeAddModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveRegistration()" [disabled]="saving()">
+          <i class='bx' [class.bx-loader-alt]="saving()" [class.bx-check]="!saving()" [class.bx-spin]="saving()"></i>
+          {{ saving() ? 'Saving...' : 'Save Registration' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Details Modal -->
+@if (showDetailsModal() && selectedRegistration()) {
+  <div class="modal-overlay" (click)="closeDetailsModal()">
+    <div class="modal-content details-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2>{{ getTypeName(selectedRegistration()!.type) }}</h2>
+          <span class="reg-number">{{ selectedRegistration()!.number }}</span>
+        </div>
+        <button class="btn-close" (click)="closeDetailsModal()">
+          <i class='bx bx-x'></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="details-grid">
+          <div class="detail-section">
+            <h4><i class='bx bx-info-circle'></i> Registration Details</h4>
+            <div class="detail-row">
+              <label>Type:</label>
+              <span>{{ getTypeName(selectedRegistration()!.type) }}</span>
+            </div>
+            <div class="detail-row">
+              <label>Number:</label>
+              <span class="highlight">{{ selectedRegistration()!.number }}</span>
+            </div>
+            <div class="detail-row">
+              <label>Status:</label>
+              <span class="badge" [class]="selectedRegistration()!.status">{{ selectedRegistration()!.status }}</span>
+            </div>
+            <div class="detail-row">
+              <label>Issue Date:</label>
+              <span>{{ selectedRegistration()!.issueDate | date:'MM/dd/yyyy' }}</span>
+            </div>
+            <div class="detail-row">
+              <label>Expiration Date:</label>
+              <span>{{ selectedRegistration()!.expirationDate | date:'MM/dd/yyyy' }}</span>
+            </div>
+            <div class="detail-row">
+              <label>Days Until Expiration:</label>
+              <span [class]="getExpirationStatus(selectedRegistration()!.expirationDate)">
+                {{ getDaysUntilExpiration(selectedRegistration()!.expirationDate) }} days
+              </span>
+            </div>
+            <div class="detail-row">
+              <label>Renewal Frequency:</label>
+              <span>{{ getRenewalFrequency(selectedRegistration()!.type) }}</span>
+            </div>
+          </div>
+          
+          @if (selectedRegistration()!.notes) {
+            <div class="detail-section">
+              <h4><i class='bx bx-note'></i> Notes</h4>
+              <p class="notes-text">{{ selectedRegistration()!.notes }}</p>
+            </div>
+          }
+        </div>
+        
+        <div class="action-bar">
+          <button class="btn btn-secondary">
+            <i class='bx bx-edit'></i> Edit Registration
+          </button>
+          <button class="btn btn-secondary">
+            <i class='bx bx-upload'></i> Upload Documents
+          </button>
+          <button class="btn btn-danger" (click)="deleteRegistration(selectedRegistration()!)">
+            <i class='bx bx-trash'></i> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}

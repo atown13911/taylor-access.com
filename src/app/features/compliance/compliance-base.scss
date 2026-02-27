@@ -1,0 +1,145 @@
+// Shared styles for all compliance pages
+@import '../admin-security/admin-theme.scss';
+
+.compliance-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  
+  .header-text {
+    h1 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-primary);
+      
+      i {
+        color: var(--cyan);
+        font-size: 2rem;
+      }
+    }
+    
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--text-muted);
+    }
+  }
+}
+
+.info-banner {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  
+  h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  ul {
+    margin: 0;
+    padding-left: 24px;
+    color: var(--text-secondary);
+    
+    li {
+      margin: 8px 0;
+    }
+  }
+}
+
+.requirements-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.requirement-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  
+  h4 {
+    margin: 0 0 12px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    i {
+      color: var(--cyan);
+    }
+  }
+  
+  p {
+    margin: 0 0 16px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    
+    &.complete {
+      background: rgba(0, 255, 136, 0.2);
+      color: var(--green);
+    }
+    
+    &.pending {
+      background: rgba(255, 170, 0, 0.2);
+      color: var(--orange);
+    }
+    
+    &.missing {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--red);
+    }
+  }
+}
+
+.coming-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  
+  i {
+    font-size: 4rem;
+    color: var(--cyan);
+    margin-bottom: 20px;
+    opacity: 0.5;
+  }
+  
+  h3 {
+    margin: 0 0 12px;
+    color: var(--text-primary);
+  }
+  
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    max-width: 500px;
+  }
+}

@@ -44,6 +44,10 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<DriverTerminal> DriverTerminals => Set<DriverTerminal>();
     public DbSet<DriverPayment> DriverPayments => Set<DriverPayment>();
 
+    // Insurance & Compliance
+    public DbSet<InsurancePolicy> InsurancePolicies => Set<InsurancePolicy>();
+    public DbSet<InsuranceEnrollment> InsuranceEnrollments => Set<InsuranceEnrollment>();
+
     // Addresses & Places
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<Place> Places => Set<Place>();

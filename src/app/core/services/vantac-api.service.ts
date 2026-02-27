@@ -146,4 +146,85 @@ export class VanTacApiService {
   updateCarrier(id: any, data: any): Observable<any> {
     return this.http.put(`${this.baseUrl}/api/v1/contacts/${id}`, data);
   }
+
+  // Driver Documents
+  getDriverDocuments(driverId?: any): Observable<any> {
+    const params = driverId ? `?driverId=${driverId}` : '';
+    return this.http.get(`${this.baseUrl}/api/v1/driver-documents${params}`);
+  }
+  getDriverDocumentSummary(driverId?: any): Observable<any> {
+    const params = driverId ? `?driverId=${driverId}` : '';
+    return this.http.get(`${this.baseUrl}/api/v1/driver-documents/summary${params}`);
+  }
+  createDriverDocument(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/driver-documents`, data);
+  }
+  updateDriverDocument(id: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/driver-documents/${id}`, data);
+  }
+  deleteDriverDocument(id: any): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/driver-documents/${id}`);
+  }
+  viewDriverDocumentFile(id: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/driver-documents/${id}/file`, { responseType: 'blob' as any });
+  }
+  downloadDriverDocumentFile(id: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/driver-documents/${id}/download`, { responseType: 'blob' as any });
+  }
+
+  // Driver Payments
+  getDriverPayments(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/driver-payments`, { params });
+  }
+  createDriverPayment(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/driver-payments`, data);
+  }
+  updateDriverPayment(id: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/driver-payments/${id}`, data);
+  }
+  deleteDriverPayment(id: any): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/driver-payments/${id}`);
+  }
+
+  // Insurance Policies
+  getInsurancePolicies(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-policies`, { params });
+  }
+  createInsurancePolicy(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/insurance-policies`, data);
+  }
+  updateInsurancePolicy(id: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-policies/${id}`, data);
+  }
+  deleteInsurancePolicy(id: any): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/insurance-policies/${id}`);
+  }
+  updateInsurancePolicyBilling(id: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-policies/${id}/billing`, data);
+  }
+  viewInsurancePolicyDoc(id: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-policies/${id}/document`, { responseType: 'blob' as any });
+  }
+  downloadInsurancePolicyDoc(id: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-policies/${id}/download`, { responseType: 'blob' as any });
+  }
+
+  // Insurance Enrollments
+  getInsuranceEnrollments(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-enrollments`, { params });
+  }
+  createInsuranceEnrollment(policyId: any, data?: any): Observable<any> {
+    const body = data || policyId;
+    const pid = data ? policyId : undefined;
+    return this.http.post(`${this.baseUrl}/api/v1/insurance-enrollments`, pid ? { ...body, policyId: pid } : body);
+  }
+  updateInsuranceEnrollment(policyIdOrId: any, idOrData?: any, data?: any): Observable<any> {
+    const id = data ? idOrData : policyIdOrId;
+    const body = data || idOrData;
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-enrollments/${id}`, body);
+  }
+  deleteInsuranceEnrollment(policyIdOrId: any, id?: any): Observable<any> {
+    const enrollmentId = id || policyIdOrId;
+    return this.http.delete(`${this.baseUrl}/api/v1/insurance-enrollments/${enrollmentId}`);
+  }
 }

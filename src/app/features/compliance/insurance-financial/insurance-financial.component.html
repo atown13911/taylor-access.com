@@ -1,0 +1,584 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-left">
+      <h1><i class='bx bx-dollar-circle'></i> Insurance & Financial</h1>
+      <p class="subtitle">Manage insurance policies and driver payment methods</p>
+    </div>
+    <div class="header-actions">
+      @if (pageTab() === 'insurance') {
+        <button class="btn btn-secondary" (click)="openReport()"><i class='bx bx-file'></i> Report</button>
+        <button class="btn btn-primary" (click)="openAddPolicy()"><i class='bx bx-plus'></i> Add Policy</button>
+      }
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="page-tabs">
+    <button class="page-tab" [class.active]="pageTab() === 'insurance'" (click)="pageTab.set('insurance')">
+      <i class='bx bx-shield-alt-2'></i> Insurance
+    </button>
+    <button class="page-tab" [class.active]="pageTab() === 'financial'" (click)="pageTab.set('financial')">
+      <i class='bx bx-credit-card'></i> Financial
+    </button>
+  </div>
+
+  <!-- ========== INSURANCE TAB ========== -->
+  @if (pageTab() === 'insurance') {
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div class="stat-info"><span class="stat-value">{{ insuranceStats().total }}</span><span class="stat-label">Total Policies</span></div></div>
+      <div class="stat-card"><div class="stat-icon active"><i class='bx bx-check-circle'></i></div><div class="stat-info"><span class="stat-value">{{ insuranceStats().active }}</span><span class="stat-label">Active</span></div></div>
+      <div class="stat-card"><div class="stat-icon expiring"><i class='bx bx-error'></i></div><div class="stat-info"><span class="stat-value">{{ insuranceStats().expiring }}</span><span class="stat-label">Expiring</span></div></div>
+      <div class="stat-card"><div class="stat-icon expired"><i class='bx bx-x-circle'></i></div><div class="stat-info"><span class="stat-value">{{ insuranceStats().expired }}</span><span class="stat-label">Expired</span></div></div>
+    </div>
+
+    @if (loadingPolicies()) {
+      <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading policies...</p></div>
+    } @else if (policies().length === 0) {
+      <div class="empty-state"><i class='bx bx-shield-alt-2'></i><h3>No insurance policies</h3><p>Add your first insurance policy to start tracking coverage.</p></div>
+    } @else {
+      <!-- Year Filter -->
+      <div class="year-filter">
+        <button class="year-btn" [class.active]="selectedYear() === null" (click)="selectedYear.set(null)">All Years</button>
+        @for (year of availableYears(); track year) {
+          <button class="year-btn" [class.active]="selectedYear() === year" (click)="selectedYear.set(year)">{{ year }}</button>
+        }
+      </div>
+
+      <!-- Grouped by Year -->
+      @for (group of policiesByYearGrouped(); track group[0]) {
+        @if (selectedYear() === null || selectedYear() === group[0]) {
+          <div class="year-group">
+            <div class="year-header">
+              <i class='bx bx-calendar'></i>
+              <span>{{ group[0] }}</span>
+              <span class="year-count">{{ group[1].length }} policies</span>
+            </div>
+            <div class="data-table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Provider</th>
+                    <th>Policy #</th>
+                    <th>Coverage</th>
+                    <th>Effective</th>
+                    <th>Expiry</th>
+                    <th>Document</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (policy of group[1]; track policy.id) {
+                    <tr>
+                      <td><strong>{{ getPolicyTypeLabel(policy.policyType) }}</strong></td>
+                      <td>{{ policy.providerName }}</td>
+                      <td class="mono">{{ policy.policyNumber || '—' }}</td>
+                      <td>{{ formatCurrency(policy.coverageAmount) }}</td>
+                      <td>{{ formatDate(policy.effectiveDate) }}</td>
+                      <td>{{ formatDate(policy.expiryDate) }}</td>
+                      <td>
+                        @if (policy.hasFile) {
+                          <div class="doc-btns">
+                            <button class="icon-btn" title="View" (click)="viewPolicyDoc(policy)"><i class='bx bx-show'></i></button>
+                            <button class="icon-btn" title="Download" (click)="downloadPolicyDoc(policy)"><i class='bx bx-download'></i></button>
+                          </div>
+                        } @else {
+                          <span class="no-doc">No file</span>
+                        }
+                      </td>
+                      <td><span class="status-badge" [class]="policy.status">{{ policy.status }}</span></td>
+                      <td class="actions-cell">
+                        <button class="icon-btn" title="Billing & Cost Setup" (click)="openBillingSetup(policy)"><i class='bx bx-money'></i></button>
+                        <button class="icon-btn" title="Driver Enrollment" (click)="openPolicyProfile(policy)"><i class='bx bx-user-circle'></i></button>
+                        <button class="icon-btn" title="Edit" (click)="editPolicy(policy)"><i class='bx bx-edit'></i></button>
+                        <button class="icon-btn danger" title="Delete" (click)="deletePolicy(policy)"><i class='bx bx-trash'></i></button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+      }
+    }
+  }
+
+  <!-- ========== FINANCIAL TAB ========== -->
+  @if (pageTab() === 'financial') {
+    <div class="info-banner">
+      <i class='bx bx-info-circle'></i>
+      <p>Enable payment methods for your organization. When a method is enabled, drivers can be assigned it from their profile -- their personal bank/card details are stored on the driver record.</p>
+    </div>
+
+    <div class="methods-grid">
+      @for (method of paymentMethods; track method.value) {
+        <div class="method-card" [class.enabled]="isMethodEnabled(method.value)" (click)="toggleMethod(method.value)">
+          <div class="method-card-icon">
+            @switch (method.group) {
+              @case ('bank') { <i class='bx bx-bank'></i> }
+              @case ('card') { <i class='bx bx-credit-card'></i> }
+              @case ('check') { <i class='bx bx-envelope'></i> }
+            }
+          </div>
+          <div class="method-card-info">
+            <h4>{{ method.label }}</h4>
+            <p class="method-desc">
+              @switch (method.value) {
+                @case ('direct_deposit') { Driver provides bank name, routing & account number }
+                @case ('comdata') { Comdata fleet fuel & payment card }
+                @case ('efs') { EFS fleet payment card }
+                @case ('wex') { WEX / Fleet One fuel card }
+                @case ('tchek') { T-Chek payment solution }
+                @case ('rts') { RTS carrier payment card }
+                @case ('stripe') { Stripe digital payment }
+                @case ('paper_check') { Physical check mailed to driver address }
+              }
+            </p>
+          </div>
+          <div class="method-toggle">
+            <span class="toggle-badge" [class.active]="isMethodEnabled(method.value)">
+              {{ isMethodEnabled(method.value) ? 'Enabled' : 'Disabled' }}
+            </span>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- ========== ADD/EDIT POLICY MODAL ========== -->
+@if (showPolicyModal()) {
+  <div class="modal-overlay" (click)="closePolicyModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingPolicy() ? 'Edit Policy' : 'Add Insurance Policy' }}</h3>
+        <button class="close-btn" (click)="closePolicyModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Policy Type *</label>
+            <select [(ngModel)]="policyForm.policyType">
+              @for (pt of policyTypes; track pt.value) {
+                <option [value]="pt.value">{{ pt.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Provider Name *</label>
+            <input type="text" [(ngModel)]="policyForm.providerName" placeholder="e.g., Great West Casualty">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Policy Number</label>
+            <input type="text" [(ngModel)]="policyForm.policyNumber" placeholder="Policy #">
+          </div>
+          <div class="form-group">
+            <label>Coverage Amount</label>
+            <input type="number" [(ngModel)]="policyForm.coverageAmount" placeholder="1000000" step="1000">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Effective Date</label>
+            <input type="date" [(ngModel)]="policyForm.effectiveDate">
+          </div>
+          <div class="form-group">
+            <label>Expiry Date</label>
+            <input type="date" [(ngModel)]="policyForm.expiryDate">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Expiry Reminders</label>
+          <div class="reminder-options">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="policyForm.remind3Months"> 3 Months Before
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="policyForm.remind30Days"> 30 Days Before
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="policyForm.remind15Days"> 15 Days Before
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="policyForm.remindDayOf"> Day Of Expiry
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="policyForm.remindDailyPastDue"> Daily After Expired
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea [(ngModel)]="policyForm.notes" rows="2" placeholder="Additional notes..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Upload Document (PDF, JPG, PNG)</label>
+          <input type="file" (change)="onPolicyFileChange($event)" accept=".pdf,.jpg,.jpeg,.png">
+          @if (editingPolicy()?.hasFile) {
+            <div class="file-preview-row">
+              <span class="existing-file"><i class='bx bx-file'></i> {{ editingPolicy()!.fileName }}</span>
+              <button class="btn btn-secondary btn-xs" (click)="previewPolicyDoc(editingPolicy()!)"><i class='bx bx-show'></i> Preview</button>
+            </div>
+          }
+          @if (policyFile) {
+            <span class="existing-file new-file"><i class='bx bx-upload'></i> New: {{ policyFile.name }}</span>
+          }
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closePolicyModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="savePolicy()" [disabled]="savingPolicy()">
+          @if (savingPolicy()) { <i class='bx bx-loader-alt bx-spin'></i> Saving... } @else { <i class='bx bx-check'></i> Save }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== POLICY PROFILE / DRIVER ENROLLMENT MODAL ========== -->
+@if (showPolicyProfile()) {
+  <div class="modal-overlay" (click)="closePolicyProfile()">
+    <div class="modal modal-wide" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3>{{ getPolicyTypeLabel(profilePolicy()!.policyType) }} - Driver Enrollment</h3>
+          <span class="modal-subtitle">{{ profilePolicy()!.providerName }} | {{ profilePolicy()!.policyNumber || 'No Policy #' }}</span>
+        </div>
+        <button class="close-btn" (click)="closePolicyProfile()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="enrollment-header">
+          <button class="btn btn-primary btn-sm" (click)="openEnrollmentModal()"><i class='bx bx-plus'></i> Enroll Driver</button>
+        </div>
+
+        @if (enrollments().length === 0) {
+          <div class="empty-state small"><i class='bx bx-user-x'></i><p>No drivers enrolled in this policy yet.</p></div>
+        }
+        @if (enrollments().length > 0) {
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Driver</th>
+                  <th>Coverage Level</th>
+                  <th>Deduction</th>
+                  <th>Frequency</th>
+                  <th>Terms</th>
+                  <th>Beneficiary</th>
+                  <th>Effective</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (e of enrollments(); track e.id) {
+                  <tr>
+                    <td><strong>{{ e.driverName }}</strong></td>
+                    <td>{{ e.coverageLevel || '—' }}</td>
+                    <td>{{ e.deductionAmount ? formatCurrency(e.deductionAmount) : '—' }}</td>
+                    <td>{{ e.deductionFrequency | titlecase }}</td>
+                    <td>{{ e.paymentTerms || '—' }}</td>
+                    <td>{{ e.beneficiary || '—' }}</td>
+                    <td>{{ formatDate(e.effectiveDate) }}</td>
+                    <td><span class="status-badge" [class]="e.status">{{ e.status }}</span></td>
+                    <td class="actions-cell">
+                      <button class="icon-btn" title="Edit" (click)="editEnrollment(e)"><i class='bx bx-edit'></i></button>
+                      <button class="icon-btn danger" title="Remove" (click)="deleteEnrollment(e)"><i class='bx bx-trash'></i></button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <!-- Unenrolled Drivers -->
+        @if (unenrolledDrivers().length > 0) {
+          <div class="unenrolled-section">
+            <h4 class="section-title"><i class='bx bx-user-x'></i> Not Enrolled ({{ unenrolledDrivers().length }})</h4>
+            <div class="unenrolled-list">
+              @for (driver of unenrolledDrivers(); track driver.id) {
+                <div class="unenrolled-row">
+                  <div class="unenrolled-info">
+                    <div class="unenrolled-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
+                    <div>
+                      <strong>{{ driver.name }}</strong>
+                      <span class="unenrolled-detail">{{ driver.phone || driver.email || '' }}</span>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-sm" (click)="quickEnroll(driver)"><i class='bx bx-plus'></i> Enroll</button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closePolicyProfile()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== ENROLL DRIVER MODAL ========== -->
+@if (showEnrollmentModal()) {
+  <div class="modal-overlay" (click)="closeEnrollmentModal()" style="z-index: 10001">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingEnrollment() ? 'Edit Enrollment' : 'Enroll Driver' }}</h3>
+        <button class="close-btn" (click)="closeEnrollmentModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        @if (!editingEnrollment()) {
+          <div class="form-group">
+            <label>Driver *</label>
+            <select [(ngModel)]="enrollmentForm.driverId">
+              <option value="">— Select Driver —</option>
+              @for (driver of availableDrivers(); track driver.id) {
+                <option [value]="driver.id">{{ driver.name }}</option>
+              }
+            </select>
+          </div>
+        }
+        <div class="form-row">
+          <div class="form-group">
+            <label>Coverage Level</label>
+            <select [(ngModel)]="enrollmentForm.coverageLevel">
+              <option value="basic">Basic</option>
+              <option value="standard">Standard</option>
+              <option value="premium">Premium</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select [(ngModel)]="enrollmentForm.status">
+              <option value="active">Opted In</option>
+              <option value="inactive">Opted Out</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Deduction Amount ($)</label>
+            <input type="number" [(ngModel)]="enrollmentForm.deductionAmount" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Deduction Frequency</label>
+            <select [(ngModel)]="enrollmentForm.deductionFrequency">
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Bi-Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="per_load">Per Load</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Payment Terms</label>
+            <input type="text" [(ngModel)]="enrollmentForm.paymentTerms" placeholder="e.g., Net 30, Payroll Deduction">
+          </div>
+          <div class="form-group">
+            <label>Effective Date</label>
+            <input type="date" [(ngModel)]="enrollmentForm.effectiveDate">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Beneficiary</label>
+          <input type="text" [(ngModel)]="enrollmentForm.beneficiary" placeholder="Beneficiary name">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeEnrollmentModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveEnrollment()" [disabled]="savingEnrollment()">
+          @if (savingEnrollment()) { <i class='bx bx-loader-alt bx-spin'></i> Saving... } @else { <i class='bx bx-check'></i> Save }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== INSURANCE REPORT MODAL ========== -->
+@if (showReport()) {
+  <div class="modal-overlay" (click)="closeReport()">
+    <div class="modal modal-wide" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class='bx bx-file'></i> Insurance Report</h3>
+        <div class="report-actions-header">
+          <button class="btn btn-secondary btn-sm" (click)="exportReportCSV()"><i class='bx bx-download'></i> Export CSV</button>
+          <button class="btn btn-secondary btn-sm" (click)="printReport()"><i class='bx bx-printer'></i> Print</button>
+          <button class="close-btn" (click)="closeReport()"><i class='bx bx-x'></i></button>
+        </div>
+      </div>
+      <div class="modal-body report-body" id="insurance-report">
+        <div class="report-title">
+          <h2>Insurance Coverage Report</h2>
+          <p>Generated: {{ reportDate }}</p>
+        </div>
+
+        <!-- Summary -->
+        <div class="report-summary">
+          <div class="report-stat">
+            <span class="rs-value">{{ policies().length }}</span>
+            <span class="rs-label">Total Policies</span>
+          </div>
+          <div class="report-stat">
+            <span class="rs-value">{{ insuranceStats().active }}</span>
+            <span class="rs-label">Active</span>
+          </div>
+          <div class="report-stat">
+            <span class="rs-value">{{ insuranceStats().expiring }}</span>
+            <span class="rs-label">Expiring Soon</span>
+          </div>
+          <div class="report-stat">
+            <span class="rs-value">{{ insuranceStats().expired }}</span>
+            <span class="rs-label">Expired</span>
+          </div>
+          <div class="report-stat">
+            <span class="rs-value">{{ formatCurrency(totalCoverage()) }}</span>
+            <span class="rs-label">Total Coverage</span>
+          </div>
+        </div>
+
+        <!-- Policy Details Table -->
+        <h4 class="report-section-title">Policy Details</h4>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Provider</th>
+              <th>Policy #</th>
+              <th>Coverage</th>
+              <th>Effective</th>
+              <th>Expiry</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (policy of policies(); track policy.id) {
+              <tr [class.expired-row]="policy.status === 'expired'" [class.expiring-row]="policy.status === 'expiring'">
+                <td>{{ getPolicyTypeLabel(policy.policyType) }}</td>
+                <td>{{ policy.providerName }}</td>
+                <td>{{ policy.policyNumber || '—' }}</td>
+                <td>{{ formatCurrency(policy.coverageAmount) }}</td>
+                <td>{{ formatDate(policy.effectiveDate) }}</td>
+                <td>{{ formatDate(policy.expiryDate) }}</td>
+                <td><span class="status-badge" [class]="policy.status">{{ policy.status }}</span></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        <!-- Coverage by Type -->
+        <h4 class="report-section-title">Coverage by Type</h4>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Insurance Type</th>
+              <th>Policies</th>
+              <th>Total Coverage</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (summary of coverageSummary(); track summary.type) {
+              <tr>
+                <td>{{ getPolicyTypeLabel(summary.type) }}</td>
+                <td>{{ summary.count }}</td>
+                <td>{{ formatCurrency(summary.totalCoverage) }}</td>
+                <td>
+                  @if (summary.hasExpired) {
+                    <span class="status-badge expired">Expired</span>
+                  } @else if (summary.hasExpiring) {
+                    <span class="status-badge expiring">Expiring</span>
+                  } @else {
+                    <span class="status-badge active">Active</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeReport()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== BILLING & COST SETUP MODAL ========== -->
+@if (showBillingModal()) {
+  <div class="modal-overlay" (click)="closeBillingModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3>Billing & Cost Setup</h3>
+          <span class="modal-subtitle">{{ getPolicyTypeLabel(billingPolicy()!.policyType) }} - {{ billingPolicy()!.providerName }}</span>
+        </div>
+        <button class="close-btn" (click)="closeBillingModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Premium Cost ($)</label>
+            <input type="number" [(ngModel)]="billingForm.premiumCost" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Billing Frequency</label>
+            <select [(ngModel)]="billingForm.billingFrequency">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="semi_annual">Semi-Annual</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Payment Method</label>
+            <select [(ngModel)]="billingForm.paymentMethod">
+              <option value="">— Select —</option>
+              <option value="ach">ACH / Bank Transfer</option>
+              <option value="check">Check</option>
+              <option value="credit_card">Credit Card</option>
+              <option value="wire">Wire Transfer</option>
+              <option value="auto_debit">Auto Debit</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Due Date (Day of Month)</label>
+            <input type="number" [(ngModel)]="billingForm.dueDayOfMonth" min="1" max="31" placeholder="1-31">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Next Payment Due</label>
+            <input type="date" [(ngModel)]="billingForm.nextPaymentDate">
+          </div>
+          <div class="form-group">
+            <label>Auto-Renew</label>
+            <select [(ngModel)]="billingForm.autoRenew">
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Billing Notes</label>
+          <textarea [(ngModel)]="billingForm.billingNotes" rows="2" placeholder="Payment reference, account number, etc."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeBillingModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveBilling()" [disabled]="savingBilling()">
+          @if (savingBilling()) { <i class='bx bx-loader-alt bx-spin'></i> Saving... } @else { <i class='bx bx-check'></i> Save }
+        </button>
+      </div>
+    </div>
+  </div>
+}

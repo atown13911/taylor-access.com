@@ -46,6 +46,38 @@ export const routes: Routes = [
       {
         path: 'hr/documents',
         loadComponent: () => import('./features/hr/documents/hr-documents.component').then(m => m.HrDocumentsComponent)
+      },
+      {
+        path: 'compliance/driver-database',
+        loadComponent: () => import('./features/compliance/driver-database/driver-database.component').then(m => m.DriverDatabaseComponent)
+      },
+      {
+        path: 'compliance/registrations',
+        loadComponent: () => import('./features/compliance/registrations/registrations.component').then(m => m.RegistrationsComponent)
+      },
+      {
+        path: 'compliance/insurance',
+        loadComponent: () => import('./features/compliance/insurance-financial/insurance-financial.component').then(m => m.InsuranceFinancialComponent)
+      },
+      {
+        path: 'compliance/driver-files',
+        loadComponent: () => import('./features/compliance/compliance-overview.component').then(m => m.ComplianceOverviewComponent)
+      },
+      {
+        path: 'compliance/drug-testing',
+        loadComponent: () => import('./features/compliance/compliance-overview.component').then(m => m.ComplianceOverviewComponent)
+      },
+      {
+        path: 'compliance/hos',
+        loadComponent: () => import('./features/compliance/compliance-overview.component').then(m => m.ComplianceOverviewComponent)
+      },
+      {
+        path: 'compliance/vehicle-inspections',
+        loadComponent: () => import('./features/compliance/compliance-overview.component').then(m => m.ComplianceOverviewComponent)
+      },
+      {
+        path: 'compliance/dot',
+        loadComponent: () => import('./features/compliance/document-management/document-management.component').then(m => m.DocumentManagementComponent)
       }
     ]
   },

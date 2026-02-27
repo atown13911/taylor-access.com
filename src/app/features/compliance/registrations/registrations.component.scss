@@ -1,0 +1,439 @@
+@import '../compliance-base.scss';
+
+.header-actions {
+  .btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    
+    &.btn-primary {
+      background: var(--cyan);
+      color: #000;
+      
+      &:hover {
+        box-shadow: 0 0 15px var(--cyan-glow);
+      }
+    }
+    
+    &.btn-secondary {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      
+      &:hover {
+        border-color: var(--cyan);
+      }
+    }
+    
+    &.btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: var(--red);
+      
+      &:hover {
+        background: rgba(239, 68, 68, 0.3);
+      }
+    }
+    
+    &.btn-sm {
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+  }
+}
+
+.registrations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 24px;
+}
+
+.registration-type-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  
+  .card-header {
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-left: 4px solid;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    .type-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      
+      i {
+        font-size: 2.5rem;
+      }
+      
+      h3 {
+        margin: 0 0 4px;
+        color: var(--text-primary);
+      }
+      
+      .type-desc {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+    }
+    
+    .count-badge {
+      width: 40px;
+      height: 40px;
+      background: rgba(0, 212, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--cyan);
+    }
+  }
+  
+  .card-body {
+    padding: 20px;
+  }
+}
+
+.empty-message {
+  text-align: center;
+  padding: 40px 20px;
+  
+  i {
+    font-size: 3rem;
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin-bottom: 12px;
+  }
+  
+  p {
+    margin: 0 0 16px;
+    color: var(--text-muted);
+  }
+}
+
+.registration-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border-left: 4px solid var(--cyan);
+  
+  &.expiring {
+    border-left-color: var(--orange);
+  }
+  
+  &.expired {
+    border-left-color: var(--red);
+    opacity: 0.7;
+  }
+  
+  .reg-info {
+    flex: 1;
+    
+    strong {
+      display: block;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+    }
+    
+    small {
+      color: var(--text-muted);
+    }
+  }
+  
+  .reg-status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-end;
+  }
+  
+  .reg-actions {
+    display: flex;
+    gap: 6px;
+  }
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  
+  &.active {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--green);
+  }
+  
+  &.pending {
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--orange);
+  }
+  
+  &.expired, &.suspended {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--red);
+  }
+}
+
+.days-badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  
+  &.valid {
+    color: var(--green);
+  }
+  
+  &.expiring {
+    color: var(--orange);
+  }
+  
+  &.expired {
+    color: var(--red);
+  }
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    background: var(--accent-10);
+  }
+  
+  &.danger {
+    color: var(--red);
+  }
+}
+
+// Modal styles
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 700px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  border-bottom: 1px solid var(--border-color);
+  
+  h2 {
+    margin: 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .reg-number {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  
+  .btn-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.5rem;
+    
+    &:hover {
+      color: var(--cyan);
+    }
+  }
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+  
+  label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  
+  input, select, textarea {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    
+    &:focus {
+      border-color: var(--cyan);
+      outline: none;
+    }
+  }
+  
+  textarea {
+    resize: vertical;
+  }
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.info-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 8px;
+  
+  i {
+    font-size: 1.5rem;
+    color: var(--cyan);
+  }
+  
+  p {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+}
+
+.details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.detail-section {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 20px;
+  
+  h4 {
+    margin: 0 0 16px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    i {
+      color: var(--cyan);
+    }
+  }
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  label {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  
+  span {
+    color: var(--text-primary);
+    text-align: right;
+    
+    &.highlight {
+      color: var(--cyan);
+      font-weight: 700;
+    }
+    
+    &.valid {
+      color: var(--green);
+    }
+    
+    &.expiring {
+      color: var(--orange);
+    }
+    
+    &.expired {
+      color: var(--red);
+    }
+  }
+}
+
+.notes-text {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.action-bar {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .registrations-grid {
+    grid-template-columns: 1fr;
+  }
+}
