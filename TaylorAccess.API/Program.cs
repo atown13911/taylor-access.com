@@ -218,6 +218,44 @@ using (var scope = app.Services.CreateScope())
         adminUser.OrganizationId = org.Id;
         await context.SaveChangesAsync();
     }
+
+    // Seed OAuth clients
+    if (!context.OAuthClients.Any())
+    {
+        var clients = new[]
+        {
+            new OAuthClient
+            {
+                ClientId = "ta_vantac_tms",
+                ClientSecret = BCrypt.Net.BCrypt.HashPassword("vantac-sso-secret-2026"),
+                Name = "Van-Tac TMS",
+                Description = "Transportation Management System",
+                HomepageUrl = "https://taylor-tms.net",
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-tms.net", "https://taylor-tms.net/callback", "http://localhost:4200", "http://localhost:4200/callback" })
+            },
+            new OAuthClient
+            {
+                ClientId = "ta_taylor_crm",
+                ClientSecret = BCrypt.Net.BCrypt.HashPassword("crm-sso-secret-2026"),
+                Name = "Taylor CRM",
+                Description = "Customer Relationship Management",
+                HomepageUrl = "https://taylor-crm.com",
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "http://localhost:4201", "http://localhost:4201/callback" })
+            },
+            new OAuthClient
+            {
+                ClientId = "ta_taylor_academy",
+                ClientSecret = BCrypt.Net.BCrypt.HashPassword("academy-sso-secret-2026"),
+                Name = "Taylor Academy",
+                Description = "Learning Management System",
+                HomepageUrl = "https://taylor-academy.net",
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-academy.net", "https://taylor-academy.net/callback", "http://localhost:4202", "http://localhost:4202/callback" })
+            }
+        };
+        context.OAuthClients.AddRange(clients);
+        await context.SaveChangesAsync();
+        Console.WriteLine($"Seeded {clients.Length} OAuth clients: VanTac TMS, Taylor CRM, Taylor Academy");
+    }
 }
 
 Console.WriteLine("Taylor Access HR API is running!");

@@ -48,6 +48,13 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<InsurancePolicy> InsurancePolicies => Set<InsurancePolicy>();
     public DbSet<InsuranceEnrollment> InsuranceEnrollments => Set<InsuranceEnrollment>();
 
+    // OAuth2 / SSO
+    public DbSet<OAuthClient> OAuthClients => Set<OAuthClient>();
+    public DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes => Set<OAuthAuthorizationCode>();
+    public DbSet<OAuthAccessToken> OAuthAccessTokens => Set<OAuthAccessToken>();
+    public DbSet<OAuthRefreshToken> OAuthRefreshTokens => Set<OAuthRefreshToken>();
+    public DbSet<AppRoleAssignment> AppRoleAssignments => Set<AppRoleAssignment>();
+
     // Addresses & Places
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<Place> Places => Set<Place>();
@@ -142,5 +149,13 @@ public class TaylorAccessDbContext : DbContext
             .WithMany()
             .HasForeignKey(d => d.ManagerUserId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<OAuthClient>()
+            .HasIndex(c => c.ClientId)
+            .IsUnique();
+
+        modelBuilder.Entity<AppRoleAssignment>()
+            .HasIndex(a => new { a.UserId, a.AppClientId })
+            .IsUnique();
     }
 }

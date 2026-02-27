@@ -52,6 +52,7 @@ export class ShellComponent implements OnInit {
         { label: 'Roles & Permissions', icon: 'bx bx-lock-alt', route: '/admin/roles' },
         { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit' },
         { label: 'Invite Users', icon: 'bx bx-user-plus', route: '/admin/invite' },
+        { label: 'Connected Apps (SSO)', icon: 'bx bx-link', route: '/admin/apps' },
         { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
         { label: 'Database', icon: 'bx bx-data', route: '/database' },
       ]

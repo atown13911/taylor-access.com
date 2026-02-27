@@ -7,6 +7,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/login.component').then(m => m.LoginComponent)
   },
   {
+    path: 'oauth/authorize',
+    loadComponent: () => import('./features/oauth/oauth-consent.component').then(m => m.OAuthConsentComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     children: [
@@ -98,6 +102,10 @@ export const routes: Routes = [
       {
         path: 'admin/invite',
         loadComponent: () => import('./features/admin-security/admin/invite-users/invite-users.component').then(m => m.InviteUsersComponent)
+      },
+      {
+        path: 'admin/apps',
+        loadComponent: () => import('./features/admin-security/connected-apps/connected-apps.component').then(m => m.ConnectedAppsComponent)
       }
     ]
   },
