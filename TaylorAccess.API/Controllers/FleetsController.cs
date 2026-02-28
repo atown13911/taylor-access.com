@@ -24,18 +24,17 @@ public class FleetsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<object>> GetFleets([FromQuery] string? status, [FromQuery] int limit = 50)
+    public async Task<ActionResult<object>> GetFleets([FromQuery] string? status, [FromQuery] int? organizationId, [FromQuery] int limit = 50)
     {
-        var (orgId, _, orgErr) = await _currentUserService.ResolveOrgFilterAsync();
-        if (orgErr != null) return Unauthorized(new { message = orgErr });
-
         var query = _context.Fleets
             .AsNoTracking()
             .Include(f => f.FleetDrivers)
             .Include(f => f.FleetVehicles)
-            .Where(f => !orgId.HasValue || f.OrganizationId == orgId)
             .Where(f => f.ParentFleetId == null)
             .AsQueryable();
+
+        if (organizationId.HasValue)
+            query = query.Where(f => f.OrganizationId == organizationId);
 
         if (!string.IsNullOrEmpty(status))
             query = query.Where(f => f.Status == status);
