@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { AuthService } from '../core/services/auth.service';
@@ -16,11 +16,20 @@ interface NavSection {
   styleUrls: ['./shell.component.scss']
 })
 export class ShellComponent implements OnInit {
-  private authService = inject(AuthService);
+  authService = inject(AuthService);
   private router = inject(Router);
 
   sidebarCollapsed = signal(false);
+  profileMenuOpen = signal(false);
   currentUser = this.authService.currentUser;
+
+  avatarUrl = computed(() => {
+    const user = this.currentUser();
+    const url = user?.avatarUrl || user?.avatar;
+    if (!url) return null;
+    if (url.startsWith('data:') || url.startsWith('http')) return url;
+    return null;
+  });
 
   navSections: NavSection[] = [
     {
@@ -69,7 +78,16 @@ export class ShellComponent implements OnInit {
     this.sidebarCollapsed.update(v => !v);
   }
 
+  toggleProfileMenu(): void {
+    this.profileMenuOpen.update(v => !v);
+  }
+
+  closeProfileMenu(): void {
+    this.profileMenuOpen.set(false);
+  }
+
   logout(): void {
+    this.closeProfileMenu();
     this.authService.logout();
     this.router.navigate(['/login']);
   }

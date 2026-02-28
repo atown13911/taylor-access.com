@@ -33,23 +33,43 @@
     </nav>
 
     <div class="sidebar-footer">
-      @if (currentUser()) {
-        <a routerLink="/profile" class="user-info" title="View Profile">
-          <i class="bx bx-user-circle"></i>
+      <div class="profile-section" [class.collapsed]="sidebarCollapsed()">
+        <button class="profile-trigger" (click)="toggleProfileMenu()">
+          <div class="avatar">
+            @if (avatarUrl()) {
+              <img [src]="avatarUrl()" alt="" class="avatar-img">
+            } @else {
+              <i class="bx bx-user"></i>
+            }
+          </div>
           @if (!sidebarCollapsed()) {
-            <div class="user-details">
-              <span class="user-name">{{ currentUser()?.name }}</span>
-              <span class="user-role">{{ currentUser()?.role }}</span>
+            <div class="profile-info">
+              <span class="profile-name">{{ currentUser()?.name }}</span>
+              <span class="profile-role">{{ currentUser()?.role }}</span>
             </div>
+            <i class="bx bx-chevron-up profile-arrow"></i>
           }
-        </a>
-      }
-      <button class="logout-btn" (click)="logout()" title="Logout">
-        <i class="bx bx-log-out"></i>
-        @if (!sidebarCollapsed()) {
-          <span>Logout</span>
+        </button>
+
+        @if (profileMenuOpen()) {
+          <div class="profile-popup">
+            <a class="popup-item" routerLink="/profile" (click)="closeProfileMenu()">
+              <i class="bx bx-user"></i>
+              <span>Profile</span>
+            </a>
+            <a class="popup-item" routerLink="/hr/my-profile" (click)="closeProfileMenu()">
+              <i class="bx bx-id-card"></i>
+              <span>HR Profile</span>
+            </a>
+            <div class="popup-divider"></div>
+            <button class="popup-item logout" (click)="logout()">
+              <i class="bx bx-log-out"></i>
+              <span>Logout</span>
+            </button>
+          </div>
+          <div class="popup-overlay" (click)="closeProfileMenu()"></div>
         }
-      </button>
+      </div>
     </div>
   </aside>
 

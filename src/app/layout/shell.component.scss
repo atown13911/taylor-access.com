@@ -120,68 +120,177 @@
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  text-decoration: none;
-  transition: all 0.2s;
-  cursor: pointer;
+// Profile Section
+.profile-section {
+  position: relative;
 
-  &:hover {
-    background: rgba(0, 212, 255, 0.08);
-  }
+  &.collapsed {
+    .profile-trigger {
+      justify-content: center;
+      padding: 8px;
+    }
 
-  i {
-    font-size: 32px;
-    color: #00d4ff;
-    min-width: 32px;
-  }
+    .avatar {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+    }
 
-  .user-details {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .user-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #e0e0e0;
-  }
-
-  .user-role {
-    font-size: 11px;
-    color: #00d4ff;
-    text-transform: capitalize;
+    .profile-popup {
+      left: 100%;
+      bottom: 0;
+      right: auto;
+      margin-left: 10px;
+      margin-bottom: 0;
+      width: 200px;
+    }
   }
 }
 
-.logout-btn {
+.profile-trigger {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  background: none;
-  border: 1px solid rgba(255, 82, 82, 0.3);
-  border-radius: 8px;
-  color: #ff5252;
-  font-size: 13px;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 212, 255, 0.03);
+  border: 1px solid rgba(0, 212, 255, 0.1);
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: left;
+  color: inherit;
+
+  &:hover {
+    background: rgba(0, 212, 255, 0.08);
+    border-color: #00d4ff;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
+  }
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: var(--bg-card, #0d0d14);
+  border: 2px solid rgba(0, 212, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+  overflow: hidden;
+
+  .avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 
   i {
-    font-size: 18px;
-    min-width: 18px;
+    font-size: 1.25rem;
+    color: #00d4ff;
+  }
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e0f7ff;
+  text-transform: capitalize;
+}
+
+.profile-role {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(0, 212, 255, 0.6);
+}
+
+.profile-arrow {
+  color: rgba(0, 212, 255, 0.5);
+  font-size: 1.25rem;
+  transition: all 0.2s;
+}
+
+// Profile Popup Menu
+.profile-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 10px;
+  background: #0d0d14;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.15), 0 10px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  z-index: 1000;
+  animation: popup-in 0.15s ease;
+}
+
+@keyframes popup-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.popup-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: #e0f7ff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+
+  i {
+    font-size: 1.1rem;
+    color: rgba(0, 212, 255, 0.5);
+    transition: all 0.2s;
   }
 
   &:hover {
-    background: rgba(255, 82, 82, 0.1);
-    border-color: #ff5252;
+    background: rgba(0, 212, 255, 0.1);
+    color: #00d4ff;
+
+    i {
+      color: #00d4ff;
+      filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.5));
+    }
   }
+
+  &.logout:hover {
+    background: rgba(255, 42, 109, 0.1);
+    color: #ff2a6d;
+
+    i {
+      color: #ff2a6d;
+      filter: drop-shadow(0 0 5px rgba(255, 42, 109, 0.5));
+    }
+  }
+}
+
+.popup-divider {
+  height: 1px;
+  background: rgba(0, 212, 255, 0.1);
+  margin: 4px 0;
+}
+
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
 }
 
 .main-content {
