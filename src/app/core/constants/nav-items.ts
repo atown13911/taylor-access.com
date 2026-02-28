@@ -117,7 +117,7 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   // Market Analysis
   { label: 'Market Analysis', icon: 'bx-trending-up', route: '/market-analysis', section: 'Market Analysis' },
   // Compliance
-  { label: 'Driver Database', icon: 'bx-group', route: '/compliance/driver-database', section: 'Compliance' },
+  { label: 'Driver Compliance', icon: 'bx-group', route: '/compliance/driver-database', section: 'Compliance' },
   { label: 'Registrations & Authority', icon: 'bx-id-card', route: '/compliance/registrations' },
   { label: 'Insurance & Financial', icon: 'bx-dollar-circle', route: '/compliance/insurance' },
   { label: 'Driver Qualification Files', icon: 'bx-folder-open', route: '/compliance/driver-files' },
