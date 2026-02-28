@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TaylorAccess.API.Models;
+using TaylorAccess.API.Models.Chat;
 
 namespace TaylorAccess.API.Data;
 
@@ -55,6 +56,27 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<OAuthRefreshToken> OAuthRefreshTokens => Set<OAuthRefreshToken>();
     public DbSet<AppRoleAssignment> AppRoleAssignments => Set<AppRoleAssignment>();
 
+    // Chat
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ChatMessageReaction> ChatMessageReactions => Set<ChatMessageReaction>();
+    public DbSet<ChatMessageAttachment> ChatMessageAttachments => Set<ChatMessageAttachment>();
+    public DbSet<ChatMessageMention> ChatMessageMentions => Set<ChatMessageMention>();
+    public DbSet<ChatConversation> ChatConversations => Set<ChatConversation>();
+    public DbSet<ChatConversationParticipant> ChatConversationParticipants => Set<ChatConversationParticipant>();
+    public DbSet<ChatUserStatus> ChatUserStatuses => Set<ChatUserStatus>();
+    public DbSet<ChatChannel> ChatChannels => Set<ChatChannel>();
+    public DbSet<ChatChannelMember> ChatChannelMembers => Set<ChatChannelMember>();
+
+    // Tickets
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketComment> TicketComments => Set<TicketComment>();
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
+    public DbSet<TicketCategory> TicketCategories => Set<TicketCategory>();
+
+    // Notifications
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
+
     // Addresses & Places
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<Place> Places => Set<Place>();
@@ -63,9 +85,6 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<Shipment> Shipments => Set<Shipment>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<Load> Loads => Set<Load>();
-
-    // Communications
-    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     // Zoom
     public DbSet<ZoomUserRecord> ZoomUserRecords => Set<ZoomUserRecord>();

@@ -1,0 +1,819 @@
+<div class="chat-container">
+  <!-- Animated Background Grid -->
+  <div class="bg-grid"></div>
+  
+  <!-- Sidebar -->
+  <aside class="chat-sidebar" [class.collapsed]="!showSidebar()">
+    <div class="sidebar-header">
+      <h2>
+        <div class="logo-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+            <path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/>
+            <path d="M13 7h-2v5.414l3.293 3.293 1.414-1.414L13 11.586z"/>
+          </svg>
+          <span class="pulse-ring"></span>
+        </div>
+        Comm Link
+      </h2>
+      <button class="btn-icon" (click)="toggleSidebar()">
+        <i class="bx bx-chevron-left"></i>
+      </button>
+    </div>
+
+    <!-- Channels Section -->
+    <div class="sidebar-section">
+      <div class="section-header">
+        <span>Channels</span>
+        <button class="btn-icon-sm" (click)="openCreateChannel()" title="Create Channel">
+          <i class="bx bx-plus"></i>
+        </button>
+      </div>
+      <div class="channel-list">
+        @for (channel of chatService.channels(); track channel.id) {
+          <div 
+            class="channel-item" 
+            [class.active]="chatService.activeChannelId() === channel.id"
+            (click)="selectChannel(channel)">
+            <span class="channel-icon">{{ channel.icon || '#' }}</span>
+            <span class="channel-name">{{ channel.name }}</span>
+            @if (channel.unreadCount > 0) {
+              <span class="unread-badge">{{ channel.unreadCount }}</span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Direct Messages Section -->
+    <div class="sidebar-section">
+      <div class="section-header">
+        <span>Direct Messages</span>
+        @if (isLoggedIn()) {
+          <button class="btn-icon-sm" (click)="openUserSearch()" title="New Message">
+            <i class="bx bx-plus"></i>
+          </button>
+        }
+      </div>
+      <div class="dm-list">
+        @if (!isLoggedIn()) {
+          <div class="login-prompt">
+            <i class="bx bx-lock-alt"></i>
+            <p>Log in to access DMs</p>
+            <button class="btn-login" (click)="goToLogin()">Log In</button>
+          </div>
+        } @else {
+          @for (conv of chatService.conversations(); track conv.id) {
+            <div 
+              class="dm-item" 
+              [class.active]="chatService.activeConversationId() === conv.id"
+              (click)="selectConversation(conv)">
+              <div class="dm-avatar">
+                {{ getUserInitials(getConversationName(conv)) }}
+              </div>
+              <div class="dm-info">
+                <span class="dm-name">{{ getConversationName(conv) }}</span>
+                @if (conv.lastMessage) {
+                  <span class="dm-preview">{{ conv.lastMessage.content | slice:0:30 }}...</span>
+                }
+              </div>
+              @if (conv.unreadCount > 0) {
+                <span class="unread-badge">{{ conv.unreadCount }}</span>
+              }
+            </div>
+          }
+          @if (chatService.conversations().length === 0) {
+            <div class="empty-dms">No conversations yet</div>
+          }
+        }
+      </div>
+    </div>
+
+    <!-- Online Users -->
+    <div class="sidebar-section online-users">
+      <div class="section-header">
+        <span>Online ({{ chatService.onlineUsers().length }})</span>
+      </div>
+      <div class="user-list">
+        @for (user of chatService.onlineUsers(); track user.id) {
+          <div class="user-item" (click)="startDM(user)">
+            <div class="user-avatar">
+              {{ getUserInitials(user.name) }}
+              <span class="status-dot" [style.background]="getStatusColor(user.status)"></span>
+            </div>
+            <span class="user-name">{{ user.name }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Floating Plus Button -->
+    <div class="sidebar-fab">
+      @if (showPlusMenu()) {
+        <div class="fab-menu">
+          <button class="fab-option" (click)="openNewChat()">
+            <i class="bx bx-message-add"></i> New Chat
+          </button>
+          <button class="fab-option" (click)="openCreateChannel(); showPlusMenu.set(false)">
+            <i class="bx bx-hash"></i> New Channel
+          </button>
+          <button class="fab-option" (click)="openUserSearch(); showPlusMenu.set(false)">
+            <i class="bx bx-search-alt"></i> Find User
+          </button>
+        </div>
+      }
+      <button class="fab-btn" [class.active]="showPlusMenu()" (click)="togglePlusMenu()">
+        <i class="bx bx-plus"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Chat Area -->
+  <main class="chat-main">
+    <!-- Header -->
+    <header class="chat-header">
+      <button class="btn-icon expand-sidebar" (click)="toggleSidebar()" [class.visible]="!showSidebar()">
+        <i class="bx bx-menu"></i>
+      </button>
+      <h3>{{ getActiveTitle() }}</h3>
+
+      <a class="shipment-toggle-btn" href="https://power.dat.com" target="_blank" title="Power DAT">
+        <i class="bx bx-bolt-circle"></i>
+        <span>Power DAT</span>
+      </a>
+      <button class="shipment-toggle-btn" [class.active]="showShipmentView()" title="Shipments" (click)="toggleShipmentView()">
+        <i class="bx bx-package"></i>
+        <span>Shipments</span>
+      </button>
+      
+      <!-- DM Controls (Video, Call, Search, More) -->
+      <div class="dm-controls" [class.visible]="chatService.activeConversationId()">
+        <button class="btn-icon-control" title="Video Call" (click)="startVideoCall()">
+          <i class="bx bx-video"></i>
+        </button>
+        <button class="btn-icon-control" title="Voice Call" (click)="startVoiceCall()">
+          <i class="bx bx-phone"></i>
+        </button>
+        <button class="btn-icon-control" title="Search Messages" (click)="toggleMessageSearch()">
+          <i class="bx bx-search"></i>
+        </button>
+        <button class="btn-icon-control" title="More Options" (click)="toggleMoreOptions()">
+          <i class="bx bx-dots-vertical-rounded"></i>
+        </button>
+      </div>
+
+      <!-- Channel Controls (Search, Pin, Settings) -->
+      <div class="channel-controls" [class.visible]="chatService.activeChannelId()">
+        <button class="btn-icon-control" title="Search Messages" (click)="toggleMessageSearch()">
+          <i class="bx bx-search"></i>
+        </button>
+        <button class="btn-icon-control" title="Pinned Messages" (click)="showPinnedMessages()">
+          <i class="bx bx-pin"></i>
+        </button>
+        <button class="btn-icon-control" title="Channel Settings" (click)="toggleMoreOptions()">
+          <i class="bx bx-dots-vertical-rounded"></i>
+        </button>
+      </div>
+
+      <div class="header-actions">
+        @if (chatService.isConnected()) {
+          <span class="connection-status connected">
+            <i class="bx bx-radio-circle-marked"></i> Connected
+          </span>
+        } @else {
+          <span class="connection-status disconnected">
+            <i class="bx bx-radio-circle"></i> Disconnected
+          </span>
+        }
+        <button class="gmail-toggle-btn" [class.active]="showGmailPanel()" title="Gmail" (click)="toggleGmailPanel()">
+          <i class="bx bx-envelope"></i>
+          <span>Gmail</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Message Search Bar (Collapsible) -->
+    @if (showMessageSearch()) {
+      <div class="message-search-bar">
+        <i class="bx bx-search"></i>
+        <input 
+          type="text" 
+          [ngModel]="messageSearchQuery()"
+          (ngModelChange)="onMessageSearchChange($event)"
+          placeholder="Search messages..."
+          autofocus
+        />
+        <span class="search-results-count">{{ messageSearchResults().length }} results</span>
+        <button class="btn-icon-sm" (click)="toggleMessageSearch()">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+    }
+
+    <!-- More Options Dropdown -->
+    @if (showMoreOptions()) {
+      <div class="more-options-overlay" (click)="toggleMoreOptions()"></div>
+      <div class="more-options-dropdown">
+        @if (chatService.activeConversationId()) {
+          <button class="option-item" (click)="viewUserProfile()">
+            <i class="bx bx-user"></i> View Profile
+          </button>
+          <button class="option-item" (click)="muteConversation()">
+            <i class="bx bx-bell-off"></i> Mute Notifications
+          </button>
+          <button class="option-item" (click)="clearChat()">
+            <i class="bx bx-trash"></i> Clear Chat
+          </button>
+          <button class="option-item danger" (click)="blockUser()">
+            <i class="bx bx-block"></i> Block User
+          </button>
+        } @else {
+          <button class="option-item" (click)="showChannelMembers()">
+            <i class="bx bx-group"></i> View Members
+          </button>
+          <button class="option-item" (click)="muteChannel()">
+            <i class="bx bx-bell-off"></i> Mute Channel
+          </button>
+          <button class="option-item" (click)="leaveChannel()">
+            <i class="bx bx-exit"></i> Leave Channel
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Shipment View (replaces messages area) -->
+    @if (showShipmentView()) {
+      <div class="shipment-view">
+        <div class="shipment-toolbar">
+          <div class="shipment-search-box">
+            <i class="bx bx-search"></i>
+            <input type="text" placeholder="Search shipments..." [ngModel]="shipmentSearch()" (ngModelChange)="shipmentSearch.set($event)" (keyup.enter)="loadShipments()">
+          </div>
+          <select class="shipment-filter" [ngModel]="shipmentStatusFilter()" (ngModelChange)="shipmentStatusFilter.set($event); loadShipments()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_transit">In Transit</option>
+            <option value="dispatched">Dispatched</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="shipment-refresh-btn" (click)="loadShipments()" [disabled]="shipmentsLoading()">
+            <i class="bx" [class.bx-refresh]="!shipmentsLoading()" [class.bx-loader-alt]="shipmentsLoading()" [class.bx-spin]="shipmentsLoading()"></i>
+          </button>
+          <span class="shipment-count">{{ shipments().length }} shipments</span>
+        </div>
+
+        @if (shipmentsLoading() && shipments().length === 0) {
+          <div class="shipment-loading">
+            <i class="bx bx-loader-alt bx-spin"></i>
+            <span>Loading shipments...</span>
+          </div>
+        } @else if (shipments().length === 0) {
+          <div class="shipment-empty">
+            <i class="bx bx-package"></i>
+            <h4>No shipments found</h4>
+          </div>
+        } @else {
+          <div class="shipment-table-wrap">
+            <table class="shipment-table">
+              <thead>
+                <tr>
+                  <th class="sortable" (click)="sortShipmentsBy('tssNumber')">
+                    TSS#
+                    @if (shipmentSortCol() === 'tssNumber') {
+                      <i class="bx" [class.bx-chevron-up]="shipmentSortDir() === 'asc'" [class.bx-chevron-down]="shipmentSortDir() === 'desc'"></i>
+                    }
+                  </th>
+                  <th class="sortable" (click)="sortShipmentsBy('status')">
+                    Status
+                    @if (shipmentSortCol() === 'status') {
+                      <i class="bx" [class.bx-chevron-up]="shipmentSortDir() === 'asc'" [class.bx-chevron-down]="shipmentSortDir() === 'desc'"></i>
+                    }
+                  </th>
+                  <th class="sortable origin-col" (click)="sortShipmentsBy('originCity')">
+                    Origin
+                    @if (shipmentSortCol() === 'originCity') {
+                      <i class="bx" [class.bx-chevron-up]="shipmentSortDir() === 'asc'" [class.bx-chevron-down]="shipmentSortDir() === 'desc'"></i>
+                    }
+                  </th>
+                  <th class="sortable dest-col" (click)="sortShipmentsBy('destinationCity')">
+                    Destination
+                    @if (shipmentSortCol() === 'destinationCity') {
+                      <i class="bx" [class.bx-chevron-up]="shipmentSortDir() === 'asc'" [class.bx-chevron-down]="shipmentSortDir() === 'desc'"></i>
+                    }
+                  </th>
+                  <th class="sortable" (click)="sortShipmentsBy('driverName')">
+                    Driver
+                    @if (shipmentSortCol() === 'driverName') {
+                      <i class="bx" [class.bx-chevron-up]="shipmentSortDir() === 'asc'" [class.bx-chevron-down]="shipmentSortDir() === 'desc'"></i>
+                    }
+                  </th>
+                  <th class="sortable" (click)="sortShipmentsBy('customerName')">
+                    Customer
+                    @if (shipmentSortCol() === 'customerName') {
+                      <i class="bx" [class.bx-chevron-up]="shipmentSortDir() === 'asc'" [class.bx-chevron-down]="shipmentSortDir() === 'desc'"></i>
+                    }
+                  </th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of shipments(); track s.id) {
+                  <tr>
+                    <td><strong class="shipment-id">{{ s.tssNumber || '#' + s.id }}</strong></td>
+                    <td><span class="shipment-status" [attr.data-status]="(s.status || '').toLowerCase().replace(' ', '_')">{{ s.status || 'N/A' }}</span></td>
+                    <td class="shipment-location">{{ s.originCity || s.pickupAddress || '—' }}</td>
+                    <td class="shipment-location">{{ s.destinationCity || s.deliveryAddress || '—' }}</td>
+                    <td>{{ s.driverName || s.driver?.name || '—' }}</td>
+                    <td>{{ s.customerName || s.customer?.name || '—' }}</td>
+                    <td class="shipment-actions-cell">
+                      <button class="ship-act-btn" title="View Details" (click)="openShipmentDetail(s)"><i class="bx bx-show"></i></button>
+                      <div class="ship-chat-wrap">
+                        <button class="ship-act-btn chat" title="Send to Chat" (click)="toggleShipmentChatMenu(s, $event)"><i class="bx bx-message-dots"></i></button>
+                        @if (shipmentChatMenuId() === s.id) {
+                          <div class="ship-chat-dropdown" (click)="$event.stopPropagation()">
+                            <div class="ship-chat-header">Send to chat</div>
+                            @if (chatService.channels().length > 0) {
+                              <div class="ship-chat-section">Channels</div>
+                              @for (ch of chatService.channels(); track ch.id) {
+                                <button class="ship-chat-option" (click)="sendShipmentToChannel(s, ch)">
+                                  <span class="ship-chat-icon">#</span> {{ ch.name }}
+                                </button>
+                              }
+                            }
+                            @if (chatService.conversations().length > 0) {
+                              <div class="ship-chat-section">Direct Messages</div>
+                              @for (conv of chatService.conversations(); track conv.id) {
+                                <button class="ship-chat-option" (click)="sendShipmentToDM(s, conv)">
+                                  <span class="ship-chat-icon"><i class="bx bx-user"></i></span> {{ getConversationName(conv) }}
+                                </button>
+                              }
+                            }
+                          </div>
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Messages -->
+    <div class="messages-container" #messagesContainer [class.hidden-by-shipments]="showShipmentView()">
+      @if (!chatService.activeChannelId() && !chatService.activeConversationId()) {
+        <div class="no-selection">
+          <div class="welcome-graphic">
+            <div class="orbit-ring ring-1"></div>
+            <div class="orbit-ring ring-2"></div>
+            <div class="orbit-ring ring-3"></div>
+            <div class="center-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 2H4c-1.103 0-2 .897-2 2v18l4-4h14c1.103 0 2-.897 2-2V4c0-1.103-.897-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+                <path d="M8 9h8v2H8zm0-3h8v2H8z"/>
+              </svg>
+            </div>
+          </div>
+          <h3>Welcome to Comm Link</h3>
+          <p>Your secure team communication hub</p>
+          <div class="welcome-features">
+            <span><i class="bx bx-check-circle"></i> Real-time messaging</span>
+            <span><i class="bx bx-check-circle"></i> Team channels</span>
+            <span><i class="bx bx-check-circle"></i> Direct messages</span>
+          </div>
+        </div>
+      } @else {
+        @for (message of chatService.currentMessages(); track message.id; let i = $index) {
+          <!-- Date Separator -->
+          @if (shouldShowDateSeparator(i)) {
+            <div class="date-separator">
+              <span>{{ getDateSeparator(message.createdAt) }}</span>
+            </div>
+          }
+          <div class="message" [class.my-message]="isMyMessage(message)">
+            <div class="message-avatar">
+              {{ getUserInitials(message.sender.name) }}
+            </div>
+            <div class="message-content">
+              <div class="message-header">
+                <span class="sender-name">{{ message.sender.name }}</span>
+                <span class="message-time">{{ formatMessageTime(message.createdAt) }}</span>
+                @if (message.editedAt) {
+                  <span class="edited-tag">(edited)</span>
+                }
+              </div>
+              <div class="message-body">
+                {{ message.content }}
+              </div>
+              <!-- Reactions -->
+              @if (message.reactions && message.reactions.length > 0) {
+                <div class="message-reactions">
+                  @for (reaction of message.reactions; track reaction.emoji) {
+                    <button 
+                      class="reaction-btn" 
+                      [class.my-reaction]="reaction.userIds.includes(getCurrentUserId())"
+                      (click)="toggleReaction(message.id, reaction.emoji)">
+                      {{ reaction.emoji }} {{ reaction.count }}
+                    </button>
+                  }
+                </div>
+              }
+              <!-- Add Reaction Button -->
+              <button class="add-reaction-btn" (click)="openEmojiPicker(message.id)">
+                <i class="bx bx-smile"></i>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- Typing Indicator -->
+        @if (chatService.typingUsers().length > 0) {
+          <div class="typing-indicator">
+            <span class="typing-dots">
+              <span></span><span></span><span></span>
+            </span>
+            {{ getTypingNames() }} {{ chatService.typingUsers().length === 1 ? 'is' : 'are' }} typing...
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Message Input -->
+    @if (chatService.activeChannelId() || chatService.activeConversationId()) {
+      <div class="message-input-container">
+        <!-- Attachment Preview -->
+        @if (pendingAttachment()) {
+          <div class="attachment-preview">
+            @if (attachmentPreview()) {
+              <img [src]="attachmentPreview()" class="attachment-thumb" alt="preview">
+            } @else {
+              <i class="bx" [class]="getAttachmentIcon(pendingAttachment()!)"></i>
+            }
+            <div class="attachment-info">
+              <span class="attachment-name">{{ pendingAttachment()!.name }}</span>
+              <span class="attachment-size">{{ formatAttachmentSize(pendingAttachment()!.size) }}</span>
+            </div>
+            <button class="attachment-remove" (click)="clearAttachment()">
+              <i class="bx bx-x"></i>
+            </button>
+          </div>
+        }
+        <div class="input-wrapper">
+          <textarea
+            #messageInput
+            [ngModel]="messageText()"
+            (ngModelChange)="onMessageTextChange($event)"
+            (keydown)="onMessageKeydown($event)"
+            (input)="onMessageInput()"
+            placeholder="Type a message..."
+            rows="1"
+          ></textarea>
+          <div class="input-actions">
+            <button class="btn-icon" title="Add emoji">
+              <i class="bx bx-smile"></i>
+            </button>
+            <label class="btn-icon attach-btn" title="Attach file">
+              <i class="bx bx-paperclip"></i>
+              <input type="file" hidden
+                     accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
+                     (change)="onAttachFile($event)">
+            </label>
+            <button class="btn-send" (click)="sendMessage()" 
+                    [disabled]="!messageText().trim() && !pendingAttachment()"
+                    [class.uploading]="isUploadingAttachment()">
+              @if (isUploadingAttachment()) {
+                <i class="bx bx-loader-alt bx-spin"></i>
+              } @else {
+                <i class="bx bx-send"></i>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  </main>
+
+  <!-- Gmail Slideout Panel -->
+  <aside class="gmail-panel" [class.open]="showGmailPanel()">
+    <div class="gmail-panel-header">
+      <h3><i class="bx bx-envelope"></i> Gmail</h3>
+      <button class="btn-icon" (click)="toggleGmailPanel()">
+        <i class="bx bx-x"></i>
+      </button>
+    </div>
+
+    @if (!gmailConnected()) {
+      <div class="gmail-panel-empty">
+        <div class="gmail-connect-icon">
+          <i class="bx bxl-google"></i>
+        </div>
+        <h4>Connect Your Gmail</h4>
+        <p>Sign in with Google to view your inbox, send emails, and manage drafts right here.</p>
+        <button class="gmail-panel-btn google" (click)="connectGmailOAuth()">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Sign in with Google
+        </button>
+        <div class="gmail-connect-divider">
+          <span>or</span>
+        </div>
+        <button class="gmail-panel-btn outline sm" (click)="navigateToGmail()">
+          <i class="bx bx-cog"></i> Configure in Settings
+        </button>
+      </div>
+    } @else {
+      <!-- Gmail Search -->
+      <div class="gmail-panel-search">
+        <i class="bx bx-search"></i>
+        <input type="text" placeholder="Search emails..." [ngModel]="gmailSearch()" (ngModelChange)="gmailSearch.set($event)" (keyup.enter)="searchGmailMessages()">
+      </div>
+
+      <!-- Quick Compose -->
+      <button class="gmail-compose-btn" (click)="navigateToGmailCompose()">
+        <i class="bx bx-edit"></i> Compose
+      </button>
+
+      <!-- Mail Folders -->
+      <div class="gmail-folders">
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'INBOX'" (click)="switchGmailFolder('INBOX')">
+          <i class="bx bx-inbox"></i> Inbox
+          @if (gmailUnread() > 0) { <span class="folder-badge">{{ gmailUnread() }}</span> }
+        </button>
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'STARRED'" (click)="switchGmailFolder('STARRED')">
+          <i class="bx bx-star"></i> Starred
+        </button>
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'SENT'" (click)="switchGmailFolder('SENT')">
+          <i class="bx bx-send"></i> Sent
+        </button>
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'DRAFT'" (click)="switchGmailFolder('DRAFT')">
+          <i class="bx bx-edit"></i> Drafts
+        </button>
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'SPAM'" (click)="switchGmailFolder('SPAM')">
+          <i class="bx bx-error-circle"></i> Spam
+        </button>
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'TRASH'" (click)="switchGmailFolder('TRASH')">
+          <i class="bx bx-trash"></i> Trash
+        </button>
+        <button class="gmail-folder" [class.active]="gmailFolder() === 'ALL'" (click)="switchGmailFolder('ALL')">
+          <i class="bx bx-mail-send"></i> All Mail
+        </button>
+      </div>
+
+      <!-- Compose Modal -->
+      @if (showComposeModal()) {
+        <div class="compose-overlay" (click)="closeCompose()">
+          <div class="compose-modal" (click)="$event.stopPropagation()">
+            <div class="compose-header">
+              <h4>New Message</h4>
+              <button class="btn-icon" (click)="closeCompose()"><i class="bx bx-x"></i></button>
+            </div>
+            <div class="compose-fields">
+              <div class="compose-field to-field">
+                <label>To</label>
+                <input type="text" [ngModel]="composeForm.to" (ngModelChange)="onToInput($event)" placeholder="recipient@example.com" (focus)="onToInput(composeForm.to)" (blur)="hideSuggestionsDelayed()" autocomplete="off">
+                @if (!showCcBcc()) {
+                  <button class="cc-toggle" (click)="showCcBcc.set(true)">Cc/Bcc</button>
+                }
+                @if (showSuggestions()) {
+                  <div class="contact-suggestions">
+                    @for (c of contactSuggestions(); track c.email) {
+                      <div class="suggestion-item" (mousedown)="selectContact(c)">
+                        <div class="suggestion-avatar">{{ c.name?.charAt(0) || '?' }}</div>
+                        <div class="suggestion-info">
+                          <div class="suggestion-name">{{ c.name }}</div>
+                          <div class="suggestion-email">{{ c.email }}</div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+              @if (showCcBcc()) {
+                <div class="compose-field">
+                  <label>Cc</label>
+                  <input type="text" [(ngModel)]="composeForm.cc" placeholder="">
+                </div>
+                <div class="compose-field">
+                  <label>Bcc</label>
+                  <input type="text" [(ngModel)]="composeForm.bcc" placeholder="">
+                </div>
+              }
+              <div class="compose-field">
+                <label>Subject</label>
+                <input type="text" [(ngModel)]="composeForm.subject" placeholder="">
+              </div>
+            </div>
+            <textarea class="compose-body" [(ngModel)]="composeForm.body" placeholder="Write your message..."></textarea>
+            <div class="compose-footer">
+              <button class="compose-send-btn" (click)="sendCompose()" [disabled]="composeSending()">
+                @if (composeSending()) {
+                  <i class="bx bx-loader-alt bx-spin"></i> Sending...
+                } @else {
+                  <i class="bx bx-send"></i> Send
+                }
+              </button>
+              <button class="compose-discard-btn" (click)="closeCompose()">
+                <i class="bx bx-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Unread Count -->
+      @if (gmailUnread() > 0) {
+        <div class="gmail-unread-bar">
+          <i class="bx bx-envelope"></i> {{ gmailUnread() }} unread
+        </div>
+      }
+
+      <!-- Email List -->
+      <div class="gmail-panel-messages">
+        @if (gmailLoading()) {
+          <div class="gmail-panel-loading">
+            <i class="bx bx-loader-alt bx-spin"></i>
+            <span>Loading emails...</span>
+          </div>
+        } @else if (gmailMessages().length === 0) {
+          <div class="gmail-panel-empty sm">
+            <i class="bx bx-inbox"></i>
+            <p>No messages</p>
+          </div>
+        } @else {
+          @for (msg of gmailMessages(); track msg.id) {
+            <div class="gmail-msg-item" [class.unread]="!msg.isRead" (click)="openGmailMessage(msg)">
+              <div class="gmail-msg-from">{{ extractGmailName(msg.from) }}</div>
+              <div class="gmail-msg-subject">{{ msg.subject || '(no subject)' }}</div>
+              <div class="gmail-msg-snippet">{{ msg.snippet }}</div>
+              <div class="gmail-msg-date">{{ formatGmailDate(msg.internalDate) }}</div>
+            </div>
+          }
+        }
+      </div>
+
+      <!-- View All Link -->
+      <div class="gmail-panel-footer">
+        <button class="gmail-panel-btn outline" (click)="navigateToGmail()">
+          <i class="bx bx-right-arrow-alt"></i> Open Full Gmail
+        </button>
+      </div>
+    }
+  </aside>
+
+  <!-- User Search Modal -->
+  @if (showUserSearch()) {
+    <div class="modal-overlay" (click)="closeUserSearch()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>New Message</h3>
+          <button class="btn-icon" (click)="closeUserSearch()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <input 
+            type="text" 
+            [ngModel]="userSearchQuery()"
+            (ngModelChange)="onUserSearchChange($event)"
+            (input)="searchUsers()"
+            placeholder="Search users..."
+            class="search-input"
+            autofocus
+          />
+          <div class="user-search-results">
+            @for (user of userSearchResults(); track user.id) {
+              <div class="user-result" (click)="startDM(user)">
+                <div class="user-avatar">{{ getUserInitials(user.name) }}</div>
+                <div class="user-info">
+                  <span class="name">{{ user.name }}</span>
+                  <span class="email">{{ user.email }}</span>
+                </div>
+              </div>
+            }
+            @if (userSearchQuery().length >= 2 && userSearchResults().length === 0) {
+              <div class="no-results">No users found</div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create Channel Modal -->
+  @if (showCreateChannel()) {
+    <div class="modal-overlay" (click)="closeCreateChannel()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>Create Channel</h3>
+          <button class="btn-icon" (click)="closeCreateChannel()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Channel Name</label>
+            <input 
+              type="text" 
+              [ngModel]="newChannelName()"
+              (ngModelChange)="onNewChannelNameChange($event)"
+              placeholder="e.g., marketing"
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label>Description (optional)</label>
+            <input 
+              type="text" 
+              [ngModel]="newChannelDescription()"
+              (ngModelChange)="onNewChannelDescriptionChange($event)"
+              placeholder="What's this channel about?"
+              class="form-input"
+            />
+          </div>
+          <button class="btn-primary" (click)="createChannel()" [disabled]="!newChannelName().trim()">
+            Create Channel
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Emoji Picker -->
+  @if (showEmojiPicker()) {
+    <div class="emoji-picker-overlay" (click)="closeEmojiPicker()">
+      <div class="emoji-picker" (click)="$event.stopPropagation()">
+        @for (emoji of commonEmojis; track emoji) {
+          <button class="emoji-btn" (click)="addReactionFromPicker(emoji)">
+            {{ emoji }}
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Company Roster Modal -->
+  @if (showRoster()) {
+    <div class="modal-overlay" (click)="closeRoster()">
+      <div class="modal roster-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3><i class="bx bx-group"></i> Company Roster</h3>
+          <button class="btn-icon" (click)="closeRoster()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <input type="text" class="search-input"
+                 [ngModel]="rosterSearch()"
+                 (ngModelChange)="rosterSearch.set($event)"
+                 placeholder="Search by name, email, position..."
+                 autofocus />
+
+          @if (rosterLoading()) {
+            <div class="roster-loading">
+              <i class="bx bx-loader-alt bx-spin"></i>
+              <span>Loading roster...</span>
+            </div>
+          }
+
+          <div class="roster-list">
+            @for (user of getFilteredRoster(); track user.id) {
+              <div class="roster-item" (click)="startChatWithEmployee(user)">
+                <div class="roster-avatar">
+                  {{ getUserInitials(user.name || (user.firstName + ' ' + user.lastName)) }}
+                  <span class="roster-status online"></span>
+                </div>
+                <div class="roster-info">
+                  <span class="roster-name">{{ user.name || (user.firstName + ' ' + user.lastName) }}</span>
+                  <span class="roster-detail">
+                    @if (user.position?.title) {
+                      {{ user.position.title }}
+                    }
+                    @if (user.position?.title && user.department?.name) {
+                      &middot;
+                    }
+                    @if (user.department?.name) {
+                      {{ user.department.name }}
+                    }
+                    @if (!user.position?.title && !user.department?.name && user.email) {
+                      {{ user.email }}
+                    }
+                  </span>
+                </div>
+                <button class="roster-chat-btn">
+                  <i class="bx bx-message-dots"></i>
+                </button>
+              </div>
+            }
+            @if (!rosterLoading() && getFilteredRoster().length === 0) {
+              <div class="roster-empty">
+                <i class="bx bx-user-x"></i>
+                <span>No employees found</span>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

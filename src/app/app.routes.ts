@@ -110,6 +110,18 @@ export const routes: Routes = [
       {
         path: 'admin/apps',
         loadComponent: () => import('./features/admin-security/connected-apps/connected-apps.component').then(m => m.ConnectedAppsComponent)
+      },
+      {
+        path: 'chat',
+        loadComponent: () => import('./features/communication/chat/chat.component').then(m => m.ChatComponent)
+      },
+      {
+        path: 'tickets',
+        loadComponent: () => import('./features/support/tickets/tickets.component').then(m => m.TicketsComponent)
+      },
+      {
+        path: 'notifications',
+        loadComponent: () => import('./features/system/notifications/notifications.component').then(m => m.NotificationsComponent)
       }
     ]
   },

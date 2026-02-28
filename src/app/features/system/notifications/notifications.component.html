@@ -1,0 +1,252 @@
+<div class="notifications-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1><i class='bx bx-bell'></i> Notifications</h1>
+      <p class="subtitle">Stay updated with system alerts and activities</p>
+    </div>
+    <div class="header-actions">
+      @if (stats().unread > 0) {
+        <button class="btn btn-secondary" (click)="markAllAsRead()">
+          <i class='bx bx-check-double'></i>
+          Mark All Read
+        </button>
+      }
+      <button class="btn btn-secondary" (click)="clearAll()">
+        <i class='bx bx-trash'></i>
+        Clear All
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-card" [class.active]="selectedType() === 'all'" (click)="selectedType.set('all')">
+      <div class="stat-icon all"><i class='bx bx-bell'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().total }}</span>
+        <span class="stat-label">Total</span>
+      </div>
+    </div>
+    <div class="stat-card unread" [class.active]="selectedTab() === 'unread'" (click)="selectedTab.set('unread')">
+      <div class="stat-icon unread"><i class='bx bx-envelope'></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats().unread }}</span>
+        <span class="stat-label">Unread</span>
+      </div>
+    </div>
+    @if (stats().critical > 0) {
+      <div class="stat-card critical">
+        <div class="stat-icon critical"><i class='bx bx-error-circle'></i></div>
+        <div class="stat-info">
+          <span class="stat-value">{{ stats().critical }}</span>
+          <span class="stat-label">Critical</span>
+        </div>
+      </div>
+    }
+    @if (stats().high > 0) {
+      <div class="stat-card high">
+        <div class="stat-icon high"><i class='bx bx-error'></i></div>
+        <div class="stat-info">
+          <span class="stat-value">{{ stats().high }}</span>
+          <span class="stat-label">High Priority</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-bar">
+    <div class="tabs">
+      <button class="tab" [class.active]="selectedTab() === 'all'" (click)="selectedTab.set('all')">
+        <i class='bx bx-list-ul'></i> All
+      </button>
+      <button class="tab" [class.active]="selectedTab() === 'unread'" (click)="selectedTab.set('unread')">
+        <i class='bx bx-envelope'></i> Unread
+        @if (stats().unread > 0) {
+          <span class="badge">{{ stats().unread }}</span>
+        }
+      </button>
+      <button class="tab" [class.active]="selectedTab() === 'settings'" (click)="selectedTab.set('settings')">
+        <i class='bx bx-cog'></i> Settings
+      </button>
+    </div>
+
+    @if (selectedTab() !== 'settings') {
+      <div class="filters">
+        <select [ngModel]="selectedType()" (ngModelChange)="selectedType.set($event)">
+          <option value="all">All Types</option>
+          <option value="shipment">Shipments</option>
+          <option value="driver">Drivers</option>
+          <option value="compliance">Compliance</option>
+          <option value="financial">Financial</option>
+          <option value="edi">EDI</option>
+          <option value="system">System</option>
+        </select>
+        <div class="search-box">
+          <i class='bx bx-search'></i>
+          <input type="text" placeholder="Search notifications..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Notifications List -->
+  @if (selectedTab() !== 'settings') {
+    <div class="notifications-list">
+      @for (notification of filteredNotifications(); track notification.id) {
+        <div class="notification-card" [class.unread]="!notification.isRead" [class]="getPriorityClass(notification.priority)">
+          <div class="notification-icon" [class]="notification.type">
+            <i class='bx {{ getTypeIcon(notification.type) }}'></i>
+          </div>
+
+          <div class="notification-content">
+            <div class="notification-header">
+              <h4>{{ notification.title }}</h4>
+              <span class="priority-badge" [class]="notification.priority">{{ notification.priority }}</span>
+            </div>
+            <p class="notification-message">{{ notification.message }}</p>
+            
+            @if (notification.relatedEntity) {
+              <div class="related-entity">
+                <i class='bx bx-link'></i>
+                <span>{{ notification.relatedEntity.name }}</span>
+              </div>
+            }
+
+            <div class="notification-footer">
+              <span class="timestamp">
+                <i class='bx bx-time'></i>
+                {{ formatTime(notification.timestamp) }}
+              </span>
+              @if (notification.actionUrl) {
+                <a class="action-link" [href]="notification.actionUrl">
+                  {{ notification.actionLabel }}
+                  <i class='bx bx-chevron-right'></i>
+                </a>
+              }
+            </div>
+          </div>
+
+          <div class="notification-actions">
+            @if (!notification.isRead) {
+              <button class="action-btn" title="Mark as Read" (click)="markAsRead(notification)">
+                <i class='bx bx-check'></i>
+              </button>
+            }
+            <button class="action-btn danger" title="Delete" (click)="deleteNotification(notification)">
+              <i class='bx bx-trash'></i>
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (filteredNotifications().length === 0) {
+        <div class="empty-state">
+          <i class='bx bx-bell-off'></i>
+          <h3>No notifications</h3>
+          <p>You're all caught up!</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Settings Tab -->
+  @if (selectedTab() === 'settings') {
+    <div class="settings-container">
+      <div class="settings-section">
+        <h3>Notification Preferences</h3>
+        <p class="section-description">Configure how you receive notifications for different event types.</p>
+
+        <div class="preferences-table">
+          <div class="pref-header">
+            <span class="pref-type">Notification Type</span>
+            <span class="pref-channel">Email</span>
+            <span class="pref-channel">Push</span>
+            <span class="pref-channel">SMS</span>
+          </div>
+
+          @for (pref of preferences; track pref.type) {
+            <div class="pref-row">
+              <div class="pref-type">
+                <i class='bx {{ pref.icon }}'></i>
+                <span>{{ pref.label }}</span>
+              </div>
+              <div class="pref-channel">
+                <label class="toggle">
+                  <input type="checkbox" [checked]="pref.email" (change)="togglePreference(pref, 'email')">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="pref-channel">
+                <label class="toggle">
+                  <input type="checkbox" [checked]="pref.push" (change)="togglePreference(pref, 'push')">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="pref-channel">
+                <label class="toggle">
+                  <input type="checkbox" [checked]="pref.sms" (change)="togglePreference(pref, 'sms')">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn-primary" (click)="savePreferences()">
+            <i class='bx bx-check'></i>
+            Save Preferences
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Quiet Hours</h3>
+        <p class="section-description">Set times when you don't want to receive push notifications or SMS.</p>
+        
+        <div class="quiet-hours-form">
+          <div class="form-group">
+            <label>
+              <input type="checkbox"> Enable Quiet Hours
+            </label>
+          </div>
+          <div class="time-range">
+            <div class="form-group">
+              <label>From</label>
+              <input type="time" value="22:00">
+            </div>
+            <div class="form-group">
+              <label>To</label>
+              <input type="time" value="07:00">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>Digest Settings</h3>
+        <p class="section-description">Receive a summary of notifications instead of individual emails.</p>
+        
+        <div class="digest-form">
+          <div class="form-group">
+            <label>
+              <input type="checkbox"> Enable Daily Digest
+            </label>
+          </div>
+          <div class="form-group">
+            <label>Delivery Time</label>
+            <select>
+              <option value="06:00">6:00 AM</option>
+              <option value="08:00">8:00 AM</option>
+              <option value="09:00" selected>9:00 AM</option>
+              <option value="12:00">12:00 PM</option>
+              <option value="18:00">6:00 PM</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>
