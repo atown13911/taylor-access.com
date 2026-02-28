@@ -129,8 +129,15 @@ builder.Services.AddCors(options =>
                 return uri.Host == "localhost"
                     || uri.Host == "taylor-access.com"
                     || uri.Host == "www.taylor-access.com"
-                    || uri.Host.EndsWith(".taylor-access-com.pages.dev")
-                    || uri.Host == "taylor-access-com.pages.dev";
+                    || uri.Host.EndsWith(".pages.dev")
+                    || uri.Host == "taylor-tms.net"
+                    || uri.Host == "www.taylor-tms.net"
+                    || uri.Host == "taylor-assets.com"
+                    || uri.Host == "www.taylor-assets.com"
+                    || uri.Host == "taylor-crm.com"
+                    || uri.Host == "www.taylor-crm.com"
+                    || uri.Host == "taylor-academy.net"
+                    || uri.Host == "www.taylor-academy.net";
             })
             .AllowAnyMethod()
             .AllowAnyHeader()
