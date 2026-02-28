@@ -111,9 +111,11 @@
 // Matrix Table
 .matrix-table-wrapper {
   overflow-x: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  background: var(--bg-card);
+  border: 1px solid rgba(0, 212, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(10, 10, 26, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .matrix-table {
@@ -122,7 +124,7 @@
   min-width: 900px;
 
   thead tr {
-    background: var(--bg-secondary);
+    background: rgba(10, 10, 26, 0.7);
   }
 
   th {
@@ -380,7 +382,9 @@ tr { cursor: pointer; }
 // Details Panel
 .details-panel {
   width: 340px;
-  background: var(--bg-card);
+  background: rgba(10, 10, 26, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   overflow-y: auto;
   max-height: calc(100vh - 200px);
   animation: slide-in 0.2s ease;
