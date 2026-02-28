@@ -150,7 +150,7 @@ tr:hover td {
 }
 
 // Glassmorphism panels - activated when background image is set
-.content-area[style*="background-image"] {
+.main-content[style*="background"] {
   .page-header, .page-container > header,
   .stats-grid, .stat-card, .stats-bar .stat-card,
   .roster-page > .page-header,

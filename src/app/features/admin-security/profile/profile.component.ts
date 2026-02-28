@@ -582,10 +582,10 @@ export class ProfileComponent implements OnInit {
     this.selectedBg.set(color.id);
     localStorage.setItem('ta_bg', color.id);
     localStorage.setItem('ta_bg_solid', color.value);
-    const contentArea = document.querySelector('.content-area') as HTMLElement;
-    if (contentArea) {
-      contentArea.style.backgroundImage = 'none';
-      contentArea.style.backgroundColor = color.value;
+    const mainContent = document.querySelector('.main-content') as HTMLElement;
+    if (mainContent) {
+      mainContent.style.backgroundImage = 'none';
+      mainContent.style.background = color.value;
     }
   }
 
@@ -593,11 +593,12 @@ export class ProfileComponent implements OnInit {
     this.selectedBg.set(id);
     localStorage.setItem('ta_bg', id);
 
-    const contentArea = document.querySelector('.content-area') as HTMLElement;
-    if (!contentArea) return;
+    const mainContent = document.querySelector('.main-content') as HTMLElement;
+    if (!mainContent) return;
 
     if (id === 'none') {
-      contentArea.style.backgroundImage = 'none';
+      mainContent.style.backgroundImage = 'none';
+      mainContent.style.background = '';
       document.documentElement.style.removeProperty('--sidebar-bg');
       document.documentElement.style.removeProperty('--topbar-bg');
       return;
@@ -607,7 +608,12 @@ export class ProfileComponent implements OnInit {
 
     if (id === 'custom') {
       const custom = localStorage.getItem('ta_bg_custom');
-      if (custom) contentArea.style.backgroundImage = `url(${custom})`;
+      if (custom) {
+        const o = this.bgOpacity() / 100;
+        mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${custom})`;
+        mainContent.style.backgroundSize = 'cover';
+        mainContent.style.backgroundPosition = 'center';
+      }
       return;
     }
 
@@ -615,10 +621,9 @@ export class ProfileComponent implements OnInit {
     if (bg) {
       const hiRes = bg.url.replace('400/300', '1920/1080');
       const o = this.bgOpacity() / 100;
-      contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${hiRes})`;
-      contentArea.style.backgroundSize = 'cover';
-      contentArea.style.backgroundPosition = 'center';
-      contentArea.style.backgroundAttachment = 'fixed';
+      mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${hiRes})`;
+      mainContent.style.backgroundSize = 'cover';
+      mainContent.style.backgroundPosition = 'center';
     }
   }
 
@@ -633,13 +638,7 @@ export class ProfileComponent implements OnInit {
       localStorage.setItem('ta_bg', 'custom');
       this.selectedBg.set('custom');
 
-      const contentArea = document.querySelector('.content-area') as HTMLElement;
-      if (contentArea) {
-        const o = this.bgOpacity() / 100;
-        contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${dataUrl})`;
-        contentArea.style.backgroundSize = 'cover';
-        contentArea.style.backgroundPosition = 'center';
-      }
+      this.selectBackground('custom');
       this.toast.success('Background uploaded');
     };
     reader.readAsDataURL(file);
