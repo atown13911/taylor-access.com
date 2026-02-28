@@ -191,10 +191,58 @@ using (var scope = app.Services.CreateScope())
         context.Database.EnsureCreated();
     }
 
-    // Ensure Fleet-related tables exist (handles case where DB already exists but tables are new)
+    // Ensure all Taylor Access-specific tables exist (shared DB with VanTac)
     try
     {
         await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""OAuthClients"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""ClientId"" TEXT NOT NULL DEFAULT '',
+                ""ClientSecret"" TEXT,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""Description"" TEXT,
+                ""RedirectUris"" TEXT,
+                ""AllowedScopes"" TEXT DEFAULT 'openid profile email',
+                ""IsActive"" BOOLEAN DEFAULT TRUE,
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""OAuthAuthorizationCodes"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""Code"" TEXT NOT NULL,
+                ""ClientId"" TEXT NOT NULL,
+                ""UserId"" INTEGER NOT NULL,
+                ""RedirectUri"" TEXT,
+                ""Scope"" TEXT,
+                ""ExpiresAt"" TIMESTAMP NOT NULL,
+                ""IsUsed"" BOOLEAN DEFAULT FALSE,
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""OAuthAccessTokens"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""Token"" TEXT NOT NULL,
+                ""ClientId"" TEXT NOT NULL,
+                ""UserId"" INTEGER NOT NULL,
+                ""Scope"" TEXT,
+                ""ExpiresAt"" TIMESTAMP NOT NULL,
+                ""IsRevoked"" BOOLEAN DEFAULT FALSE,
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""OAuthRefreshTokens"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""Token"" TEXT NOT NULL,
+                ""ClientId"" TEXT NOT NULL,
+                ""UserId"" INTEGER NOT NULL,
+                ""ExpiresAt"" TIMESTAMP NOT NULL,
+                ""IsRevoked"" BOOLEAN DEFAULT FALSE,
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""AppRoleAssignments"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""UserId"" INTEGER NOT NULL,
+                ""AppClientId"" TEXT NOT NULL,
+                ""Role"" TEXT DEFAULT 'user',
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW()
+            );
             CREATE TABLE IF NOT EXISTS ""Fleets"" (
                 ""Id"" SERIAL PRIMARY KEY,
                 ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
@@ -229,11 +277,11 @@ using (var scope = app.Services.CreateScope())
                 PRIMARY KEY (""FleetId"", ""VehicleId"")
             );
         ");
-        Console.WriteLine("Fleet tables verified/created");
+        Console.WriteLine("All required tables verified/created");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Fleet table creation note: {ex.Message}");
+        Console.WriteLine($"Table creation note: {ex.Message}");
     }
 
     await roleService.SeedDefaultRolesAsync();
