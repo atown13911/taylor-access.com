@@ -106,66 +106,55 @@
 
     <!-- Driver Details Panel -->
     @if (selectedDriver()) {
+      <div class="panel-overlay" (click)="selectedDriver.set(null)"></div>
       <aside class="details-panel">
-      <div class="panel-header">
-        <h2>Driver Details</h2>
-        <div class="panel-header-actions">
-          <a class="edit-btn" [routerLink]="['/drivers']" [queryParams]="{edit: selectedDriver()!.id}" title="Edit Driver">
-            <i class='bx bx-edit-alt'></i>
-          </a>
+        <div class="panel-header">
+          <h2>Driver Details</h2>
           <button class="close-btn" (click)="selectedDriver.set(null)"><i class='bx bx-x'></i></button>
         </div>
-      </div>
 
-      <div class="panel-avatar">
-        <div class="big-avatar">{{ selectedDriver()!.name?.charAt(0) || '?' }}</div>
-        <h3>{{ selectedDriver()!.name }}</h3>
-        <span class="panel-status" [class]="'status-' + (selectedDriver()!.status || 'active')">{{ selectedDriver()!.status || 'active' }}</span>
-      </div>
+        <div class="panel-avatar">
+          <div class="big-avatar">{{ selectedDriver()!.name?.charAt(0) || '?' }}</div>
+          <h3>{{ selectedDriver()!.name }}</h3>
+          <span class="panel-status" [class]="'status-' + (selectedDriver()!.status || 'active')">{{ selectedDriver()!.status || 'active' }}</span>
+        </div>
 
-      <div class="panel-section">
-        <h4>Contact</h4>
-        <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
-        <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
-      </div>
+        <div class="panel-section">
+          <h4>Contact</h4>
+          <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
+          <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
+        </div>
 
-      <div class="panel-section">
-        <h4>License</h4>
-        <div class="detail-row"><span class="label">Number</span><span>{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
-        <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
-        <div class="detail-row"><span class="label">Expires</span><span>{{ selectedDriver()!.licenseExpiration | date:'mediumDate' }}</span></div>
-        <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
-      </div>
-
-      <div class="panel-section">
-        <h4>Employment</h4>
-        <div class="detail-row"><span class="label">Type</span><span>{{ selectedDriver()!.driverType || '—' }}</span></div>
-        <div class="detail-row"><span class="label">Hire Date</span><span>{{ selectedDriver()!.hireDate | date:'mediumDate' }}</span></div>
-        <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
-      </div>
-
-      <div class="panel-section">
-        <h4>Compliance Summary</h4>
-        @for (item of complianceItems; track item.key) {
-          <div class="compliance-row">
-            <span class="dot" [class]="getComplianceClass(selectedDriver()!, item.key)"></span>
-            <span class="comp-label">{{ item.label }}</span>
+        <div class="panel-section">
+          <h4>License</h4>
+          <div class="detail-row"><span class="label">Number</span><span class="mono">{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
+          <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
+          <div class="detail-row">
+            <span class="label">Expires</span>
+            <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiration)" [class.expired]="isExpired(selectedDriver()!.licenseExpiration)">
+              {{ formatDate(selectedDriver()!.licenseExpiration) }}
+            </span>
           </div>
-        }
-      </div>
+          <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
+        </div>
 
-      <div class="panel-actions">
-        @if (selectedDriver()!.status === 'active' || selectedDriver()!.status === 'available') {
-          <button class="btn-action suspend" (click)="suspendDriver(selectedDriver()!)">
-            <i class='bx bx-pause-circle'></i> Suspend
-          </button>
-        } @else {
-          <button class="btn-action reactivate" (click)="reactivateDriver(selectedDriver()!)">
-            <i class='bx bx-play-circle'></i> Reactivate
-          </button>
-        }
-      </div>
-    </aside>
+        <div class="panel-section">
+          <h4>Employment</h4>
+          <div class="detail-row"><span class="label">Type</span><span>{{ selectedDriver()!.driverType || '—' }}</span></div>
+          <div class="detail-row"><span class="label">Hire Date</span><span>{{ formatDate(selectedDriver()!.hireDate) }}</span></div>
+          <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
+        </div>
+
+        <div class="panel-section">
+          <h4>Compliance Summary</h4>
+          @for (item of complianceItems; track item.key) {
+            <div class="compliance-row">
+              <span class="dot" [class]="getComplianceClass(selectedDriver()!, item.key)"></span>
+              <span class="comp-label">{{ item.label }}</span>
+            </div>
+          }
+        </div>
+      </aside>
     }
   </div>
 

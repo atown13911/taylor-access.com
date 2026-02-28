@@ -337,6 +337,22 @@ export class DriverDatabaseComponent implements OnInit {
     return 'compliant';
   }
 
+  formatDate(dateString: string): string {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  isExpiringSoon(dateString: string): boolean {
+    if (!dateString) return false;
+    const days = this.getDaysUntilExpiration(dateString);
+    return days > 0 && days <= 90;
+  }
+
+  isExpired(dateString: string): boolean {
+    if (!dateString) return false;
+    return this.getDaysUntilExpiration(dateString) < 0;
+  }
+
   complianceItems = [
     { key: 'cdl', label: 'CDL / License' }, { key: 'medical', label: 'Medical Certificate' },
     { key: 'mvr', label: 'Motor Vehicle Record' }, { key: 'drug', label: 'Drug & Alcohol Test' },
