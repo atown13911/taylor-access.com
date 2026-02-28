@@ -375,7 +375,6 @@
 // Selected row
 tr.selected td {
   background: var(--accent-10) !important;
-  border-left: 2px solid var(--cyan);
 }
 
 tr { cursor: pointer; }
