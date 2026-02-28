@@ -2,6 +2,7 @@ import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { AuthService } from '../core/services/auth.service';
+import { InactivityService } from '../core/services/inactivity.service';
 
 interface NavSection {
   label?: string;
@@ -17,6 +18,7 @@ interface NavSection {
 })
 export class ShellComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
+  inactivity = inject(InactivityService);
   private router = inject(Router);
 
   sidebarCollapsed = signal(false);
@@ -53,6 +55,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
         { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
         { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
+        { label: 'Time Clock', icon: 'bx bx-time-five', route: '/hr/time-clock' },
         { label: 'Time Off', icon: 'bx bx-calendar-event', route: '/hr/time-off' },
         { label: 'Benefits', icon: 'bx bx-star', route: '/hr/benefits' },
         { label: 'Performance Reviews', icon: 'bx bx-bar-chart-alt-2', route: '/hr/performance-reviews' },
@@ -85,6 +88,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     if (!this.authService.isAuthenticated()) {
       this.router.navigate(['/login']);
+    } else {
+      this.inactivity.start();
     }
     this.clockInterval = setInterval(() => this.currentTime = new Date(), 1000);
     this.restoreSavedStyles();

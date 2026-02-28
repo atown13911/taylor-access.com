@@ -481,3 +481,86 @@
   padding: 0 4px;
   box-shadow: 0 0 8px rgba(255, 42, 109, 0.5);
 }
+
+// Inactivity Warning Modal
+.inactivity-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.inactivity-modal {
+  background: rgba(13, 13, 20, 0.95);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  max-width: 360px;
+  box-shadow: 0 0 60px rgba(255, 170, 0, 0.15);
+  animation: pulse-border 2s ease-in-out infinite;
+
+  h3 {
+    color: #ffaa00;
+    font-size: 1.3rem;
+    margin: 16px 0 8px;
+  }
+
+  p {
+    color: #8899aa;
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .inactivity-sub {
+    margin-top: 8px;
+    font-size: 0.8rem;
+  }
+}
+
+.inactivity-icon {
+  i {
+    font-size: 3rem;
+    color: #ffaa00;
+    filter: drop-shadow(0 0 12px rgba(255, 170, 0, 0.5));
+  }
+}
+
+.inactivity-countdown {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #ffaa00;
+  font-family: 'JetBrains Mono', monospace;
+  margin: 12px 0;
+  text-shadow: 0 0 20px rgba(255, 170, 0, 0.4);
+}
+
+.inactivity-btn {
+  margin-top: 20px;
+  padding: 12px 32px;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(0, 212, 255, 0.05));
+  color: var(--cyan);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 212, 255, 0.1));
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+  }
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: rgba(255, 170, 0, 0.3); }
+  50% { border-color: rgba(255, 170, 0, 0.6); }
+}

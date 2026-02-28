@@ -14,6 +14,12 @@ public interface IMongoDbService
     Task<object> GetClickAnalyticsAsync(int? organizationId = null, DateTime? from = null, DateTime? to = null);
     Task<object> GetHeatmapDataAsync(string pageUrl, int? organizationId = null, DateTime? from = null, DateTime? to = null);
 
+    // Session tracking
+    Task<string> LogSessionStartAsync(UserSession session);
+    Task LogSessionEndAsync(string sessionId, string reason);
+    Task<List<UserSession>> GetUserSessionsAsync(int? userId = null, DateTime? from = null, DateTime? to = null, int limit = 100);
+    Task<UserSession?> GetActiveSessionAsync(string sessionId);
+
     // Audit log methods
     Task LogAuditAsync(MongoAuditLog log);
     Task<List<MongoAuditLog>> GetAuditLogsAsync(string? entityType = null, int? entityId = null, int? userId = null, int? organizationId = null, DateTime? from = null, DateTime? to = null, int limit = 100);
@@ -100,6 +106,7 @@ public class MongoDbService : IMongoDbService
     private readonly IMongoCollection<ClickEvent>? _clickEvents;
     private readonly IMongoCollection<PageViewEvent>? _pageViews;
     private readonly IMongoCollection<MongoJobLog>? _jobLogs;
+    private readonly IMongoCollection<UserSession>? _sessions;
     private readonly bool _isConnected;
 
     public bool IsConnected => _isConnected;
@@ -135,6 +142,7 @@ public class MongoDbService : IMongoDbService
             _clickEvents = _database.GetCollection<ClickEvent>("click_events");
             _pageViews = _database.GetCollection<PageViewEvent>("page_views");
             _jobLogs = _database.GetCollection<MongoJobLog>("scheduled_job_logs");
+            _sessions = _database.GetCollection<UserSession>("user_sessions");
 
             // Create indexes for fast job log queries
             try
@@ -444,6 +452,63 @@ public class MongoDbService : IMongoDbService
             return cleaned;
         }
         catch (Exception ex) { _logger.LogError(ex, "Failed to cleanup stale job logs"); return 0; }
+    }
+
+    // ========== SESSION TRACKING ==========
+
+    public async Task<string> LogSessionStartAsync(UserSession session)
+    {
+        if (_sessions == null) return "";
+        try
+        {
+            await _sessions.InsertOneAsync(session);
+            return session.Id ?? "";
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to log session start"); return ""; }
+    }
+
+    public async Task LogSessionEndAsync(string sessionId, string reason)
+    {
+        if (_sessions == null) return;
+        try
+        {
+            var filter = Builders<UserSession>.Filter.Eq(s => s.Id, sessionId);
+            var now = DateTime.UtcNow;
+            var session = await _sessions.Find(filter).FirstOrDefaultAsync();
+            double duration = session != null ? (now - session.LoginTime).TotalMinutes : 0;
+
+            var update = Builders<UserSession>.Update
+                .Set(s => s.LogoutTime, now)
+                .Set(s => s.LogoutReason, reason)
+                .Set(s => s.DurationMinutes, Math.Round(duration, 1));
+            await _sessions.UpdateOneAsync(filter, update);
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to log session end"); }
+    }
+
+    public async Task<List<UserSession>> GetUserSessionsAsync(int? userId = null, DateTime? from = null, DateTime? to = null, int limit = 100)
+    {
+        if (_sessions == null) return new List<UserSession>();
+        try
+        {
+            var builder = Builders<UserSession>.Filter;
+            var filter = builder.Empty;
+            if (userId.HasValue) filter &= builder.Eq(s => s.UserId, userId.Value);
+            if (from.HasValue) filter &= builder.Gte(s => s.LoginTime, from.Value);
+            if (to.HasValue) filter &= builder.Lte(s => s.LoginTime, to.Value);
+            return await _sessions.Find(filter).SortByDescending(s => s.LoginTime).Limit(limit).ToListAsync();
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to get sessions"); return new List<UserSession>(); }
+    }
+
+    public async Task<UserSession?> GetActiveSessionAsync(string sessionId)
+    {
+        if (_sessions == null) return null;
+        try
+        {
+            return await _sessions.Find(Builders<UserSession>.Filter.Eq(s => s.Id, sessionId)).FirstOrDefaultAsync();
+        }
+        catch { return null; }
     }
 }
 

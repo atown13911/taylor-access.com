@@ -135,3 +135,19 @@
     </div>
   </main>
 </div>
+
+<!-- Inactivity Warning Modal -->
+@if (inactivity.showWarning()) {
+  <div class="inactivity-overlay">
+    <div class="inactivity-modal">
+      <div class="inactivity-icon"><i class="bx bx-time-five"></i></div>
+      <h3>Session Expiring</h3>
+      <p>You will be logged out in</p>
+      <div class="inactivity-countdown">{{ inactivity.getWarningMinutes() }}</div>
+      <p class="inactivity-sub">due to inactivity</p>
+      <button class="inactivity-btn" (click)="inactivity.stayLoggedIn()">
+        <i class="bx bx-check-circle"></i> Stay Logged In
+      </button>
+    </div>
+  </div>
+}

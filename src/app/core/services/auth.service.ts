@@ -204,10 +204,19 @@ export class AuthService {
     this.permissions.set(perms);
   }
 
+  private onLogoutCallback: ((reason: string) => void) | null = null;
+
+  registerLogoutCallback(cb: (reason: string) => void): void {
+    this.onLogoutCallback = cb;
+  }
+
   /**
    * Logout user
    */
-  logout(): void {
+  logout(reason: string = 'manual'): void {
+    if (this.onLogoutCallback) {
+      try { this.onLogoutCallback(reason); } catch {}
+    }
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
     localStorage.removeItem(this.ORG_KEY);
