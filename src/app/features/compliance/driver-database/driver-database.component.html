@@ -2,7 +2,10 @@
   <div class="page-header">
     <div class="header-text">
       <h1><i class='bx bx-group'></i> Driver Compliance Database</h1>
-      <p class="subtitle">Track driver compliance status, licenses, medical certs, and qualification files</p>
+      <p class="subtitle">Track driver compliance status at a glance</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-refresh" (click)="loadDrivers()"><i class='bx bx-refresh'></i> Refresh</button>
     </div>
   </div>
 
@@ -19,723 +22,82 @@
     </button>
   </div>
 
-  <!-- Filters -->
+  <!-- Search -->
   <div class="filters-bar">
     <div class="search-box">
       <i class='bx bx-search'></i>
       <input type="text" [(ngModel)]="searchTerm" placeholder="Search by name, phone, email, license...">
     </div>
-    <select [(ngModel)]="complianceFilter">
-      <option value="all">All Drivers</option>
-      <option value="compliant">Compliant</option>
-      <option value="warning">Needs Attention</option>
-      <option value="non-compliant">Non-Compliant</option>
-    </select>
   </div>
 
-  @if (loading()) {
-    <div class="loading-state">
-      <i class='bx bx-loader-alt bx-spin'></i>
-      <p>Loading driver database...</p>
-    </div>
-  } @else if (filteredDrivers().length === 0) {
-    <div class="empty-state">
-      <i class='bx bx-user-x'></i>
-      <h3>No Drivers Found</h3>
-      <p>No drivers in the database</p>
-    </div>
-  } @else {
-    <div class="drivers-table-container">
-      <table class="drivers-table">
-        <thead>
+  <!-- Compliance Matrix Table -->
+  <div class="matrix-table-wrapper">
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th class="col-name">Driver</th>
+          <th class="col-status">Status</th>
+          <th class="col-dot" title="CDL / License">CDL</th>
+          <th class="col-dot" title="Medical Certificate">Medical</th>
+          <th class="col-dot" title="Motor Vehicle Record">MVR</th>
+          <th class="col-dot" title="Drug & Alcohol Testing">Drug Test</th>
+          <th class="col-dot" title="Driver Qualification File">DQF</th>
+          <th class="col-dot" title="Employment Verification">Employment</th>
+          <th class="col-dot" title="Training & Orientation">Training</th>
+          <th class="col-dot" title="Insurance Coverage">Insurance</th>
+          <th class="col-dot" title="Vehicle Documents">Vehicle</th>
+          <th class="col-dot" title="Permits & Authority">Permits</th>
+          <th class="col-dot" title="IFTA Compliance">IFTA</th>
+          <th class="col-dot" title="Safety Awards">Safety</th>
+          <th class="col-dot" title="Violations Record">Violations</th>
+          <th class="col-overall">Overall</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (driver of filteredDrivers(); track driver.id) {
           <tr>
-            <th>Driver</th>
-            <th>CDL #</th>
-            <th>CDL Expiration</th>
-            <th>Medical Card</th>
-            <th>DQF Status</th>
-            <th>Drug Test</th>
-            <th>Compliance Score</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (driver of filteredDrivers(); track driver.id) {
-            <tr (click)="viewDriverDetails(driver)">
-              <td>
+            <td class="col-name">
+              <div class="driver-cell">
+                <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
                 <div class="driver-info">
-                  <strong>{{ driver.name }}</strong>
-                  <small>{{ driver.email }}</small>
+                  <span class="driver-name">{{ driver.name }}</span>
+                  <span class="driver-meta">{{ driver.phone || driver.email || '—' }}</span>
                 </div>
-              </td>
-              <td>
-                <span class="cdl-number">{{ driver.licenseNumber || '—' }}</span>
-              </td>
-              <td>
-                <span class="date">{{ driver.licenseExpiration | date:'MM/dd/yyyy' || '—' }}</span>
-              </td>
-              <td>
-                <span class="badge" [class.expired]="false" [class.expiring]="false" [class.valid]="true">
-                  {{ driver.medicalCertExpiration | date:'MM/dd/yyyy' || 'Not on file' }}
-                </span>
-              </td>
-              <td>
-                <span class="badge complete">Complete</span>
-              </td>
-              <td>
-                <span class="badge complete">Current</span>
-              </td>
-              <td>
-                <div class="compliance-score">
-                  <div class="score-bar">
-                    <div class="score-fill" [style.width.%]="getComplianceScore(driver)"></div>
-                  </div>
-                  <span class="score-text">{{ getComplianceScore(driver) }}%</span>
-                </div>
-              </td>
-              <td>
-                <div class="action-buttons">
-                  <button class="btn-icon" (click)="viewDriverDetails(driver); $event.stopPropagation()" title="View Details">
-                    <i class='bx bx-show'></i>
-                  </button>
-                  <button class="btn-icon" title="Edit Driver">
-                    <i class='bx bx-edit'></i>
-                  </button>
-                  <button class="btn-icon" title="Upload Document">
-                    <i class='bx bx-upload'></i>
-                  </button>
-                  <button class="btn-icon warning" title="Compliance Alert">
-                    <i class='bx bx-bell'></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
+              </div>
+            </td>
+            <td class="col-status">
+              <span class="status-badge" [class]="'status-' + (driver.status || 'active')">{{ driver.status || 'active' }}</span>
+            </td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'cdl')" [title]="getComplianceTooltip(driver, 'cdl')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'medical')" [title]="getComplianceTooltip(driver, 'medical')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'mvr')" [title]="getComplianceTooltip(driver, 'mvr')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'drug')" [title]="getComplianceTooltip(driver, 'drug')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'dqf')" [title]="getComplianceTooltip(driver, 'dqf')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'employment')" [title]="getComplianceTooltip(driver, 'employment')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'training')" [title]="getComplianceTooltip(driver, 'training')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'insurance')" [title]="getComplianceTooltip(driver, 'insurance')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'vehicle')" [title]="getComplianceTooltip(driver, 'vehicle')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'permits')" [title]="getComplianceTooltip(driver, 'permits')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'ifta')" [title]="getComplianceTooltip(driver, 'ifta')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'safety')" [title]="getComplianceTooltip(driver, 'safety')"></span></td>
+            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'violations')" [title]="getComplianceTooltip(driver, 'violations')"></span></td>
+            <td class="col-overall">
+              <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallStatus(driver) }}</span>
+            </td>
+          </tr>
+        }
+        @if (filteredDrivers().length === 0 && !loading()) {
+          <tr><td colspan="16" class="empty-row">No drivers found</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span class="legend-item"><span class="dot dot-green"></span> Compliant</span>
+    <span class="legend-item"><span class="dot dot-yellow"></span> Expiring Soon (30 days)</span>
+    <span class="legend-item"><span class="dot dot-red"></span> Expired / Non-Compliant</span>
+    <span class="legend-item"><span class="dot dot-gray"></span> Not on File</span>
+  </div>
 </div>
-
-<!-- Driver Details Modal -->
-@if (showDetailsModal() && selectedDriver()) {
-  <div class="modal-overlay" (click)="closeDriverDetails()">
-    <div class="modal-content" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <div class="driver-header-info">
-          <h2>{{ selectedDriver()?.name }}</h2>
-          <span class="driver-id">ID: {{ selectedDriver()?.id }}</span>
-        </div>
-        <button class="btn-close" (click)="closeDriverDetails()">
-          <i class='bx bx-x'></i>
-        </button>
-      </div>
-
-      <!-- Tabs -->
-      <div class="modal-tabs">
-        <button 
-          class="tab-button"
-          [class.active]="activeTab() === 'overview'"
-          (click)="setActiveTab('overview')">
-          <i class='bx bx-user'></i> Overview
-        </button>
-        <button 
-          class="tab-button"
-          [class.active]="activeTab() === 'compliance'"
-          (click)="setActiveTab('compliance')">
-          <i class='bx bx-shield-alt-2'></i> Compliance
-        </button>
-        <button 
-          class="tab-button"
-          [class.active]="activeTab() === 'documents'"
-          (click)="setActiveTab('documents')">
-          <i class='bx bx-file'></i> Documents
-        </button>
-        <button 
-          class="tab-button"
-          [class.active]="activeTab() === 'history'"
-          (click)="setActiveTab('history')">
-          <i class='bx bx-history'></i> History
-        </button>
-        <button 
-          class="tab-button"
-          [class.active]="activeTab() === 'equipment'"
-          (click)="setActiveTab('equipment'); loadDriverEquipment()">
-          <i class='bx bxs-truck'></i> Equipment
-        </button>
-        <button 
-          class="tab-button"
-          [class.active]="activeTab() === 'financial'"
-          (click)="setActiveTab('financial'); loadDriverFinancial()">
-          <i class='bx bx-dollar-circle'></i> Financial
-        </button>
-      </div>
-
-      <div class="modal-body">
-        <!-- Overview Tab -->
-        @if (activeTab() === 'overview') {
-          <div class="details-grid">
-            <div class="detail-section">
-              <h3><i class='bx bx-user'></i> Personal Information</h3>
-              <div class="detail-row">
-                <label>Full Name:</label>
-                <span>{{ selectedDriver()?.name }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Email:</label>
-                <span>{{ selectedDriver()?.email }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Phone:</label>
-                <span>{{ selectedDriver()?.phone || 'Not on file' }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Date of Birth:</label>
-                <span>{{ selectedDriver()?.dateOfBirth | date:'MM/dd/yyyy' || 'Not on file' }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Address:</label>
-                <span>{{ selectedDriver()?.address || 'Not on file' }}</span>
-              </div>
-            </div>
-
-            <div class="detail-section">
-              <h3><i class='bx bx-briefcase'></i> Employment</h3>
-              <div class="detail-row">
-                <label>Status:</label>
-                <span class="badge" [class]="selectedDriver()?.status">{{ selectedDriver()?.status }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Hire Date:</label>
-                <span>{{ selectedDriver()?.hireDate | date:'MM/dd/yyyy' || 'Not on file' }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Organization:</label>
-                <span>{{ selectedDriver()?.organizationName || 'Not assigned' }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Home Terminal:</label>
-                <span>{{ selectedDriver()?.homeTerminal || 'Not assigned' }}</span>
-              </div>
-            </div>
-          </div>
-        }
-
-        <!-- Compliance Tab -->
-        @if (activeTab() === 'compliance') {
-          <div class="compliance-details">
-            <div class="compliance-item">
-              <div class="compliance-header">
-                <h4><i class='bx bx-id-card'></i> Commercial Driver's License (CDL)</h4>
-                <span class="badge" [class]="getExpirationStatus(selectedDriver()?.licenseExpiration)">
-                  {{ getExpirationStatus(selectedDriver()?.licenseExpiration) }}
-                </span>
-              </div>
-              <div class="compliance-body">
-                <div class="detail-row">
-                  <label>CDL Number:</label>
-                  <span class="cdl-number">{{ selectedDriver()?.licenseNumber || 'Not on file' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>CDL Class:</label>
-                  <span>{{ selectedDriver()?.licenseClass || 'Not on file' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Expiration Date:</label>
-                  <span>{{ selectedDriver()?.licenseExpiration | date:'MM/dd/yyyy' || 'Not on file' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Days Until Expiration:</label>
-                  <span [class.warning]="getDaysUntilExpiration(selectedDriver()?.licenseExpiration) < 30">
-                    {{ getDaysUntilExpiration(selectedDriver()?.licenseExpiration) }} days
-                  </span>
-                </div>
-                <div class="detail-row">
-                  <label>Endorsements:</label>
-                  <span>{{ selectedDriver()?.endorsements || 'None' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="compliance-item">
-              <div class="compliance-header">
-                <h4><i class='bx bx-health'></i> Medical Certificate</h4>
-                <span class="badge" [class]="getExpirationStatus(selectedDriver()?.medicalCertExpiration)">
-                  {{ getExpirationStatus(selectedDriver()?.medicalCertExpiration) }}
-                </span>
-              </div>
-              <div class="compliance-body">
-                <div class="detail-row">
-                  <label>Medical Card Expiration:</label>
-                  <span>{{ selectedDriver()?.medicalCertExpiration | date:'MM/dd/yyyy' || 'Not on file' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Days Until Expiration:</label>
-                  <span [class.warning]="getDaysUntilExpiration(selectedDriver()?.medicalCertExpiration) < 30">
-                    {{ getDaysUntilExpiration(selectedDriver()?.medicalCertExpiration) }} days
-                  </span>
-                </div>
-                <div class="detail-row">
-                  <label>Examiner:</label>
-                  <span>{{ selectedDriver()?.medicalExaminer || 'Not on file' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Medical Restrictions:</label>
-                  <span>{{ selectedDriver()?.medicalRestrictions || 'None' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="compliance-item">
-              <div class="compliance-header">
-                <h4><i class='bx bx-test-tube'></i> Drug & Alcohol Testing</h4>
-                <span class="badge complete">Current</span>
-              </div>
-              <div class="compliance-body">
-                <div class="detail-row">
-                  <label>Last Random Test:</label>
-                  <span>{{ selectedDriver()?.lastDrugTest | date:'MM/dd/yyyy' || 'No test on record' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Test Result:</label>
-                  <span class="badge complete">{{ selectedDriver()?.lastDrugTestResult || 'N/A' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Consortium:</label>
-                  <span>{{ selectedDriver()?.drugTestConsortium || 'Not enrolled' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Clearinghouse Status:</label>
-                  <span class="badge complete">Cleared</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="compliance-item">
-              <div class="compliance-header">
-                <h4><i class='bx bx-folder'></i> Driver Qualification File (DQF)</h4>
-                <span class="badge complete">Complete</span>
-              </div>
-              <div class="compliance-body">
-                <div class="detail-row">
-                  <label>Application on File:</label>
-                  <span class="badge complete">✓ Yes</span>
-                </div>
-                <div class="detail-row">
-                  <label>MVR (3-year):</label>
-                  <span class="badge complete">✓ Current</span>
-                </div>
-                <div class="detail-row">
-                  <label>Road Test:</label>
-                  <span class="badge complete">✓ Passed</span>
-                </div>
-                <div class="detail-row">
-                  <label>Annual Review:</label>
-                  <span>{{ selectedDriver()?.lastAnnualReview | date:'MM/dd/yyyy' || 'Not completed' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="compliance-item">
-              <div class="compliance-header">
-                <h4><i class='bx bx-time'></i> Hours of Service (HOS)</h4>
-                <span class="badge complete">Compliant</span>
-              </div>
-              <div class="compliance-body">
-                <div class="detail-row">
-                  <label>ELD Device:</label>
-                  <span>{{ selectedDriver()?.eldDevice || 'Not assigned' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Last 7-Day Average:</label>
-                  <span>{{ selectedDriver()?.avgHoursPerDay || 'N/A' }} hrs/day</span>
-                </div>
-                <div class="detail-row">
-                  <label>HOS Violations (30 days):</label>
-                  <span [class.warning]="selectedDriver()?.hosViolations > 0">
-                    {{ selectedDriver()?.hosViolations || 0 }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Overall Compliance Score -->
-            <div class="compliance-summary">
-              <h3>Overall Compliance Score</h3>
-              <div class="score-display">
-                <div class="score-circle">
-                  <span class="score-value">{{ getComplianceScore(selectedDriver()) }}%</span>
-                </div>
-                <div class="score-breakdown">
-                  <div class="score-item">
-                    <span class="score-label">CDL Valid:</span>
-                    <span class="score-status complete">✓</span>
-                  </div>
-                  <div class="score-item">
-                    <span class="score-label">Medical Current:</span>
-                    <span class="score-status complete">✓</span>
-                  </div>
-                  <div class="score-item">
-                    <span class="score-label">DQF Complete:</span>
-                    <span class="score-status complete">✓</span>
-                  </div>
-                  <div class="score-item">
-                    <span class="score-label">Drug Test Current:</span>
-                    <span class="score-status complete">✓</span>
-                  </div>
-                  <div class="score-item">
-                    <span class="score-label">HOS Compliant:</span>
-                    <span class="score-status complete">✓</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        }
-
-        <!-- Documents Tab -->
-        @if (activeTab() === 'documents') {
-          <div class="documents-list">
-            <h3><i class='bx bx-file'></i> Driver Documents</h3>
-            <div class="document-items">
-              <div class="document-item">
-                <i class='bx bx-file-pdf'></i>
-                <div class="document-info">
-                  <strong>CDL Copy</strong>
-                  <small>Expires: {{ selectedDriver()?.licenseExpiration | date:'MM/dd/yyyy' }}</small>
-                </div>
-                <button class="btn-icon"><i class='bx bx-download'></i></button>
-              </div>
-              <div class="document-item">
-                <i class='bx bx-file-pdf'></i>
-                <div class="document-info">
-                  <strong>Medical Certificate</strong>
-                  <small>Expires: {{ selectedDriver()?.medicalCertExpiration | date:'MM/dd/yyyy' }}</small>
-                </div>
-                <button class="btn-icon"><i class='bx bx-download'></i></button>
-              </div>
-              <div class="document-item">
-                <i class='bx bx-file-pdf'></i>
-                <div class="document-info">
-                  <strong>MVR Report</strong>
-                  <small>Last updated: 3 months ago</small>
-                </div>
-                <button class="btn-icon"><i class='bx bx-download'></i></button>
-              </div>
-            </div>
-            <button class="btn btn-primary">
-              <i class='bx bx-upload'></i> Upload Document
-            </button>
-          </div>
-        }
-
-        <!-- History Tab -->
-        @if (activeTab() === 'history') {
-          <div class="history-list">
-            <h3><i class='bx bx-history'></i> Compliance History</h3>
-            <div class="timeline">
-              <div class="timeline-item">
-                <div class="timeline-icon"><i class='bx bx-check-circle'></i></div>
-                <div class="timeline-content">
-                  <strong>Medical Certificate Renewed</strong>
-                  <small>{{ selectedDriver()?.medicalCertExpiration | date:'MM/dd/yyyy' }}</small>
-                </div>
-              </div>
-              <div class="timeline-item">
-                <div class="timeline-icon"><i class='bx bx-check-circle'></i></div>
-                <div class="timeline-content">
-                  <strong>Drug Test Completed</strong>
-                  <small>{{ selectedDriver()?.lastDrugTest | date:'MM/dd/yyyy' }} - Result: Negative</small>
-                </div>
-              </div>
-              <div class="timeline-item">
-                <div class="timeline-icon"><i class='bx bx-check-circle'></i></div>
-                <div class="timeline-content">
-                  <strong>Annual Review Completed</strong>
-                  <small>{{ selectedDriver()?.lastAnnualReview | date:'MM/dd/yyyy' }}</small>
-                </div>
-              </div>
-            </div>
-          </div>
-        }
-
-        <!-- Equipment Tab -->
-        @if (activeTab() === 'equipment') {
-          <div class="details-grid">
-            <div class="detail-section">
-              <h3><i class='bx bxs-truck'></i> Assigned Truck</h3>
-              @if (selectedDriver()?.currentVehicle) {
-                <div class="detail-row">
-                  <label>Unit Number:</label>
-                  <span>{{ selectedDriver()?.currentVehicle?.unitNumber || selectedDriver()?.currentVehicle?.number || 'N/A' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Make / Model:</label>
-                  <span>{{ selectedDriver()?.currentVehicle?.make || '' }} {{ selectedDriver()?.currentVehicle?.model || '' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Year:</label>
-                  <span>{{ selectedDriver()?.currentVehicle?.year || 'N/A' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>VIN:</label>
-                  <span>{{ selectedDriver()?.currentVehicle?.vin || 'N/A' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>License Plate:</label>
-                  <span>{{ selectedDriver()?.currentVehicle?.licensePlate || 'N/A' }}</span>
-                </div>
-                <div class="detail-row">
-                  <label>Status:</label>
-                  <span class="badge" [class]="selectedDriver()?.currentVehicle?.status">{{ selectedDriver()?.currentVehicle?.status || 'N/A' }}</span>
-                </div>
-              } @else {
-                <div class="empty-state">
-                  <i class='bx bxs-truck'></i>
-                  <p>No truck assigned</p>
-                </div>
-              }
-            </div>
-
-            <div class="detail-section">
-              <h3><i class='bx bx-package'></i> Assigned Trailers</h3>
-              @if (driverTrailers().length > 0) {
-                @for (trailer of driverTrailers(); track trailer.id) {
-                  <div class="equipment-card">
-                    <div class="detail-row">
-                      <label>Trailer #:</label>
-                      <span>{{ trailer.number || trailer.trailerNumber }}</span>
-                    </div>
-                    <div class="detail-row">
-                      <label>Type:</label>
-                      <span>{{ trailer.type || trailer.trailerType || 'N/A' }}</span>
-                    </div>
-                    <div class="detail-row">
-                      <label>Status:</label>
-                      <span class="badge" [class]="trailer.status">{{ trailer.status }}</span>
-                    </div>
-                    @if (trailer.licensePlate) {
-                      <div class="detail-row">
-                        <label>Plate:</label>
-                        <span>{{ trailer.licensePlate }}</span>
-                      </div>
-                    }
-                  </div>
-                }
-              } @else {
-                <div class="empty-state">
-                  <i class='bx bx-package'></i>
-                  <p>No trailers assigned</p>
-                </div>
-              }
-            </div>
-          </div>
-        }
-
-        <!-- Financial Tab -->
-        @if (activeTab() === 'financial') {
-          <div class="financial-section">
-            <!-- Payment Method -->
-            <div class="detail-section">
-              <div class="section-header-row">
-                <h3><i class='bx bx-credit-card'></i> Payment Method</h3>
-                <button class="section-settings-btn" title="Edit Payment Method" (click)="openPaymentEditor()"><i class='bx bx-cog'></i></button>
-              </div>
-              @if (driverPayment()) {
-                <div class="detail-row">
-                  <label>Method:</label>
-                  <span class="badge active">{{ getPaymentMethodLabel(driverPayment()!.paymentMethod) }}</span>
-                </div>
-                @if (driverPayment()!.paymentMethod === 'direct_deposit') {
-                  <div class="detail-row">
-                    <label>Bank Name:</label>
-                    <span>{{ driverPayment()!.bankName || 'Not on file' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <label>Account Type:</label>
-                    <span>{{ (driverPayment()!.accountType || 'checking') | titlecase }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <label>Routing Number:</label>
-                    <span>{{ driverPayment()!.routingNumber ? '****' + driverPayment()!.routingNumber.slice(-4) : 'Not on file' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <label>Account Number:</label>
-                    <span>{{ driverPayment()!.accountNumber ? '****' + driverPayment()!.accountNumber.slice(-4) : 'Not on file' }}</span>
-                  </div>
-                }
-                @if (driverPayment()!.cardLastFour) {
-                  <div class="detail-row">
-                    <label>Card:</label>
-                    <span>{{ (driverPayment()!.cardType || driverPayment()!.paymentMethod) | titlecase }} ending in {{ driverPayment()!.cardLastFour }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <label>Card Holder:</label>
-                    <span>{{ driverPayment()!.cardHolderName || 'Not on file' }}</span>
-                  </div>
-                }
-                @if (driverPayment()!.paymentMethod === 'paper_check') {
-                  <div class="detail-row">
-                    <label>Mailing Address:</label>
-                    <span>{{ driverPayment()!.mailingAddress || 'Not on file' }}</span>
-                  </div>
-                }
-                <div class="detail-row">
-                  <label>Status:</label>
-                  <span class="badge" [class]="driverPayment()!.status">{{ driverPayment()!.status }}</span>
-                </div>
-              } @else {
-                <p class="no-data">No payment method assigned</p>
-              }
-            </div>
-
-            <!-- Insurance Deductions -->
-            <div class="detail-section">
-              <div class="section-header-row">
-                <h3><i class='bx bx-shield-alt-2'></i> Insurance Enrollments & Deductions</h3>
-                <button class="section-settings-btn" title="Manage Enrollments" (click)="openEnrollmentEditor()"><i class='bx bx-cog'></i></button>
-              </div>
-              @if (driverEnrollments().length > 0) {
-                <div class="enrollments-list">
-                  @for (e of driverEnrollments(); track e.id) {
-                    <div class="enrollment-card" [class]="e.status">
-                      <div class="enrollment-header">
-                        <strong>{{ e.policyType }}</strong>
-                        <span class="badge" [class]="e.status">{{ e.status === 'active' ? 'Enrolled' : 'Opted Out' }}</span>
-                      </div>
-                      <div class="enrollment-details">
-                        <div class="enrollment-detail">
-                          <label>Provider:</label>
-                          <span>{{ e.providerName }}</span>
-                        </div>
-                        <div class="enrollment-detail">
-                          <label>Coverage:</label>
-                          <span>{{ (e.coverageLevel || 'standard') | titlecase }}</span>
-                        </div>
-                        <div class="enrollment-detail">
-                          <label>Deduction:</label>
-                          <span>{{ e.deductionAmount ? ('$' + e.deductionAmount.toFixed(2)) : '—' }} / {{ e.deductionFrequency || 'monthly' }}</span>
-                        </div>
-                        @if (e.beneficiary) {
-                          <div class="enrollment-detail">
-                            <label>Beneficiary:</label>
-                            <span>{{ e.beneficiary }}</span>
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
-                </div>
-                <div class="deduction-summary">
-                  <strong>Total Monthly Deductions:</strong>
-                  <span class="deduction-total">${{ totalMonthlyDeductions().toFixed(2) }}</span>
-                </div>
-              } @else {
-                <p class="no-data">No insurance enrollments</p>
-              }
-            </div>
-          </div>
-        }
-      </div>
-    </div>
-  </div>
-}
-
-<!-- ========== EDIT PAYMENT METHOD MODAL ========== -->
-@if (showPaymentEditor()) {
-  <div class="modal-overlay" (click)="closePaymentEditor()" style="z-index: 10001">
-    <div class="modal-content" (click)="$event.stopPropagation()" style="max-width: 500px">
-      <div class="modal-header">
-        <h2>Edit Payment Method</h2>
-        <button class="btn-close" (click)="closePaymentEditor()"><i class='bx bx-x'></i></button>
-      </div>
-      <div class="modal-body">
-        <div class="input-group">
-          <label>Payment Method</label>
-          <select [(ngModel)]="paymentEditForm.paymentMethod" (ngModelChange)="onPaymentMethodEditChange()">
-            <option value="">— Select —</option>
-            <option value="direct_deposit">Direct Deposit</option>
-            <option value="comdata">Comdata</option>
-            <option value="efs">EFS</option>
-            <option value="wex">WEX / Fleet One</option>
-            <option value="tchek">T-Chek</option>
-            <option value="rts">RTS</option>
-            <option value="stripe">Stripe</option>
-            <option value="paper_check">Paper Check</option>
-          </select>
-        </div>
-        @if (paymentEditForm.paymentMethod === 'direct_deposit') {
-          <div class="input-group"><label>Bank Name</label><input type="text" [(ngModel)]="paymentEditForm.bankName" placeholder="e.g., Chase Bank"></div>
-          <div class="input-row">
-            <div class="input-group"><label>Routing Number</label><input type="text" [(ngModel)]="paymentEditForm.routingNumber" maxlength="9" placeholder="9 digits"></div>
-            <div class="input-group"><label>Account Number</label><input type="text" [(ngModel)]="paymentEditForm.accountNumber" placeholder="Account #"></div>
-          </div>
-          <div class="input-group"><label>Account Type</label>
-            <select [(ngModel)]="paymentEditForm.accountType"><option value="checking">Checking</option><option value="savings">Savings</option></select>
-          </div>
-        }
-        @if (paymentEditForm.paymentMethod && paymentEditForm.paymentMethod !== 'direct_deposit' && paymentEditForm.paymentMethod !== 'paper_check') {
-          <div class="input-row">
-            <div class="input-group"><label>Card Holder Name</label><input type="text" [(ngModel)]="paymentEditForm.cardHolderName" placeholder="Name on card"></div>
-            <div class="input-group"><label>Card Last 4</label><input type="text" [(ngModel)]="paymentEditForm.cardLastFour" maxlength="4" placeholder="1234"></div>
-          </div>
-        }
-        @if (paymentEditForm.paymentMethod === 'paper_check') {
-          <div class="input-group"><label>Mailing Address</label><textarea [(ngModel)]="paymentEditForm.mailingAddress" rows="2" placeholder="Full mailing address"></textarea></div>
-        }
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" (click)="closePaymentEditor()">Cancel</button>
-        <button class="btn btn-primary" (click)="savePaymentEdit()" [disabled]="savingPaymentEdit()">
-          @if (savingPaymentEdit()) { <i class='bx bx-loader-alt bx-spin'></i> } @else { <i class='bx bx-check'></i> Save }
-        </button>
-      </div>
-    </div>
-  </div>
-}
-
-<!-- ========== MANAGE ENROLLMENTS MODAL ========== -->
-@if (showEnrollmentEditor()) {
-  <div class="modal-overlay" (click)="closeEnrollmentEditor()" style="z-index: 10001">
-    <div class="modal-content" (click)="$event.stopPropagation()" style="max-width: 700px">
-      <div class="modal-header">
-        <h2>Manage Insurance Enrollments</h2>
-        <button class="btn-close" (click)="closeEnrollmentEditor()"><i class='bx bx-x'></i></button>
-      </div>
-      <div class="modal-body">
-        @if (driverEnrollments().length > 0) {
-          @for (e of driverEnrollments(); track e.id) {
-            <div class="enrollment-edit-card">
-              <div class="enrollment-edit-header">
-                <strong>{{ e.policyType }}</strong>
-                <span class="small-text">{{ e.providerName }}</span>
-              </div>
-              <div class="enrollment-edit-fields">
-                <div class="input-group"><label>Coverage</label>
-                  <select [(ngModel)]="e.coverageLevel"><option value="basic">Basic</option><option value="standard">Standard</option><option value="premium">Premium</option><option value="custom">Custom</option></select>
-                </div>
-                <div class="input-group"><label>Deduction ($)</label>
-                  <input type="number" [(ngModel)]="e.deductionAmount" step="0.01" placeholder="0.00">
-                </div>
-                <div class="input-group"><label>Frequency</label>
-                  <select [(ngModel)]="e.deductionFrequency"><option value="weekly">Weekly</option><option value="biweekly">Bi-Weekly</option><option value="monthly">Monthly</option><option value="per_load">Per Load</option></select>
-                </div>
-                <div class="input-group"><label>Status</label>
-                  <select [(ngModel)]="e.status"><option value="active">Opted In</option><option value="inactive">Opted Out</option></select>
-                </div>
-              </div>
-              <div class="enrollment-edit-actions">
-                <button class="btn btn-primary btn-sm" (click)="saveEnrollmentEdit(e)"><i class='bx bx-check'></i> Save</button>
-              </div>
-            </div>
-          }
-        } @else {
-          <p class="no-data">No insurance enrollments to manage. Enroll this driver from the Insurance & Financial page.</p>
-        }
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" (click)="closeEnrollmentEditor()">Close</button>
-      </div>
-    </div>
-  </div>
-}

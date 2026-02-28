@@ -330,10 +330,106 @@ export class DriverDatabaseComponent implements OnInit {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
   
-  getExpirationStatus(date: string): 'valid' | 'expiring' | 'expired' {
+  getExpirationStatus(date: string): 'compliant' | 'expiring' | 'expired' {
     const days = this.getDaysUntilExpiration(date);
     if (days < 0) return 'expired';
     if (days < 30) return 'expiring';
-    return 'valid';
+    return 'compliant';
+  }
+
+  getComplianceClass(driver: any, item: string): string {
+    const status = this.getItemStatus(driver, item);
+    if (status === 'compliant') return 'dot dot-green';
+    if (status === 'expiring') return 'dot dot-yellow';
+    if (status === 'expired') return 'dot dot-red';
+    return 'dot dot-gray';
+  }
+
+  getComplianceTooltip(driver: any, item: string): string {
+    const labels: any = {
+      cdl: 'CDL / License', medical: 'Medical Certificate', mvr: 'Motor Vehicle Record',
+      drug: 'Drug & Alcohol Test', dqf: 'Driver Qualification File', employment: 'Employment Verification',
+      training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
+      permits: 'Permits', ifta: 'IFTA', safety: 'Safety Awards', violations: 'Violations'
+    };
+    const status = this.getItemStatus(driver, item);
+    const statusLabel = status === 'compliant' ? 'Compliant' : status === 'expiring' ? 'Expiring Soon' : status === 'expired' ? 'Expired' : 'Not on File';
+    return `${labels[item] || item}: ${statusLabel}`;
+  }
+
+  getItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
+    switch (item) {
+      case 'cdl':
+        if (!driver.licenseExpiration) return 'none';
+        return this.getExpirationStatus(driver.licenseExpiration);
+      case 'medical':
+        if (!driver.medicalCardExpiration) return 'none';
+        return this.getExpirationStatus(driver.medicalCardExpiration);
+      case 'mvr':
+        if (driver.mvrOnFile) return 'compliant';
+        return 'none';
+      case 'drug':
+        if (driver.drugTestDate) {
+          const days = this.getDaysUntilExpiration(driver.drugTestDate);
+          if (days < -365) return 'expired';
+          return 'compliant';
+        }
+        return 'none';
+      case 'dqf':
+        if (driver.dqfComplete) return 'compliant';
+        if (driver.dqfOnFile) return 'expiring';
+        return 'none';
+      case 'employment':
+        if (driver.employmentVerified || driver.hireDate) return 'compliant';
+        return 'none';
+      case 'training':
+        if (driver.trainingComplete || driver.orientationDate) return 'compliant';
+        return 'none';
+      case 'insurance':
+        if (driver.insuranceExpiration) return this.getExpirationStatus(driver.insuranceExpiration);
+        return 'none';
+      case 'vehicle':
+        if (driver.vehicleInspectionDate) {
+          const days = this.getDaysUntilExpiration(driver.vehicleInspectionDate);
+          if (days < -90) return 'expired';
+          if (days < -60) return 'expiring';
+          return 'compliant';
+        }
+        return 'none';
+      case 'permits':
+        if (driver.permitsOnFile) return 'compliant';
+        return 'none';
+      case 'ifta':
+        if (driver.iftaCompliant) return 'compliant';
+        return 'none';
+      case 'safety':
+        if (driver.safetyAwards) return 'compliant';
+        return 'none';
+      case 'violations':
+        if (driver.violations && driver.violations > 0) return 'expired';
+        if (driver.violationsChecked) return 'compliant';
+        return 'none';
+      default:
+        return 'none';
+    }
+  }
+
+  getOverallStatus(driver: any): string {
+    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    let hasExpired = false;
+    let hasExpiring = false;
+    let compliantCount = 0;
+
+    for (const item of items) {
+      const status = this.getItemStatus(driver, item);
+      if (status === 'expired') hasExpired = true;
+      if (status === 'expiring') hasExpiring = true;
+      if (status === 'compliant') compliantCount++;
+    }
+
+    if (hasExpired) return 'critical';
+    if (hasExpiring) return 'warning';
+    if (compliantCount >= 5) return 'good';
+    return 'pending';
   }
 }
