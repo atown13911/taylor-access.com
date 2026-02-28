@@ -26,21 +26,38 @@ public class FleetsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<object>> GetFleets([FromQuery] string? status, [FromQuery] int? organizationId, [FromQuery] int limit = 50)
     {
-        var query = _context.Fleets
-            .AsNoTracking()
-            .Include(f => f.FleetDrivers)
-            .Include(f => f.FleetVehicles)
-            .Where(f => f.ParentFleetId == null)
-            .AsQueryable();
+        try
+        {
+            var query = _context.Fleets
+                .AsNoTracking()
+                .Include(f => f.FleetDrivers)
+                .Include(f => f.FleetVehicles)
+                .AsQueryable();
 
-        if (organizationId.HasValue)
-            query = query.Where(f => f.OrganizationId == organizationId);
+            if (organizationId.HasValue)
+                query = query.Where(f => f.OrganizationId == organizationId);
 
-        if (!string.IsNullOrEmpty(status))
-            query = query.Where(f => f.Status == status);
+            if (!string.IsNullOrEmpty(status))
+                query = query.Where(f => f.Status == status);
 
-        var fleets = await query.OrderBy(f => f.Name).Take(limit).ToListAsync();
-        return Ok(new { data = fleets });
+            var fleets = await query.OrderBy(f => f.Name).Take(limit).ToListAsync();
+            return Ok(new { data = fleets });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load fleets");
+            // Fallback: raw query without navigation properties
+            try
+            {
+                var fleets = await _context.Fleets.AsNoTracking()
+                    .OrderBy(f => f.Name).Take(limit).ToListAsync();
+                return Ok(new { data = fleets });
+            }
+            catch (Exception ex2)
+            {
+                return StatusCode(500, new { error = ex2.Message, inner = ex.Message });
+            }
+        }
     }
 
     [HttpGet("{id}")]
