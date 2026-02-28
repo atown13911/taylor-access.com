@@ -1,4 +1,4 @@
-import { Component, signal, inject, OnInit, OnDestroy } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -82,7 +82,7 @@ import { AuthService } from '../../../core/services/auth.service';
             </tr>
           </thead>
           <tbody>
-            @for (s of sessions(); track s.id) {
+            @for (s of paginatedSessions(); track s.id) {
               <tr>
                 <td class="tc-user-cell">
                   <div class="tc-avatar">{{ (s.userName || 'U').charAt(0) }}</div>
@@ -112,6 +112,30 @@ import { AuthService } from '../../../core/services/auth.service';
           </tbody>
         </table>
       </div>
+
+      <!-- Pagination -->
+      @if (totalPages() > 1) {
+        <div class="tc-pagination">
+          <span class="tc-page-info">Page {{ currentPage() }} of {{ totalPages() }} ({{ sessions().length }} sessions)</span>
+          <div class="tc-page-btns">
+            <button class="tc-page-btn" [disabled]="currentPage() <= 1" (click)="currentPage.set(1)" title="First">
+              <i class="bx bx-chevrons-left"></i>
+            </button>
+            <button class="tc-page-btn" [disabled]="currentPage() <= 1" (click)="currentPage.set(currentPage() - 1)" title="Previous">
+              <i class="bx bx-chevron-left"></i>
+            </button>
+            @for (p of visiblePages(); track p) {
+              <button class="tc-page-btn" [class.active]="p === currentPage()" (click)="currentPage.set(p)">{{ p }}</button>
+            }
+            <button class="tc-page-btn" [disabled]="currentPage() >= totalPages()" (click)="currentPage.set(currentPage() + 1)" title="Next">
+              <i class="bx bx-chevron-right"></i>
+            </button>
+            <button class="tc-page-btn" [disabled]="currentPage() >= totalPages()" (click)="currentPage.set(totalPages())" title="Last">
+              <i class="bx bx-chevrons-right"></i>
+            </button>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -194,6 +218,23 @@ import { AuthService } from '../../../core/services/auth.service';
     }
     .tc-empty { text-align: center; color: var(--text-secondary); padding: 2rem !important; }
 
+    .tc-pagination {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; margin-top: 12px;
+    }
+    .tc-page-info { color: var(--text-secondary); font-size: 0.8rem; }
+    .tc-page-btns { display: flex; gap: 4px; }
+    .tc-page-btn {
+      min-width: 32px; height: 32px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04);
+      color: var(--text-secondary); font-size: 0.82rem; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+      &:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.08); }
+      &.active { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+      &:disabled { opacity: 0.3; cursor: not-allowed; }
+    }
+
     @media (max-width: 768px) { .tc-stats { grid-template-columns: repeat(2, 1fr); } }
   `]
 })
@@ -210,6 +251,26 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   liveTimer = signal('0:00:00');
   private sessionStart = new Date();
 
+  currentPage = signal(1);
+  pageSize = 10;
+
+  totalPages = computed(() => Math.ceil(this.sessions().length / this.pageSize) || 1);
+
+  paginatedSessions = computed(() => {
+    const start = (this.currentPage() - 1) * this.pageSize;
+    return this.sessions().slice(start, start + this.pageSize);
+  });
+
+  visiblePages = computed(() => {
+    const total = this.totalPages();
+    const current = this.currentPage();
+    const pages: number[] = [];
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  });
+
   ngOnInit(): void {
     this.loadSessions();
     this.loadSummary();
@@ -224,8 +285,9 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   }
 
   loadSessions(): void {
+    this.currentPage.set(1);
     const userId = this.selectedUserId();
-    const params = userId ? `?userId=${userId}` : '';
+    const params = userId ? `?userId=${userId}&limit=200` : '?limit=200';
     this.http.get<any>(`${this.apiUrl}/api/v1/sessions${params}`).subscribe({
       next: (res) => this.sessions.set(res?.data || []),
       error: () => this.sessions.set([])
