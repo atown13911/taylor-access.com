@@ -451,17 +451,12 @@ export class ProfileComponent implements OnInit {
       contentArea.style.backgroundImage = 'none';
       const sidebar = document.querySelector('.sidebar') as HTMLElement;
       const topbar = document.querySelector('.topbar') as HTMLElement;
-      if (sidebar) sidebar.style.backgroundColor = '';
-      if (topbar) topbar.style.backgroundColor = '';
+      if (sidebar) sidebar.style.removeProperty('background');
+      if (topbar) topbar.style.removeProperty('background');
       return;
     }
 
-    // Apply sidebar opacity
-    const sidebarEl = document.querySelector('.sidebar') as HTMLElement;
-    const topbarEl = document.querySelector('.topbar') as HTMLElement;
-    const so = this.sidebarOpacity() / 100;
-    if (sidebarEl) sidebarEl.style.backgroundColor = `rgba(13, 13, 26, ${so})`;
-    if (topbarEl) topbarEl.style.backgroundColor = `rgba(8, 8, 15, ${so})`;
+    this.applySidebarOpacity(this.sidebarOpacity());
 
     if (id === 'custom') {
       const custom = localStorage.getItem('ta_bg_custom');
@@ -515,10 +510,14 @@ export class ProfileComponent implements OnInit {
     const val = parseInt(event.target.value);
     this.sidebarOpacity.set(val);
     localStorage.setItem('ta_sidebar_opacity', val.toString());
+    this.applySidebarOpacity(val);
+  }
+
+  private applySidebarOpacity(val: number) {
     const sidebar = document.querySelector('.sidebar') as HTMLElement;
     const topbar = document.querySelector('.topbar') as HTMLElement;
-    if (sidebar) sidebar.style.backgroundColor = `rgba(13, 13, 26, ${val / 100})`;
-    if (topbar) topbar.style.backgroundColor = `rgba(8, 8, 15, ${val / 100})`;
+    if (sidebar) sidebar.style.setProperty('background', `rgba(13, 13, 26, ${val / 100})`, 'important');
+    if (topbar) topbar.style.setProperty('background', `rgba(8, 8, 15, ${val / 100})`, 'important');
   }
 
   selectTheme(id: string) {
