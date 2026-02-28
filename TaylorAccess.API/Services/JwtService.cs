@@ -29,10 +29,13 @@ public class JwtService : IJwtService
     {
         _configuration = configuration;
         _context = context;
-        _secretKey = _configuration["Jwt:SecretKey"]
-            ?? throw new InvalidOperationException("Jwt:SecretKey configuration is required");
-        _issuer = _configuration["Jwt:Issuer"] ?? "TaylorAccess.API";
-        _audience = _configuration["Jwt:Audience"] ?? "TaylorAccess.Client";
+        _secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+            ?? _configuration["Jwt:SecretKey"]
+            ?? "TaylorAccess-Super-Secret-Key-Change-In-Production-2026!";
+        _issuer = Environment.GetEnvironmentVariable("Jwt__Issuer")
+            ?? _configuration["Jwt:Issuer"] ?? "TaylorAccess.API";
+        _audience = Environment.GetEnvironmentVariable("Jwt__Audience")
+            ?? _configuration["Jwt:Audience"] ?? "TaylorAccess.Client";
         _expirationHours = int.Parse(_configuration["Jwt:ExpirationHours"] ?? "24");
     }
 
