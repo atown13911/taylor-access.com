@@ -109,7 +109,12 @@
       <aside class="details-panel">
       <div class="panel-header">
         <h2>Driver Details</h2>
-        <button class="close-btn" (click)="selectedDriver.set(null)"><i class='bx bx-x'></i></button>
+        <div class="panel-header-actions">
+          <a class="edit-btn" [routerLink]="['/drivers']" [queryParams]="{edit: selectedDriver()!.id}" title="Edit Driver">
+            <i class='bx bx-edit-alt'></i>
+          </a>
+          <button class="close-btn" (click)="selectedDriver.set(null)"><i class='bx bx-x'></i></button>
+        </div>
       </div>
 
       <div class="panel-avatar">

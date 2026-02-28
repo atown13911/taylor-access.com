@@ -2,14 +2,14 @@ import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
 
 @Component({
   selector: 'app-driver-database',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './driver-database.component.html',
   styleUrls: ['./driver-database.component.scss']
 })

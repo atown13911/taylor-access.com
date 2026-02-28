@@ -409,6 +409,29 @@ tr { cursor: pointer; }
   h2 { font-size: 16px; color: var(--text-primary); }
 }
 
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.edit-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--cyan);
+  text-decoration: none;
+  transition: all 0.2s;
+  i { font-size: 18px; }
+  &:hover {
+    background: rgba(0, 212, 255, 0.1);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+  }
+}
+
 .close-btn {
   background: none;
   border: none;
