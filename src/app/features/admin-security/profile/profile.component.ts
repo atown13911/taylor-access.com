@@ -459,7 +459,7 @@ export class ProfileComponent implements OnInit {
     const bg = this.backgrounds.find(b => b.id === id);
     if (bg) {
       const hiRes = bg.url.replace('w=400&q=60', 'w=1920&q=80');
-      contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.85), rgba(5,5,8,0.92)), url(${hiRes})`;
+      contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.55), rgba(5,5,8,0.65)), url(${hiRes})`;
       contentArea.style.backgroundSize = 'cover';
       contentArea.style.backgroundPosition = 'center';
       contentArea.style.backgroundAttachment = 'fixed';
@@ -479,7 +479,7 @@ export class ProfileComponent implements OnInit {
 
       const contentArea = document.querySelector('.content-area') as HTMLElement;
       if (contentArea) {
-        contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.85), rgba(5,5,8,0.92)), url(${dataUrl})`;
+        contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.55), rgba(5,5,8,0.65)), url(${dataUrl})`;
         contentArea.style.backgroundSize = 'cover';
         contentArea.style.backgroundPosition = 'center';
       }
