@@ -128,6 +128,11 @@
               <td class="actions-cell">
                 <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                 <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
+                @if (driver.status === 'active' || driver.status === 'available') {
+                  <button class="action-btn deactivate" title="Deactivate" (click)="$event.stopPropagation(); deactivateDriver(driver)"><i class='bx bx-power-off'></i></button>
+                } @else {
+                  <button class="action-btn activate" title="Reactivate" (click)="$event.stopPropagation(); reactivateDriver(driver)"><i class='bx bx-check-circle'></i></button>
+                }
               </td>
             </tr>
           }

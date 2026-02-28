@@ -526,6 +526,28 @@ export class DriverListComponent implements OnInit {
     }
   }
 
+  deactivateDriver(driver: DriverRow): void {
+    if (!confirm(`Deactivate ${driver.name}?`)) return;
+    this.api.updateDriver(driver.id, { status: 'inactive' }).subscribe({
+      next: () => {
+        this.toast.success(`${driver.name} deactivated`, 'Success');
+        this.loadDrivers();
+      },
+      error: () => this.toast.error('Failed to deactivate driver', 'Error')
+    });
+  }
+
+  reactivateDriver(driver: DriverRow): void {
+    if (!confirm(`Reactivate ${driver.name}?`)) return;
+    this.api.updateDriver(driver.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.toast.success(`${driver.name} reactivated`, 'Success');
+        this.loadDrivers();
+      },
+      error: () => this.toast.error('Failed to reactivate driver', 'Error')
+    });
+  }
+
   formatDate(dateString: string): string {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

@@ -394,6 +394,18 @@
     border-color: var(--cyan, #00e5ff);
     box-shadow: 0 0 8px rgba(0, 229, 255, 0.2);
   }
+
+  &.deactivate:hover {
+    color: #ff4444;
+    border-color: #ff4444;
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.2);
+  }
+
+  &.activate:hover {
+    color: #00ff88;
+    border-color: #00ff88;
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+  }
 }
 
 // Primary button
