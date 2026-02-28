@@ -77,12 +77,16 @@ public class Driver
 
     public bool IsOnline { get; set; } = false;
 
+    public int? FleetId { get; set; }
+
     public int? DivisionId { get; set; }
 
     [ForeignKey("DivisionId")]
     public Division? Division { get; set; }
 
     public int? DriverTerminalId { get; set; }
+
+    public string? Ssn { get; set; }
 
     [ForeignKey("DriverTerminalId")]
     public DriverTerminal? DriverTerminal { get; set; }

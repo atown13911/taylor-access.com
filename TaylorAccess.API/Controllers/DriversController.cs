@@ -225,6 +225,8 @@ public class DriversController : ControllerBase
         if (request.MedicalCardExpiry.HasValue) driver.MedicalCardExpiry = request.MedicalCardExpiry;
         if (request.DateOfBirth.HasValue) driver.DateOfBirth = request.DateOfBirth;
         
+        if (request.FleetId.HasValue) driver.FleetId = request.FleetId.Value == 0 ? null : request.FleetId;
+        if (request.OrganizationId.HasValue && request.OrganizationId.Value > 0) driver.OrganizationId = request.OrganizationId.Value;
         if (request.DivisionId.HasValue) driver.DivisionId = request.DivisionId.Value == 0 ? null : request.DivisionId;
         if (request.DriverTerminalId.HasValue) driver.DriverTerminalId = request.DriverTerminalId.Value == 0 ? null : request.DriverTerminalId;
         
@@ -232,6 +234,7 @@ public class DriversController : ControllerBase
         if (!string.IsNullOrEmpty(request.Status)) driver.Status = request.Status;
         if (request.IsOnline.HasValue) driver.IsOnline = request.IsOnline.Value;
         if (request.DriverType != null) driver.DriverType = request.DriverType;
+        if (request.Ssn != null) driver.Ssn = request.Ssn;
         
         // Address: create or update the linked Address record
         var hasAddressFields = request.Address != null || request.City != null || request.State != null || request.ZipCode != null || request.Zip != null;
@@ -418,6 +421,8 @@ public record UpdateDriverRequest(
     string? Name,
     string? Email,
     string? Phone,
+    int? FleetId,
+    int? OrganizationId,
     int? DivisionId,
     int? DriverTerminalId,
     string? LicenseNumber,
@@ -429,6 +434,7 @@ public record UpdateDriverRequest(
     string? Status,
     bool? IsOnline,
     string? DriverType,
+    string? Ssn,
     string? Address,
     string? City,
     string? State,
