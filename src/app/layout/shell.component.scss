@@ -314,11 +314,11 @@
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  height: 32px;
-  min-height: 32px;
+  height: 64px;
+  min-height: 64px;
   background: var(--topbar-bg, #08080f);
   border-bottom: 1px solid rgba(0, 212, 255, 0.08);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .topbar-left {
@@ -445,8 +445,8 @@
 
 .topbar-btn {
   position: relative;
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
   border: none;
   background: none;
   color: var(--text-dim);
