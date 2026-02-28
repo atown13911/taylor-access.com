@@ -429,18 +429,81 @@ export class ProfileComponent implements OnInit {
   selectedMaterial = signal(localStorage.getItem('ta_material') || 'none');
   materialOpacity = signal(parseInt(localStorage.getItem('ta_material_opacity') || '40'));
 
-  materials = [
-    { id: 'dark-wood', name: 'Dark Wood', url: 'https://picsum.photos/id/395/400/600' },
-    { id: 'stone', name: 'Stone', url: 'https://picsum.photos/id/1040/400/600' },
-    { id: 'concrete', name: 'Concrete', url: 'https://picsum.photos/id/1026/400/600' },
-    { id: 'marble', name: 'Marble', url: 'https://picsum.photos/id/1050/400/600' },
-    { id: 'metal', name: 'Brushed Metal', url: 'https://picsum.photos/id/262/400/600' },
-    { id: 'leather', name: 'Leather', url: 'https://picsum.photos/id/351/400/600' },
-    { id: 'fabric', name: 'Dark Fabric', url: 'https://picsum.photos/id/139/400/600' },
-    { id: 'carbon', name: 'Carbon Fiber', url: 'https://picsum.photos/id/201/400/600' },
-    { id: 'water', name: 'Water', url: 'https://picsum.photos/id/1053/400/600' },
-    { id: 'circuit', name: 'Circuit Board', url: 'https://picsum.photos/id/60/400/600' },
+  materialCategory = signal('materials');
+
+  materialCategories = [
+    { id: 'materials', label: 'Materials', icon: 'bx-cube' },
+    { id: 'nature', label: 'Nature', icon: 'bx-leaf' },
+    { id: 'city', label: 'City', icon: 'bx-buildings' },
+    { id: 'tech', label: 'Tech', icon: 'bx-chip' },
+    { id: 'anime', label: 'Anime', icon: 'bx-ghost' },
+    { id: 'space', label: 'Space', icon: 'bx-planet' },
   ];
+
+  allMaterials: Record<string, any[]> = {
+    materials: [
+      { id: 'dark-wood', name: 'Dark Wood', url: 'https://picsum.photos/id/395/400/600' },
+      { id: 'stone', name: 'Stone', url: 'https://picsum.photos/id/1040/400/600' },
+      { id: 'concrete', name: 'Concrete', url: 'https://picsum.photos/id/1026/400/600' },
+      { id: 'marble', name: 'Marble', url: 'https://picsum.photos/id/1050/400/600' },
+      { id: 'metal', name: 'Brushed Metal', url: 'https://picsum.photos/id/262/400/600' },
+      { id: 'leather', name: 'Leather', url: 'https://picsum.photos/id/351/400/600' },
+      { id: 'fabric', name: 'Dark Fabric', url: 'https://picsum.photos/id/139/400/600' },
+      { id: 'carbon', name: 'Carbon Fiber', url: 'https://picsum.photos/id/201/400/600' },
+    ],
+    nature: [
+      { id: 'forest-n', name: 'Forest', url: 'https://picsum.photos/id/15/400/600' },
+      { id: 'moss', name: 'Moss', url: 'https://picsum.photos/id/145/400/600' },
+      { id: 'leaves', name: 'Leaves', url: 'https://picsum.photos/id/167/400/600' },
+      { id: 'bamboo', name: 'Bamboo', url: 'https://picsum.photos/id/312/400/600' },
+      { id: 'water-n', name: 'Water', url: 'https://picsum.photos/id/1053/400/600' },
+      { id: 'rocks', name: 'Rocks', url: 'https://picsum.photos/id/188/400/600' },
+      { id: 'snow', name: 'Snow', url: 'https://picsum.photos/id/1036/400/600' },
+      { id: 'flowers', name: 'Flowers', url: 'https://picsum.photos/id/152/400/600' },
+    ],
+    city: [
+      { id: 'skyline', name: 'Skyline', url: 'https://picsum.photos/id/1044/400/600' },
+      { id: 'neon', name: 'Neon Lights', url: 'https://picsum.photos/id/399/400/600' },
+      { id: 'bridge', name: 'Bridge', url: 'https://picsum.photos/id/122/400/600' },
+      { id: 'street', name: 'Street', url: 'https://picsum.photos/id/258/400/600' },
+      { id: 'subway', name: 'Subway', url: 'https://picsum.photos/id/256/400/600' },
+      { id: 'rain-city', name: 'Rainy City', url: 'https://picsum.photos/id/1039/400/600' },
+      { id: 'rooftop', name: 'Rooftop', url: 'https://picsum.photos/id/274/400/600' },
+      { id: 'traffic', name: 'Traffic', url: 'https://picsum.photos/id/1058/400/600' },
+    ],
+    tech: [
+      { id: 'circuit', name: 'Circuit Board', url: 'https://picsum.photos/id/60/400/600' },
+      { id: 'code', name: 'Code', url: 'https://picsum.photos/id/2/400/600' },
+      { id: 'server', name: 'Server Room', url: 'https://picsum.photos/id/180/400/600' },
+      { id: 'keyboard', name: 'Keyboard', url: 'https://picsum.photos/id/119/400/600' },
+      { id: 'fiber', name: 'Fiber Optic', url: 'https://picsum.photos/id/366/400/600' },
+      { id: 'laptop', name: 'Workspace', url: 'https://picsum.photos/id/0/400/600' },
+      { id: 'hardware', name: 'Hardware', url: 'https://picsum.photos/id/48/400/600' },
+      { id: 'lens', name: 'Lens', url: 'https://picsum.photos/id/250/400/600' },
+    ],
+    anime: [
+      { id: 'anime-city', name: 'Night City', url: 'https://cdn.pixabay.com/photo/2023/05/21/16/17/ai-generated-8009433_640.jpg' },
+      { id: 'anime-sunset', name: 'Sunset', url: 'https://cdn.pixabay.com/photo/2024/01/18/09/13/ai-generated-8516149_640.jpg' },
+      { id: 'anime-rain', name: 'Rain', url: 'https://cdn.pixabay.com/photo/2024/03/11/11/07/ai-generated-8626153_640.jpg' },
+      { id: 'anime-forest', name: 'Forest Path', url: 'https://cdn.pixabay.com/photo/2023/08/02/04/55/ai-generated-8164307_640.jpg' },
+      { id: 'anime-sky', name: 'Sky', url: 'https://cdn.pixabay.com/photo/2023/05/20/17/49/ai-generated-8007535_640.jpg' },
+      { id: 'anime-mech', name: 'Mech', url: 'https://cdn.pixabay.com/photo/2024/02/28/13/51/ai-generated-8602225_640.jpg' },
+      { id: 'anime-temple', name: 'Temple', url: 'https://cdn.pixabay.com/photo/2023/12/05/14/10/ai-generated-8432220_640.jpg' },
+      { id: 'anime-ocean', name: 'Ocean', url: 'https://cdn.pixabay.com/photo/2024/01/04/05/22/ai-generated-8486513_640.jpg' },
+    ],
+    space: [
+      { id: 'galaxy', name: 'Galaxy', url: 'https://picsum.photos/id/631/400/600' },
+      { id: 'nebula-s', name: 'Nebula', url: 'https://picsum.photos/id/984/400/600' },
+      { id: 'stars', name: 'Stars', url: 'https://picsum.photos/id/733/400/600' },
+      { id: 'aurora', name: 'Aurora', url: 'https://picsum.photos/id/1057/400/600' },
+      { id: 'moon', name: 'Moon', url: 'https://picsum.photos/id/683/400/600' },
+      { id: 'earth', name: 'Earth', url: 'https://picsum.photos/id/985/400/600' },
+      { id: 'cosmos', name: 'Cosmos', url: 'https://picsum.photos/id/1062/400/600' },
+      { id: 'eclipse', name: 'Eclipse', url: 'https://picsum.photos/id/832/400/600' },
+    ],
+  };
+
+  get materials() { return this.allMaterials[this.materialCategory()] || []; }
   bgOpacity = signal(parseInt(localStorage.getItem('ta_bg_opacity') || '60'));
   sidebarOpacity = signal(parseInt(localStorage.getItem('ta_sidebar_opacity') || '90'));
 

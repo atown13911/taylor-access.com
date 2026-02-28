@@ -366,6 +366,13 @@
               </div>
 
               <h3 class="style-heading">Sidebar Material</h3>
+              <div class="material-tabs">
+                @for (cat of materialCategories; track cat.id) {
+                  <button class="mat-tab" [class.active]="materialCategory() === cat.id" (click)="materialCategory.set(cat.id)">
+                    <i class="bx" [class]="'bx ' + cat.icon"></i> {{ cat.label }}
+                  </button>
+                }
+              </div>
               <div class="bg-grid">
                 <button class="bg-card" [class.active]="selectedMaterial() === 'none'" (click)="selectMaterial('none')">
                   <div class="bg-preview bg-none"><i class="bx bx-x"></i></div>

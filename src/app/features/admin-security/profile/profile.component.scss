@@ -576,6 +576,31 @@
   cursor: pointer;
 }
 
+.material-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.mat-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  background: var(--accent-05, rgba(0,212,255,0.05));
+  border: 1px solid var(--border-color, rgba(0,212,255,0.1));
+  border-radius: 6px;
+  color: var(--text-secondary, #7dd3fc);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  i { font-size: 14px; }
+
+  &:hover { border-color: var(--accent-40, rgba(0,212,255,0.4)); }
+  &.active { background: var(--accent-15, rgba(0,212,255,0.15)); border-color: var(--cyan, #00d4ff); color: var(--cyan, #00d4ff); }
+}
+
 .opacity-control {
   margin-top: 16px;
 
