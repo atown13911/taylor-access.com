@@ -7,7 +7,7 @@
   gap: 16px;
   align-items: flex-start;
 
-  .matrix-table-wrapper {
+  .matrix-table {
     flex: 1;
     min-width: 0;
   }
@@ -109,21 +109,18 @@
 }
 
 // Matrix Table
-.matrix-table-wrapper {
-  overflow-x: auto;
-  border: 1px solid rgba(0, 212, 255, 0.12);
-  border-radius: 12px;
-  background: rgba(13, 13, 20, 0.65);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
-}
-
 .matrix-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate !important;
+  border-spacing: 0;
   min-width: 900px;
-  background: transparent !important;
+  background: rgba(13, 13, 20, 0.65) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(0, 212, 255, 0.12) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
 
   thead tr {
     background: rgba(10, 10, 26, 0.7) !important;
