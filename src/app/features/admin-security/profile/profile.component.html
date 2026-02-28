@@ -365,6 +365,31 @@
                 </label>
               </div>
 
+              <h3 class="style-heading">Sidebar Material</h3>
+              <div class="bg-grid">
+                <button class="bg-card" [class.active]="selectedMaterial() === 'none'" (click)="selectMaterial('none')">
+                  <div class="bg-preview bg-none"><i class="bx bx-x"></i></div>
+                  <span>None</span>
+                </button>
+                @for (mat of materials; track mat.id) {
+                  <button class="bg-card" [class.active]="selectedMaterial() === mat.id" (click)="selectMaterial(mat.id)">
+                    <div class="bg-preview" [style.background-image]="'url(' + mat.url + ')'" [style.background-size]="'cover'" [style.background-position]="'center'"></div>
+                    <span>{{ mat.name }}</span>
+                  </button>
+                }
+              </div>
+
+              @if (selectedMaterial() !== 'none') {
+                <div class="opacity-control">
+                  <label>Material Opacity: <strong>{{ materialOpacity() }}%</strong></label>
+                  <input type="range" min="10" max="100" step="5" [value]="materialOpacity()" (input)="adjustMaterialOpacity($event)">
+                  <div class="opacity-labels">
+                    <span>Subtle</span>
+                    <span>Full</span>
+                  </div>
+                </div>
+              }
+
               @if (selectedBg() !== 'none') {
                 <div class="opacity-control">
                   <label>Content Overlay: <strong>{{ bgOpacity() }}%</strong></label>

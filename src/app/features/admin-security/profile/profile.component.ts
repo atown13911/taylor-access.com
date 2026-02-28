@@ -426,6 +426,21 @@ export class ProfileComponent implements OnInit {
   ];
 
   selectedBg = signal(localStorage.getItem('ta_bg') || 'none');
+  selectedMaterial = signal(localStorage.getItem('ta_material') || 'none');
+  materialOpacity = signal(parseInt(localStorage.getItem('ta_material_opacity') || '40'));
+
+  materials = [
+    { id: 'dark-wood', name: 'Dark Wood', url: 'https://picsum.photos/id/395/400/600' },
+    { id: 'stone', name: 'Stone', url: 'https://picsum.photos/id/1040/400/600' },
+    { id: 'concrete', name: 'Concrete', url: 'https://picsum.photos/id/1026/400/600' },
+    { id: 'marble', name: 'Marble', url: 'https://picsum.photos/id/1050/400/600' },
+    { id: 'metal', name: 'Brushed Metal', url: 'https://picsum.photos/id/262/400/600' },
+    { id: 'leather', name: 'Leather', url: 'https://picsum.photos/id/351/400/600' },
+    { id: 'fabric', name: 'Dark Fabric', url: 'https://picsum.photos/id/139/400/600' },
+    { id: 'carbon', name: 'Carbon Fiber', url: 'https://picsum.photos/id/201/400/600' },
+    { id: 'water', name: 'Water', url: 'https://picsum.photos/id/1053/400/600' },
+    { id: 'circuit', name: 'Circuit Board', url: 'https://picsum.photos/id/60/400/600' },
+  ];
   bgOpacity = signal(parseInt(localStorage.getItem('ta_bg_opacity') || '60'));
   sidebarOpacity = signal(parseInt(localStorage.getItem('ta_sidebar_opacity') || '90'));
 
@@ -494,6 +509,39 @@ export class ProfileComponent implements OnInit {
       this.toast.success('Background uploaded');
     };
     reader.readAsDataURL(file);
+  }
+
+  selectMaterial(id: string) {
+    this.selectedMaterial.set(id);
+    localStorage.setItem('ta_material', id);
+    this.applyMaterial(id, this.materialOpacity());
+  }
+
+  adjustMaterialOpacity(event: any) {
+    const val = parseInt(event.target.value);
+    this.materialOpacity.set(val);
+    localStorage.setItem('ta_material_opacity', val.toString());
+    this.applyMaterial(this.selectedMaterial(), val);
+  }
+
+  private applyMaterial(id: string, opacity: number) {
+    const sidebar = document.querySelector('.sidebar') as HTMLElement;
+    if (!sidebar) return;
+
+    if (id === 'none') {
+      sidebar.style.removeProperty('background-image');
+      sidebar.style.removeProperty('background-size');
+      return;
+    }
+
+    const mat = this.materials.find(m => m.id === id);
+    if (mat) {
+      const hiRes = mat.url.replace('400/600', '800/1200');
+      const o = 1 - (opacity / 100);
+      sidebar.style.backgroundImage = `linear-gradient(rgba(13,13,26,${o}), rgba(13,13,26,${o})), url(${hiRes})`;
+      sidebar.style.backgroundSize = 'cover';
+      sidebar.style.backgroundPosition = 'center';
+    }
   }
 
   adjustOpacity(event: any) {
