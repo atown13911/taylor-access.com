@@ -742,6 +742,7 @@ import { AuthService } from '../../../core/services/auth.service';
                         <tr>
                           <th>Document</th>
                           <th>Category</th>
+                          <th>Expiration</th>
                           <th>Status</th>
                           <th></th>
                         </tr>
@@ -751,6 +752,15 @@ import { AuthService } from '../../../core/services/auth.service';
                           <tr [class.uploaded]="hasDocument(doc.type)">
                             <td><i class="bx bx-file-blank"></i> {{ doc.label }}</td>
                             <td><span class="category-badge">{{ doc.category }}</span></td>
+                            <td>
+                              @if (getDocExpiration(doc.type); as exp) {
+                                <span class="expiry-date" [class.expiring]="isExpiringSoon(exp)" [class.expired]="isDocExpired(exp)">
+                                  {{ exp | date:'mediumDate' }}
+                                </span>
+                              } @else {
+                                <span class="expiry-none">—</span>
+                              }
+                            </td>
                             <td>
                               @if (hasDocument(doc.type)) {
                                 <span class="status-badge uploaded">Uploaded</span>
@@ -796,6 +806,11 @@ import { AuthService } from '../../../core/services/auth.service';
                             <span class="doc-type">{{ doc.documentType }}</span>
                             <span class="doc-date">{{ doc.createdAt | date:'short' }}</span>
                             <span class="doc-size">{{ (doc.fileSize / 1024).toFixed(1) }} KB</span>
+                            @if (doc.expirationDate) {
+                              <span class="doc-expiry" [class.expiring]="isExpiringSoon(doc.expirationDate)" [class.expired]="isDocExpired(doc.expirationDate)">
+                                <i class="bx bx-calendar"></i> Exp: {{ doc.expirationDate | date:'mediumDate' }}
+                              </span>
+                            }
                           </div>
                         </div>
                         <div class="doc-actions">
@@ -3477,6 +3492,22 @@ import { AuthService } from '../../../core/services/auth.service';
       font-size: 0.72rem;
     }
 
+    .expiry-date {
+      font-size: 0.82rem;
+      color: #ccc;
+      &.expiring { color: #ffaa00; }
+      &.expired { color: #ff4444; font-weight: 600; }
+    }
+    .expiry-none { color: #555; font-size: 0.82rem; }
+
+    .doc-expiry {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.72rem; color: #aaa;
+      i { font-size: 0.8rem; }
+      &.expiring { color: #ffaa00; }
+      &.expired { color: #ff4444; font-weight: 600; }
+    }
+
     .empty-docs {
       text-align: center; padding: 30px 20px; color: #888;
       i { font-size: 1.5rem; color: #555; display: block; margin-bottom: 8px; }
@@ -4988,6 +5019,28 @@ export class EmployeeRosterComponent implements OnInit {
       return dType === slug || dType.includes(slug) || slug.includes(dType);
     });
     return doc ? new Date(doc.createdAt).toLocaleDateString() : null;
+  }
+
+  getDocExpiration(docType: string): string | null {
+    const slug = docType.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const doc = this.employeeDocuments().find(d => {
+      const dType = (d.documentType || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      return dType === slug || dType.includes(slug) || slug.includes(dType);
+    });
+    return doc?.expirationDate || doc?.expiryDate || null;
+  }
+
+  isExpiringSoon(dateStr: string): boolean {
+    if (!dateStr) return false;
+    const exp = new Date(dateStr);
+    const now = new Date();
+    const days = Math.floor((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return days > 0 && days <= 90;
+  }
+
+  isDocExpired(dateStr: string): boolean {
+    if (!dateStr) return false;
+    return new Date(dateStr) < new Date();
   }
 
   uploadMandatoryDoc(docType: string) {
