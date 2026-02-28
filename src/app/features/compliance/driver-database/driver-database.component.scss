@@ -2,6 +2,7 @@
   max-width: 100%;
   display: flex;
   gap: 0;
+  align-items: flex-start;
 
   &.panel-open .main-area {
     flex: 1;
@@ -384,12 +385,14 @@ tr { cursor: pointer; }
   background: var(--bg-card);
   border-left: 1px solid var(--border-bright);
   overflow-y: auto;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - 140px);
   animation: slide-in 0.2s ease;
   margin-left: 16px;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
 }
 
 @keyframes slide-in {
@@ -521,3 +524,4 @@ tr { cursor: pointer; }
     &:hover { background: rgba(0, 255, 136, 0.2); }
   }
 }
+
