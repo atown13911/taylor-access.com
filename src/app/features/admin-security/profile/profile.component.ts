@@ -41,7 +41,7 @@ export class ProfileComponent implements OnInit {
   saving = signal(false);
 
   // Active tab
-  activeTab = signal<'profile' | 'security' | 'preferences'>('profile');
+  activeTab = signal<'profile' | 'security' | 'preferences' | 'style'>('profile');
 
   // Profile form
   profileForm = {
@@ -176,7 +176,7 @@ export class ProfileComponent implements OnInit {
     }
   }
 
-  setActiveTab(tab: 'profile' | 'security' | 'preferences'): void {
+  setActiveTab(tab: 'profile' | 'security' | 'preferences' | 'style'): void {
     this.activeTab.set(tab);
   }
 
@@ -387,6 +387,73 @@ export class ProfileComponent implements OnInit {
     if (role === 'superadmin' || role === 'admin') return 'role-admin';
     if (role === 'manager') return 'role-manager';
     return 'role-user';
+  }
+
+  // ============ STYLE TAB ============
+
+  selectedTheme = signal(localStorage.getItem('ta_theme') || 'tron-dark');
+  selectedAccent = signal(localStorage.getItem('ta_accent') || 'Cyan');
+  selectedFontSize = signal(localStorage.getItem('ta_font_size') || 'medium');
+
+  themes = [
+    { id: 'tron-dark', name: 'TRON Dark', description: 'Deep black with neon cyan glow', bg: '#050508', sidebar: '#0d0d1a', topbar: '#08080f', accent: '#00d4ff' },
+    { id: 'midnight', name: 'Midnight', description: 'Deep navy blue tones', bg: '#0a0e1a', sidebar: '#0d1225', topbar: '#080c18', accent: '#4a90d9' },
+    { id: 'carbon', name: 'Carbon', description: 'Neutral dark gray', bg: '#1a1a1a', sidebar: '#222222', topbar: '#181818', accent: '#00d4ff' },
+    { id: 'dark-emerald', name: 'Dark Emerald', description: 'Dark with green accents', bg: '#0a100e', sidebar: '#0d1812', topbar: '#080f0c', accent: '#00ff88' },
+    { id: 'obsidian', name: 'Obsidian', description: 'Pure black minimal', bg: '#000000', sidebar: '#0a0a0a', topbar: '#050505', accent: '#ffffff' },
+    { id: 'dark-purple', name: 'Nebula', description: 'Dark with purple accents', bg: '#0e0a14', sidebar: '#150d1e', topbar: '#0a0810', accent: '#a855f7' },
+    { id: 'dark-red', name: 'Crimson', description: 'Dark with red accents', bg: '#100a0a', sidebar: '#1a0d0d', topbar: '#0f0808', accent: '#ff2a6d' },
+    { id: 'dark-orange', name: 'Blaze', description: 'Dark with warm orange', bg: '#100e0a', sidebar: '#1a150d', topbar: '#0f0c08', accent: '#ff6b35' },
+  ];
+
+  accentColors = [
+    { name: 'Cyan', value: '#00d4ff' },
+    { name: 'Blue', value: '#0080ff' },
+    { name: 'Green', value: '#00ff88' },
+    { name: 'Purple', value: '#a855f7' },
+    { name: 'Red', value: '#ff2a6d' },
+    { name: 'Orange', value: '#ff6b35' },
+    { name: 'Yellow', value: '#fbbf24' },
+    { name: 'Pink', value: '#ec4899' },
+    { name: 'Teal', value: '#14b8a6' },
+    { name: 'White', value: '#ffffff' },
+  ];
+
+  fontSizes = [
+    { label: 'Small', value: 'small' },
+    { label: 'Medium', value: 'medium' },
+    { label: 'Large', value: 'large' },
+  ];
+
+  selectTheme(id: string) {
+    this.selectedTheme.set(id);
+  }
+
+  selectAccent(name: string) {
+    this.selectedAccent.set(name);
+  }
+
+  selectFontSize(size: string) {
+    this.selectedFontSize.set(size);
+  }
+
+  saveStylePreferences() {
+    localStorage.setItem('ta_theme', this.selectedTheme());
+    localStorage.setItem('ta_accent', this.selectedAccent());
+    localStorage.setItem('ta_font_size', this.selectedFontSize());
+
+    const accent = this.accentColors.find(c => c.name === this.selectedAccent());
+    if (accent) {
+      document.documentElement.style.setProperty('--cyan', accent.value);
+    }
+
+    const theme = this.themes.find(t => t.id === this.selectedTheme());
+    if (theme) {
+      document.documentElement.style.setProperty('--bg-primary', theme.bg);
+      document.documentElement.style.setProperty('--bg-secondary', theme.sidebar);
+    }
+
+    this.toast.success('Style preferences saved');
   }
 }
 

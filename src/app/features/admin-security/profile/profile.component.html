@@ -82,6 +82,13 @@
             <i class="bx bx-cog"></i>
             Preferences
           </button>
+          <button 
+            class="nav-item" 
+            [class.active]="activeTab() === 'style'"
+            (click)="setActiveTab('style')">
+            <i class="bx bx-palette"></i>
+            Style
+          </button>
         </nav>
 
         <div class="account-info">
@@ -291,6 +298,59 @@
                   </button>
                 </div>
               </form>
+            </div>
+          }
+
+          @case ('style') {
+            <div class="content-section">
+              <h2><i class="bx bx-palette"></i> Style</h2>
+              <p class="section-description">Choose your visual theme.</p>
+
+              <div class="theme-grid">
+                @for (theme of themes; track theme.id) {
+                  <button class="theme-card" [class.active]="selectedTheme() === theme.id" (click)="selectTheme(theme.id)">
+                    <div class="theme-preview" [style.background]="theme.bg">
+                      <div class="preview-sidebar" [style.background]="theme.sidebar"></div>
+                      <div class="preview-topbar" [style.background]="theme.topbar"></div>
+                      <div class="preview-content">
+                        <div class="preview-accent" [style.background]="theme.accent"></div>
+                      </div>
+                    </div>
+                    <div class="theme-info">
+                      <span class="theme-name">{{ theme.name }}</span>
+                      <span class="theme-desc">{{ theme.description }}</span>
+                    </div>
+                    @if (selectedTheme() === theme.id) {
+                      <i class="bx bx-check-circle theme-check"></i>
+                    }
+                  </button>
+                }
+              </div>
+
+              <h3 class="style-heading">Accent Color</h3>
+              <div class="accent-colors">
+                @for (color of accentColors; track color.name) {
+                  <button class="accent-swatch" [style.background]="color.value"
+                    [class.active]="selectedAccent() === color.name"
+                    (click)="selectAccent(color.name)" [title]="color.name">
+                  </button>
+                }
+              </div>
+
+              <h3 class="style-heading">Font Size</h3>
+              <div class="font-sizes">
+                @for (size of fontSizes; track size.value) {
+                  <button class="font-btn" [class.active]="selectedFontSize() === size.value" (click)="selectFontSize(size.value)">
+                    {{ size.label }}
+                  </button>
+                }
+              </div>
+
+              <div class="form-actions" style="margin-top: 24px">
+                <button class="btn btn-primary" (click)="saveStylePreferences()">
+                  <i class="bx bx-save"></i> Save Style
+                </button>
+              </div>
             </div>
           }
         }

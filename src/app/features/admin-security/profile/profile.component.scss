@@ -425,3 +425,99 @@
     box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
   }
 }
+
+// Style Tab
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.theme-card {
+  position: relative;
+  background: var(--bg-card, #0d0d14);
+  border: 2px solid var(--border-color, rgba(0,212,255,0.1));
+  border-radius: 12px;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s;
+  overflow: hidden;
+  text-align: left;
+  color: inherit;
+
+  &:hover { border-color: var(--accent-40, rgba(0,212,255,0.4)); }
+  &.active { border-color: var(--cyan, #00d4ff); box-shadow: 0 0 20px rgba(0,212,255,0.2); }
+}
+
+.theme-preview {
+  height: 80px;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-sidebar { width: 30%; height: 100%; }
+.preview-topbar { position: absolute; top: 0; left: 30%; right: 0; height: 12px; }
+.preview-content { position: absolute; top: 12px; left: 30%; right: 0; bottom: 0; padding: 8px; }
+.preview-accent { width: 40px; height: 6px; border-radius: 3px; }
+
+.theme-info {
+  padding: 10px 12px;
+  .theme-name { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary, #e0f7ff); }
+  .theme-desc { display: block; font-size: 11px; color: var(--text-dim, rgba(0,212,255,0.4)); margin-top: 2px; }
+}
+
+.theme-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 20px;
+  color: var(--cyan, #00d4ff);
+  filter: drop-shadow(0 0 6px rgba(0,212,255,0.5));
+}
+
+.style-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #e0f7ff);
+  margin: 24px 0 12px;
+}
+
+.accent-colors {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.accent-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 8px rgba(0,0,0,0.3);
+
+  &:hover { transform: scale(1.15); }
+  &.active { border-color: white; box-shadow: 0 0 12px currentColor; transform: scale(1.15); }
+}
+
+.font-sizes {
+  display: flex;
+  gap: 8px;
+}
+
+.font-btn {
+  padding: 8px 20px;
+  background: var(--accent-05, rgba(0,212,255,0.05));
+  border: 1px solid var(--border-color, rgba(0,212,255,0.1));
+  border-radius: 8px;
+  color: var(--text-secondary, #7dd3fc);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover { border-color: var(--cyan, #00d4ff); }
+  &.active { background: var(--accent-15, rgba(0,212,255,0.15)); border-color: var(--cyan, #00d4ff); color: var(--cyan, #00d4ff); }
+}
