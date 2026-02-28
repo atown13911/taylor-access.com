@@ -209,6 +209,25 @@ using (var scope = app.Services.CreateScope())
         try { await context.Database.ExecuteSqlRawAsync(sql); }
         catch (Exception ex) { Console.WriteLine($"Table note: {ex.Message}"); }
     }
+
+    // Add any missing columns to existing tables
+    var alterStatements = new[]
+    {
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""ClientSecret"" TEXT NOT NULL DEFAULT ''",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""LogoUrl"" TEXT",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""HomepageUrl"" TEXT",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""Status"" TEXT DEFAULT 'active'",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""Scopes"" TEXT DEFAULT '[]'",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""OrganizationId"" INTEGER",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""CreatedBy"" INTEGER",
+        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""UpdatedAt"" TIMESTAMP DEFAULT NOW()",
+    };
+
+    foreach (var sql in alterStatements)
+    {
+        try { await context.Database.ExecuteSqlRawAsync(sql); }
+        catch { }
+    }
     Console.WriteLine("All required tables verified/created");
 
     await roleService.SeedDefaultRolesAsync();
