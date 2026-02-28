@@ -33,10 +33,27 @@
 .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
 
 // Category tabs
-.category-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1.5rem; padding-bottom: 0.5rem; }
-.cat-tab { display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.8rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: #6b8299; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; white-space: nowrap;
-  &:hover { border-color: rgba(0,229,255,0.3); color: #99aabb; }
-  &.active { background: rgba(0,229,255,0.1); border-color: var(--cyan, #00e5ff); color: var(--cyan, #00e5ff); box-shadow: 0 0 8px rgba(0,229,255,0.1); }
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1.5rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(10, 10, 20, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+.cat-tab {
+  display: flex; align-items: center; gap: 0.35rem;
+  padding: 0.5rem 0.9rem; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #99aabb; font-size: 0.78rem;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  &:hover { border-color: rgba(0,229,255,0.4); color: #ccdde8; background: rgba(255,255,255,0.08); }
+  &.active { background: rgba(0,229,255,0.15); border-color: var(--cyan, #00e5ff); color: var(--cyan, #00e5ff); box-shadow: 0 0 12px rgba(0,229,255,0.15); }
   i { font-size: 0.9rem; }
 }
 .cat-count { background: rgba(0,229,255,0.15); color: var(--cyan, #00e5ff); padding: 0.1rem 0.35rem; border-radius: 10px; font-size: 0.65rem; font-weight: 700; min-width: 18px; text-align: center; }
