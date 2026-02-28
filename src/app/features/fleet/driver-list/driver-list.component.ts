@@ -345,6 +345,49 @@ export class DriverListComponent implements OnInit {
     }
   }
 
+  previewDocument(doc: any): void {
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, '_blank');
+    } else {
+      this.toast.info(`No file uploaded for ${doc.type}`, 'Preview');
+    }
+  }
+
+  uploadDocument(event: any, doc: any): void {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    const driver = this.profileDriver();
+    if (!driver) return;
+
+    this.toast.success(`Uploading ${file.name} for ${doc.type}...`, 'Upload');
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('documentType', doc.type);
+    formData.append('driverId', driver.id);
+
+    this.api.uploadDriverDocument(driver.id, formData).subscribe({
+      next: () => {
+        this.toast.success(`${doc.type} uploaded successfully`, 'Success');
+        this.loadDriverDocuments(driver.id);
+      },
+      error: () => this.toast.error(`Failed to upload ${doc.type}`, 'Error')
+    });
+  }
+
+  archiveDocument(doc: any): void {
+    if (!confirm(`Archive "${doc.type}"? It will be moved to archived documents.`)) return;
+
+    const driver = this.profileDriver();
+    if (!driver) return;
+
+    this.toast.success(`${doc.type} archived`, 'Archived');
+    this.driverDocuments.update(docs => docs.map(d =>
+      d.type === doc.type ? { ...d, status: 'missing', number: '', expiry: '' } : d
+    ));
+  }
+
   // Modal methods
   openAddModal(): void {
     this.modalType.set('add');

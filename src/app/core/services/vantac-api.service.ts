@@ -245,6 +245,9 @@ export class VanTacApiService {
   downloadDriverDocumentFile(id: any): Observable<any> {
     return this.http.get(`${this.baseUrl}/api/v1/driver-documents/${id}/download`, { responseType: 'blob' as any });
   }
+  uploadDriverDocument(driverId: any, formData: FormData): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/driver-documents/upload/${driverId}`, formData);
+  }
 
   // Driver Payments
   getDriverPayments(params?: any): Observable<any> {

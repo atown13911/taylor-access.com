@@ -899,6 +899,47 @@
   &.missing { background: rgba(136, 136, 170, 0.1); color: #8888aa; }
 }
 
+.doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.doc-action-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  background: transparent;
+  color: var(--text-secondary, #8899aa);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+
+  &:hover {
+    color: var(--cyan, #00e5ff);
+    border-color: var(--cyan, #00e5ff);
+    background: rgba(0, 212, 255, 0.08);
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.15);
+  }
+
+  &.archive:hover {
+    color: #ffaa00;
+    border-color: #ffaa00;
+    background: rgba(255, 170, 0, 0.08);
+    box-shadow: 0 0 8px rgba(255, 170, 0, 0.15);
+  }
+
+  i { font-size: 15px; }
+
+  input[type="file"] { display: none; }
+}
+
 .doc-empty {
   display: flex;
   flex-direction: column;

@@ -512,6 +512,22 @@
                   @if (doc.expiry) { <span class="doc-expiry">Exp: {{ formatDate(doc.expiry) }}</span> }
                 </div>
                 <span class="doc-status-badge" [class]="doc.status">{{ getDocStatusLabel(doc.status) }}</span>
+                <div class="doc-actions">
+                  @if (doc.status !== 'missing') {
+                    <button class="doc-action-btn" title="Preview" (click)="previewDocument(doc)">
+                      <i class='bx bx-show'></i>
+                    </button>
+                  }
+                  <label class="doc-action-btn" title="Upload">
+                    <i class='bx bx-upload'></i>
+                    <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadDocument($event, doc)">
+                  </label>
+                  @if (doc.status !== 'missing') {
+                    <button class="doc-action-btn archive" title="Archive" (click)="archiveDocument(doc)">
+                      <i class='bx bx-archive-in'></i>
+                    </button>
+                  }
+                </div>
               </div>
             } @empty {
               <div class="doc-empty">
