@@ -521,3 +521,57 @@
   &:hover { border-color: var(--cyan, #00d4ff); }
   &.active { background: var(--accent-15, rgba(0,212,255,0.15)); border-color: var(--cyan, #00d4ff); color: var(--cyan, #00d4ff); }
 }
+
+// Background Picker
+.bg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.bg-card {
+  background: none;
+  border: 2px solid var(--border-color, rgba(0,212,255,0.1));
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.2s;
+  text-align: center;
+  color: inherit;
+
+  &:hover { border-color: var(--accent-40, rgba(0,212,255,0.4)); }
+  &.active { border-color: var(--cyan, #00d4ff); box-shadow: 0 0 15px rgba(0,212,255,0.2); }
+
+  span {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary, #7dd3fc);
+    padding: 6px 0;
+  }
+}
+
+.bg-preview {
+  width: 100%;
+  height: 70px;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-none {
+  background: var(--bg-card, #0d0d14);
+  i { font-size: 24px; color: var(--text-dim, rgba(0,212,255,0.4)); }
+}
+
+.bg-custom {
+  background: var(--bg-card, #0d0d14);
+  border-bottom: 1px solid var(--border-color, rgba(0,212,255,0.1));
+  i { font-size: 24px; color: var(--cyan, #00d4ff); }
+}
+
+.bg-upload {
+  cursor: pointer;
+}

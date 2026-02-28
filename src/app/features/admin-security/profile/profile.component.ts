@@ -425,6 +425,69 @@ export class ProfileComponent implements OnInit {
     { label: 'Large', value: 'large' },
   ];
 
+  selectedBg = signal(localStorage.getItem('ta_bg') || 'none');
+
+  backgrounds = [
+    { id: 'grid-cyan', name: 'Cyber Grid', url: 'https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?w=400&q=60' },
+    { id: 'space', name: 'Deep Space', url: 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=400&q=60' },
+    { id: 'nebula', name: 'Nebula', url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=400&q=60' },
+    { id: 'mountain', name: 'Mountain', url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&q=60' },
+    { id: 'city', name: 'City Night', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=400&q=60' },
+    { id: 'abstract', name: 'Abstract', url: 'https://images.unsplash.com/photo-1550684376-efcbd6e3f031?w=400&q=60' },
+    { id: 'ocean', name: 'Ocean', url: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=400&q=60' },
+    { id: 'forest', name: 'Dark Forest', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=60' },
+  ];
+
+  selectBackground(id: string) {
+    this.selectedBg.set(id);
+    localStorage.setItem('ta_bg', id);
+
+    const contentArea = document.querySelector('.content-area') as HTMLElement;
+    if (!contentArea) return;
+
+    if (id === 'none') {
+      contentArea.style.backgroundImage = 'none';
+      return;
+    }
+
+    if (id === 'custom') {
+      const custom = localStorage.getItem('ta_bg_custom');
+      if (custom) contentArea.style.backgroundImage = `url(${custom})`;
+      return;
+    }
+
+    const bg = this.backgrounds.find(b => b.id === id);
+    if (bg) {
+      const hiRes = bg.url.replace('w=400&q=60', 'w=1920&q=80');
+      contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.85), rgba(5,5,8,0.92)), url(${hiRes})`;
+      contentArea.style.backgroundSize = 'cover';
+      contentArea.style.backgroundPosition = 'center';
+      contentArea.style.backgroundAttachment = 'fixed';
+    }
+  }
+
+  uploadBackground(event: any) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e: any) => {
+      const dataUrl = e.target.result;
+      localStorage.setItem('ta_bg_custom', dataUrl);
+      localStorage.setItem('ta_bg', 'custom');
+      this.selectedBg.set('custom');
+
+      const contentArea = document.querySelector('.content-area') as HTMLElement;
+      if (contentArea) {
+        contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.85), rgba(5,5,8,0.92)), url(${dataUrl})`;
+        contentArea.style.backgroundSize = 'cover';
+        contentArea.style.backgroundPosition = 'center';
+      }
+      this.toast.success('Background uploaded');
+    };
+    reader.readAsDataURL(file);
+  }
+
   selectTheme(id: string) {
     this.selectedTheme.set(id);
     const theme = this.themes.find(t => t.id === id);

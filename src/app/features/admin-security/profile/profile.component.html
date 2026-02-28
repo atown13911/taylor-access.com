@@ -346,6 +346,25 @@
                 }
               </div>
 
+              <h3 class="style-heading">Background</h3>
+              <div class="bg-grid">
+                <button class="bg-card" [class.active]="selectedBg() === 'none'" (click)="selectBackground('none')">
+                  <div class="bg-preview bg-none"><i class="bx bx-x"></i></div>
+                  <span>None</span>
+                </button>
+                @for (bg of backgrounds; track bg.id) {
+                  <button class="bg-card" [class.active]="selectedBg() === bg.id" (click)="selectBackground(bg.id)">
+                    <div class="bg-preview" [style.background-image]="'url(' + bg.url + ')'" [style.background-size]="'cover'" [style.background-position]="'center'"></div>
+                    <span>{{ bg.name }}</span>
+                  </button>
+                }
+                <label class="bg-card bg-upload">
+                  <div class="bg-preview bg-custom"><i class="bx bx-upload"></i></div>
+                  <span>Upload</span>
+                  <input type="file" accept="image/*" (change)="uploadBackground($event)" hidden>
+                </label>
+              </div>
+
               <div class="form-actions" style="margin-top: 24px">
                 <button class="btn btn-primary" (click)="saveStylePreferences()">
                   <i class="bx bx-save"></i> Save Style
