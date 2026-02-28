@@ -576,6 +576,35 @@
   cursor: pointer;
 }
 
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+}
+
+.color-swatch-card {
+  background: none;
+  border: 2px solid var(--border-color, rgba(0,212,255,0.1));
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.2s;
+  text-align: center;
+  color: inherit;
+
+  &:hover { border-color: var(--accent-40, rgba(0,212,255,0.4)); }
+  &.active { border-color: var(--cyan, #00d4ff); box-shadow: 0 0 12px rgba(0,212,255,0.2); }
+
+  span { display: block; font-size: 10px; color: var(--text-secondary, #7dd3fc); padding: 4px 0; }
+}
+
+.color-swatch {
+  width: 100%;
+  height: 50px;
+  border-bottom: 1px solid var(--border-color, rgba(0,212,255,0.1));
+}
+
 .material-tabs {
   display: flex;
   gap: 6px;

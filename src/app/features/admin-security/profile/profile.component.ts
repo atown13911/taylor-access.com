@@ -507,16 +507,87 @@ export class ProfileComponent implements OnInit {
   bgOpacity = signal(parseInt(localStorage.getItem('ta_bg_opacity') || '60'));
   sidebarOpacity = signal(parseInt(localStorage.getItem('ta_sidebar_opacity') || '90'));
 
-  backgrounds = [
-    { id: 'grid-cyan', name: 'Cyber Grid', url: 'https://picsum.photos/id/1025/400/300' },
-    { id: 'space', name: 'Deep Space', url: 'https://picsum.photos/id/631/400/300' },
-    { id: 'nebula', name: 'Nebula', url: 'https://picsum.photos/id/984/400/300' },
-    { id: 'mountain', name: 'Mountain', url: 'https://picsum.photos/id/29/400/300' },
-    { id: 'city', name: 'City Night', url: 'https://picsum.photos/id/1044/400/300' },
-    { id: 'abstract', name: 'Abstract', url: 'https://picsum.photos/id/1069/400/300' },
-    { id: 'ocean', name: 'Ocean', url: 'https://picsum.photos/id/1015/400/300' },
-    { id: 'forest', name: 'Dark Forest', url: 'https://picsum.photos/id/15/400/300' },
+  bgCategory = signal('nature');
+
+  bgCategories = [
+    { id: 'nature', label: 'Nature', icon: 'bx-leaf' },
+    { id: 'city', label: 'City', icon: 'bx-buildings' },
+    { id: 'abstract', label: 'Abstract', icon: 'bx-shape-polygon' },
+    { id: 'space', label: 'Space', icon: 'bx-planet' },
+    { id: 'color', label: 'Solid Color', icon: 'bx-palette' },
   ];
+
+  allBackgrounds: Record<string, any[]> = {
+    nature: [
+      { id: 'forest-bg', name: 'Forest', url: 'https://picsum.photos/id/15/400/300' },
+      { id: 'mountain-bg', name: 'Mountain', url: 'https://picsum.photos/id/29/400/300' },
+      { id: 'ocean-bg', name: 'Ocean', url: 'https://picsum.photos/id/1015/400/300' },
+      { id: 'river-bg', name: 'River', url: 'https://picsum.photos/id/1025/400/300' },
+      { id: 'lake-bg', name: 'Lake', url: 'https://picsum.photos/id/1036/400/300' },
+      { id: 'waterfall-bg', name: 'Waterfall', url: 'https://picsum.photos/id/1053/400/300' },
+      { id: 'desert-bg', name: 'Desert', url: 'https://picsum.photos/id/274/400/300' },
+      { id: 'beach-bg', name: 'Beach', url: 'https://picsum.photos/id/188/400/300' },
+    ],
+    city: [
+      { id: 'skyline-bg', name: 'Skyline', url: 'https://picsum.photos/id/1044/400/300' },
+      { id: 'neon-bg', name: 'Neon', url: 'https://picsum.photos/id/399/400/300' },
+      { id: 'bridge-bg', name: 'Bridge', url: 'https://picsum.photos/id/122/400/300' },
+      { id: 'rain-bg', name: 'Rain', url: 'https://picsum.photos/id/1039/400/300' },
+      { id: 'street-bg', name: 'Street', url: 'https://picsum.photos/id/258/400/300' },
+      { id: 'roof-bg', name: 'Rooftop', url: 'https://picsum.photos/id/1058/400/300' },
+      { id: 'tunnel-bg', name: 'Tunnel', url: 'https://picsum.photos/id/256/400/300' },
+      { id: 'highway-bg', name: 'Highway', url: 'https://picsum.photos/id/1062/400/300' },
+    ],
+    abstract: [
+      { id: 'abstract-bg', name: 'Abstract', url: 'https://picsum.photos/id/1069/400/300' },
+      { id: 'texture-bg', name: 'Texture', url: 'https://picsum.photos/id/984/400/300' },
+      { id: 'blur-bg', name: 'Blur', url: 'https://picsum.photos/id/631/400/300' },
+      { id: 'geometric-bg', name: 'Geometric', url: 'https://picsum.photos/id/366/400/300' },
+      { id: 'gradient-bg', name: 'Gradient', url: 'https://picsum.photos/id/201/400/300' },
+      { id: 'pattern-bg', name: 'Pattern', url: 'https://picsum.photos/id/60/400/300' },
+      { id: 'smoke-bg', name: 'Smoke', url: 'https://picsum.photos/id/250/400/300' },
+      { id: 'waves-bg', name: 'Waves', url: 'https://picsum.photos/id/139/400/300' },
+    ],
+    space: [
+      { id: 'galaxy-bg', name: 'Galaxy', url: 'https://picsum.photos/id/631/400/300' },
+      { id: 'nebula-bg', name: 'Nebula', url: 'https://picsum.photos/id/984/400/300' },
+      { id: 'stars-bg', name: 'Stars', url: 'https://picsum.photos/id/733/400/300' },
+      { id: 'aurora-bg', name: 'Aurora', url: 'https://picsum.photos/id/1057/400/300' },
+      { id: 'moon-bg', name: 'Moon', url: 'https://picsum.photos/id/683/400/300' },
+      { id: 'cosmos-bg', name: 'Cosmos', url: 'https://picsum.photos/id/832/400/300' },
+      { id: 'saturn-bg', name: 'Planet', url: 'https://picsum.photos/id/985/400/300' },
+      { id: 'milkyway-bg', name: 'Milky Way', url: 'https://picsum.photos/id/1062/400/300' },
+    ],
+    color: [],
+  };
+
+  solidColors = [
+    { id: 'solid-black', name: 'Black', value: '#0a0a0a' },
+    { id: 'solid-navy', name: 'Navy', value: '#0a0e1a' },
+    { id: 'solid-charcoal', name: 'Charcoal', value: '#1a1a1a' },
+    { id: 'solid-slate', name: 'Slate', value: '#1e293b' },
+    { id: 'solid-dark-cyan', name: 'Dark Cyan', value: '#0a1a1a' },
+    { id: 'solid-dark-purple', name: 'Dark Purple', value: '#150a1e' },
+    { id: 'solid-dark-red', name: 'Dark Wine', value: '#1a0a0a' },
+    { id: 'solid-dark-green', name: 'Dark Forest', value: '#0a1a0e' },
+    { id: 'solid-dark-brown', name: 'Espresso', value: '#1a140a' },
+    { id: 'solid-midnight', name: 'Midnight', value: '#050510' },
+    { id: 'solid-graphite', name: 'Graphite', value: '#252525' },
+    { id: 'solid-ink', name: 'Ink', value: '#0d0d14' },
+  ];
+
+  get backgrounds() { return this.allBackgrounds[this.bgCategory()] || []; }
+
+  selectSolidColor(color: any) {
+    this.selectedBg.set(color.id);
+    localStorage.setItem('ta_bg', color.id);
+    localStorage.setItem('ta_bg_solid', color.value);
+    const contentArea = document.querySelector('.content-area') as HTMLElement;
+    if (contentArea) {
+      contentArea.style.backgroundImage = 'none';
+      contentArea.style.backgroundColor = color.value;
+    }
+  }
 
   selectBackground(id: string) {
     this.selectedBg.set(id);
