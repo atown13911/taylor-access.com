@@ -427,14 +427,37 @@ export class ProfileComponent implements OnInit {
 
   selectTheme(id: string) {
     this.selectedTheme.set(id);
+    const theme = this.themes.find(t => t.id === id);
+    if (theme) {
+      document.documentElement.style.setProperty('--bg-primary', theme.bg);
+      document.documentElement.style.setProperty('--bg-secondary', theme.sidebar);
+      document.documentElement.style.setProperty('--bg-card', theme.sidebar);
+      document.documentElement.style.setProperty('--bg-elevated', theme.sidebar);
+      document.body.style.background = theme.bg;
+    }
+    localStorage.setItem('ta_theme', id);
   }
 
   selectAccent(name: string) {
     this.selectedAccent.set(name);
+    const color = this.accentColors.find(c => c.name === name);
+    if (color) {
+      document.documentElement.style.setProperty('--cyan', color.value);
+      document.documentElement.style.setProperty('--cyan-bright', color.value);
+      document.documentElement.style.setProperty('--border-color', `${color.value}26`);
+      document.documentElement.style.setProperty('--border-bright', `${color.value}4d`);
+      document.documentElement.style.setProperty('--accent-10', `${color.value}1a`);
+      document.documentElement.style.setProperty('--accent-15', `${color.value}26`);
+      document.documentElement.style.setProperty('--accent-20', `${color.value}33`);
+    }
+    localStorage.setItem('ta_accent', name);
   }
 
   selectFontSize(size: string) {
     this.selectedFontSize.set(size);
+    const sizes: any = { small: '13px', medium: '14px', large: '16px' };
+    document.documentElement.style.fontSize = sizes[size] || '14px';
+    localStorage.setItem('ta_font_size', size);
   }
 
   saveStylePreferences() {
