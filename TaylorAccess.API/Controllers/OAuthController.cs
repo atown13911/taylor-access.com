@@ -112,7 +112,8 @@ public class OAuthController : ControllerBase
         // Also accept JSON body
         if (string.IsNullOrEmpty(grant_type) && Request.ContentType?.Contains("json") == true)
         {
-            var body = await JsonSerializer.DeserializeAsync<TokenRequest>(Request.Body);
+            var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var body = await JsonSerializer.DeserializeAsync<TokenRequest>(Request.Body, jsonOptions);
             if (body != null)
             {
                 grant_type = body.GrantType;
