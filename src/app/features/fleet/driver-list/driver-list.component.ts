@@ -46,6 +46,7 @@ export class DriverListComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   availableFleets = signal<any[]>([]);
+  availableOrganizations = signal<any[]>([]);
 
   readonly usStates = [
     { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
@@ -74,6 +75,7 @@ export class DriverListComponent implements OnInit {
     name: '',
     email: '',
     phone: '',
+    organizationId: null as number | null,
     fleetId: null as number | null,
     divisionId: null as number | null,
     driverTerminalId: null as number | null,
@@ -138,6 +140,14 @@ export class DriverListComponent implements OnInit {
   ngOnInit(): void {
     this.loadDrivers();
     this.loadFleets();
+    this.loadOrganizations();
+  }
+
+  loadOrganizations(): void {
+    this.api.getOrganizations().subscribe({
+      next: (res: any) => this.availableOrganizations.set(res?.data || res || []),
+      error: () => this.availableOrganizations.set([])
+    });
   }
 
   loadFleets(): void {
@@ -354,6 +364,7 @@ export class DriverListComponent implements OnInit {
           name: d.name || '',
           email: d.email || '',
           phone: d.phone || '',
+          organizationId: d.organizationId || null,
           fleetId: d.fleetId || null,
           divisionId: d.divisionId || null,
           driverTerminalId: d.driverTerminalId || null,
@@ -382,7 +393,7 @@ export class DriverListComponent implements OnInit {
       error: () => {
         this.driverForm.set({
           name: driver.name, email: driver.email, phone: driver.phone,
-          fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
+          organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
           licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : '',
           dateOfBirth: '', address: '', city: '', state: '', zip: '', ssn: '',
           emergencyContact: '', emergencyPhone: '',
@@ -402,7 +413,7 @@ export class DriverListComponent implements OnInit {
 
   resetForm(): void {
     this.driverForm.set({
-      name: '', email: '', phone: '', fleetId: null, divisionId: null, driverTerminalId: null,
+      name: '', email: '', phone: '', organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
       address: '', city: '', state: '', zip: '', ssn: '', emergencyContact: '', emergencyPhone: '',
       hireDate: '', payRate: 0, payType: 'mile', driverType: 'company',
@@ -471,6 +482,7 @@ export class DriverListComponent implements OnInit {
       name: form.name,
       email: form.email,
       phone: form.phone,
+      organizationId: form.organizationId || null,
       fleetId: form.fleetId || null,
       divisionId: form.divisionId || null,
       driverTerminalId: form.driverTerminalId || null,
