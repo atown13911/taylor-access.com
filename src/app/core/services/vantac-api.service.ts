@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -107,9 +108,58 @@ export class VanTacApiService {
     return this.http.delete(`${this.baseUrl}/api/v1/divisions/${id}`);
   }
 
-  // Fleets (stub)
+  // Fleets
   getFleets(): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/divisions`);
+    return this.http.get(`${this.baseUrl}/api/v1/fleets`);
+  }
+
+  getFleet(id: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/fleets/${id}`);
+  }
+
+  createFleet(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/fleets`, data);
+  }
+
+  updateFleet(id: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/fleets/${id}`, data);
+  }
+
+  deleteFleet(id: any): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/fleets/${id}`);
+  }
+
+  getFleetDrivers(fleetId: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/fleets/${fleetId}`).pipe(
+      map((res: any) => ({ data: res?.data?.fleetDrivers || [] }))
+    );
+  }
+
+  getFleetVehicles(fleetId: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/fleets/${fleetId}`).pipe(
+      map((res: any) => ({ data: res?.data?.fleetVehicles || [] }))
+    );
+  }
+
+  addDriverToFleet(fleetId: any, driverId: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/fleets/${fleetId}/assign-driver`, { driverId });
+  }
+
+  removeDriverFromFleet(fleetId: any, driverId: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/fleets/${fleetId}/remove-driver`, { driverId });
+  }
+
+  addVehicleToFleet(fleetId: any, vehicleId: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/fleets/${fleetId}/assign-vehicle`, { vehicleId });
+  }
+
+  removeVehicleFromFleet(fleetId: any, vehicleId: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/fleets/${fleetId}/remove-vehicle`, { vehicleId });
+  }
+
+  // Vehicles
+  getVehicles(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/vehicles`, { params });
   }
 
   // Drivers
@@ -134,13 +184,20 @@ export class VanTacApiService {
     return this.http.put(`${this.baseUrl}/api/v1/drivers/${id}/location`, data);
   }
 
-  getDriverTerminals(driverId: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/driver-terminals?driverId=${driverId}`);
+  getDriverTerminals(params?: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/driver-terminals`, { params });
   }
 
-  // Vehicles
-  getVehicles(params?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/vehicles`, { params });
+  createDriverTerminal(data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/driver-terminals`, data);
+  }
+
+  updateDriverTerminal(id: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/driver-terminals/${id}`, data);
+  }
+
+  deleteDriverTerminal(id: any): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/driver-terminals/${id}`);
   }
 
   createVehicle(data: any): Observable<any> {

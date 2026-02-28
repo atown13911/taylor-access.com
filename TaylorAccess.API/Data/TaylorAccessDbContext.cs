@@ -38,6 +38,12 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<DocumentCategory> DocumentCategories => Set<DocumentCategory>();
     public DbSet<DocumentCategoryItem> DocumentCategoryItems => Set<DocumentCategoryItem>();
 
+    // Fleets & Vehicles
+    public DbSet<Fleet> Fleets => Set<Fleet>();
+    public DbSet<FleetDriver> FleetDrivers => Set<FleetDriver>();
+    public DbSet<FleetVehicle> FleetVehicles => Set<FleetVehicle>();
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+
     // Drivers
     public DbSet<Driver> Drivers => Set<Driver>();
     public DbSet<DriverDocument> DriverDocuments => Set<DriverDocument>();
@@ -168,6 +174,12 @@ public class TaylorAccessDbContext : DbContext
             .WithMany()
             .HasForeignKey(d => d.ManagerUserId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<FleetDriver>()
+            .HasKey(fd => new { fd.FleetId, fd.DriverId });
+
+        modelBuilder.Entity<FleetVehicle>()
+            .HasKey(fv => new { fv.FleetId, fv.VehicleId });
 
         modelBuilder.Entity<OAuthClient>()
             .HasIndex(c => c.ClientId)

@@ -1,0 +1,581 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-title">
+      <h1><i class='bx bx-collection'></i> Fleet Entities</h1>
+      <p class="subtitle">Manage your fleets, divisions, terminals, and assignments</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" (click)="refreshCurrentTab()" title="Refresh">
+        <i class='bx bx-refresh'></i>
+      </button>
+      @if (pageTab() === 'entities') {
+        <button class="btn btn-primary" (click)="showAddModal.set(true)">
+          <i class='bx bx-plus'></i> Create Fleet
+        </button>
+      } @else if (pageTab() === 'divisions') {
+        <button class="btn btn-primary" (click)="openAddDivision()">
+          <i class='bx bx-plus'></i> Add Division
+        </button>
+      } @else {
+        <button class="btn btn-primary" (click)="openAddTerminal()">
+          <i class='bx bx-plus'></i> Add Terminal
+        </button>
+      }
+    </div>
+  </header>
+
+  <!-- Page Tabs -->
+  <div class="page-tabs">
+    <button class="page-tab" [class.active]="pageTab() === 'entities'" (click)="pageTab.set('entities')">
+      <i class='bx bx-collection'></i> Entities
+    </button>
+    <button class="page-tab" [class.active]="pageTab() === 'divisions'" (click)="pageTab.set('divisions'); loadFleets(); loadDivisions()">
+      <i class='bx bx-sitemap'></i> Divisions
+    </button>
+    <button class="page-tab" [class.active]="pageTab() === 'terminals'" (click)="pageTab.set('terminals'); loadFleets(); loadDriverTerminals()">
+      <i class='bx bx-buildings'></i> Terminals
+    </button>
+  </div>
+
+  @if (pageTab() === 'entities') {
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <i class='bx bxs-group stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ fleets().length }}</span>
+        <span class="stat-label">Total Fleets</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class='bx bxs-truck stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ totalVehicles() }}</span>
+        <span class="stat-label">Vehicles</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class='bx bxs-user stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ totalDrivers() }}</span>
+        <span class="stat-label">Drivers</span>
+      </div>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <i class='bx bx-loader-alt bx-spin'></i>
+      <p>Loading fleets...</p>
+    </div>
+  } @else if (fleets().length === 0) {
+    <div class="empty-state">
+      <i class='bx bxs-group'></i>
+      <h3>No fleets yet</h3>
+      <p>Create a fleet to organize your drivers and vehicles</p>
+      <button class="btn btn-primary" (click)="showAddModal.set(true)">
+        <i class='bx bx-plus'></i> Create Fleet
+      </button>
+    </div>
+  } @else {
+    <div class="fleets-grid">
+      @for (fleet of fleets(); track fleet.id) {
+        <div class="fleet-card" [class.selected]="selectedFleet()?.id === fleet.id" (click)="selectFleet(fleet)">
+          <div class="fleet-header">
+            <div class="fleet-icon">
+              <i class='bx bxs-group'></i>
+            </div>
+            <span class="status-badge" [ngClass]="fleet.status">{{ fleet.status }}</span>
+          </div>
+          
+          <div class="fleet-info">
+            <h3>{{ fleet.name }}</h3>
+            <p class="fleet-desc">{{ fleet.description || 'No description' }}</p>
+          </div>
+
+          <div class="fleet-stats">
+            <div class="fleet-stat">
+              <i class='bx bxs-truck'></i>
+              <span>{{ fleet.vehicleCount || 0 }} vehicles</span>
+            </div>
+            <div class="fleet-stat">
+              <i class='bx bxs-user'></i>
+              <span>{{ fleet.driverCount || 0 }} drivers</span>
+            </div>
+          </div>
+
+          <div class="fleet-actions">
+            <button class="btn-icon" title="Edit" (click)="editFleet($event, fleet)">
+              <i class='bx bx-edit'></i>
+            </button>
+            <button class="btn-icon" title="Add Members" (click)="openAddMembers($event, fleet)">
+              <i class='bx bx-user-plus'></i>
+            </button>
+            <button class="btn-icon danger" title="Delete" (click)="deleteFleet($event, fleet)">
+              <i class='bx bx-trash'></i>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Selected Fleet Details -->
+    @if (selectedFleet()) {
+      <div class="fleet-details">
+        <h2>{{ selectedFleet()?.name }} - Members</h2>
+        
+        <div class="tabs">
+          <button class="tab" [class.active]="activeTab() === 'drivers'" (click)="activeTab.set('drivers')">
+            <i class='bx bxs-user'></i> Drivers
+          </button>
+          <button class="tab" [class.active]="activeTab() === 'vehicles'" (click)="activeTab.set('vehicles')">
+            <i class='bx bxs-truck'></i> Vehicles
+          </button>
+        </div>
+
+        @if (activeTab() === 'drivers') {
+          <div class="members-list">
+            @if (fleetDrivers().length === 0) {
+              <p class="no-members">No drivers assigned to this fleet</p>
+            } @else {
+              @for (driver of fleetDrivers(); track driver.id) {
+                <div class="member-item">
+                  <i class='bx bxs-user-circle'></i>
+                  <span class="member-name">{{ driver.driverName }}</span>
+                  <span class="member-status" [ngClass]="driver.status">{{ driver.status }}</span>
+                  <button class="btn-icon small" title="Remove" (click)="removeDriver(driver)">
+                    <i class='bx bx-x'></i>
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        } @else {
+          <div class="members-list">
+            @if (fleetVehicles().length === 0) {
+              <p class="no-members">No vehicles assigned to this fleet</p>
+            } @else {
+              @for (vehicle of fleetVehicles(); track vehicle.id) {
+                <div class="member-item">
+                  <i class='bx bxs-truck'></i>
+                  <span class="member-name">{{ vehicle.vehicleName }}</span>
+                  <span class="member-status" [ngClass]="vehicle.status">{{ vehicle.status }}</span>
+                  <button class="btn-icon small" title="Remove" (click)="removeVehicle(vehicle)">
+                    <i class='bx bx-x'></i>
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+  } <!-- end entities tab -->
+
+  @if (pageTab() === 'divisions') {
+    <!-- Divisions Tab -->
+    <div class="divisions-section">
+      <div class="division-filter-bar">
+        <div class="filter-group">
+          <label>Filter by Fleet</label>
+          <select [ngModel]="selectedDivisionFleetId()" (ngModelChange)="onFleetFilterChange($event)">
+            <option value="">All Fleets</option>
+            @for (fleet of fleets(); track fleet.id) {
+              <option [value]="fleet.id">{{ fleet.name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      @if (divisions().length === 0) {
+        <div class="empty-state">
+          <i class='bx bx-sitemap'></i>
+          <h3>No divisions found</h3>
+          <p>
+            @if (selectedDivisionFleetId()) {
+              This fleet has no divisions yet. Click "Add Division" to create one.
+            } @else {
+              Select a fleet to view its divisions, or create a new one.
+            }
+          </p>
+        </div>
+      } @else {
+        <div class="divisions-table-wrap">
+          <table class="divisions-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Fleet</th>
+                <th>Manager</th>
+                <th>Location</th>
+                <th>Drivers</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (div of divisions(); track div.id) {
+                <tr>
+                  <td>
+                    <strong>{{ div.name }}</strong>
+                    @if (div.description) {
+                      <span class="div-desc">{{ div.description }}</span>
+                    }
+                  </td>
+                  <td>{{ div.fleetName || '—' }}</td>
+                  <td>{{ div.managerName || '—' }}</td>
+                  <td>{{ div.location || '—' }}</td>
+                  <td>{{ div.driverCount || 0 }}</td>
+                  <td><span class="status-badge" [ngClass]="div.status">{{ div.status }}</span></td>
+                  <td class="actions-cell">
+                    <button class="btn-icon" title="Edit" (click)="editDivision(div)"><i class='bx bx-edit'></i></button>
+                    <button class="btn-icon danger" title="Delete" (click)="deleteDivision(div)"><i class='bx bx-trash'></i></button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  } <!-- end divisions tab -->
+
+  @if (pageTab() === 'terminals') {
+    <!-- Terminals Tab -->
+    <div class="divisions-section">
+      <div class="division-filter-bar">
+        <div class="filter-group">
+          <label>Fleet</label>
+          <select [ngModel]="selectedTerminalFleetId()" (ngModelChange)="onTerminalFleetChange($event)">
+            <option value="">All Fleets</option>
+            @for (fleet of fleets(); track fleet.id) {
+              <option [value]="fleet.id">{{ fleet.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Division</label>
+          <select [ngModel]="selectedTerminalDivisionId()" (ngModelChange)="onTerminalDivisionChange($event)" [disabled]="!selectedTerminalFleetId()">
+            <option value="">All Divisions</option>
+            @for (div of filteredTerminalDivisions(); track div.id) {
+              <option [value]="div.id">{{ div.name }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      @if (driverTerminals().length === 0) {
+        <div class="empty-state">
+          <i class='bx bx-buildings'></i>
+          <h3>No terminals found</h3>
+          <p>
+            @if (selectedTerminalDivisionId()) {
+              This division has no terminals yet. Click "Add Terminal" to create one.
+            } @else {
+              Select a fleet and division to view terminals.
+            }
+          </p>
+        </div>
+      } @else {
+        <div class="divisions-table-wrap">
+          <table class="divisions-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Division</th>
+                <th>Fleet</th>
+                <th>Manager</th>
+                <th>Location</th>
+                <th>Drivers</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (term of driverTerminals(); track term.id) {
+                <tr>
+                  <td>
+                    <strong>{{ term.name }}</strong>
+                    @if (term.description) {
+                      <span class="div-desc">{{ term.description }}</span>
+                    }
+                  </td>
+                  <td>{{ term.divisionName || '—' }}</td>
+                  <td>{{ term.fleetName || '—' }}</td>
+                  <td>{{ term.managerName || '—' }}</td>
+                  <td>{{ term.location || '—' }}</td>
+                  <td>{{ term.driverCount || 0 }}</td>
+                  <td><span class="status-badge" [ngClass]="term.status">{{ term.status }}</span></td>
+                  <td class="actions-cell">
+                    <button class="btn-icon" title="Edit" (click)="editTerminal(term)"><i class='bx bx-edit'></i></button>
+                    <button class="btn-icon danger" title="Delete" (click)="deleteTerminal(term)"><i class='bx bx-trash'></i></button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  } <!-- end terminals tab -->
+
+  <!-- Create/Edit Fleet Modal -->
+  @if (showAddModal()) {
+    <div class="modal-overlay">
+      <div class="modal-content" >
+        <div class="modal-header">
+          <h2>{{ editingFleet() ? 'Edit Fleet' : 'Create Fleet' }}</h2>
+          <button class="btn-close" (click)="closeModal()"><i class='bx bx-x'></i></button>
+        </div>
+        
+        <form (ngSubmit)="saveFleet()" class="fleet-form">
+          <div class="input-group">
+            <label>Fleet Name *</label>
+            <input type="text" [(ngModel)]="formData.name" name="name" required placeholder="e.g., East Coast Fleet">
+          </div>
+          <div class="input-group">
+            <label>Description</label>
+            <textarea [(ngModel)]="formData.description" name="description" rows="3" placeholder="Optional description..."></textarea>
+          </div>
+          <div class="input-group">
+            <label>Status</label>
+            <select [(ngModel)]="formData.status" name="status">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          @if (formError()) {
+            <div class="form-error">{{ formError() }}</div>
+          }
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <i class='bx bx-loader-alt bx-spin'></i> Saving...
+              } @else {
+                <i class='bx bx-check'></i> {{ editingFleet() ? 'Update' : 'Create' }}
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Add Members Modal -->
+  @if (showMembersModal() && selectedFleetForMembers()) {
+    <div class="modal-overlay">
+      <div class="modal-content large" >
+        <div class="modal-header">
+          <h2><i class='bx bx-plus-circle'></i> Add to {{ selectedFleetForMembers()?.name }}</h2>
+          <button class="btn-close" (click)="closeMembersModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="members-modal-content">
+          <div class="member-tabs">
+            <button class="tab-btn" [class.active]="memberTab() === 'drivers'" (click)="memberTab.set('drivers')">
+              <i class='bx bx-user'></i> Add Drivers
+            </button>
+            <button class="tab-btn" [class.active]="memberTab() === 'vehicles'" (click)="memberTab.set('vehicles')">
+              <i class='bx bx-car'></i> Add Vehicles
+            </button>
+          </div>
+
+          @if (memberTab() === 'drivers') {
+            <div class="available-list">
+              @if (availableDrivers().length === 0) {
+                <div class="empty-state"><i class='bx bx-user-x'></i><p>No available drivers</p></div>
+              } @else {
+                @for (driver of availableDrivers(); track driver.id) {
+                  <div class="member-item">
+                    <div class="member-info">
+                      <strong>{{ driver.name }}</strong>
+                      <span>{{ driver.email || driver.phone || 'No contact' }}</span>
+                    </div>
+                    <button class="btn btn-sm btn-primary" (click)="addDriverToFleet(driver)">
+                      <i class='bx bx-plus'></i> Add
+                    </button>
+                  </div>
+                }
+              }
+            </div>
+          }
+
+          @if (memberTab() === 'vehicles') {
+            <div class="available-list">
+              @if (availableVehicles().length === 0) {
+                <div class="empty-state"><i class='bx bx-car'></i><p>No available vehicles</p></div>
+              } @else {
+                @for (vehicle of availableVehicles(); track vehicle.id) {
+                  <div class="member-item">
+                    <div class="member-info">
+                      <strong>{{ vehicle.name || vehicle.make + ' ' + vehicle.model }}</strong>
+                      <span>{{ vehicle.plateNumber || vehicle.vin }}</span>
+                    </div>
+                    <button class="btn btn-sm btn-primary" (click)="addVehicleToFleet(vehicle)">
+                      <i class='bx bx-plus'></i> Add
+                    </button>
+                  </div>
+                }
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create/Edit Division Modal -->
+  @if (showDivisionModal()) {
+    <div class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>{{ editingDivision() ? 'Edit Division' : 'Add Division' }}</h2>
+          <button class="btn-close" (click)="closeDivisionModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <form (ngSubmit)="saveDivision()" class="fleet-form">
+          <div class="input-group">
+            <label>Fleet Assignment</label>
+            @if (editingDivision()) {
+              <select [(ngModel)]="divisionForm.fleetId" name="divFleetIdEdit">
+                <option value="">— No Fleet —</option>
+                @for (fleet of fleets(); track fleet.id) {
+                  <option [value]="fleet.id">{{ fleet.name }}</option>
+                }
+              </select>
+            } @else {
+              <select [(ngModel)]="divisionModalFleetId" name="divFleetId">
+                <option value="">— Select Fleet —</option>
+                @for (fleet of fleets(); track fleet.id) {
+                  <option [value]="fleet.id">{{ fleet.name }}</option>
+                }
+              </select>
+            }
+          </div>
+          <div class="input-group">
+            <label>Division Name *</label>
+            <input type="text" [(ngModel)]="divisionForm.name" name="divName" required placeholder="e.g., Southeast Division">
+          </div>
+          <div class="input-group">
+            <label>Description</label>
+            <textarea [(ngModel)]="divisionForm.description" name="divDesc" rows="2" placeholder="Optional description..."></textarea>
+          </div>
+          <div class="input-group">
+            <label>Manager</label>
+            <select [(ngModel)]="divisionForm.managerName" name="divManager">
+              <option value="">— Select Manager —</option>
+              @for (emp of employees(); track emp.id) {
+                <option [value]="emp.name">{{ emp.name }} {{ emp.jobTitle ? '(' + emp.jobTitle + ')' : '' }}</option>
+              }
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Location</label>
+            <input type="text" [(ngModel)]="divisionForm.location" name="divLocation" placeholder="e.g., Atlanta, GA">
+          </div>
+          <div class="input-group">
+            <label>Status</label>
+            <select [(ngModel)]="divisionForm.status" name="divStatus">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          @if (divisionFormError()) {
+            <div class="form-error">{{ divisionFormError() }}</div>
+          }
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeDivisionModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="savingDivision()">
+              @if (savingDivision()) {
+                <i class='bx bx-loader-alt bx-spin'></i> Saving...
+              } @else {
+                <i class='bx bx-check'></i> {{ editingDivision() ? 'Update' : 'Create' }}
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Create/Edit Terminal Modal -->
+  @if (showTerminalModal()) {
+    <div class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>{{ editingTerminal() ? 'Edit Terminal' : 'Add Terminal' }}</h2>
+          <button class="btn-close" (click)="closeTerminalModal()"><i class='bx bx-x'></i></button>
+        </div>
+        <form (ngSubmit)="saveTerminal()" class="fleet-form">
+          @if (!editingTerminal()) {
+            <div class="input-group">
+              <label>Fleet *</label>
+              <select [(ngModel)]="terminalModalFleetId" name="termFleetId" (ngModelChange)="onTerminalModalFleetChange($event)">
+                <option value="">— Select Fleet —</option>
+                @for (fleet of fleets(); track fleet.id) {
+                  <option [value]="fleet.id">{{ fleet.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Division *</label>
+              <select [(ngModel)]="terminalModalDivisionId" name="termDivId" [disabled]="!terminalModalFleetId">
+                <option value="">— Select Division —</option>
+                @for (div of terminalModalDivisions(); track div.id) {
+                  <option [value]="div.id">{{ div.name }}</option>
+                }
+              </select>
+            </div>
+          }
+          <div class="input-group">
+            <label>Terminal Name *</label>
+            <input type="text" [(ngModel)]="terminalForm.name" name="termName" required placeholder="e.g., Atlanta Hub">
+          </div>
+          <div class="input-group">
+            <label>Description</label>
+            <textarea [(ngModel)]="terminalForm.description" name="termDesc" rows="2" placeholder="Optional description..."></textarea>
+          </div>
+          <div class="input-group">
+            <label>Manager</label>
+            <select [(ngModel)]="terminalForm.managerName" name="termManager">
+              <option value="">— Select Manager —</option>
+              @for (emp of employees(); track emp.id) {
+                <option [value]="emp.name">{{ emp.name }} {{ emp.jobTitle ? '(' + emp.jobTitle + ')' : '' }}</option>
+              }
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Location</label>
+            <input type="text" [(ngModel)]="terminalForm.location" name="termLocation" placeholder="e.g., 123 Truck Way, Atlanta, GA">
+          </div>
+          <div class="input-group">
+            <label>Status</label>
+            <select [(ngModel)]="terminalForm.status" name="termStatus">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          @if (terminalFormError()) {
+            <div class="form-error">{{ terminalFormError() }}</div>
+          }
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeTerminalModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="savingTerminal()">
+              @if (savingTerminal()) {
+                <i class='bx bx-loader-alt bx-spin'></i> Saving...
+              } @else {
+                <i class='bx bx-check'></i> {{ editingTerminal() ? 'Update' : 'Create' }}
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>
