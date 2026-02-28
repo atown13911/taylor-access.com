@@ -28,11 +28,7 @@ public class FleetsController : ControllerBase
     {
         try
         {
-            var query = _context.Fleets
-                .AsNoTracking()
-                .Include(f => f.FleetDrivers)
-                .Include(f => f.FleetVehicles)
-                .AsQueryable();
+            var query = _context.Fleets.AsNoTracking().AsQueryable();
 
             if (organizationId.HasValue)
                 query = query.Where(f => f.OrganizationId == organizationId);
@@ -40,17 +36,30 @@ public class FleetsController : ControllerBase
             if (!string.IsNullOrEmpty(status))
                 query = query.Where(f => f.Status == status);
 
-            var fleets = await query.OrderBy(f => f.Name).Take(limit).ToListAsync();
+            var fleets = await query.OrderBy(f => f.Name).Take(limit)
+                .Select(f => new {
+                    f.Id, f.Name, f.Description, f.Status,
+                    f.OrganizationId, f.ParentFleetId,
+                    f.CreatedAt, f.UpdatedAt,
+                    fleetDrivers = _context.FleetDrivers.Where(fd => fd.FleetId == f.Id).ToList(),
+                    fleetVehicles = _context.FleetVehicles.Where(fv => fv.FleetId == f.Id).ToList()
+                }).ToListAsync();
+
             return Ok(new { data = fleets });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load fleets");
-            // Fallback: raw query without navigation properties
+            _logger.LogError(ex, "Failed to load fleets with members");
             try
             {
                 var fleets = await _context.Fleets.AsNoTracking()
-                    .OrderBy(f => f.Name).Take(limit).ToListAsync();
+                    .OrderBy(f => f.Name).Take(limit)
+                    .Select(f => new {
+                        f.Id, f.Name, f.Description, f.Status,
+                        f.OrganizationId, f.ParentFleetId,
+                        f.CreatedAt, f.UpdatedAt,
+                        vehicleCount = 0, driverCount = 0
+                    }).ToListAsync();
                 return Ok(new { data = fleets });
             }
             catch (Exception ex2)
