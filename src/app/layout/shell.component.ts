@@ -1,5 +1,5 @@
-import { Component, signal, computed, inject, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule, DatePipe } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { AuthService } from '../core/services/auth.service';
 
@@ -11,17 +11,19 @@ interface NavSection {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, DatePipe],
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.scss']
 })
-export class ShellComponent implements OnInit {
+export class ShellComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
   private router = inject(Router);
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
   currentUser = this.authService.currentUser;
+  currentTime = new Date();
+  private clockInterval: any;
 
   avatarUrl = computed(() => {
     const user = this.currentUser();
@@ -73,6 +75,11 @@ export class ShellComponent implements OnInit {
     if (!this.authService.isAuthenticated()) {
       this.router.navigate(['/login']);
     }
+    this.clockInterval = setInterval(() => this.currentTime = new Date(), 1000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.clockInterval) clearInterval(this.clockInterval);
   }
 
   toggleSidebar(): void {

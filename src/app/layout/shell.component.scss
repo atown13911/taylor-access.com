@@ -295,7 +295,122 @@
 
 .main-content {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   background: #0a0a1a;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-area {
+  flex: 1;
+  overflow-y: auto;
   padding: 24px;
+}
+
+// Top Bar
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  height: 42px;
+  min-height: 42px;
+  background: #08080f;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.08);
+  font-size: 12px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.app-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  i { font-size: 16px; }
+}
+
+.topbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #00ff88;
+  font-size: 11px;
+  font-weight: 600;
+
+  .live-dot {
+    font-size: 16px;
+    animation: pulse-green 2s ease infinite;
+  }
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.topbar-clock {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  i { font-size: 14px; color: var(--accent-50); }
+}
+
+.topbar-org {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--accent-05);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  i { font-size: 14px; color: var(--cyan); }
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.topbar-icon {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  i { font-size: 18px; }
+
+  &:hover {
+    color: var(--cyan);
+    background: var(--accent-08);
+  }
 }

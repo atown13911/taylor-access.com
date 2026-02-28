@@ -75,6 +75,37 @@
 
   <!-- Main Content -->
   <main class="main-content">
-    <router-outlet></router-outlet>
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="app-badge"><i class='bx bx-shield-quarter'></i> Taylor Access</span>
+      </div>
+
+      <div class="topbar-center">
+        <span class="topbar-status"><i class='bx bx-radio-circle-marked live-dot'></i> System Online</span>
+      </div>
+
+      <div class="topbar-right">
+        <div class="topbar-clock">
+          <i class='bx bx-time-five'></i>
+          <span>{{ currentTime | date:'h:mm:ss a' }}</span>
+        </div>
+
+        <div class="topbar-org">
+          <i class='bx bxs-buildings'></i>
+          <span>{{ currentUser()?.organizationName || 'All Organizations' }}</span>
+        </div>
+
+        <div class="topbar-actions">
+          <button class="topbar-icon" routerLink="/admin/audit" title="Audit Logs"><i class='bx bx-history'></i></button>
+          <button class="topbar-icon" routerLink="/admin/apps" title="Connected Apps"><i class='bx bx-link'></i></button>
+          <button class="topbar-icon" routerLink="/profile" title="Profile"><i class='bx bx-cog'></i></button>
+        </div>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <router-outlet></router-outlet>
+    </div>
   </main>
 </div>
