@@ -1,4 +1,4 @@
-import { Component, signal, OnInit, inject } from '@angular/core';
+import { Component, signal, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -260,6 +260,8 @@ import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
     ::ng-deep .ngx-charts { text { fill: #aaa !important; } .gridline-path { stroke: rgba(255,255,255,0.06) !important; } }
     ::ng-deep .ngx-charts .tick text { fill: #888 !important; font-size: 10px !important; }
     ::ng-deep .ngx-charts .label { fill: #ccc !important; font-size: 11px !important; }
+    ::ng-deep ngx-charts-line-chart, ::ng-deep ngx-charts-bar-horizontal, ::ng-deep ngx-charts-pie-chart,
+    ::ng-deep ngx-charts-bar-vertical, ::ng-deep ngx-charts-area-chart { display: block; position: relative; z-index: 0; }
 
     .quick-actions { margin-bottom: 32px; }
     .quick-actions h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
@@ -302,9 +304,10 @@ import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
     @media (max-width: 640px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .action-grid { grid-template-columns: repeat(2, 1fr); } }
   `]
 })
-export class HrDashboardComponent implements OnInit {
+export class HrDashboardComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
+  private resizeHandler = () => this.updateChartWidth();
 
   loading = signal(false);
   stats = signal({ totalEmployees: 0, activeEmployees: 0, pendingTimeOff: 0, presentToday: 0, pendingPaychecks: 0, bulkStaging: 0 });
@@ -338,8 +341,12 @@ export class HrDashboardComponent implements OnInit {
 
   ngOnInit(): void {
     this.updateChartWidth();
-    window.addEventListener('resize', () => this.updateChartWidth());
+    window.addEventListener('resize', this.resizeHandler);
     this.loadAll();
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('resize', this.resizeHandler);
   }
 
   updateChartWidth(): void {
