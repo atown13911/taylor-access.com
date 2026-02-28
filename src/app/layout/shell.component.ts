@@ -90,6 +90,116 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.router.navigate(['/login']);
     }
     this.clockInterval = setInterval(() => this.currentTime = new Date(), 1000);
+    this.restoreSavedStyles();
+  }
+
+  private restoreSavedStyles(): void {
+    // Restore theme
+    const theme = localStorage.getItem('ta_theme');
+    if (theme) {
+      const themes: any = {
+        'tron-dark': { bg: '#050508', sidebar: '#0d0d1a' },
+        'midnight': { bg: '#0a0e1a', sidebar: '#0d1225' },
+        'carbon': { bg: '#1a1a1a', sidebar: '#222222' },
+        'dark-emerald': { bg: '#0a100e', sidebar: '#0d1812' },
+        'obsidian': { bg: '#000000', sidebar: '#0a0a0a' },
+        'dark-purple': { bg: '#0e0a14', sidebar: '#150d1e' },
+        'dark-red': { bg: '#100a0a', sidebar: '#1a0d0d' },
+        'dark-orange': { bg: '#100e0a', sidebar: '#1a150d' },
+      };
+      const t = themes[theme];
+      if (t) {
+        document.documentElement.style.setProperty('--bg-primary', t.bg);
+        document.documentElement.style.setProperty('--bg-secondary', t.sidebar);
+        document.documentElement.style.setProperty('--bg-card', t.sidebar);
+      }
+    }
+
+    // Restore accent color
+    const accent = localStorage.getItem('ta_accent');
+    if (accent) {
+      const colors: any = { Cyan:'#00d4ff', Blue:'#0080ff', Green:'#00ff88', Purple:'#a855f7', Red:'#ff2a6d', Orange:'#ff6b35', Yellow:'#fbbf24', Pink:'#ec4899', Teal:'#14b8a6', White:'#ffffff' };
+      const val = colors[accent];
+      if (val) {
+        document.documentElement.style.setProperty('--cyan', val);
+        document.documentElement.style.setProperty('--cyan-bright', val);
+        document.documentElement.style.setProperty('--border-color', `${val}26`);
+        document.documentElement.style.setProperty('--border-bright', `${val}4d`);
+        document.documentElement.style.setProperty('--accent-10', `${val}1a`);
+        document.documentElement.style.setProperty('--accent-15', `${val}26`);
+        document.documentElement.style.setProperty('--accent-20', `${val}33`);
+      }
+    }
+
+    // Restore font size
+    const fontSize = localStorage.getItem('ta_font_size');
+    if (fontSize) {
+      const sizes: any = { small: '13px', medium: '14px', large: '16px' };
+      document.documentElement.style.fontSize = sizes[fontSize] || '14px';
+    }
+
+    // Restore background
+    setTimeout(() => {
+      const bg = localStorage.getItem('ta_bg');
+      const mainContent = document.querySelector('.main-content') as HTMLElement;
+      if (!bg || bg === 'none' || !mainContent) return;
+
+      const bgOpacity = parseInt(localStorage.getItem('ta_bg_opacity') || '60') / 100;
+
+      if (bg.startsWith('solid-')) {
+        const solidVal = localStorage.getItem('ta_bg_solid');
+        if (solidVal) mainContent.style.background = solidVal;
+      } else if (bg === 'custom') {
+        const custom = localStorage.getItem('ta_bg_custom');
+        if (custom) {
+          mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${bgOpacity}), rgba(5,5,8,${Math.min(bgOpacity+0.1,1)})), url(${custom})`;
+          mainContent.style.backgroundSize = 'cover';
+          mainContent.style.backgroundPosition = 'center';
+        }
+      } else {
+        // picsum backgrounds - reconstruct URL from ID mappings
+        const bgUrls: any = {
+          'forest-bg':'15','mountain-bg':'29','ocean-bg':'1015','river-bg':'1025','lake-bg':'1036','waterfall-bg':'1053','desert-bg':'274','beach-bg':'188',
+          'skyline-bg':'1044','neon-bg':'399','bridge-bg':'122','rain-bg':'1039','street-bg':'258','roof-bg':'1058','tunnel-bg':'256','highway-bg':'1062',
+          'abstract-bg':'1069','texture-bg':'984','blur-bg':'631','geometric-bg':'366','gradient-bg':'201','pattern-bg':'60','smoke-bg':'250','waves-bg':'139',
+          'galaxy-bg':'631','nebula-bg':'984','stars-bg':'733','aurora-bg':'1057','moon-bg':'683','cosmos-bg':'832','saturn-bg':'985','milkyway-bg':'1062',
+        };
+        const picsumId = bgUrls[bg];
+        if (picsumId) {
+          mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${bgOpacity}), rgba(5,5,8,${Math.min(bgOpacity+0.1,1)})), url(https://picsum.photos/id/${picsumId}/1920/1080)`;
+          mainContent.style.backgroundSize = 'cover';
+          mainContent.style.backgroundPosition = 'center';
+        }
+      }
+
+      // Restore sidebar opacity
+      const sidebarOpacity = parseInt(localStorage.getItem('ta_sidebar_opacity') || '90');
+      if (sidebarOpacity < 100) {
+        document.documentElement.style.setProperty('--sidebar-bg', `rgba(13, 13, 26, ${sidebarOpacity / 100})`);
+        document.documentElement.style.setProperty('--topbar-bg', `rgba(8, 8, 15, ${sidebarOpacity / 100})`);
+      }
+
+      // Restore sidebar material
+      const mat = localStorage.getItem('ta_material');
+      if (mat && mat !== 'none') {
+        const matOpacity = parseInt(localStorage.getItem('ta_material_opacity') || '40');
+        const matUrls: any = {
+          'dark-wood':'395','stone':'1040','concrete':'1026','marble':'1050','metal':'262','leather':'351','fabric':'139','carbon':'201',
+          'forest-n':'15','moss':'145','leaves':'167','bamboo':'312','water-n':'1053','rocks':'188','snow':'1036','flowers':'152',
+          'skyline':'1044','neon':'399','bridge':'122','street':'258','subway':'256','rain-city':'1039','rooftop':'274','traffic':'1058',
+          'circuit':'60','code':'2','server':'180','keyboard':'119','fiber':'366','laptop':'0','hardware':'48','lens':'250',
+          'galaxy':'631','nebula-s':'984','stars':'733','aurora':'1057','moon':'683','earth':'985','cosmos':'1062','eclipse':'832',
+        };
+        const sidebar = document.querySelector('.sidebar') as HTMLElement;
+        const pId = matUrls[mat];
+        if (sidebar && pId) {
+          const o = 1 - (matOpacity / 100);
+          sidebar.style.backgroundImage = `linear-gradient(rgba(13,13,26,${o}), rgba(13,13,26,${o})), url(https://picsum.photos/id/${pId}/800/1200)`;
+          sidebar.style.backgroundSize = 'cover';
+          sidebar.style.backgroundPosition = 'center';
+        }
+      }
+    }, 100);
   }
 
   ngOnDestroy(): void {
