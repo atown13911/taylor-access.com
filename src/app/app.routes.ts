@@ -16,8 +16,12 @@ export const routes: Routes = [
     children: [
       {
         path: '',
-        redirectTo: 'hr/roster',
+        redirectTo: 'dashboard',
         pathMatch: 'full'
+      },
+      {
+        path: 'dashboard',
+        loadComponent: () => import('./features/hr/hr-dashboard/hr-dashboard.component').then(m => m.HrDashboardComponent)
       },
       {
         path: 'hr/roster',

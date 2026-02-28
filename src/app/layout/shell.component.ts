@@ -34,6 +34,7 @@ export class ShellComponent implements OnInit {
   navSections: NavSection[] = [
     {
       items: [
+        { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
         { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
         { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
         { label: 'Benefits', icon: 'bx bx-star', route: '/hr/benefits' },
