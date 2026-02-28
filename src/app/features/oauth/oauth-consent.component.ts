@@ -231,22 +231,39 @@ export class OAuthConsentComponent implements OnInit {
     this.authorizing.set(true);
     this.authError.set(null);
 
-    this.http.post(`${this.baseUrl}/oauth/authorize/login`, {
-      email: this.email,
-      password: this.password,
-      clientId: this.clientId(),
-      redirectUri: this.redirectUri(),
-      scope: this.scope(),
-      state: this.state()
-    }).subscribe({
-      next: (res: any) => {
-        window.location.href = res.redirectUrl;
-      },
-      error: (err) => {
-        this.authError.set(err.error?.error_description || 'Authentication failed');
-        this.authorizing.set(false);
-      }
-    });
+    if (this.isLoggedIn()) {
+      this.http.post(`${this.baseUrl}/oauth/authorize/consent`, {
+        clientId: this.clientId(),
+        redirectUri: this.redirectUri(),
+        scope: this.scope(),
+        state: this.state()
+      }).subscribe({
+        next: (res: any) => {
+          window.location.href = res.redirectUrl;
+        },
+        error: (err) => {
+          this.authError.set(err.error?.error_description || 'Authorization failed');
+          this.authorizing.set(false);
+        }
+      });
+    } else {
+      this.http.post(`${this.baseUrl}/oauth/authorize/login`, {
+        email: this.email,
+        password: this.password,
+        clientId: this.clientId(),
+        redirectUri: this.redirectUri(),
+        scope: this.scope(),
+        state: this.state()
+      }).subscribe({
+        next: (res: any) => {
+          window.location.href = res.redirectUrl;
+        },
+        error: (err) => {
+          this.authError.set(err.error?.error_description || 'Authentication failed');
+          this.authorizing.set(false);
+        }
+      });
+    }
   }
 
   cancel() {

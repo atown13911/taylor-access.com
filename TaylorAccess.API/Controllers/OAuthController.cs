@@ -193,6 +193,48 @@ public class OAuthController : ControllerBase
         return Ok();
     }
 
+    /// <summary>
+    /// Authorize using existing session (already logged-in user)
+    /// POST /oauth/authorize/consent
+    /// </summary>
+    [HttpPost("authorize/consent")]
+    [Authorize]
+    public async Task<ActionResult> AuthorizeConsent([FromBody] OAuthConsentRequest request)
+    {
+        var client = await _context.OAuthClients.FirstOrDefaultAsync(c => c.ClientId == request.ClientId && c.Status == "active");
+        if (client == null)
+            return BadRequest(new { error = "invalid_client" });
+
+        var userIdClaim = User.FindFirst("userId")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdClaim, out var userId))
+            return Unauthorized(new { error = "invalid_token" });
+
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId && u.Status == "active");
+        if (user == null)
+            return Unauthorized(new { error = "user_not_found" });
+
+        var code = OAuthAuthorizationCode.Generate();
+        _context.OAuthAuthorizationCodes.Add(new OAuthAuthorizationCode
+        {
+            Code = code,
+            ClientId = request.ClientId,
+            UserId = user.Id,
+            RedirectUri = request.RedirectUri,
+            Scopes = request.Scope ?? "openid profile email",
+            ExpiresAt = DateTime.UtcNow.AddMinutes(5)
+        });
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("oauth_authorize", "OAuthClient", null,
+            $"User {user.Email} authorized {client.Name} (via session)");
+
+        var redirectUrl = $"{request.RedirectUri}?code={code}";
+        if (!string.IsNullOrEmpty(request.State))
+            redirectUrl += $"&state={request.State}";
+
+        return Ok(new { redirectUrl, code });
+    }
+
     // ============ CLIENT MANAGEMENT ============
 
     /// <summary>
@@ -429,5 +471,6 @@ public class OAuthController : ControllerBase
 
 // Additional DTOs
 public record OAuthLoginRequest(string Email, string Password, string ClientId, string RedirectUri, string? Scope, string? State);
+public record OAuthConsentRequest(string ClientId, string RedirectUri, string? Scope, string? State);
 public record RevokeRequest(string Token);
 public record AssignAppRoleRequest(string AppClientId, string Role, string? Permissions);
