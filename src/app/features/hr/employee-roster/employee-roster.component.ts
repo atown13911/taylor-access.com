@@ -754,7 +754,7 @@ import { AuthService } from '../../../core/services/auth.service';
                             <td><span class="category-badge">{{ doc.category }}</span></td>
                             <td>
                               @if (editingExpiryType === doc.type) {
-                                <input type="date" class="expiry-input" [value]="getDocExpiration(doc.type) || ''" (change)="saveExpiration(doc.type, $event)" (blur)="editingExpiryType = ''">
+                                <input type="date" class="expiry-input" [value]="getDocExpiration(doc.type) || todayDate()" (change)="saveExpiration(doc.type, $event)" (blur)="editingExpiryType = ''">
                               } @else if (getDocExpiration(doc.type)) {
                                 <span class="expiry-date" [class.expiring]="isExpiringSoon(getDocExpiration(doc.type)!)" [class.expired]="isDocExpired(getDocExpiration(doc.type)!)" (click)="editingExpiryType = doc.type" style="cursor:pointer" title="Click to edit">
                                   {{ getDocExpiration(doc.type) | date:'mediumDate' }}
@@ -5131,6 +5131,10 @@ export class EmployeeRosterComponent implements OnInit {
       return dType === slug || dType.includes(slug) || slug.includes(dType);
     });
     return doc ? new Date(doc.createdAt).toLocaleDateString() : null;
+  }
+
+  todayDate(): string {
+    return new Date().toISOString().split('T')[0];
   }
 
   getDocExpiration(docType: string): string | null {
