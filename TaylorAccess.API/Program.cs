@@ -129,15 +129,8 @@ builder.Services.AddCors(options =>
                 return uri.Host == "localhost"
                     || uri.Host == "taylor-access.com"
                     || uri.Host == "www.taylor-access.com"
-                    || uri.Host.EndsWith(".pages.dev")
-                    || uri.Host == "taylor-tms.net"
-                    || uri.Host == "www.taylor-tms.net"
-                    || uri.Host == "taylor-assets.com"
-                    || uri.Host == "www.taylor-assets.com"
-                    || uri.Host == "taylor-crm.com"
-                    || uri.Host == "www.taylor-crm.com"
-                    || uri.Host == "taylor-academy.net"
-                    || uri.Host == "www.taylor-academy.net";
+                    || uri.Host.EndsWith(".taylor-access-com.pages.dev")
+                    || uri.Host == "taylor-access-com.pages.dev";
             })
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -196,6 +189,51 @@ using (var scope = app.Services.CreateScope())
     catch
     {
         context.Database.EnsureCreated();
+    }
+
+    // Ensure Fleet-related tables exist (handles case where DB already exists but tables are new)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Fleets"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""Description"" TEXT,
+                ""Status"" TEXT NOT NULL DEFAULT 'active',
+                ""Task"" TEXT,
+                ""ParentFleetId"" INTEGER,
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""Vehicles"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""Name"" TEXT NOT NULL DEFAULT '',
+                ""Make"" TEXT, ""Model"" TEXT, ""Year"" INTEGER,
+                ""Vin"" TEXT, ""PlateNumber"" TEXT, ""PlateState"" TEXT,
+                ""Status"" TEXT NOT NULL DEFAULT 'active',
+                ""OrganizationId"" INTEGER, ""FleetId"" INTEGER,
+                ""CreatedAt"" TIMESTAMP DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS ""FleetDrivers"" (
+                ""FleetId"" INTEGER NOT NULL,
+                ""DriverId"" INTEGER NOT NULL,
+                ""AssignedAt"" TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (""FleetId"", ""DriverId"")
+            );
+            CREATE TABLE IF NOT EXISTS ""FleetVehicles"" (
+                ""FleetId"" INTEGER NOT NULL,
+                ""VehicleId"" INTEGER NOT NULL,
+                ""AssignedAt"" TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (""FleetId"", ""VehicleId"")
+            );
+        ");
+        Console.WriteLine("Fleet tables verified/created");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Fleet table creation note: {ex.Message}");
     }
 
     await roleService.SeedDefaultRolesAsync();
