@@ -1896,6 +1896,13 @@ import { AuthService } from '../../../core/services/auth.service';
       padding: 24px;
     }
 
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+
     .page-header h1 {
       color: #00f2fe;
       font-size: 2rem;
@@ -1915,6 +1922,7 @@ import { AuthService } from '../../../core/services/auth.service';
       display: flex;
       gap: 12px;
       align-items: center;
+      flex-shrink: 0;
     }
 
     .btn-secondary {
