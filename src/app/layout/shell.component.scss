@@ -313,8 +313,8 @@
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  height: 42px;
-  min-height: 42px;
+  height: 32px;
+  min-height: 32px;
   background: #08080f;
   border-bottom: 1px solid rgba(0, 212, 255, 0.08);
   font-size: 12px;
@@ -354,7 +354,7 @@
   border: 1px solid rgba(255, 42, 109, 0.3);
   border-radius: 4px;
   color: #ff2a6d;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -444,8 +444,8 @@
 
 .topbar-btn {
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border: none;
   background: none;
   color: var(--text-dim);
