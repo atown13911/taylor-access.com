@@ -1,18 +1,16 @@
 .compliance-container {
   max-width: 100%;
+}
+
+.table-panel-row {
   display: flex;
-  gap: 0;
+  gap: 16px;
   align-items: flex-start;
 
-  &.panel-open .main-area {
+  .matrix-table-wrapper {
     flex: 1;
     min-width: 0;
   }
-}
-
-.main-area {
-  flex: 1;
-  min-width: 0;
 }
 
 .page-header {
@@ -383,16 +381,12 @@ tr { cursor: pointer; }
 .details-panel {
   width: 340px;
   background: var(--bg-card);
-  border-left: 1px solid var(--border-bright);
   overflow-y: auto;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100vh - 200px);
   animation: slide-in 0.2s ease;
-  margin-left: 16px;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
 }
 
 @keyframes slide-in {
