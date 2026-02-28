@@ -279,7 +279,7 @@ using (var scope = app.Services.CreateScope())
                 Name = "Taylor CRM",
                 Description = "Customer Relationship Management",
                 HomepageUrl = "https://taylor-crm.com",
-                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "http://localhost:4201", "http://localhost:4201/callback" })
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "https://taylor-crm.pages.dev", "https://taylor-crm.pages.dev/callback", "http://localhost:4201", "http://localhost:4201/callback" })
             },
             new OAuthClient
             {
