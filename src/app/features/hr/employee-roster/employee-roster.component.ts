@@ -810,9 +810,9 @@ import { AuthService } from '../../../core/services/auth.service';
                             <span class="doc-type">{{ doc.documentType }}</span>
                             <span class="doc-date">{{ doc.createdAt | date:'short' }}</span>
                             <span class="doc-size">{{ (doc.fileSize / 1024).toFixed(1) }} KB</span>
-                            @if (doc.expirationDate) {
-                              <span class="doc-expiry" [class.expiring]="isExpiringSoon(doc.expirationDate)" [class.expired]="isDocExpired(doc.expirationDate)">
-                                <i class="bx bx-calendar"></i> Exp: {{ doc.expirationDate | date:'mediumDate' }}
+                            @if (doc.expiresAt || doc.expirationDate) {
+                              <span class="doc-expiry" [class.expiring]="isExpiringSoon(doc.expiresAt || doc.expirationDate)" [class.expired]="isDocExpired(doc.expiresAt || doc.expirationDate)">
+                                <i class="bx bx-calendar"></i> Exp: {{ (doc.expiresAt || doc.expirationDate) | date:'mediumDate' }}
                               </span>
                             }
                           </div>
@@ -1405,7 +1405,7 @@ import { AuthService } from '../../../core/services/auth.service';
                         <td class="doc-date-cell">{{ doc.createdAt | date:'shortDate' }}</td>
                         <td>
                           <input type="date" class="expiry-input-inline"
-                                 [value]="doc.expirationDate ? (doc.expirationDate | date:'yyyy-MM-dd') : ''"
+                                 [value]="doc.expiresAt || doc.expirationDate || ''"
                                  (change)="updateDocExpiration(doc, $event)">
                         </td>
                         <td class="doc-actions-cell">
@@ -5139,7 +5139,7 @@ export class EmployeeRosterComponent implements OnInit {
       const dType = (d.documentType || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
       return dType === slug || dType.includes(slug) || slug.includes(dType);
     });
-    return doc?.expirationDate || doc?.expiryDate || null;
+    return doc?.expiresAt || doc?.expirationDate || doc?.expiryDate || null;
   }
 
   isExpiringSoon(dateStr: string): boolean {

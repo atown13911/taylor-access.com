@@ -117,6 +117,29 @@ public class EmployeeDocumentsController : ControllerBase
         return Ok(new { document = new { document.Id, document.FileName }, message = "Document uploaded" });
     }
 
+    [HttpPut("{id}")]
+    public async Task<ActionResult> UpdateDocument(int id, [FromBody] UpdateDocumentRequest request)
+    {
+        var doc = await _context.EmployeeDocuments.FindAsync(id);
+        if (doc == null) return NotFound(new { error = "Document not found" });
+
+        if (request.ExpirationDate != null)
+        {
+            doc.ExpiresAt = DateOnly.Parse(request.ExpirationDate);
+        }
+        if (request.DocumentType != null)
+        {
+            doc.DocumentType = request.DocumentType;
+        }
+        if (request.Description != null)
+        {
+            doc.Description = request.Description;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Document updated", document = new { doc.Id, doc.ExpiresAt } });
+    }
+
     [HttpGet("{id}/download")]
     public async Task<ActionResult> DownloadDocument(int id)
     {
@@ -205,5 +228,5 @@ public class EmployeeDocumentsController : ControllerBase
 }
 
 public record SignDocumentRequest(string SignatureData);
-
+public record UpdateDocumentRequest(string? ExpirationDate, string? DocumentType, string? Description);
 
