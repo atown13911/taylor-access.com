@@ -106,6 +106,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<AccountTransaction> AccountTransactions => Set<AccountTransaction>();
     public DbSet<Paycheck> Paychecks => Set<Paycheck>();
     public DbSet<TimeOffRequest> TimeOffRequests => Set<TimeOffRequest>();
+    public DbSet<TimeOffBalance> TimeOffBalances => Set<TimeOffBalance>();
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Timesheet> Timesheets => Set<Timesheet>();
 

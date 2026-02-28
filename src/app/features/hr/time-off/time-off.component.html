@@ -1,0 +1,477 @@
+<div class="time-off-page">
+  <div class="page-header">
+    <div class="header-left">
+      <h1><i class="bx bx-calendar-event"></i> Time Off Management</h1>
+      <p class="subtitle">Manage PTO, sick leave, and time off requests</p>
+    </div>
+    <button class="btn-primary" (click)="openRequestModal()">
+      <i class="bx bx-plus"></i> Request Time Off
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card pending-stat">
+      <div class="stat-icon"><i class="bx bx-time-five"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ pendingCount() }}</span>
+        <span class="stat-label">Pending Requests</span>
+      </div>
+    </div>
+    <div class="stat-card approved-stat">
+      <div class="stat-icon"><i class="bx bx-check-circle"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ approvedThisMonth() }}</span>
+        <span class="stat-label">Approved This Month</span>
+      </div>
+    </div>
+    <div class="stat-card days-stat">
+      <div class="stat-icon"><i class="bx bx-calendar-minus"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ totalDaysUsed() }}</span>
+        <span class="stat-label">Total Days Used</span>
+      </div>
+    </div>
+    <div class="stat-card balance-stat">
+      <div class="stat-icon"><i class="bx bx-group"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">{{ employees().length }}</span>
+        <span class="stat-label">Employees</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="page-tabs">
+    <button class="tab" [class.active]="activeTab() === 'calendar'" (click)="switchTab('calendar')">
+      <i class="bx bx-calendar"></i> Calendar
+    </button>
+    <button class="tab" [class.active]="activeTab() === 'pending'" (click)="switchTab('pending')">
+      <i class="bx bx-time-five"></i> Pending
+      @if (pendingCount() > 0) {
+        <span class="tab-badge">{{ pendingCount() }}</span>
+      }
+    </button>
+    <button class="tab" [class.active]="activeTab() === 'history'" (click)="switchTab('history')">
+      <i class="bx bx-history"></i> History
+    </button>
+    <button class="tab" [class.active]="activeTab() === 'balances'" (click)="switchTab('balances')">
+      <i class="bx bx-bar-chart-alt-2"></i> Balances
+    </button>
+  </div>
+
+  <!-- CALENDAR TAB -->
+  @if (activeTab() === 'calendar') {
+    <div class="calendar-layout">
+      <!-- Left: Employee Roster -->
+      <div class="roster-panel">
+        <div class="roster-header">
+          <h3><i class="bx bx-group"></i> Employees</h3>
+          <span class="roster-count">{{ filteredEmployees().length }}</span>
+        </div>
+        <div class="roster-search">
+          <i class="bx bx-search"></i>
+          <input type="text" placeholder="Search employees..." [ngModel]="employeeSearch()" (ngModelChange)="employeeSearch.set($event)">
+        </div>
+        <div class="roster-list">
+          @for (emp of filteredEmployees(); track emp.id) {
+            <div class="roster-item" [class.active]="selectedEmployee()?.id === emp.id" (click)="selectEmployee(emp)">
+              <div class="roster-avatar">{{ (emp.name || emp.email || 'E').charAt(0).toUpperCase() }}</div>
+              <div class="roster-info">
+                <span class="roster-name">{{ emp.name || emp.email }}</span>
+                <span class="roster-role">{{ emp.jobTitle || emp.role || '—' }}</span>
+              </div>
+              @if (selectedEmployee()?.id === emp.id) {
+                <i class="bx bx-chevron-right roster-arrow"></i>
+              }
+            </div>
+          }
+          @if (filteredEmployees().length === 0) {
+            <div class="roster-empty">
+              <i class="bx bx-search-alt"></i>
+              <span>No employees found</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Right: Calendar + Details -->
+      <div class="detail-panel">
+        @if (selectedEmployee()) {
+          <!-- Selected Employee Header -->
+          <div class="detail-header">
+            <div class="detail-employee">
+              <div class="detail-avatar">{{ (selectedEmployee()!.name || 'E').charAt(0).toUpperCase() }}</div>
+              <div>
+                <h3>{{ selectedEmployee()!.name || selectedEmployee()!.email }}</h3>
+                <span class="detail-meta">{{ selectedEmployee()!.jobTitle || selectedEmployee()!.role || '' }} {{ selectedEmployee()!.department ? '· ' + selectedEmployee()!.department : '' }}</span>
+              </div>
+            </div>
+            <button class="btn-primary btn-sm" (click)="openRequestForEmployee()">
+              <i class="bx bx-plus"></i> Request Time Off
+            </button>
+          </div>
+
+          <!-- Balance Summary -->
+          @if (selectedEmployeeBalance()) {
+            <div class="balance-summary">
+              <div class="balance-chip pto">
+                <i class="bx bx-sun"></i>
+                <span class="chip-label">PTO</span>
+                <span class="chip-value">{{ selectedEmployeeBalance()!.ptoRemaining }}/{{ selectedEmployeeBalance()!.ptoTotal }}</span>
+              </div>
+              <div class="balance-chip sick">
+                <i class="bx bx-plus-medical"></i>
+                <span class="chip-label">Sick</span>
+                <span class="chip-value">{{ selectedEmployeeBalance()!.sickRemaining }}/{{ selectedEmployeeBalance()!.sickTotal }}</span>
+              </div>
+              <div class="balance-chip personal">
+                <i class="bx bx-user"></i>
+                <span class="chip-label">Personal</span>
+                <span class="chip-value">{{ selectedEmployeeBalance()!.personalRemaining }}/{{ selectedEmployeeBalance()!.personalTotal }}</span>
+              </div>
+            </div>
+          }
+
+          <!-- Calendar -->
+          <div class="calendar-card">
+            <div class="calendar-nav">
+              <button class="cal-nav-btn" (click)="prevMonth()"><i class="bx bx-chevron-left"></i></button>
+              <h4 class="cal-month-label">{{ calendarMonthLabel() }}</h4>
+              <button class="cal-nav-btn" (click)="nextMonth()"><i class="bx bx-chevron-right"></i></button>
+              <button class="cal-today-btn" (click)="goToday()">Today</button>
+            </div>
+            <div class="calendar-grid">
+              <div class="cal-weekday">Sun</div>
+              <div class="cal-weekday">Mon</div>
+              <div class="cal-weekday">Tue</div>
+              <div class="cal-weekday">Wed</div>
+              <div class="cal-weekday">Thu</div>
+              <div class="cal-weekday">Fri</div>
+              <div class="cal-weekday">Sat</div>
+              @for (day of calendarDays(); track $index) {
+                <div class="cal-day"
+                     [class.other-month]="!day.isCurrentMonth"
+                     [class.today]="day.isToday"
+                     [class.weekend]="day.isWeekend"
+                     [class.has-request]="day.requests.length > 0">
+                  <span class="cal-day-num">{{ day.day }}</span>
+                  @if (day.requests.length > 0) {
+                    <div class="cal-day-dots">
+                      @for (req of day.requests; track req.id) {
+                        <span class="cal-dot" [style.background]="getRequestTypeColor(req.type)" [title]="getTypeLabel(req.type) + ' (' + req.status + ')'"></span>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+            <!-- Legend -->
+            <div class="calendar-legend">
+              <div class="legend-item"><span class="legend-dot" style="background: #00ff88;"></span> PTO / Vacation</div>
+              <div class="legend-item"><span class="legend-dot" style="background: #ff2a6d;"></span> Sick</div>
+              <div class="legend-item"><span class="legend-dot" style="background: #818cf8;"></span> Personal</div>
+              <div class="legend-item"><span class="legend-dot" style="background: #fbbf24;"></span> Jury Duty</div>
+              <div class="legend-item"><span class="legend-dot" style="background: #ec4899;"></span> Bereavement</div>
+            </div>
+          </div>
+
+          <!-- Upcoming / Recent Requests -->
+          <div class="upcoming-section">
+            <h4><i class="bx bx-list-ul"></i> Upcoming & Recent Requests</h4>
+            @if (upcomingRequests().length === 0 && selectedEmployeeRequests().length === 0) {
+              <div class="upcoming-empty">No time off requests for this employee</div>
+            } @else {
+              <div class="upcoming-list">
+                @for (req of (upcomingRequests().length > 0 ? upcomingRequests() : selectedEmployeeRequests().slice(0, 5)); track req.id) {
+                  <div class="upcoming-item">
+                    <div class="upcoming-type">
+                      <span class="type-badge sm" [class]="req.type">
+                        <i class="bx" [ngClass]="getTypeIcon(req.type)"></i>
+                        {{ getTypeLabel(req.type) }}
+                      </span>
+                    </div>
+                    <div class="upcoming-dates">
+                      <i class="bx bx-calendar"></i>
+                      {{ formatDate(req.startDate) }} — {{ formatDate(req.endDate) }}
+                    </div>
+                    <span class="upcoming-days">{{ req.days }}d</span>
+                    <span class="status-badge sm" [class]="req.status">{{ req.status }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="detail-empty">
+            <i class="bx bx-user-circle"></i>
+            <h4>Select an Employee</h4>
+            <p>Choose an employee from the roster to view their time off calendar and details</p>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- PENDING TAB -->
+  @if (activeTab() === 'pending') {
+    @if (pendingRequests().length < 1) {
+      <div class="empty-state">
+        <i class="bx bx-check-double"></i>
+        <h4>All caught up!</h4>
+        <p>No pending time off requests to review</p>
+      </div>
+    } @else {
+      <div class="requests-grid">
+        @for (request of pendingRequests(); track request.id) {
+          <div class="request-card">
+            <div class="request-top">
+              <div class="employee-info">
+                <div class="avatar">{{ (request.employeeName || 'E').charAt(0) }}</div>
+                <div>
+                  <span class="employee-name">{{ request.employeeName }}</span>
+                  <span class="request-created">Submitted {{ formatDate(request.createdAt) }}</span>
+                </div>
+              </div>
+              <span class="type-badge" [class]="request.type">
+                <i class="bx" [ngClass]="getTypeIcon(request.type)"></i>
+                {{ getTypeLabel(request.type) }}
+              </span>
+            </div>
+            <div class="request-dates-row">
+              <div class="date-range">
+                <i class="bx bx-calendar"></i>
+                <span>{{ formatDate(request.startDate) }} — {{ formatDate(request.endDate) }}</span>
+              </div>
+              <span class="days-count">{{ request.days }} day{{ request.days !== 1 ? 's' : '' }}</span>
+            </div>
+            @if (request.reason) {
+              <div class="request-reason">
+                <i class="bx bx-message-detail"></i> {{ request.reason }}
+              </div>
+            }
+            <div class="request-actions">
+              <button class="btn-approve" (click)="approve(request.id)">
+                <i class="bx bx-check"></i> Approve
+              </button>
+              <button class="btn-deny" (click)="openDenyModal(request.id)">
+                <i class="bx bx-x"></i> Deny
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- HISTORY TAB -->
+  @if (activeTab() === 'history') {
+    <div class="history-header">
+      <select [ngModel]="historyFilter()" (ngModelChange)="historyFilter.set($event)">
+        <option value="all">All Requests</option>
+        <option value="approved">Approved</option>
+        <option value="denied">Denied</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="pending">Pending</option>
+      </select>
+    </div>
+    @if (filteredHistory().length < 1) {
+      <div class="empty-state">
+        <i class="bx bx-history"></i>
+        <h4>No requests found</h4>
+      </div>
+    } @else {
+      <div class="data-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Type</th>
+              <th>Dates</th>
+              <th>Days</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Reviewed By</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of filteredHistory(); track r.id) {
+              <tr>
+                <td><strong>{{ r.employeeName }}</strong></td>
+                <td>
+                  <span class="type-badge sm" [class]="r.type">{{ getTypeLabel(r.type) }}</span>
+                </td>
+                <td>{{ formatDate(r.startDate) }} — {{ formatDate(r.endDate) }}</td>
+                <td>{{ r.days }}</td>
+                <td class="reason-cell">{{ r.reason || '—' }}</td>
+                <td>
+                  <span class="status-badge" [class]="r.status">{{ r.status }}</span>
+                </td>
+                <td>
+                  {{ r.approvedByName || r.approvedBy?.name || '—' }}
+                  @if (r.denialReason) {
+                    <span class="denial-note">{{ r.denialReason }}</span>
+                  }
+                </td>
+                <td>
+                  @if (r.status === 'approved' || r.status === 'pending') {
+                    <button class="icon-btn danger" title="Cancel" (click)="cancelRequest(r)">
+                      <i class="bx bx-x-circle"></i>
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- BALANCES TAB -->
+  @if (activeTab() === 'balances') {
+    @if (balances().length < 1) {
+      <div class="empty-state">
+        <i class="bx bx-bar-chart-alt-2"></i>
+        <h4>No balances configured</h4>
+        <p>Time off balances will appear here once set up for employees</p>
+      </div>
+    } @else {
+      <div class="balances-grid">
+        @for (b of balances(); track b.id) {
+          <div class="balance-card">
+            <div class="balance-header">
+              <div class="avatar">{{ (b.employee?.name || 'E').charAt(0) }}</div>
+              <div>
+                <strong>{{ b.employee?.name || 'Employee #' + b.employeeId }}</strong>
+                <span class="balance-year">{{ b.year }}</span>
+              </div>
+            </div>
+            <div class="balance-rows">
+              <div class="balance-row">
+                <div class="balance-label">
+                  <i class="bx bx-sun"></i> PTO
+                </div>
+                <div class="balance-bar-wrap">
+                  <div class="balance-bar">
+                    <div class="balance-bar-fill pto" [style.width.%]="getBalancePercent(b.ptoUsed, b.ptoTotal)"></div>
+                  </div>
+                  <span class="balance-text">{{ b.ptoUsed }}/{{ b.ptoTotal }} used</span>
+                </div>
+              </div>
+              <div class="balance-row">
+                <div class="balance-label">
+                  <i class="bx bx-plus-medical"></i> Sick
+                </div>
+                <div class="balance-bar-wrap">
+                  <div class="balance-bar">
+                    <div class="balance-bar-fill sick" [style.width.%]="getBalancePercent(b.sickUsed, b.sickTotal)"></div>
+                  </div>
+                  <span class="balance-text">{{ b.sickUsed }}/{{ b.sickTotal }} used</span>
+                </div>
+              </div>
+              <div class="balance-row">
+                <div class="balance-label">
+                  <i class="bx bx-user"></i> Personal
+                </div>
+                <div class="balance-bar-wrap">
+                  <div class="balance-bar">
+                    <div class="balance-bar-fill personal" [style.width.%]="getBalancePercent(b.personalUsed, b.personalTotal)"></div>
+                  </div>
+                  <span class="balance-text">{{ b.personalUsed }}/{{ b.personalTotal }} used</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
+
+<!-- REQUEST MODAL -->
+@if (showRequestModal()) {
+  <div class="modal-overlay" (click)="closeRequestModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class="bx bx-calendar-plus"></i> Request Time Off</h3>
+        <button class="close-btn" (click)="closeRequestModal()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Employee *</label>
+          <select [ngModel]="requestForm().employeeId" (ngModelChange)="updateFormField('employeeId', $event ? +$event : null)">
+            <option [ngValue]="null">— Select Employee —</option>
+            @for (emp of employees(); track emp.id) {
+              <option [ngValue]="emp.id">{{ emp.name || emp.email }}</option>
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Type *</label>
+          <div class="type-selector">
+            @for (opt of typeOptions; track opt.value) {
+              <button class="type-option" [class.selected]="requestForm().type === opt.value" (click)="updateFormField('type', opt.value)">
+                <i class="bx" [ngClass]="opt.icon"></i>
+                {{ opt.label }}
+              </button>
+            }
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start Date *</label>
+            <input type="date" [ngModel]="requestForm().startDate" (ngModelChange)="updateFormField('startDate', $event)">
+          </div>
+          <div class="form-group">
+            <label>End Date *</label>
+            <input type="date" [ngModel]="requestForm().endDate" (ngModelChange)="updateFormField('endDate', $event)">
+          </div>
+          <div class="form-group days-group">
+            <label>Days</label>
+            <div class="days-display">{{ requestForm().days }}</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Reason (optional)</label>
+          <textarea [ngModel]="requestForm().reason" (ngModelChange)="updateFormField('reason', $event)" rows="3" placeholder="Vacation, family event, medical appointment..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closeRequestModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitRequest()" [disabled]="saving()">
+          @if (saving()) {
+            <i class="bx bx-loader-alt bx-spin"></i> Submitting...
+          } @else {
+            <i class="bx bx-send"></i> Submit Request
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- DENY MODAL -->
+@if (showDenyModal()) {
+  <div class="modal-overlay" (click)="closeDenyModal()">
+    <div class="modal modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-header deny-header">
+        <h3><i class="bx bx-x-circle"></i> Deny Request</h3>
+        <button class="close-btn" (click)="closeDenyModal()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Reason for denial (optional)</label>
+          <textarea [ngModel]="denyReason()" (ngModelChange)="denyReason.set($event)" rows="3" placeholder="Insufficient coverage, schedule conflict..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closeDenyModal()">Cancel</button>
+        <button class="btn-deny-submit" (click)="submitDeny()">
+          <i class="bx bx-x"></i> Deny Request
+        </button>
+      </div>
+    </div>
+  </div>
+}
