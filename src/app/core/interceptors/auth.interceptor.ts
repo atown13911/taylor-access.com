@@ -63,9 +63,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         const isLoginPage = currentUrl.includes('/login') || currentUrl === '/';
         const isOptionalEndpoint = req.url.includes('/notifications') || 
                                    req.url.includes('/organizations') ||
-                                   req.url.includes('/setup/status');
+                                   req.url.includes('/setup/status') ||
+                                   req.url.includes('/oauth/');
+        const isOAuthPage = currentUrl.includes('/oauth/');
         
-        if (!isLoginPage && !isOptionalEndpoint) {
+        if (!isLoginPage && !isOAuthPage && !isOptionalEndpoint) {
           console.warn('Unauthorized request - redirecting to login');
           authService.logout();
           router.navigate(['/login']);
