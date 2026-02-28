@@ -1,8 +1,8 @@
 <div class="page-container">
   <header class="page-header">
     <div class="header-left">
-      <h1><i class='bx bx-dollar-circle'></i> Insurance & Financial</h1>
-      <p class="subtitle">Manage insurance policies and driver payment methods</p>
+      <h1><i class='bx bx-shield-alt-2'></i> Insurance</h1>
+      <p class="subtitle">Manage insurance policies</p>
     </div>
     <div class="header-actions">
       @if (pageTab() === 'insurance') {
@@ -14,11 +14,8 @@
 
   <!-- Tabs -->
   <div class="page-tabs">
-    <button class="page-tab" [class.active]="pageTab() === 'insurance'" (click)="pageTab.set('insurance')">
+    <button class="page-tab active">
       <i class='bx bx-shield-alt-2'></i> Insurance
-    </button>
-    <button class="page-tab" [class.active]="pageTab() === 'financial'" (click)="pageTab.set('financial')">
-      <i class='bx bx-credit-card'></i> Financial
     </button>
   </div>
 

@@ -47,7 +47,7 @@ export class ShellComponent implements OnInit {
       items: [
         { label: 'Driver Database', icon: 'bx bx-search-alt', route: '/compliance/driver-database' },
         { label: 'Registrations & Authority', icon: 'bx bx-certification', route: '/compliance/registrations' },
-        { label: 'Insurance & Financial', icon: 'bx bx-dollar-circle', route: '/compliance/insurance' },
+        { label: 'Insurance', icon: 'bx bx-shield-alt-2', route: '/compliance/insurance' },
         { label: 'Driver Qualification Files', icon: 'bx bx-folder-open', route: '/compliance/driver-files' },
         { label: 'Drug & Alcohol Testing', icon: 'bx bx-test-tube', route: '/compliance/drug-testing' },
         { label: 'Hours of Service (HOS)', icon: 'bx bx-time', route: '/compliance/hos' },
