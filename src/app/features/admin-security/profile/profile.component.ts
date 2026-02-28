@@ -426,6 +426,7 @@ export class ProfileComponent implements OnInit {
   ];
 
   selectedBg = signal(localStorage.getItem('ta_bg') || 'none');
+  bgOpacity = signal(parseInt(localStorage.getItem('ta_bg_opacity') || '60'));
 
   backgrounds = [
     { id: 'grid-cyan', name: 'Cyber Grid', url: 'https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?w=400&q=60' },
@@ -459,7 +460,8 @@ export class ProfileComponent implements OnInit {
     const bg = this.backgrounds.find(b => b.id === id);
     if (bg) {
       const hiRes = bg.url.replace('w=400&q=60', 'w=1920&q=80');
-      contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.55), rgba(5,5,8,0.65)), url(${hiRes})`;
+      const o = this.bgOpacity() / 100;
+      contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${hiRes})`;
       contentArea.style.backgroundSize = 'cover';
       contentArea.style.backgroundPosition = 'center';
       contentArea.style.backgroundAttachment = 'fixed';
@@ -479,13 +481,23 @@ export class ProfileComponent implements OnInit {
 
       const contentArea = document.querySelector('.content-area') as HTMLElement;
       if (contentArea) {
-        contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,0.55), rgba(5,5,8,0.65)), url(${dataUrl})`;
+        const o = this.bgOpacity() / 100;
+        contentArea.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${dataUrl})`;
         contentArea.style.backgroundSize = 'cover';
         contentArea.style.backgroundPosition = 'center';
       }
       this.toast.success('Background uploaded');
     };
     reader.readAsDataURL(file);
+  }
+
+  adjustOpacity(event: any) {
+    const val = parseInt(event.target.value);
+    this.bgOpacity.set(val);
+    localStorage.setItem('ta_bg_opacity', val.toString());
+    // Re-apply current background with new opacity
+    const currentBg = this.selectedBg();
+    if (currentBg !== 'none') this.selectBackground(currentBg);
   }
 
   selectTheme(id: string) {
