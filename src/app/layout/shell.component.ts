@@ -21,9 +21,23 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
+  showOrgDropdown = signal(false);
   currentUser = this.authService.currentUser;
   currentTime = new Date();
   private clockInterval: any;
+
+  tickerUpdates = [
+    { id: 1, type: 'driver', message: 'Aaron Mathis CDL expires Jul 11, 2026' },
+    { id: 2, type: 'compliant', message: 'Alexander Quevedo medical cert renewed' },
+    { id: 3, type: 'warning', message: 'Chris Teaford license expiring in 28 days' },
+    { id: 4, type: 'employee', message: 'New employee Adaleta Aličković added to roster' },
+    { id: 5, type: 'access', message: 'VanTac TMS connected via SSO' },
+    { id: 6, type: 'expired', message: 'David Parrott drug test overdue' },
+    { id: 7, type: 'compliant', message: 'Loren Perry MVR check completed' },
+    { id: 8, type: 'driver', message: 'Hayward Feaster Jr assigned to Landmark Trucking' },
+    { id: 9, type: 'warning', message: '2 insurance policies expiring this month' },
+    { id: 10, type: 'access', message: 'Taylor CRM authenticated via Taylor Access' },
+  ];
 
   avatarUrl = computed(() => {
     const user = this.currentUser();

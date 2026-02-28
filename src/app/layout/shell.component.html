@@ -78,29 +78,60 @@
     <!-- Top Bar -->
     <header class="topbar">
       <div class="topbar-left">
-        <span class="app-badge"><i class='bx bx-shield-quarter'></i> Taylor Access</span>
+        <button class="menu-btn" (click)="toggleSidebar()">
+          <i class="bx bx-menu"></i>
+        </button>
       </div>
 
-      <div class="topbar-center">
-        <span class="topbar-status"><i class='bx bx-radio-circle-marked live-dot'></i> System Online</span>
+      <!-- Compliance Ticker -->
+      <div class="tracking-ticker">
+        <div class="ticker-label">
+          <i class="bx bx-radar"></i>
+          <span>LIVE</span>
+        </div>
+        <div class="ticker-content">
+          <div class="ticker-scroll">
+            @for (update of tickerUpdates; track update.id) {
+              <span class="ticker-item" [class]="update.type">
+                <i class="bx" [class.bx-user]="update.type === 'driver'"
+                   [class.bx-check-circle]="update.type === 'compliant'"
+                   [class.bx-error]="update.type === 'warning'"
+                   [class.bx-x-circle]="update.type === 'expired'"
+                   [class.bx-id-card]="update.type === 'employee'"
+                   [class.bx-shield-quarter]="update.type === 'access'"></i>
+                {{ update.message }}
+              </span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-clock">
+        <i class="bx bx-time-five"></i>
+        <span>{{ currentTime | date:'h:mm:ss a' }}</span>
+      </div>
+
+      <!-- Org Switcher -->
+      <div class="topbar-org" (click)="showOrgDropdown.set(!showOrgDropdown())">
+        <i class="bx bxs-buildings"></i>
+        <span>{{ currentUser()?.organizationName || 'All Organizations' }}</span>
+        <i class="bx bx-chevron-down"></i>
       </div>
 
       <div class="topbar-right">
-        <div class="topbar-clock">
-          <i class='bx bx-time-five'></i>
-          <span>{{ currentTime | date:'h:mm:ss a' }}</span>
-        </div>
-
-        <div class="topbar-org">
-          <i class='bx bxs-buildings'></i>
-          <span>{{ currentUser()?.organizationName || 'All Organizations' }}</span>
-        </div>
-
-        <div class="topbar-actions">
-          <button class="topbar-icon" routerLink="/admin/audit" title="Audit Logs"><i class='bx bx-history'></i></button>
-          <button class="topbar-icon" routerLink="/admin/apps" title="Connected Apps"><i class='bx bx-link'></i></button>
-          <button class="topbar-icon" routerLink="/profile" title="Profile"><i class='bx bx-cog'></i></button>
-        </div>
+        <button class="topbar-btn" routerLink="/admin/apps" title="Connected Apps">
+          <i class="bx bx-link"></i>
+        </button>
+        <button class="topbar-btn" title="Messages">
+          <i class="bx bx-message-rounded-dots"></i>
+        </button>
+        <button class="topbar-btn" title="Support Tickets">
+          <i class="bx bx-support"></i>
+        </button>
+        <button class="topbar-btn notification-btn" routerLink="/admin/audit" title="Notifications">
+          <i class="bx bx-bell"></i>
+          <span class="notification-badge">3</span>
+        </button>
       </div>
     </header>
 
