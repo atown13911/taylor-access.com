@@ -327,113 +327,57 @@
   </div>
 }
 
-<!-- Driver Profile Modal -->
+<!-- Driver Details Panel -->
 @if (selectedDriver()) {
-  <div class="modal-overlay" (click)="closeProfile()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <div class="profile-header-info">
-          <div class="profile-avatar">{{ selectedDriver()!.name?.charAt(0) || 'D' }}</div>
-          <div>
-            <h3>{{ selectedDriver()!.name }}</h3>
-            <div class="profile-tags">
-              <span class="type-badge" [class]="selectedDriver()!.type">{{ selectedDriver()!.type }}</span>
-              <span class="status-badge" [class]="selectedDriver()!.status">{{ selectedDriver()!.status }}</span>
-            </div>
-          </div>
-        </div>
-        <button class="close-btn" (click)="closeProfile()"><i class='bx bx-x'></i></button>
-      </div>
-
-      <!-- Profile Tabs -->
-      <div class="profile-tabs">
-        <button class="profile-tab" [class.active]="profileTab() === 'profile'" (click)="switchProfileTab('profile')">
-          <i class='bx bx-user'></i> Profile
-        </button>
-        <button class="profile-tab" [class.active]="profileTab() === 'documents'" (click)="switchProfileTab('documents')">
-          <i class='bx bx-file'></i> Documents
-        </button>
-      </div>
-
-      <div class="modal-body">
-        @if (profileTab() === 'profile') {
-          <div class="profile-grid">
-            <div class="profile-field">
-              <span class="profile-label">Phone</span>
-              <span class="profile-value">{{ selectedDriver()!.phone || '—' }}</span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">Email</span>
-              <span class="profile-value">{{ selectedDriver()!.email || '—' }}</span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">License #</span>
-              <span class="profile-value mono">{{ selectedDriver()!.licenseNumber || '—' }}</span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">License Expiry</span>
-              <span class="profile-value" [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiry)" [class.expired]="isExpired(selectedDriver()!.licenseExpiry)">
-                {{ formatDate(selectedDriver()!.licenseExpiry) }}
-              </span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">Driver Type</span>
-              <span class="profile-value">{{ selectedDriver()!.type | titlecase }}</span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">Fleet</span>
-              <span class="profile-value">{{ selectedDriver()!.fleetName }}</span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">Hire Date</span>
-              <span class="profile-value">{{ formatDate(selectedDriver()!.hireDate) }}</span>
-            </div>
-            <div class="profile-field">
-              <span class="profile-label">Status</span>
-              <span class="profile-value">{{ selectedDriver()!.status | titlecase }}</span>
-            </div>
-          </div>
-        }
-
-        @if (profileTab() === 'documents') {
-          <div class="doc-list">
-            @for (doc of driverDocuments(); track doc.type) {
-              <div class="doc-item" [class]="doc.status">
-                <div class="doc-icon"><i class='bx' [ngClass]="doc.icon"></i></div>
-                <div class="doc-info">
-                  <span class="doc-name">{{ doc.type }}</span>
-                  @if (doc.number) {
-                    <span class="doc-number">{{ doc.number }}</span>
-                  }
-                  @if (doc.expiry) {
-                    <span class="doc-expiry">Exp: {{ formatDate(doc.expiry) }}</span>
-                  }
-                </div>
-                <span class="doc-status-badge" [class]="doc.status">{{ getDocStatusLabel(doc.status) }}</span>
-                @if (doc.status === 'missing') {
-                  <label class="doc-upload-btn">
-                    <i class='bx bx-upload'></i> Upload
-                    <input type="file" hidden accept=".pdf,.jpg,.png">
-                  </label>
-                }
-              </div>
-            } @empty {
-              <div class="doc-empty">
-                <i class='bx bx-file'></i>
-                <p>Loading documents...</p>
-              </div>
-            }
-          </div>
-        }
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" (click)="editDriver(selectedDriver()!); closeProfile()">
-          <i class='bx bx-edit'></i> Edit Driver
-        </button>
-        <button class="btn btn-secondary" (click)="closeProfile()">Close</button>
-      </div>
+  <div class="panel-overlay" (click)="closeProfile()"></div>
+  <aside class="details-panel">
+    <div class="panel-header">
+      <h2>Driver Details</h2>
+      <button class="close-btn" (click)="closeProfile()"><i class='bx bx-x'></i></button>
     </div>
-  </div>
+
+    <div class="panel-avatar">
+      <div class="big-avatar">{{ selectedDriver()!.name?.charAt(0) || '?' }}</div>
+      <h3>{{ selectedDriver()!.name }}</h3>
+      <span class="panel-status" [class]="'status-' + (selectedDriver()!.status || 'active')">{{ selectedDriver()!.status || 'active' }}</span>
+    </div>
+
+    <div class="panel-section">
+      <h4>Contact</h4>
+      <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
+      <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h4>License</h4>
+      <div class="detail-row"><span class="label">Number</span><span class="mono">{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
+      <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
+      <div class="detail-row">
+        <span class="label">Expires</span>
+        <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiry)" [class.expired]="isExpired(selectedDriver()!.licenseExpiry)">
+          {{ formatDate(selectedDriver()!.licenseExpiry) }}
+        </span>
+      </div>
+      <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h4>Employment</h4>
+      <div class="detail-row"><span class="label">Type</span><span>{{ selectedDriver()!.type || '—' }}</span></div>
+      <div class="detail-row"><span class="label">Hire Date</span><span>{{ formatDate(selectedDriver()!.hireDate) }}</span></div>
+      <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h4>Compliance Summary</h4>
+      @for (doc of complianceItems; track doc.key) {
+        <div class="compliance-row">
+          <span class="dot" [class]="getComplianceStatus(selectedDriver()!, doc.key)"></span>
+          <span class="comp-label">{{ doc.label }}</span>
+        </div>
+      }
+    </div>
+  </aside>
 }
 
 <!-- US States datalist -->

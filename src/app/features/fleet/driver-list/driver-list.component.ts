@@ -181,13 +181,60 @@ export class DriverListComponent implements OnInit {
   }
 
   // Profile view
-  selectedDriver = signal<DriverRow | null>(null);
+  selectedDriver = signal<any>(null);
   profileTab = signal<'profile' | 'documents'>('profile');
   driverDocuments = signal<any[]>([]);
 
+  complianceItems = [
+    { key: 'cdl', label: 'CDL / License' },
+    { key: 'medical', label: 'Medical Certificate' },
+    { key: 'mvr', label: 'Motor Vehicle Record' },
+    { key: 'drugTest', label: 'Drug & Alcohol Test' },
+    { key: 'dqf', label: 'Driver Qualification File' },
+    { key: 'employment', label: 'Employment Verification' },
+    { key: 'training', label: 'Training' },
+    { key: 'insurance', label: 'Insurance' },
+    { key: 'vehicleDocs', label: 'Vehicle Docs' },
+    { key: 'permits', label: 'Permits' },
+  ];
+
+  getComplianceStatus(driver: any, key: string): string {
+    if (key === 'cdl' && driver.licenseNumber) {
+      return this.isExpired(driver.licenseExpiry) ? 'dot-red' :
+             this.isExpiringSoon(driver.licenseExpiry) ? 'dot-yellow' : 'dot-green';
+    }
+    if (key === 'medical' && driver.medicalCardExpiry) {
+      return this.isExpired(driver.medicalCardExpiry) ? 'dot-red' :
+             this.isExpiringSoon(driver.medicalCardExpiry) ? 'dot-yellow' : 'dot-green';
+    }
+    if (key === 'employment' && driver.hireDate) return 'dot-green';
+    return 'dot-gray';
+  }
+
   viewDriver(driver: DriverRow): void {
-    // Navigate to Driver Compliance Database with driver ID to open full profile
-    this.router.navigate(['/compliance/driver-database'], { queryParams: { driverId: driver.id } });
+    this.profileTab.set('profile');
+    this.driverDocuments.set([]);
+    this.api.getDriver(driver.id).subscribe({
+      next: (res: any) => {
+        const d = res?.data || res;
+        this.selectedDriver.set({
+          ...driver,
+          licenseState: d.licenseState || '',
+          licenseClass: d.licenseClass || '',
+          address: d.addressRef?.street1 || d.address || d.fullAddress || '',
+          city: d.addressRef?.city || d.city || '',
+          state: d.addressRef?.state || d.state || '',
+          zip: d.addressRef?.zipCode || d.zipCode || d.zip || '',
+          emergencyContact: d.emergencyContactName || d.emergencyContact || '',
+          emergencyPhone: d.emergencyContactPhone || d.emergencyPhone || '',
+          dateOfBirth: d.dateOfBirth || '',
+          medicalCardExpiry: d.medicalCardExpiry || '',
+          payRate: d.payRate || 0,
+          payType: d.payType || '',
+        });
+      },
+      error: () => this.selectedDriver.set(driver as any)
+    });
   }
 
   closeProfile(): void {
