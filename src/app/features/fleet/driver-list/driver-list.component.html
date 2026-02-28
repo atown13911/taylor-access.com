@@ -104,7 +104,7 @@
         </thead>
         <tbody>
           @for (driver of filteredDrivers(); track driver.id) {
-            <tr>
+            <tr (click)="selectDriverRow(driver)" [class.selected]="selectedDriver()?.id === driver.id" style="cursor:pointer">
               <td class="name-cell">
                 <div class="avatar">{{ driver.name.charAt(0) }}</div>
                 {{ driver.name }}
@@ -126,8 +126,8 @@
               <td>{{ formatDate(driver.hireDate) }}</td>
               <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
               <td class="actions-cell">
-                <button class="action-btn" title="View Profile" (click)="viewDriver(driver)"><i class='bx bx-user'></i></button>
-                <button class="action-btn" title="Edit" (click)="editDriver(driver)"><i class='bx bx-edit'></i></button>
+                <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
+                <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
               </td>
             </tr>
           }
@@ -337,7 +337,7 @@
   </div>
 }
 
-<!-- Driver Details Panel -->
+<!-- Slide-out Details Panel (row click) -->
 @if (selectedDriver()) {
   <div class="panel-overlay" (click)="closeProfile()"></div>
   <aside class="details-panel">
@@ -388,6 +388,133 @@
       }
     </div>
   </aside>
+}
+
+<!-- Driver Profile Modal (icon click) -->
+@if (profileDriver()) {
+  <div class="modal-overlay" (click)="closeProfileModal()">
+    <div class="modal modal-profile" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div class="profile-header-info">
+          <div class="profile-avatar-lg">{{ profileDriver()!.name?.charAt(0) || 'D' }}</div>
+          <div>
+            <h3>{{ profileDriver()!.name }}</h3>
+            <div class="profile-tags">
+              <span class="type-badge" [class]="profileDriver()!.type">{{ profileDriver()!.type }}</span>
+              <span class="status-badge" [class]="profileDriver()!.status">{{ profileDriver()!.status }}</span>
+            </div>
+          </div>
+        </div>
+        <button class="close-btn" (click)="closeProfileModal()"><i class='bx bx-x'></i></button>
+      </div>
+
+      <div class="profile-tabs">
+        <button class="profile-tab" [class.active]="profileTab() === 'profile'" (click)="switchProfileTab('profile')">
+          <i class='bx bx-user'></i> Profile
+        </button>
+        <button class="profile-tab" [class.active]="profileTab() === 'documents'" (click)="switchProfileTab('documents')">
+          <i class='bx bx-file'></i> Documents
+        </button>
+      </div>
+
+      <div class="modal-body">
+        @if (profileTab() === 'profile') {
+          <div class="profile-sections">
+            <div class="profile-section-block">
+              <h4>Contact</h4>
+              <div class="profile-grid">
+                <div class="profile-field"><span class="profile-label">Phone</span><span class="profile-value">{{ profileDriver()!.phone || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">Email</span><span class="profile-value">{{ profileDriver()!.email || '—' }}</span></div>
+              </div>
+            </div>
+
+            <div class="profile-section-block">
+              <h4>License</h4>
+              <div class="profile-grid">
+                <div class="profile-field"><span class="profile-label">CDL Number</span><span class="profile-value mono">{{ profileDriver()!.licenseNumber || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">State</span><span class="profile-value">{{ profileDriver()!.licenseState || '—' }}</span></div>
+                <div class="profile-field">
+                  <span class="profile-label">Expiry</span>
+                  <span class="profile-value" [class.expiring]="isExpiringSoon(profileDriver()!.licenseExpiry)" [class.expired]="isExpired(profileDriver()!.licenseExpiry)">
+                    {{ formatDate(profileDriver()!.licenseExpiry) }}
+                  </span>
+                </div>
+                <div class="profile-field"><span class="profile-label">Class</span><span class="profile-value">{{ profileDriver()!.licenseClass || '—' }}</span></div>
+              </div>
+            </div>
+
+            <div class="profile-section-block">
+              <h4>Address</h4>
+              <div class="profile-grid">
+                <div class="profile-field full"><span class="profile-label">Street</span><span class="profile-value">{{ profileDriver()!.address || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">City</span><span class="profile-value">{{ profileDriver()!.city || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">State</span><span class="profile-value">{{ profileDriver()!.state || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">ZIP</span><span class="profile-value">{{ profileDriver()!.zip || '—' }}</span></div>
+              </div>
+            </div>
+
+            <div class="profile-section-block">
+              <h4>Employment</h4>
+              <div class="profile-grid">
+                <div class="profile-field"><span class="profile-label">Type</span><span class="profile-value">{{ profileDriver()!.type || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">Hire Date</span><span class="profile-value">{{ formatDate(profileDriver()!.hireDate) }}</span></div>
+                <div class="profile-field"><span class="profile-label">Fleet</span><span class="profile-value">{{ profileDriver()!.fleetName || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">Pay</span><span class="profile-value">{{ profileDriver()!.payType || '—' }} — {{ profileDriver()!.payRate || '—' }}</span></div>
+              </div>
+            </div>
+
+            <div class="profile-section-block">
+              <h4>Emergency Contact</h4>
+              <div class="profile-grid">
+                <div class="profile-field"><span class="profile-label">Name</span><span class="profile-value">{{ profileDriver()!.emergencyContact || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">Phone</span><span class="profile-value">{{ profileDriver()!.emergencyPhone || '—' }}</span></div>
+              </div>
+            </div>
+
+            <div class="profile-section-block">
+              <h4>Compliance Summary</h4>
+              <div class="compliance-grid">
+                @for (item of complianceItems; track item.key) {
+                  <div class="compliance-row">
+                    <span class="dot" [class]="getComplianceStatus(profileDriver()!, item.key)"></span>
+                    <span class="comp-label">{{ item.label }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (profileTab() === 'documents') {
+          <div class="doc-list">
+            @for (doc of driverDocuments(); track doc.type) {
+              <div class="doc-item" [class]="doc.status">
+                <div class="doc-icon"><i class='bx' [ngClass]="doc.icon"></i></div>
+                <div class="doc-info">
+                  <span class="doc-name">{{ doc.type }}</span>
+                  @if (doc.number) { <span class="doc-number">{{ doc.number }}</span> }
+                  @if (doc.expiry) { <span class="doc-expiry">Exp: {{ formatDate(doc.expiry) }}</span> }
+                </div>
+                <span class="doc-status-badge" [class]="doc.status">{{ getDocStatusLabel(doc.status) }}</span>
+              </div>
+            } @empty {
+              <div class="doc-empty">
+                <i class='bx bx-file'></i>
+                <p>Loading documents...</p>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="editDriver(profileDriver()!); closeProfileModal()">
+          <i class='bx bx-edit'></i> Edit Driver
+        </button>
+        <button class="btn btn-secondary" (click)="closeProfileModal()">Close</button>
+      </div>
+    </div>
+  </div>
 }
 
 <!-- US States datalist -->

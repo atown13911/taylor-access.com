@@ -181,8 +181,10 @@ export class DriverListComponent implements OnInit {
     });
   }
 
-  // Profile view
+  // Slide-out panel (row click)
   selectedDriver = signal<any>(null);
+  // Profile modal popup (icon click)
+  profileDriver = signal<any>(null);
   profileTab = signal<'profile' | 'documents'>('profile');
   driverDocuments = signal<any[]>([]);
 
@@ -212,13 +214,11 @@ export class DriverListComponent implements OnInit {
     return 'dot-gray';
   }
 
-  viewDriver(driver: DriverRow): void {
-    this.profileTab.set('profile');
-    this.driverDocuments.set([]);
+  private fetchFullDriver(driver: DriverRow): void {
     this.api.getDriver(driver.id).subscribe({
       next: (res: any) => {
         const d = res?.data || res;
-        this.selectedDriver.set({
+        const full = {
           ...driver,
           licenseState: d.licenseState || '',
           licenseClass: d.licenseClass || '',
@@ -226,28 +226,51 @@ export class DriverListComponent implements OnInit {
           city: d.addressRef?.city || d.city || '',
           state: d.addressRef?.state || d.state || '',
           zip: d.addressRef?.zipCode || d.zipCode || d.zip || '',
+          ssn: d.ssn || d.socialSecurityNumber || '',
           emergencyContact: d.emergencyContactName || d.emergencyContact || '',
           emergencyPhone: d.emergencyContactPhone || d.emergencyPhone || '',
           dateOfBirth: d.dateOfBirth || '',
           medicalCardExpiry: d.medicalCardExpiry || '',
           payRate: d.payRate || 0,
           payType: d.payType || '',
-        });
+        };
+        if (this._fetchTarget === 'panel') this.selectedDriver.set(full);
+        else this.profileDriver.set(full);
       },
-      error: () => this.selectedDriver.set(driver as any)
+      error: () => {
+        if (this._fetchTarget === 'panel') this.selectedDriver.set(driver as any);
+        else this.profileDriver.set(driver as any);
+      }
     });
+  }
+  private _fetchTarget: 'panel' | 'modal' = 'panel';
+
+  selectDriverRow(driver: DriverRow): void {
+    this._fetchTarget = 'panel';
+    this.fetchFullDriver(driver);
+  }
+
+  viewDriver(driver: DriverRow): void {
+    this.profileTab.set('profile');
+    this.driverDocuments.set([]);
+    this._fetchTarget = 'modal';
+    this.fetchFullDriver(driver);
   }
 
   closeProfile(): void {
     this.selectedDriver.set(null);
+  }
+
+  closeProfileModal(): void {
+    this.profileDriver.set(null);
     this.profileTab.set('profile');
     this.driverDocuments.set([]);
   }
 
   switchProfileTab(tab: 'profile' | 'documents'): void {
     this.profileTab.set(tab);
-    if (tab === 'documents' && this.selectedDriver()) {
-      this.loadDriverDocuments(this.selectedDriver()!.id);
+    if (tab === 'documents' && this.profileDriver()) {
+      this.loadDriverDocuments(this.profileDriver()!.id);
     }
   }
 
