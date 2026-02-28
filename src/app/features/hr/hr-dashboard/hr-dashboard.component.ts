@@ -1,9 +1,28 @@
-import { Component, signal, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, signal, computed, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { lastValueFrom, catchError, of } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
+
+interface RosterSummary {
+  totalEmployees: number;
+  activeEmployees: number;
+  byDepartment: { department: string; count: number }[];
+  byRole: { role: string; count: number }[];
+}
+
+interface SessionDashboard {
+  dailyHours: { date: string; totalHours: number; sessionCount: number }[];
+  employeeHoursThisWeek: { name: string; hours: number }[];
+  clockInDistribution: { morning: number; afternoon: number; evening: number; night: number };
+  uniqueUsersToday: number;
+  totalSessionsToday: number;
+}
+
+interface ChartPoint { name: string; value: number; }
+interface ActivityItem { id: string; icon: string; title: string; description: string; time: string; date: Date; category: string; }
 
 @Component({
   selector: 'app-hr-dashboard',
@@ -38,7 +57,7 @@ import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
         </div>
         <div class="stat-card attendance">
           <i class="bx bx-time-five stat-icon"></i>
-          <div><span class="stat-value">{{ dashStats().uniqueUsersToday || stats().presentToday }}</span><span class="stat-label">Logged In Today</span></div>
+          <div><span class="stat-value">{{ dashStats()?.uniqueUsersToday ?? stats().presentToday }}</span><span class="stat-label">Logged In Today</span></div>
         </div>
         <div class="stat-card payroll">
           <i class="bx bx-money stat-icon"></i>
@@ -58,7 +77,7 @@ import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
             <h3>Daily Work Hours (Last 30 Days)</h3>
             @if (dailyHoursData().length > 0) {
               <ngx-charts-line-chart
-                [results]="dailyHoursChartData"
+                [results]="dailyHoursChartData()"
                 [view]="[chartWidth, 250]"
                 [scheme]="lineScheme"
                 [xAxis]="true"
@@ -163,7 +182,7 @@ import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
             <h3>Headcount Trend</h3>
             @if (headcountData().length > 0) {
               <ngx-charts-area-chart
-                [results]="headcountChartData"
+                [results]="headcountChartData()"
                 [view]="[chartWidth, 250]"
                 [scheme]="areaScheme"
                 [xAxis]="true"
@@ -311,18 +330,25 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   loading = signal(false);
   stats = signal({ totalEmployees: 0, activeEmployees: 0, pendingTimeOff: 0, presentToday: 0, pendingPaychecks: 0, bulkStaging: 0 });
-  dashStats = signal<any>({});
-  recentActivity = signal<any[]>([]);
+  dashStats = signal<SessionDashboard | null>(null);
+  recentActivity = signal<ActivityItem[]>([]);
 
-  // Chart data
-  dailyHoursData = signal<any[]>([]);
-  employeeHoursData = signal<any[]>([]);
-  deptChartData = signal<any[]>([]);
-  roleChartData = signal<any[]>([]);
-  clockInData = signal<any[]>([]);
-  headcountData = signal<any[]>([]);
+  dailyHoursData = signal<ChartPoint[]>([]);
+  employeeHoursData = signal<ChartPoint[]>([]);
+  deptChartData = signal<ChartPoint[]>([]);
+  roleChartData = signal<ChartPoint[]>([]);
+  clockInData = signal<ChartPoint[]>([]);
+  headcountData = signal<ChartPoint[]>([]);
 
   chartWidth = 480;
+
+  dailyHoursChartData = computed(() =>
+    [{ name: 'Hours', series: this.dailyHoursData() }]
+  );
+
+  headcountChartData = computed(() =>
+    [{ name: 'Headcount', series: this.headcountData() }]
+  );
 
   lineScheme: Color = { name: 'line', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
   barScheme: Color = { name: 'bar', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
@@ -330,14 +356,6 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   roleScheme: Color = { name: 'role', selectable: true, group: ScaleType.Ordinal, domain: ['#a855f7', '#818cf8', '#06b6d4', '#00e5ff', '#00ff88', '#ffaa00', '#f97316', '#ff2a6d', '#22c55e', '#ec4899'] };
   clockScheme: Color = { name: 'clock', selectable: true, group: ScaleType.Ordinal, domain: ['#ffaa00', '#00e5ff', '#a855f7', '#1a1a4e'] };
   areaScheme: Color = { name: 'area', selectable: true, group: ScaleType.Ordinal, domain: ['#00ff88'] };
-
-  get dailyHoursChartData() {
-    return [{ name: 'Hours', series: this.dailyHoursData().map(d => ({ name: d.name, value: d.value })) }];
-  }
-
-  get headcountChartData() {
-    return [{ name: 'Headcount', series: this.headcountData().map(d => ({ name: d.name, value: d.value })) }];
-  }
 
   ngOnInit(): void {
     this.updateChartWidth();
@@ -356,102 +374,120 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   async loadAll() {
     this.loading.set(true);
-    await Promise.all([
-      this.loadRosterSummary(),
-      this.loadTimeOff(),
-      this.loadPaychecks(),
-      this.loadStaging(),
-      this.loadDashboardStats(),
-      this.loadSnapshots(),
-      this.loadRecentActivity()
-    ]);
-    this.loading.set(false);
+    try {
+      await Promise.all([
+        this.loadRosterSummary(),
+        this.loadTimeOff(),
+        this.loadPaychecks(),
+        this.loadStaging(),
+        this.loadDashboardStats(),
+        this.loadSnapshots(),
+        this.loadRecentActivity()
+      ]);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private async fetch<T>(url: string): Promise<T | null> {
+    try {
+      return await lastValueFrom(
+        this.http.get<T>(url).pipe(catchError(err => { console.error(`Dashboard fetch failed: ${url}`, err); return of(null as any); }))
+      );
+    } catch (err) {
+      console.error(`Dashboard fetch error: ${url}`, err);
+      return null;
+    }
   }
 
   async loadRosterSummary() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-roster/summary`).toPromise();
-      this.stats.update(s => ({ ...s, totalEmployees: res?.totalEmployees || 0, activeEmployees: res?.activeEmployees || 0 }));
-      const depts = (res?.byDepartment || []).sort((a: any, b: any) => b.count - a.count);
-      const roles = (res?.byRole || []).sort((a: any, b: any) => b.count - a.count);
-      this.deptChartData.set(depts.slice(0, 10).map((d: any) => ({ name: d.department || 'Unassigned', value: d.count })));
-      this.roleChartData.set(roles.slice(0, 10).map((r: any) => ({ name: r.role || 'Unassigned', value: r.count })));
-    } catch {}
+    const res = await this.fetch<RosterSummary>(`${this.apiUrl}/api/v1/employee-roster/summary`);
+    if (!res) return;
+    this.stats.update(s => ({ ...s, totalEmployees: res.totalEmployees ?? 0, activeEmployees: res.activeEmployees ?? 0 }));
+    const depts = (res.byDepartment ?? []).sort((a, b) => b.count - a.count);
+    const roles = (res.byRole ?? []).sort((a, b) => b.count - a.count);
+    this.deptChartData.set(depts.slice(0, 10).map(d => ({ name: d.department || 'Unassigned', value: d.count })));
+    this.roleChartData.set(roles.slice(0, 10).map(r => ({ name: r.role || 'Unassigned', value: r.count })));
   }
 
   async loadTimeOff() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/time-off/requests?status=pending&pageSize=100`).toPromise();
-      this.stats.update(s => ({ ...s, pendingTimeOff: res?.data?.length || res?.total || 0 }));
-    } catch {}
+    const res = await this.fetch<{ data: any[]; total?: number }>(`${this.apiUrl}/api/v1/time-off/requests?status=pending&pageSize=100`);
+    this.stats.update(s => ({ ...s, pendingTimeOff: res?.data?.length ?? res?.total ?? 0 }));
   }
 
   async loadPaychecks() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/paychecks?status=pending&pageSize=100`).toPromise();
-      this.stats.update(s => ({ ...s, pendingPaychecks: res?.data?.length || res?.total || 0 }));
-    } catch {}
+    const res = await this.fetch<{ data: any[]; total?: number }>(`${this.apiUrl}/api/v1/paychecks?status=pending&pageSize=100`);
+    this.stats.update(s => ({ ...s, pendingPaychecks: res?.data?.length ?? res?.total ?? 0 }));
   }
 
   async loadStaging() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-data/staging`).toPromise();
-      this.stats.update(s => ({ ...s, bulkStaging: res?.data?.length || res?.total || 0 }));
-    } catch {}
+    const res = await this.fetch<{ data: any[]; total?: number }>(`${this.apiUrl}/api/v1/employee-data/staging`);
+    this.stats.update(s => ({ ...s, bulkStaging: res?.data?.length ?? res?.total ?? 0 }));
   }
 
   async loadDashboardStats() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/sessions/dashboard`).toPromise();
-      this.dashStats.set(res || {});
+    const res = await this.fetch<SessionDashboard>(`${this.apiUrl}/api/v1/sessions/dashboard`);
+    if (!res) return;
+    this.dashStats.set(res);
 
-      // Daily hours line chart
-      const daily = (res?.dailyHours || []).map((d: any) => ({
+    this.dailyHoursData.set(
+      (res.dailyHours ?? []).map(d => ({
         name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: d.totalHours
-      }));
-      this.dailyHoursData.set(daily);
+        value: d.totalHours ?? 0
+      }))
+    );
 
-      // Employee hours bar chart
-      const empHours = (res?.employeeHoursThisWeek || []).map((e: any) => ({ name: e.name, value: e.hours }));
-      this.employeeHoursData.set(empHours);
+    this.employeeHoursData.set(
+      (res.employeeHoursThisWeek ?? []).map(e => ({ name: e.name, value: e.hours }))
+    );
 
-      // Clock-in distribution
-      const dist = res?.clockInDistribution || {};
-      this.clockInData.set([
-        { name: 'Morning (5-12)', value: dist.morning || 0 },
-        { name: 'Afternoon (12-5)', value: dist.afternoon || 0 },
-        { name: 'Evening (5-9)', value: dist.evening || 0 },
-        { name: 'Night (9-5)', value: dist.night || 0 }
-      ]);
-    } catch {}
+    const dist = res.clockInDistribution ?? { morning: 0, afternoon: 0, evening: 0, night: 0 };
+    this.clockInData.set([
+      { name: 'Morning (5-12)', value: dist.morning },
+      { name: 'Afternoon (12-5)', value: dist.afternoon },
+      { name: 'Evening (5-9)', value: dist.evening },
+      { name: 'Night (9-5)', value: dist.night }
+    ]);
   }
 
   async loadSnapshots() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-snapshots`).toPromise();
-      const snaps = (res?.data || []).slice(0, 12).reverse();
-      this.headcountData.set(snaps.map((s: any) => ({
-        name: this.formatMonth(s.month),
-        value: s.activeCount || 0
-      })));
-    } catch {}
+    const res = await this.fetch<{ data: { month: string; activeCount: number }[] }>(`${this.apiUrl}/api/v1/employee-snapshots`);
+    const snaps = (res?.data ?? []).slice(0, 12).reverse();
+    this.headcountData.set(snaps.map(s => ({ name: this.formatMonth(s.month), value: s.activeCount ?? 0 })));
   }
 
   async loadRecentActivity() {
-    const activities: any[] = [];
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/time-off/requests?pageSize=5`).toPromise();
-      for (const r of (res?.data || [])) {
-        activities.push({ id: 'to-' + r.id, icon: r.status === 'approved' ? 'bx-check-circle' : r.status === 'denied' ? 'bx-x-circle' : 'bx-calendar-event', title: `Time Off ${r.status === 'approved' ? 'Approved' : r.status === 'denied' ? 'Denied' : 'Requested'}`, description: `${r.employeeName || 'Employee'} - ${r.startDate ? new Date(r.startDate).toLocaleDateString() : ''}`, time: this.timeAgo(r.createdAt || r.requestedAt), date: new Date(r.createdAt || r.requestedAt || 0), category: 'timeoff' });
-      }
-    } catch {}
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-documents?pageSize=5`).toPromise();
-      for (const d of (res?.data || [])) {
-        activities.push({ id: 'doc-' + d.id, icon: 'bx-file', title: 'Document Uploaded', description: `${d.documentType || d.fileName || 'Document'} - ${d.employeeName || 'Employee'}`, time: this.timeAgo(d.createdAt || d.uploadedAt), date: new Date(d.createdAt || d.uploadedAt || 0), category: 'document' });
-      }
-    } catch {}
+    const activities: ActivityItem[] = [];
+
+    const [timeOffRes, docsRes] = await Promise.all([
+      this.fetch<{ data: any[] }>(`${this.apiUrl}/api/v1/time-off/requests?pageSize=5`),
+      this.fetch<{ data: any[] }>(`${this.apiUrl}/api/v1/employee-documents?pageSize=5`)
+    ]);
+
+    for (const r of (timeOffRes?.data ?? [])) {
+      activities.push({
+        id: 'to-' + r.id,
+        icon: r.status === 'approved' ? 'bx-check-circle' : r.status === 'denied' ? 'bx-x-circle' : 'bx-calendar-event',
+        title: `Time Off ${r.status === 'approved' ? 'Approved' : r.status === 'denied' ? 'Denied' : 'Requested'}`,
+        description: `${r.employeeName ?? 'Employee'} - ${r.startDate ? new Date(r.startDate).toLocaleDateString() : ''}`,
+        time: this.timeAgo(r.createdAt ?? r.requestedAt),
+        date: new Date(r.createdAt ?? r.requestedAt ?? 0),
+        category: 'timeoff'
+      });
+    }
+
+    for (const d of (docsRes?.data ?? [])) {
+      activities.push({
+        id: 'doc-' + d.id,
+        icon: 'bx-file',
+        title: 'Document Uploaded',
+        description: `${d.documentType ?? d.fileName ?? 'Document'} - ${d.employeeName ?? 'Employee'}`,
+        time: this.timeAgo(d.createdAt ?? d.uploadedAt),
+        date: new Date(d.createdAt ?? d.uploadedAt ?? 0),
+        category: 'document'
+      });
+    }
+
     activities.sort((a, b) => b.date.getTime() - a.date.getTime());
     this.recentActivity.set(activities.slice(0, 10));
   }
