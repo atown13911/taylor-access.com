@@ -105,7 +105,7 @@ public class OAuthController : ControllerBase
     /// </summary>
     [HttpPost("token")]
     [AllowAnonymous]
-    public async Task<ActionResult<TokenResponse>> Token([FromForm] string grant_type, [FromForm] string? code,
+    public async Task<ActionResult<TokenResponse>> Token([FromForm] string? grant_type, [FromForm] string? code,
         [FromForm] string? redirect_uri, [FromForm] string? client_id, [FromForm] string? client_secret,
         [FromForm] string? refresh_token)
     {
