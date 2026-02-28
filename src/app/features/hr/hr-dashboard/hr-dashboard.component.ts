@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
+import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
 
 @Component({
   selector: 'app-hr-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, NgxChartsModule],
   template: `
     <div class="hr-dashboard">
       <div class="page-header">
@@ -25,167 +26,186 @@ import { environment } from '../../../../environments/environment';
       <div class="stats-grid">
         <div class="stat-card total">
           <i class="bx bx-group stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().totalEmployees }}</span>
-            <span class="stat-label">Total Employees</span>
-          </div>
+          <div><span class="stat-value">{{ stats().totalEmployees }}</span><span class="stat-label">Total Employees</span></div>
         </div>
-
-        <div class="stat-card active">
+        <div class="stat-card active-card">
           <i class="bx bx-user-check stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().activeEmployees }}</span>
-            <span class="stat-label">Active</span>
-          </div>
+          <div><span class="stat-value">{{ stats().activeEmployees }}</span><span class="stat-label">Active</span></div>
         </div>
-
         <div class="stat-card timeoff">
           <i class="bx bx-calendar-event stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().pendingTimeOff }}</span>
-            <span class="stat-label">Pending Time Off</span>
-          </div>
+          <div><span class="stat-value">{{ stats().pendingTimeOff }}</span><span class="stat-label">Pending Time Off</span></div>
         </div>
-
         <div class="stat-card attendance">
           <i class="bx bx-time-five stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().presentToday }}</span>
-            <span class="stat-label">Present Today</span>
-          </div>
+          <div><span class="stat-value">{{ dashStats().uniqueUsersToday || stats().presentToday }}</span><span class="stat-label">Logged In Today</span></div>
         </div>
-
         <div class="stat-card payroll">
           <i class="bx bx-money stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().pendingPaychecks }}</span>
-            <span class="stat-label">Pending Paychecks</span>
-          </div>
+          <div><span class="stat-value">{{ stats().pendingPaychecks }}</span><span class="stat-label">Pending Paychecks</span></div>
         </div>
-
         <a routerLink="/hr/roster" [queryParams]="{tab: 'bulk'}" class="stat-card staging clickable">
           <i class="bx bx-table stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().bulkStaging }}</span>
-            <span class="stat-label">Bulk Staging</span>
-          </div>
+          <div><span class="stat-value">{{ stats().bulkStaging }}</span><span class="stat-label">Bulk Staging</span></div>
         </a>
       </div>
 
-      <!-- Workforce Breakdown -->
-      @if (byDepartment().length > 0 || byRole().length > 0) {
-        <div class="breakdown-section">
-          <h2>Workforce Breakdown</h2>
-          <div class="breakdown-grid">
-            @if (byDepartment().length > 0) {
-              <div class="breakdown-card">
-                <h3><i class="bx bx-buildings"></i> By Department</h3>
-                <div class="bar-list">
-                  @for (dept of byDepartment(); track dept.department) {
-                    <div class="bar-item">
-                      <div class="bar-label">
-                        <span>{{ dept.department }}</span>
-                        <span class="bar-count">{{ dept.count }}</span>
-                      </div>
-                      <div class="bar-track">
-                        <div class="bar-fill" [style.width.%]="getBarWidth(dept.count, maxDeptCount())"></div>
-                      </div>
-                    </div>
-                  }
-                </div>
+      <!-- Row 2: Work Hours Charts -->
+      <div class="chart-section">
+        <h2><i class="bx bx-line-chart"></i> Work Hours</h2>
+        <div class="chart-grid-2">
+          <div class="chart-card">
+            <h3>Daily Work Hours (Last 30 Days)</h3>
+            @if (dailyHoursData().length > 0) {
+              <ngx-charts-line-chart
+                [results]="dailyHoursChartData"
+                [view]="[chartWidth, 250]"
+                [scheme]="lineScheme"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="false"
+                [showYAxisLabel]="true"
+                [yAxisLabel]="'Hours'"
+                [autoScale]="true"
+                [animations]="true"
+                [gradient]="true">
+              </ngx-charts-line-chart>
+            } @else {
+              <div class="chart-empty">No session data yet</div>
+            }
+          </div>
+          <div class="chart-card">
+            <h3>Top Employees This Week (Hours)</h3>
+            @if (employeeHoursData().length > 0) {
+              <ngx-charts-bar-horizontal
+                [results]="employeeHoursData()"
+                [view]="[chartWidth, 250]"
+                [scheme]="barScheme"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [xAxisLabel]="'Hours'"
+                [gradient]="true">
+              </ngx-charts-bar-horizontal>
+            } @else {
+              <div class="chart-empty">No data this week</div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Workforce Breakdown -->
+      @if (deptChartData().length > 0 || roleChartData().length > 0) {
+        <div class="chart-section">
+          <h2><i class="bx bx-pie-chart-alt"></i> Workforce Breakdown</h2>
+          <div class="chart-grid-2">
+            @if (deptChartData().length > 0) {
+              <div class="chart-card">
+                <h3>By Department</h3>
+                <ngx-charts-pie-chart
+                  [results]="deptChartData()"
+                  [view]="[chartWidth, 300]"
+                  [scheme]="pieScheme"
+                  [doughnut]="true"
+                  [labels]="true"
+                  [trimLabels]="true"
+                  [maxLabelLength]="15"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-pie-chart>
               </div>
             }
-            @if (byRole().length > 0) {
-              <div class="breakdown-card">
-                <h3><i class="bx bx-shield-quarter"></i> By Role</h3>
-                <div class="bar-list">
-                  @for (role of byRole(); track role.role) {
-                    <div class="bar-item">
-                      <div class="bar-label">
-                        <span>{{ role.role || 'unassigned' }}</span>
-                        <span class="bar-count">{{ role.count }}</span>
-                      </div>
-                      <div class="bar-track">
-                        <div class="bar-fill role-fill" [style.width.%]="getBarWidth(role.count, maxRoleCount())"></div>
-                      </div>
-                    </div>
-                  }
-                </div>
+            @if (roleChartData().length > 0) {
+              <div class="chart-card">
+                <h3>By Role</h3>
+                <ngx-charts-pie-chart
+                  [results]="roleChartData()"
+                  [view]="[chartWidth, 300]"
+                  [scheme]="roleScheme"
+                  [doughnut]="true"
+                  [labels]="true"
+                  [trimLabels]="true"
+                  [maxLabelLength]="15"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-pie-chart>
               </div>
             }
           </div>
         </div>
       }
+
+      <!-- Row 4: Clock-In Distribution -->
+      <div class="chart-section">
+        <h2><i class="bx bx-time"></i> Clock-In Patterns (Today)</h2>
+        <div class="chart-grid-2">
+          <div class="chart-card">
+            <h3>Login Time Distribution</h3>
+            @if (clockInData().length > 0) {
+              <ngx-charts-bar-vertical
+                [results]="clockInData()"
+                [view]="[chartWidth, 250]"
+                [scheme]="clockScheme"
+                [xAxis]="true"
+                [yAxis]="true"
+                [showXAxisLabel]="true"
+                [xAxisLabel]="'Time of Day'"
+                [showYAxisLabel]="true"
+                [yAxisLabel]="'Logins'"
+                [gradient]="true"
+                [animations]="true">
+              </ngx-charts-bar-vertical>
+            } @else {
+              <div class="chart-empty">No logins today</div>
+            }
+          </div>
+          <div class="chart-card">
+            <h3>Headcount Trend</h3>
+            @if (headcountData().length > 0) {
+              <ngx-charts-area-chart
+                [results]="headcountChartData"
+                [view]="[chartWidth, 250]"
+                [scheme]="areaScheme"
+                [xAxis]="true"
+                [yAxis]="true"
+                [autoScale]="true"
+                [gradient]="true"
+                [animations]="true">
+              </ngx-charts-area-chart>
+            } @else {
+              <div class="chart-empty">No trend data</div>
+            }
+          </div>
+        </div>
+      </div>
 
       <!-- Quick Actions -->
       <div class="quick-actions">
         <h2>Quick Actions</h2>
         <div class="action-grid">
-          <a routerLink="/hr/paychecks" class="action-card">
-            <i class="bx bx-money"></i>
-            <span>Process Payroll</span>
-            @if (stats().pendingPaychecks > 0) {
-              <span class="action-badge paycheck-badge">{{ stats().pendingPaychecks }}</span>
-            }
+          <a routerLink="/hr/paychecks" class="action-card"><i class="bx bx-money"></i><span>Process Payroll</span>
+            @if (stats().pendingPaychecks > 0) { <span class="action-badge paycheck-badge">{{ stats().pendingPaychecks }}</span> }
           </a>
-          <a routerLink="/hr/time-off" class="action-card">
-            <i class="bx bx-calendar-event"></i>
-            <span>Review Time Off</span>
-            @if (stats().pendingTimeOff > 0) {
-              <span class="action-badge timeoff-badge">{{ stats().pendingTimeOff }}</span>
-            }
+          <a routerLink="/hr/time-off" class="action-card"><i class="bx bx-calendar-event"></i><span>Review Time Off</span>
+            @if (stats().pendingTimeOff > 0) { <span class="action-badge timeoff-badge">{{ stats().pendingTimeOff }}</span> }
           </a>
-          <a routerLink="/hr/attendance" class="action-card">
-            <i class="bx bx-time-five"></i>
-            <span>View Attendance</span>
-          </a>
-          <a routerLink="/hr/documents" class="action-card">
-            <i class="bx bx-folder"></i>
-            <span>HR Documents</span>
-          </a>
-          <a routerLink="/hr/roster" class="action-card">
-            <i class="bx bx-id-card"></i>
-            <span>Employee Roster</span>
-          </a>
-          <a routerLink="/hr/timesheets" class="action-card">
-            <i class="bx bx-spreadsheet"></i>
-            <span>Timesheets</span>
-          </a>
+          <a routerLink="/hr/time-clock" class="action-card"><i class="bx bx-time-five"></i><span>Time Clock</span></a>
+          <a routerLink="/hr/documents" class="action-card"><i class="bx bx-folder"></i><span>HR Documents</span></a>
+          <a routerLink="/hr/roster" class="action-card"><i class="bx bx-id-card"></i><span>Employee Roster</span></a>
+          <a routerLink="/compliance/dot" class="action-card"><i class="bx bx-shield-alt-2"></i><span>DOT Compliance</span></a>
         </div>
       </div>
-
-      <!-- Headcount Trend -->
-      @if (snapshots().length > 0) {
-        <div class="trend-section">
-          <h2>Headcount Trend</h2>
-          <div class="trend-row">
-            @for (snap of snapshots(); track snap.month) {
-              <div class="trend-item">
-                <span class="trend-value">{{ snap.activeCount }}</span>
-                <span class="trend-month">{{ formatMonth(snap.month) }}</span>
-              </div>
-            }
-          </div>
-        </div>
-      }
 
       <!-- Recent Activity -->
       <div class="recent-section">
         <h2>Recent Activity</h2>
         @if (recentActivity().length === 0) {
-          <div class="activity-list">
-            <div class="activity-empty">
-              <i class="bx bx-history"></i>
-              <span>No recent activity found</span>
-            </div>
-          </div>
+          <div class="activity-list"><div class="activity-empty"><i class="bx bx-history"></i><span>No recent activity found</span></div></div>
         } @else {
           <div class="activity-list">
             @for (activity of recentActivity(); track activity.id) {
               <div class="activity-item">
-                <div class="activity-icon-wrap" [class]="activity.category">
-                  <i [class]="'bx ' + activity.icon"></i>
-                </div>
+                <div class="activity-icon-wrap" [class]="activity.category"><i [class]="'bx ' + activity.icon"></i></div>
                 <div class="activity-content">
                   <strong>{{ activity.title }}</strong>
                   <span>{{ activity.description }}</span>
@@ -200,160 +220,86 @@ import { environment } from '../../../../environments/environment';
   `,
   styles: [`
     .hr-dashboard { padding: 24px; }
-
-    .page-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-    }
-    .page-header h1 {
-      color: #00f2fe; font-size: 2rem; margin: 0 0 8px 0;
-      display: flex; align-items: center; gap: 12px;
-      text-shadow: 0 0 20px rgba(0, 242, 254, 0.5);
-    }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .page-header h1 { color: #00f2fe; font-size: 2rem; margin: 0 0 8px 0; display: flex; align-items: center; gap: 12px; text-shadow: 0 0 20px rgba(0,242,254,0.5); }
     .page-header p { color: #9ca3af; margin: 0; }
-
-    .btn-refresh {
-      padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;
-      border: 1px solid rgba(0, 242, 254, 0.3); background: rgba(0, 242, 254, 0.1);
-      color: #00f2fe; display: flex; align-items: center; gap: 6px; transition: all 0.2s;
-    }
-    .btn-refresh:hover:not(:disabled) { background: rgba(0, 242, 254, 0.2); }
+    .btn-refresh { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; border: 1px solid rgba(0,242,254,0.3); background: rgba(0,242,254,0.1); color: #00f2fe; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .btn-refresh:hover:not(:disabled) { background: rgba(0,242,254,0.2); }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* Stats */
-    .stats-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px; margin: 24px 0 32px;
-    }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0 32px; }
     .stat-card {
-      background: rgba(26, 26, 46, 0.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(0, 242, 254, 0.2); border-radius: 14px;
-      padding: 20px; display: flex; align-items: center; gap: 16px;
-      transition: all 0.3s ease;
+      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 20px; display: flex; align-items: center; gap: 16px; transition: all 0.3s ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
     }
-    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 0 25px rgba(0, 242, 254, 0.2); }
+    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 0 25px rgba(0,242,254,0.2); }
     .stat-card.clickable { cursor: pointer; text-decoration: none; }
-
-    .stat-card.total { border-color: rgba(0, 212, 255, 0.3); }
+    .stat-icon { font-size: 2.2rem; }
+    .stat-value { font-size: 1.8rem; font-weight: 700; display: block; }
+    .stat-label { font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
     .stat-card.total .stat-icon, .stat-card.total .stat-value { color: #00d4ff; }
-    .stat-card.active { border-color: rgba(34, 197, 94, 0.3); }
-    .stat-card.active .stat-icon, .stat-card.active .stat-value { color: #22c55e; }
-    .stat-card.timeoff { border-color: rgba(251, 191, 36, 0.3); }
+    .stat-card.active-card .stat-icon, .stat-card.active-card .stat-value { color: #22c55e; }
     .stat-card.timeoff .stat-icon, .stat-card.timeoff .stat-value { color: #fbbf24; }
-    .stat-card.attendance { border-color: rgba(168, 85, 247, 0.3); }
     .stat-card.attendance .stat-icon, .stat-card.attendance .stat-value { color: #a855f7; }
-    .stat-card.payroll { border-color: rgba(59, 130, 246, 0.3); }
     .stat-card.payroll .stat-icon, .stat-card.payroll .stat-value { color: #3b82f6; }
-    .stat-card.staging { border-color: rgba(0, 242, 254, 0.3); }
     .stat-card.staging .stat-icon, .stat-card.staging .stat-value { color: #00f2fe; }
 
-    .stat-icon { font-size: 2.4rem; }
-    .stat-value { display: block; font-size: 1.8rem; font-weight: 700; line-height: 1; }
-    .stat-label { display: block; font-size: 0.8rem; color: #9ca3af; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .chart-section { margin-bottom: 32px; }
+    .chart-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; i { color: var(--cyan); } }
+    .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .chart-card {
+      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px; overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 16px; font-weight: 500; }
+    }
+    .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
 
-    /* Breakdown */
-    .breakdown-section { margin-bottom: 32px; }
-    .breakdown-section h2, .quick-actions h2, .recent-section h2, .trend-section h2 {
-      color: #00f2fe; margin-bottom: 16px; font-size: 1.2rem;
-    }
-    .breakdown-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 16px;
-    }
-    .breakdown-card {
-      background: rgba(26, 26, 46, 0.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(0, 242, 254, 0.15); border-radius: 14px; padding: 20px;
-    }
-    .breakdown-card h3 {
-      color: #e0e0e0; font-size: 0.95rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
-    }
-    .breakdown-card h3 i { color: #00f2fe; }
-    .bar-list { display: flex; flex-direction: column; gap: 10px; }
-    .bar-item { }
-    .bar-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.85rem; }
-    .bar-label span:first-child { color: #d1d5db; text-transform: capitalize; }
-    .bar-count { color: #00f2fe; font-weight: 600; }
-    .bar-track {
-      height: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 3px; overflow: hidden;
-    }
-    .bar-fill {
-      height: 100%; background: linear-gradient(90deg, #00f2fe, #00d4ff);
-      border-radius: 3px; transition: width 0.6s ease;
-    }
-    .bar-fill.role-fill { background: linear-gradient(90deg, #a855f7, #7c3aed); }
+    ::ng-deep .ngx-charts { text { fill: #aaa !important; } .gridline-path { stroke: rgba(255,255,255,0.06) !important; } }
+    ::ng-deep .ngx-charts .tick text { fill: #888 !important; font-size: 10px !important; }
+    ::ng-deep .ngx-charts .label { fill: #ccc !important; font-size: 11px !important; }
 
-    /* Quick Actions */
-    .action-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px; margin-bottom: 32px;
-    }
+    .quick-actions { margin-bottom: 32px; }
+    .quick-actions h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
+    .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
     .action-card {
-      background: rgba(26, 26, 46, 0.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(0, 242, 254, 0.15); border-radius: 12px;
-      padding: 20px; display: flex; flex-direction: column; align-items: center;
-      gap: 10px; text-decoration: none; color: #e0e0e0;
-      transition: all 0.3s ease; cursor: pointer; position: relative;
+      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
+      padding: 20px; text-align: center; cursor: pointer; text-decoration: none;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      transition: all 0.3s; position: relative;
+      i { font-size: 2rem; color: var(--cyan); }
+      span { color: #ccc; font-size: 0.82rem; font-weight: 500; }
+      &:hover { border-color: var(--cyan); transform: translateY(-2px); box-shadow: 0 0 20px rgba(0,212,255,0.15); }
     }
-    .action-card:hover {
-      transform: translateY(-3px); border-color: #00f2fe;
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
-    }
-    .action-card i { font-size: 2.2rem; color: #00f2fe; }
-    .action-card span { font-size: 0.85rem; text-align: center; }
-    .action-badge {
-      position: absolute; top: 8px; right: 8px;
-      min-width: 22px; height: 22px; border-radius: 11px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.7rem; font-weight: 700; padding: 0 6px;
-    }
-    .timeoff-badge { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
-    .paycheck-badge { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); }
+    .action-badge { position: absolute; top: 8px; right: 8px; background: #ff2a6d; color: #fff; font-size: 0.65rem; padding: 2px 6px; border-radius: 8px; font-weight: 700; }
 
-    /* Headcount Trend */
-    .trend-section { margin-bottom: 32px; }
-    .trend-row {
-      display: flex; gap: 8px; overflow-x: auto; padding: 4px 0;
-    }
-    .trend-item {
-      background: rgba(26, 26, 46, 0.6); border: 1px solid rgba(0, 242, 254, 0.15);
-      border-radius: 10px; padding: 12px 16px; min-width: 80px;
-      display: flex; flex-direction: column; align-items: center; gap: 4px;
-      flex-shrink: 0;
-    }
-    .trend-value { font-size: 1.3rem; font-weight: 700; color: #00f2fe; }
-    .trend-month { font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; }
-
-    /* Recent Activity */
+    .recent-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
     .activity-list {
-      background: rgba(26, 26, 46, 0.6); backdrop-filter: blur(12px);
-      border: 1px solid rgba(0, 242, 254, 0.15); border-radius: 14px; padding: 8px;
+      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; overflow: hidden;
     }
-    .activity-empty {
-      padding: 40px; text-align: center; color: #6b7280;
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-    }
-    .activity-empty i { font-size: 2rem; }
-    .activity-item {
-      display: flex; gap: 14px; padding: 14px; border-radius: 10px;
-      transition: background 0.2s;
-    }
-    .activity-item:hover { background: rgba(255, 255, 255, 0.03); }
+    .activity-empty { padding: 40px; text-align: center; color: #555; display: flex; flex-direction: column; align-items: center; gap: 8px; i { font-size: 2rem; } }
+    .activity-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
+    .activity-item:hover { background: rgba(255,255,255,0.02); }
+    .activity-item:last-child { border-bottom: none; }
     .activity-icon-wrap {
-      width: 36px; height: 36px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      &.timeoff { background: rgba(251,191,36,0.15); color: #fbbf24; }
+      &.paycheck { background: rgba(59,130,246,0.15); color: #3b82f6; }
+      &.document { background: rgba(0,212,255,0.15); color: #00d4ff; }
+      &.attendance { background: rgba(168,85,247,0.15); color: #a855f7; }
     }
-    .activity-icon-wrap i { font-size: 1.2rem; }
-    .activity-icon-wrap.timeoff { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
-    .activity-icon-wrap.timeoff i { color: #fbbf24; }
-    .activity-icon-wrap.paycheck { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-    .activity-icon-wrap.paycheck i { color: #3b82f6; }
-    .activity-icon-wrap.document { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-    .activity-icon-wrap.document i { color: #22c55e; }
-    .activity-icon-wrap.attendance { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
-    .activity-icon-wrap.attendance i { color: #a855f7; }
+    .activity-content { display: flex; flex-direction: column; gap: 2px;
+      strong { color: #e0f7ff; font-size: 0.85rem; }
+      span { color: #888; font-size: 0.8rem; }
+      .time { font-size: 0.72rem; color: #555; }
+    }
 
-    .activity-content { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .activity-content strong { color: #e0e0e0; font-size: 0.9rem; }
-    .activity-content span { color: #9ca3af; font-size: 0.8rem; }
-    .time { font-size: 0.75rem !important; color: #6b7280 !important; }
+    @media (max-width: 900px) { .chart-grid-2 { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .action-grid { grid-template-columns: repeat(2, 1fr); } }
   `]
 })
 export class HrDashboardComponent implements OnInit {
@@ -361,24 +307,44 @@ export class HrDashboardComponent implements OnInit {
   private apiUrl = environment.apiUrl;
 
   loading = signal(false);
-  stats = signal({
-    totalEmployees: 0,
-    activeEmployees: 0,
-    pendingTimeOff: 0,
-    presentToday: 0,
-    pendingPaychecks: 0,
-    bulkStaging: 0
-  });
-
-  byDepartment = signal<any[]>([]);
-  byRole = signal<any[]>([]);
-  maxDeptCount = signal(1);
-  maxRoleCount = signal(1);
-  snapshots = signal<any[]>([]);
+  stats = signal({ totalEmployees: 0, activeEmployees: 0, pendingTimeOff: 0, presentToday: 0, pendingPaychecks: 0, bulkStaging: 0 });
+  dashStats = signal<any>({});
   recentActivity = signal<any[]>([]);
 
-  ngOnInit() {
+  // Chart data
+  dailyHoursData = signal<any[]>([]);
+  employeeHoursData = signal<any[]>([]);
+  deptChartData = signal<any[]>([]);
+  roleChartData = signal<any[]>([]);
+  clockInData = signal<any[]>([]);
+  headcountData = signal<any[]>([]);
+
+  chartWidth = 480;
+
+  lineScheme: Color = { name: 'line', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
+  barScheme: Color = { name: 'bar', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
+  pieScheme: Color = { name: 'pie', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff', '#a855f7', '#00ff88', '#ffaa00', '#ff2a6d', '#818cf8', '#06b6d4', '#f97316', '#22c55e', '#ec4899'] };
+  roleScheme: Color = { name: 'role', selectable: true, group: ScaleType.Ordinal, domain: ['#a855f7', '#818cf8', '#06b6d4', '#00e5ff', '#00ff88', '#ffaa00', '#f97316', '#ff2a6d', '#22c55e', '#ec4899'] };
+  clockScheme: Color = { name: 'clock', selectable: true, group: ScaleType.Ordinal, domain: ['#ffaa00', '#00e5ff', '#a855f7', '#1a1a4e'] };
+  areaScheme: Color = { name: 'area', selectable: true, group: ScaleType.Ordinal, domain: ['#00ff88'] };
+
+  get dailyHoursChartData() {
+    return [{ name: 'Hours', series: this.dailyHoursData().map(d => ({ name: d.name, value: d.value })) }];
+  }
+
+  get headcountChartData() {
+    return [{ name: 'Headcount', series: this.headcountData().map(d => ({ name: d.name, value: d.value })) }];
+  }
+
+  ngOnInit(): void {
+    this.updateChartWidth();
+    window.addEventListener('resize', () => this.updateChartWidth());
     this.loadAll();
+  }
+
+  updateChartWidth(): void {
+    const w = window.innerWidth;
+    this.chartWidth = w > 1400 ? 580 : w > 1000 ? 480 : w > 700 ? 400 : w - 80;
   }
 
   async loadAll() {
@@ -386,9 +352,9 @@ export class HrDashboardComponent implements OnInit {
     await Promise.all([
       this.loadRosterSummary(),
       this.loadTimeOff(),
-      this.loadAttendance(),
       this.loadPaychecks(),
       this.loadStaging(),
+      this.loadDashboardStats(),
       this.loadSnapshots(),
       this.loadRecentActivity()
     ]);
@@ -398,130 +364,89 @@ export class HrDashboardComponent implements OnInit {
   async loadRosterSummary() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-roster/summary`).toPromise();
-      this.stats.update(s => ({
-        ...s,
-        totalEmployees: res?.totalEmployees || 0,
-        activeEmployees: res?.activeEmployees || 0
-      }));
+      this.stats.update(s => ({ ...s, totalEmployees: res?.totalEmployees || 0, activeEmployees: res?.activeEmployees || 0 }));
       const depts = (res?.byDepartment || []).sort((a: any, b: any) => b.count - a.count);
       const roles = (res?.byRole || []).sort((a: any, b: any) => b.count - a.count);
-      this.byDepartment.set(depts);
-      this.byRole.set(roles);
-      this.maxDeptCount.set(depts[0]?.count || 1);
-      this.maxRoleCount.set(roles[0]?.count || 1);
-    } catch { }
+      this.deptChartData.set(depts.slice(0, 10).map((d: any) => ({ name: d.department || 'Unassigned', value: d.count })));
+      this.roleChartData.set(roles.slice(0, 10).map((r: any) => ({ name: r.role || 'Unassigned', value: r.count })));
+    } catch {}
   }
 
   async loadTimeOff() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/time-off/requests?status=pending&pageSize=100`).toPromise();
-      const count = res?.data?.length || res?.total || 0;
-      this.stats.update(s => ({ ...s, pendingTimeOff: count }));
-    } catch { }
-  }
-
-  async loadAttendance() {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/attendance?date=${today}&pageSize=1000`).toPromise();
-      const count = res?.data?.length || 0;
-      this.stats.update(s => ({ ...s, presentToday: count }));
-    } catch { }
+      this.stats.update(s => ({ ...s, pendingTimeOff: res?.data?.length || res?.total || 0 }));
+    } catch {}
   }
 
   async loadPaychecks() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/paychecks?status=pending&pageSize=100`).toPromise();
-      const count = res?.data?.length || res?.total || 0;
-      this.stats.update(s => ({ ...s, pendingPaychecks: count }));
-    } catch { }
+      this.stats.update(s => ({ ...s, pendingPaychecks: res?.data?.length || res?.total || 0 }));
+    } catch {}
   }
 
   async loadStaging() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-data/staging`).toPromise();
-      const count = res?.data?.length || res?.total || 0;
-      this.stats.update(s => ({ ...s, bulkStaging: count }));
-    } catch { }
+      this.stats.update(s => ({ ...s, bulkStaging: res?.data?.length || res?.total || 0 }));
+    } catch {}
+  }
+
+  async loadDashboardStats() {
+    try {
+      const res: any = await this.http.get(`${this.apiUrl}/api/v1/sessions/dashboard`).toPromise();
+      this.dashStats.set(res || {});
+
+      // Daily hours line chart
+      const daily = (res?.dailyHours || []).map((d: any) => ({
+        name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: d.totalHours
+      }));
+      this.dailyHoursData.set(daily);
+
+      // Employee hours bar chart
+      const empHours = (res?.employeeHoursThisWeek || []).map((e: any) => ({ name: e.name, value: e.hours }));
+      this.employeeHoursData.set(empHours);
+
+      // Clock-in distribution
+      const dist = res?.clockInDistribution || {};
+      this.clockInData.set([
+        { name: 'Morning (5-12)', value: dist.morning || 0 },
+        { name: 'Afternoon (12-5)', value: dist.afternoon || 0 },
+        { name: 'Evening (5-9)', value: dist.evening || 0 },
+        { name: 'Night (9-5)', value: dist.night || 0 }
+      ]);
+    } catch {}
   }
 
   async loadSnapshots() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-snapshots`).toPromise();
       const snaps = (res?.data || []).slice(0, 12).reverse();
-      this.snapshots.set(snaps);
-    } catch { }
+      this.headcountData.set(snaps.map((s: any) => ({
+        name: this.formatMonth(s.month),
+        value: s.activeCount || 0
+      })));
+    } catch {}
   }
 
   async loadRecentActivity() {
     const activities: any[] = [];
-
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/time-off/requests?pageSize=5`).toPromise();
       for (const r of (res?.data || [])) {
-        activities.push({
-          id: 'to-' + r.id,
-          icon: r.status === 'approved' ? 'bx-check-circle' : r.status === 'denied' ? 'bx-x-circle' : 'bx-calendar-event',
-          title: `Time Off ${r.status === 'approved' ? 'Approved' : r.status === 'denied' ? 'Denied' : 'Requested'}`,
-          description: `${r.employeeName || 'Employee'} - ${r.startDate ? new Date(r.startDate).toLocaleDateString() : ''} to ${r.endDate ? new Date(r.endDate).toLocaleDateString() : ''}`,
-          time: this.timeAgo(r.createdAt || r.requestedAt),
-          date: new Date(r.createdAt || r.requestedAt || 0),
-          category: 'timeoff'
-        });
+        activities.push({ id: 'to-' + r.id, icon: r.status === 'approved' ? 'bx-check-circle' : r.status === 'denied' ? 'bx-x-circle' : 'bx-calendar-event', title: `Time Off ${r.status === 'approved' ? 'Approved' : r.status === 'denied' ? 'Denied' : 'Requested'}`, description: `${r.employeeName || 'Employee'} - ${r.startDate ? new Date(r.startDate).toLocaleDateString() : ''}`, time: this.timeAgo(r.createdAt || r.requestedAt), date: new Date(r.createdAt || r.requestedAt || 0), category: 'timeoff' });
       }
-    } catch { }
-
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/paychecks?pageSize=5`).toPromise();
-      for (const p of (res?.data || [])) {
-        activities.push({
-          id: 'pc-' + p.id,
-          icon: p.status === 'paid' ? 'bx-check-double' : 'bx-money',
-          title: `Paycheck ${p.status === 'paid' ? 'Paid' : p.status === 'approved' ? 'Approved' : 'Created'}`,
-          description: `${p.employeeName || 'Employee'} - $${(p.netPay || p.grossPay || 0).toLocaleString()}`,
-          time: this.timeAgo(p.createdAt),
-          date: new Date(p.createdAt || 0),
-          category: 'paycheck'
-        });
-      }
-    } catch { }
-
+    } catch {}
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-documents?pageSize=5`).toPromise();
       for (const d of (res?.data || [])) {
-        activities.push({
-          id: 'doc-' + d.id,
-          icon: 'bx-file',
-          title: 'Document Uploaded',
-          description: `${d.documentType || d.fileName || 'Document'} - ${d.employeeName || 'Employee'}`,
-          time: this.timeAgo(d.createdAt || d.uploadedAt),
-          date: new Date(d.createdAt || d.uploadedAt || 0),
-          category: 'document'
-        });
+        activities.push({ id: 'doc-' + d.id, icon: 'bx-file', title: 'Document Uploaded', description: `${d.documentType || d.fileName || 'Document'} - ${d.employeeName || 'Employee'}`, time: this.timeAgo(d.createdAt || d.uploadedAt), date: new Date(d.createdAt || d.uploadedAt || 0), category: 'document' });
       }
-    } catch { }
-
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/attendance?pageSize=5`).toPromise();
-      for (const a of (res?.data || [])) {
-        activities.push({
-          id: 'att-' + a.id,
-          icon: 'bx-log-in',
-          title: a.clockOut ? 'Clocked Out' : 'Clocked In',
-          description: `${a.employeeName || 'Employee'} - ${a.workedHours ? a.workedHours.toFixed(1) + 'h' : 'active'}`,
-          time: this.timeAgo(a.clockIn || a.createdAt),
-          date: new Date(a.clockIn || a.createdAt || 0),
-          category: 'attendance'
-        });
-      }
-    } catch { }
-
+    } catch {}
     activities.sort((a, b) => b.date.getTime() - a.date.getTime());
     this.recentActivity.set(activities.slice(0, 10));
-  }
-
-  getBarWidth(count: number, max: number): number {
-    return max > 0 ? (count / max) * 100 : 0;
   }
 
   formatMonth(month: string): string {
@@ -533,9 +458,7 @@ export class HrDashboardComponent implements OnInit {
 
   timeAgo(dateStr: string): string {
     if (!dateStr) return '';
-    const now = Date.now();
-    const then = new Date(dateStr).getTime();
-    const diff = now - then;
+    const diff = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m ago`;

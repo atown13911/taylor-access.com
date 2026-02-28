@@ -89,6 +89,59 @@ public class SessionsController : ControllerBase
             sessionsMonth = monthSessions.Count
         });
     }
+    [HttpGet("dashboard")]
+    public async Task<ActionResult> GetDashboardStats()
+    {
+        var now = DateTime.UtcNow;
+        var thirtyDaysAgo = now.AddDays(-30);
+        var weekStart = now.Date.AddDays(-(int)now.DayOfWeek);
+        var todayStart = now.Date;
+
+        var allSessions = await _mongo.GetUserSessionsAsync(null, thirtyDaysAgo, now, 5000);
+
+        // Daily hours (last 30 days)
+        var dailyHours = allSessions
+            .GroupBy(s => s.LoginTime.Date)
+            .Select(g => new {
+                date = g.Key.ToString("yyyy-MM-dd"),
+                totalHours = Math.Round(g.Sum(s => s.DurationMinutes ?? 0) / 60.0, 1),
+                sessionCount = g.Count()
+            })
+            .OrderBy(d => d.date)
+            .ToList();
+
+        // Employee hours this week (top 10)
+        var weekSessions = allSessions.Where(s => s.LoginTime >= weekStart).ToList();
+        var employeeHoursThisWeek = weekSessions
+            .GroupBy(s => s.UserName ?? "Unknown")
+            .Select(g => new {
+                name = g.Key,
+                hours = Math.Round(g.Sum(s => s.DurationMinutes ?? 0) / 60.0, 1)
+            })
+            .OrderByDescending(e => e.hours)
+            .Take(10)
+            .ToList();
+
+        // Clock-in distribution
+        var todaySessions = allSessions.Where(s => s.LoginTime >= todayStart).ToList();
+        var clockInDist = new {
+            morning = todaySessions.Count(s => s.LoginTime.Hour >= 5 && s.LoginTime.Hour < 12),
+            afternoon = todaySessions.Count(s => s.LoginTime.Hour >= 12 && s.LoginTime.Hour < 17),
+            evening = todaySessions.Count(s => s.LoginTime.Hour >= 17 && s.LoginTime.Hour < 21),
+            night = todaySessions.Count(s => s.LoginTime.Hour >= 21 || s.LoginTime.Hour < 5)
+        };
+
+        // Unique users today vs total users
+        var uniqueUsersToday = todaySessions.Select(s => s.UserId).Distinct().Count();
+
+        return Ok(new {
+            dailyHours,
+            employeeHoursThisWeek,
+            clockInDistribution = clockInDist,
+            uniqueUsersToday,
+            totalSessionsToday = todaySessions.Count
+        });
+    }
 }
 
 public record EndSessionRequest(string? SessionId, string? Reason);
