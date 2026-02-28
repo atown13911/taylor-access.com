@@ -148,3 +148,62 @@ td {
 tr:hover td {
   background: var(--accent-03);
 }
+
+// Glassmorphism panels - activated when background image is set
+.content-area[style*="background-image"] {
+  .page-header, .page-container > header,
+  .stats-grid, .stat-card, .stats-bar .stat-card,
+  .roster-page > .page-header,
+  .compliance-container .page-header {
+    background: rgba(10, 10, 26, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 212, 255, 0.08);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  table {
+    background: rgba(10, 10, 26, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  th {
+    background: rgba(10, 10, 26, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  td {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+  }
+
+  tr:hover td {
+    background: rgba(0, 212, 255, 0.06);
+  }
+
+  .matrix-table-wrapper,
+  .profile-layout, .profile-sidebar,
+  .content-section,
+  .app-card, .apps-grid .app-card,
+  .filters-bar .search-box,
+  .status-tabs, .page-tabs,
+  .legend,
+  .details-panel {
+    background: rgba(10, 10, 26, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 212, 255, 0.08);
+    border-radius: 10px;
+  }
+
+  .sidebar-footer {
+    background: rgba(10, 10, 26, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+}
