@@ -1,10 +1,10 @@
 const { Client } = require('pg');
 
-// VanTac DB (source) - use public proxy URLs
-const SOURCE_URL = process.env.VANTAC_DB_URL || 'postgresql://postgres:HCBxSXAbVdPyfrgJINqtPmHJzIOVtmEZ@monorail.proxy.rlwy.net:24513/railway';
+// VanTac DB (source) - public proxy
+const SOURCE_URL = process.env.VANTAC_DB_URL || 'postgresql://postgres:FvvaZajshbyeSurLBYhxSegTipctVVjH@interchange.proxy.rlwy.net:41778/railway';
 
-// Taylor Access DB (target)
-const TARGET_URL = process.env.DATABASE_URL || process.env.TA_DB_URL || 'postgresql://postgres:FvvaZajshbyeSurLBYhxSegTipctVVjH@vantac_db.railway.internal:5432/railway';
+// Taylor Access DB (target) - public proxy
+const TARGET_URL = process.env.TA_DB_URL || 'postgresql://postgres:PdMRjqwZUlmsOwRQtxGiUVUdAjWGuxXw@maglev.proxy.rlwy.net:57249/railway';
 
 async function run() {
   const src = new Client({ connectionString: SOURCE_URL });
