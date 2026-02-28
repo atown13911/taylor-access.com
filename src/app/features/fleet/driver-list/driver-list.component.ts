@@ -85,6 +85,7 @@ export class DriverListComponent implements OnInit {
     city: '',
     state: '',
     zip: '',
+    ssn: '',
     emergencyContact: '',
     emergencyPhone: '',
     hireDate: '',
@@ -341,6 +342,7 @@ export class DriverListComponent implements OnInit {
           city: d.addressRef?.city || d.city || '',
           state: d.addressRef?.state || d.state || '',
           zip: d.addressRef?.zipCode || d.zipCode || d.zip || '',
+          ssn: d.ssn || d.socialSecurityNumber || '',
           emergencyContact: d.emergencyContactName || d.emergencyContact || '',
           emergencyPhone: d.emergencyContactPhone || d.emergencyPhone || '',
           hireDate: d.hireDate ? d.hireDate.split('T')[0] : '',
@@ -359,7 +361,7 @@ export class DriverListComponent implements OnInit {
           name: driver.name, email: driver.email, phone: driver.phone,
           fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
           licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : '',
-          dateOfBirth: '', address: '', city: '', state: '', zip: '',
+          dateOfBirth: '', address: '', city: '', state: '', zip: '', ssn: '',
           emergencyContact: '', emergencyPhone: '',
           hireDate: driver.hireDate ? driver.hireDate.split('T')[0] : '',
           payRate: 0, payType: 'mile', driverType: driver.type || 'company',
@@ -379,7 +381,7 @@ export class DriverListComponent implements OnInit {
     this.driverForm.set({
       name: '', email: '', phone: '', fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
-      address: '', city: '', state: '', zip: '', emergencyContact: '', emergencyPhone: '',
+      address: '', city: '', state: '', zip: '', ssn: '', emergencyContact: '', emergencyPhone: '',
       hireDate: '', payRate: 0, payType: 'mile', driverType: 'company',
       teamDriverId: null, teamDriverName: ''
     });
@@ -458,6 +460,7 @@ export class DriverListComponent implements OnInit {
       state: form.state,
       zipCode: form.zip,
       zip: form.zip,
+      ssn: form.ssn || null,
       emergencyContactName: form.emergencyContact,
       emergencyContact: form.emergencyContact,
       emergencyContactPhone: form.emergencyPhone,
