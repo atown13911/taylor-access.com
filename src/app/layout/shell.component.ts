@@ -55,7 +55,6 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
         { label: 'Benefits', icon: 'bx bx-star', route: '/hr/benefits' },
         { label: 'Performance Reviews', icon: 'bx bx-bar-chart-alt-2', route: '/hr/performance-reviews' },
-        { label: 'HR Documents', icon: 'bx bx-file', route: '/hr/documents' },
       ]
     },
     {
@@ -79,6 +78,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit' },
         { label: 'Invite Users', icon: 'bx bx-user-plus', route: '/admin/invite' },
         { label: 'Connected Apps (SSO)', icon: 'bx bx-link', route: '/admin/apps' },
+        { label: 'HR Documents', icon: 'bx bx-file', route: '/hr/documents' },
         { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
         { label: 'Database', icon: 'bx bx-data', route: '/database' },
       ]
