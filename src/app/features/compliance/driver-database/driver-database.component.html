@@ -1,103 +1,176 @@
-<div class="compliance-container">
-  <div class="page-header">
-    <div class="header-text">
-      <h1><i class='bx bx-group'></i> Driver Compliance Database</h1>
-      <p class="subtitle">Track driver compliance status at a glance</p>
+<div class="compliance-container" [class.panel-open]="selectedDriver()">
+  <div class="main-area">
+    <div class="page-header">
+      <div class="header-text">
+        <h1><i class='bx bx-group'></i> Driver Compliance Database</h1>
+        <p class="subtitle">Track driver compliance status at a glance</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn-refresh" (click)="loadDrivers()"><i class='bx bx-refresh'></i> Refresh</button>
+      </div>
     </div>
-    <div class="header-actions">
-      <button class="btn-refresh" (click)="loadDrivers()"><i class='bx bx-refresh'></i> Refresh</button>
+
+    <!-- Status Tabs -->
+    <div class="status-tabs">
+      <button class="status-tab" [class.active]="activeStatusTab() === 'active'" (click)="activeStatusTab.set('active')">
+        <i class='bx bx-check-circle'></i> Active <span class="tab-count">{{ tabCounts().active }}</span>
+      </button>
+      <button class="status-tab" [class.active]="activeStatusTab() === 'inactive'" (click)="activeStatusTab.set('inactive')">
+        <i class='bx bx-pause-circle'></i> Inactive <span class="tab-count">{{ tabCounts().inactive }}</span>
+      </button>
+      <button class="status-tab" [class.active]="activeStatusTab() === 'archived'" (click)="activeStatusTab.set('archived')">
+        <i class='bx bx-archive'></i> Archived <span class="tab-count">{{ tabCounts().archived }}</span>
+      </button>
     </div>
-  </div>
 
-  <!-- Status Tabs -->
-  <div class="status-tabs">
-    <button class="status-tab" [class.active]="activeStatusTab() === 'active'" (click)="activeStatusTab.set('active')">
-      <i class='bx bx-check-circle'></i> Active <span class="tab-count">{{ tabCounts().active }}</span>
-    </button>
-    <button class="status-tab" [class.active]="activeStatusTab() === 'inactive'" (click)="activeStatusTab.set('inactive')">
-      <i class='bx bx-pause-circle'></i> Inactive <span class="tab-count">{{ tabCounts().inactive }}</span>
-    </button>
-    <button class="status-tab" [class.active]="activeStatusTab() === 'archived'" (click)="activeStatusTab.set('archived')">
-      <i class='bx bx-archive'></i> Archived <span class="tab-count">{{ tabCounts().archived }}</span>
-    </button>
-  </div>
-
-  <!-- Search -->
-  <div class="filters-bar">
-    <div class="search-box">
-      <i class='bx bx-search'></i>
-      <input type="text" [(ngModel)]="searchTerm" placeholder="Search by name, phone, email, license...">
+    <!-- Search -->
+    <div class="filters-bar">
+      <div class="search-box">
+        <i class='bx bx-search'></i>
+        <input type="text" [(ngModel)]="searchTerm" placeholder="Search by name, phone, email, license...">
+      </div>
     </div>
-  </div>
 
-  <!-- Compliance Matrix Table -->
-  <div class="matrix-table-wrapper">
-    <table class="matrix-table">
-      <thead>
-        <tr>
-          <th class="col-name">Driver</th>
-          <th class="col-status">Status</th>
-          <th class="col-dot" title="CDL / License">CDL</th>
-          <th class="col-dot" title="Medical Certificate">Medical</th>
-          <th class="col-dot" title="Motor Vehicle Record">MVR</th>
-          <th class="col-dot" title="Drug & Alcohol Testing">Drug Test</th>
-          <th class="col-dot" title="Driver Qualification File">DQF</th>
-          <th class="col-dot" title="Employment Verification">Employment</th>
-          <th class="col-dot" title="Training & Orientation">Training</th>
-          <th class="col-dot" title="Insurance Coverage">Insurance</th>
-          <th class="col-dot" title="Vehicle Documents">Vehicle</th>
-          <th class="col-dot" title="Permits & Authority">Permits</th>
-          <th class="col-dot" title="IFTA Compliance">IFTA</th>
-          <th class="col-dot" title="Safety Awards">Safety</th>
-          <th class="col-dot" title="Violations Record">Violations</th>
-          <th class="col-overall">Overall</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (driver of filteredDrivers(); track driver.id) {
+    <!-- Compliance Matrix Table -->
+    <div class="matrix-table-wrapper">
+      <table class="matrix-table">
+        <thead>
           <tr>
-            <td class="col-name">
-              <div class="driver-cell">
-                <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
-                <div class="driver-info">
-                  <span class="driver-name">{{ driver.name }}</span>
-                  <span class="driver-meta">{{ driver.phone || driver.email || '—' }}</span>
-                </div>
-              </div>
-            </td>
-            <td class="col-status">
-              <span class="status-badge" [class]="'status-' + (driver.status || 'active')">{{ driver.status || 'active' }}</span>
-            </td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'cdl')" [title]="getComplianceTooltip(driver, 'cdl')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'medical')" [title]="getComplianceTooltip(driver, 'medical')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'mvr')" [title]="getComplianceTooltip(driver, 'mvr')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'drug')" [title]="getComplianceTooltip(driver, 'drug')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'dqf')" [title]="getComplianceTooltip(driver, 'dqf')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'employment')" [title]="getComplianceTooltip(driver, 'employment')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'training')" [title]="getComplianceTooltip(driver, 'training')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'insurance')" [title]="getComplianceTooltip(driver, 'insurance')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'vehicle')" [title]="getComplianceTooltip(driver, 'vehicle')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'permits')" [title]="getComplianceTooltip(driver, 'permits')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'ifta')" [title]="getComplianceTooltip(driver, 'ifta')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'safety')" [title]="getComplianceTooltip(driver, 'safety')"></span></td>
-            <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'violations')" [title]="getComplianceTooltip(driver, 'violations')"></span></td>
-            <td class="col-overall">
-              <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallStatus(driver) }}</span>
-            </td>
+            <th class="col-name">Driver</th>
+            <th class="col-status">Status</th>
+            <th class="col-dot" title="CDL / License">CDL</th>
+            <th class="col-dot" title="Medical Certificate">Medical</th>
+            <th class="col-dot" title="Motor Vehicle Record">MVR</th>
+            <th class="col-dot" title="Drug & Alcohol Testing">Drug Test</th>
+            <th class="col-dot" title="Driver Qualification File">DQF</th>
+            <th class="col-dot" title="Employment Verification">Employ</th>
+            <th class="col-dot" title="Training & Orientation">Training</th>
+            <th class="col-dot" title="Insurance Coverage">Insur.</th>
+            <th class="col-dot" title="Vehicle Documents">Vehicle</th>
+            <th class="col-dot" title="Permits & Authority">Permits</th>
+            <th class="col-dot" title="IFTA Compliance">IFTA</th>
+            <th class="col-dot" title="Safety Awards">Safety</th>
+            <th class="col-dot" title="Violations Record">Viol.</th>
+            <th class="col-overall">Overall</th>
+            <th class="col-actions">Actions</th>
           </tr>
-        }
-        @if (filteredDrivers().length === 0 && !loading()) {
-          <tr><td colspan="16" class="empty-row">No drivers found</td></tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (driver of filteredDrivers(); track driver.id) {
+            <tr [class.selected]="selectedDriver()?.id === driver.id" (click)="selectDriver(driver)">
+              <td class="col-name">
+                <div class="driver-cell">
+                  <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
+                  <div class="driver-info">
+                    <span class="driver-name">{{ driver.name }}</span>
+                    <span class="driver-meta">{{ driver.phone || driver.email || '—' }}</span>
+                  </div>
+                </div>
+              </td>
+              <td class="col-status">
+                <span class="status-badge" [class]="'status-' + (driver.status || 'active')">{{ driver.status || 'active' }}</span>
+              </td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'cdl')" [title]="getComplianceTooltip(driver, 'cdl')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'medical')" [title]="getComplianceTooltip(driver, 'medical')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'mvr')" [title]="getComplianceTooltip(driver, 'mvr')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'drug')" [title]="getComplianceTooltip(driver, 'drug')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'dqf')" [title]="getComplianceTooltip(driver, 'dqf')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'employment')" [title]="getComplianceTooltip(driver, 'employment')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'training')" [title]="getComplianceTooltip(driver, 'training')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'insurance')" [title]="getComplianceTooltip(driver, 'insurance')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'vehicle')" [title]="getComplianceTooltip(driver, 'vehicle')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'permits')" [title]="getComplianceTooltip(driver, 'permits')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'ifta')" [title]="getComplianceTooltip(driver, 'ifta')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'safety')" [title]="getComplianceTooltip(driver, 'safety')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'violations')" [title]="getComplianceTooltip(driver, 'violations')"></span></td>
+              <td class="col-overall">
+                <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallStatus(driver) }}</span>
+              </td>
+              <td class="col-actions" (click)="$event.stopPropagation()">
+                @if (driver.status === 'active' || driver.status === 'available') {
+                  <button class="action-btn suspend" title="Suspend Driver" (click)="suspendDriver(driver)">
+                    <i class='bx bx-pause-circle'></i>
+                  </button>
+                } @else {
+                  <button class="action-btn reactivate" title="Reactivate Driver" (click)="reactivateDriver(driver)">
+                    <i class='bx bx-play-circle'></i>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+          @if (filteredDrivers().length === 0 && !loading()) {
+            <tr><td colspan="17" class="empty-row">No drivers found</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <span class="legend-item"><span class="dot dot-green"></span> Compliant</span>
+      <span class="legend-item"><span class="dot dot-yellow"></span> Expiring Soon</span>
+      <span class="legend-item"><span class="dot dot-red"></span> Non-Compliant</span>
+      <span class="legend-item"><span class="dot dot-gray"></span> Not on File</span>
+    </div>
   </div>
 
-  <!-- Legend -->
-  <div class="legend">
-    <span class="legend-item"><span class="dot dot-green"></span> Compliant</span>
-    <span class="legend-item"><span class="dot dot-yellow"></span> Expiring Soon (30 days)</span>
-    <span class="legend-item"><span class="dot dot-red"></span> Expired / Non-Compliant</span>
-    <span class="legend-item"><span class="dot dot-gray"></span> Not on File</span>
-  </div>
+  <!-- Driver Details Panel -->
+  @if (selectedDriver()) {
+    <aside class="details-panel">
+      <div class="panel-header">
+        <h2>Driver Details</h2>
+        <button class="close-btn" (click)="selectedDriver.set(null)"><i class='bx bx-x'></i></button>
+      </div>
+
+      <div class="panel-avatar">
+        <div class="big-avatar">{{ selectedDriver()!.name?.charAt(0) || '?' }}</div>
+        <h3>{{ selectedDriver()!.name }}</h3>
+        <span class="panel-status" [class]="'status-' + (selectedDriver()!.status || 'active')">{{ selectedDriver()!.status || 'active' }}</span>
+      </div>
+
+      <div class="panel-section">
+        <h4>Contact</h4>
+        <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
+        <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h4>License</h4>
+        <div class="detail-row"><span class="label">Number</span><span>{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
+        <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
+        <div class="detail-row"><span class="label">Expires</span><span>{{ selectedDriver()!.licenseExpiration | date:'mediumDate' }}</span></div>
+        <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Employment</h4>
+        <div class="detail-row"><span class="label">Type</span><span>{{ selectedDriver()!.driverType || '—' }}</span></div>
+        <div class="detail-row"><span class="label">Hire Date</span><span>{{ selectedDriver()!.hireDate | date:'mediumDate' }}</span></div>
+        <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Compliance Summary</h4>
+        @for (item of complianceItems; track item.key) {
+          <div class="compliance-row">
+            <span class="dot" [class]="getComplianceClass(selectedDriver()!, item.key)"></span>
+            <span class="comp-label">{{ item.label }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="panel-actions">
+        @if (selectedDriver()!.status === 'active' || selectedDriver()!.status === 'available') {
+          <button class="btn-action suspend" (click)="suspendDriver(selectedDriver()!)">
+            <i class='bx bx-pause-circle'></i> Suspend
+          </button>
+        } @else {
+          <button class="btn-action reactivate" (click)="reactivateDriver(selectedDriver()!)">
+            <i class='bx bx-play-circle'></i> Reactivate
+          </button>
+        }
+      </div>
+    </aside>
+  }
 </div>

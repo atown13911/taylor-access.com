@@ -337,6 +337,34 @@ export class DriverDatabaseComponent implements OnInit {
     return 'compliant';
   }
 
+  complianceItems = [
+    { key: 'cdl', label: 'CDL / License' }, { key: 'medical', label: 'Medical Certificate' },
+    { key: 'mvr', label: 'Motor Vehicle Record' }, { key: 'drug', label: 'Drug & Alcohol Test' },
+    { key: 'dqf', label: 'Driver Qualification File' }, { key: 'employment', label: 'Employment Verification' },
+    { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
+    { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
+    { key: 'ifta', label: 'IFTA' }, { key: 'safety', label: 'Safety Awards' },
+    { key: 'violations', label: 'Violations' }
+  ];
+
+  selectDriver(driver: any) {
+    this.selectedDriver.set(this.selectedDriver()?.id === driver.id ? null : driver);
+  }
+
+  suspendDriver(driver: any) {
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { ...driver, status: 'suspended' }).subscribe({
+      next: () => { driver.status = 'suspended'; this.drivers.set([...this.drivers()]); },
+      error: () => {}
+    });
+  }
+
+  reactivateDriver(driver: any) {
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { ...driver, status: 'active' }).subscribe({
+      next: () => { driver.status = 'active'; this.drivers.set([...this.drivers()]); },
+      error: () => {}
+    });
+  }
+
   getComplianceClass(driver: any, item: string): string {
     const status = this.getItemStatus(driver, item);
     if (status === 'compliant') return 'dot dot-green';
