@@ -9,7 +9,7 @@
         }
       </div>
       <button class="toggle-btn" (click)="toggleSidebar()">
-        <i class="bx" [class.bx-chevron-left]="!sidebarCollapsed()" [class.bx-chevron-right]="sidebarCollapsed()"></i>
+        <i class="bx" [class.bx-menu]="sidebarCollapsed()" [class.bx-x]="!sidebarCollapsed()"></i>
       </button>
     </div>
 
