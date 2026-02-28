@@ -755,9 +755,9 @@ import { AuthService } from '../../../core/services/auth.service';
                             <td>
                               @if (editingExpiryType === doc.type) {
                                 <input type="date" class="expiry-input" [value]="getDocExpiration(doc.type) || ''" (change)="saveExpiration(doc.type, $event)" (blur)="editingExpiryType = ''">
-                              } @else if (getDocExpiration(doc.type); as exp) {
-                                <span class="expiry-date" [class.expiring]="isExpiringSoon(exp)" [class.expired]="isDocExpired(exp)" (click)="editingExpiryType = doc.type" style="cursor:pointer" title="Click to edit">
-                                  {{ exp | date:'mediumDate' }}
+                              } @else if (getDocExpiration(doc.type)) {
+                                <span class="expiry-date" [class.expiring]="isExpiringSoon(getDocExpiration(doc.type)!)" [class.expired]="isDocExpired(getDocExpiration(doc.type)!)" (click)="editingExpiryType = doc.type" style="cursor:pointer" title="Click to edit">
+                                  {{ getDocExpiration(doc.type) | date:'mediumDate' }}
                                 </span>
                               } @else {
                                 <button class="action-btn-inline" (click)="editingExpiryType = doc.type" title="Set expiration date">
@@ -1076,6 +1076,9 @@ import { AuthService } from '../../../core/services/auth.service';
             <button [class.active]="editModalTab() === 'integrations'" (click)="editModalTab.set('integrations')">
               <i class="bx bx-plug"></i> Integrations
             </button>
+            <button [class.active]="editModalTab() === 'documents'" (click)="editModalTab.set('documents'); loadEditDocuments()">
+              <i class="bx bx-file"></i> Documents
+            </button>
             @if (editingEmployee?.entityType === 'satellite' && editingEmployee?.satelliteId && canSeeSatelliteFinancials()) {
               <button [class.active]="editModalTab() === 'business'" (click)="switchEditTab('business')">
                 <i class="bx bx-building-house"></i> Business
@@ -1359,6 +1362,66 @@ import { AuthService } from '../../../core/services/auth.service';
               </div>
 
             } <!-- end integrations tab -->
+
+            <!-- ==================== DOCUMENTS TAB ==================== -->
+            @if (editModalTab() === 'documents') {
+              <div class="form-section">
+                <h3><i class="bx bx-file"></i> Uploaded Documents</h3>
+                <p class="section-hint">Manage documents and set expiration dates</p>
+              </div>
+
+              @if (editDocuments().length === 0) {
+                <div class="edit-docs-empty">
+                  <i class="bx bx-folder-open"></i>
+                  <p>No documents uploaded for this employee</p>
+                  <button class="btn-primary btn-sm" (click)="uploadEmployeeDocument()">
+                    <i class="bx bx-upload"></i> Upload Document
+                  </button>
+                </div>
+              } @else {
+                <div class="edit-docs-actions">
+                  <button class="btn-primary btn-sm" (click)="uploadEmployeeDocument()">
+                    <i class="bx bx-upload"></i> Upload Document
+                  </button>
+                </div>
+                <table class="edit-docs-table">
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Type</th>
+                      <th>Uploaded</th>
+                      <th>Expiration Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (doc of editDocuments(); track doc.id) {
+                      <tr>
+                        <td class="doc-name-cell">
+                          <i class="bx bx-file-blank"></i>
+                          <span>{{ doc.fileName }}</span>
+                        </td>
+                        <td><span class="category-badge">{{ doc.documentType }}</span></td>
+                        <td class="doc-date-cell">{{ doc.createdAt | date:'shortDate' }}</td>
+                        <td>
+                          <input type="date" class="expiry-input-inline"
+                                 [value]="doc.expirationDate ? (doc.expirationDate | date:'yyyy-MM-dd') : ''"
+                                 (change)="updateDocExpiration(doc, $event)">
+                        </td>
+                        <td class="doc-actions-cell">
+                          <button class="action-btn view" (click)="viewDocument(doc)" title="View">
+                            <i class="bx bx-show"></i>
+                          </button>
+                          <button class="action-btn delete" (click)="deleteDocument(doc)" title="Delete">
+                            <i class="bx bx-trash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            } <!-- end documents tab -->
 
             <!-- ==================== BUSINESS TAB (satellite only) ==================== -->
             @if (editModalTab() === 'business' && satelliteDetails()) {
@@ -3509,6 +3572,35 @@ import { AuthService } from '../../../core/services/auth.service';
       background: rgba(0,0,0,0.3); color: #fff; font-size: 0.82rem; outline: none;
       width: 140px;
     }
+    .edit-docs-empty {
+      text-align: center; padding: 40px 20px; color: #888;
+      i { display: block; font-size: 2.5rem; color: var(--cyan); opacity: 0.4; margin-bottom: 12px; }
+      p { margin: 0 0 16px; }
+    }
+    .edit-docs-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .edit-docs-table {
+      width: 100%; border-collapse: collapse;
+      th, td { padding: 10px 12px; text-align: left; font-size: 0.82rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+      th { color: var(--cyan, #00e5ff); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; background: rgba(255,255,255,0.02); }
+      td { color: #ccc; }
+      tbody tr:hover { background: rgba(0,229,255,0.03); }
+      tbody tr:last-child td { border-bottom: none; }
+    }
+    .doc-name-cell {
+      display: flex; align-items: center; gap: 8px;
+      i { color: var(--cyan); font-size: 1.1rem; }
+      span { font-weight: 500; }
+    }
+    .doc-date-cell { color: #888; font-size: 0.8rem; }
+    .doc-actions-cell { display: flex; gap: 4px; }
+    .expiry-input-inline {
+      padding: 5px 8px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+      background: rgba(0,0,0,0.3); color: #fff; font-size: 0.82rem; outline: none; width: 140px;
+      &:focus { border-color: var(--cyan, #00e5ff); box-shadow: 0 0 6px rgba(0,212,255,0.2); }
+    }
+    .section-hint { color: #888; font-size: 0.82rem; margin: -8px 0 16px; }
+    .btn-sm { padding: 8px 16px; font-size: 0.82rem; border-radius: 8px; }
+
     .action-btn-inline {
       width: 28px; height: 28px; border-radius: 6px;
       border: 1px solid rgba(0, 212, 255, 0.2); background: transparent;
@@ -4118,7 +4210,7 @@ export class EmployeeRosterComponent implements OnInit {
   selectedOrgCountry = signal<string>('USA');
 
   // Edit modal tabs & banking
-  editModalTab = signal<'personal' | 'employment' | 'financial' | 'integrations' | 'business'>('personal');
+  editModalTab = signal<'personal' | 'employment' | 'financial' | 'integrations' | 'documents' | 'business'>('personal');
   satelliteDetails = signal<any>(null);
   employeeAccounts = signal<any[]>([]);
   showBankForm = signal(false);
@@ -4126,6 +4218,7 @@ export class EmployeeRosterComponent implements OnInit {
   bankForm: any = { bankName: '', accountNumber: '', routingNumber: '', accountType: 'checking', iban: '', swiftBic: '' };
   activeDetailsTab = signal<'details' | 'documents' | 'onboarding' | 'offboarding' | 'evaluations'>('details');
   employeeDocuments = signal<any[]>([]);
+  editDocuments = signal<any[]>([]);
   editingExpiryType = '';
   docCategories = signal<any[]>([]);
   addressSuggestions = signal<any[]>([]);
@@ -5060,6 +5153,29 @@ export class EmployeeRosterComponent implements OnInit {
   isDocExpired(dateStr: string): boolean {
     if (!dateStr) return false;
     return new Date(dateStr) < new Date();
+  }
+
+  loadEditDocuments(): void {
+    const emp = this.editingEmployee;
+    if (!emp?.userId && !emp?.id) return;
+    const userId = emp.userId || emp.id;
+    this.http.get<any>(`${this.apiUrl}/api/v1/employee-documents?employeeId=${userId}`).subscribe({
+      next: (res) => this.editDocuments.set(res?.data || []),
+      error: () => this.editDocuments.set([])
+    });
+  }
+
+  updateDocExpiration(doc: any, event: any): void {
+    const date = event.target?.value;
+    if (!date) return;
+    this.http.put(`${this.apiUrl}/api/v1/employee-documents/${doc.id}`, { expirationDate: date }).subscribe({
+      next: () => {
+        doc.expirationDate = date;
+        this.editDocuments.set([...this.editDocuments()]);
+        this.toast.success('Expiration date updated', 'Saved');
+      },
+      error: () => this.toast.error('Failed to update expiration', 'Error')
+    });
   }
 
   saveExpiration(docType: string, event: any): void {
