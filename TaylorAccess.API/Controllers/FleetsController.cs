@@ -31,9 +31,8 @@ public class FleetsController : ControllerBase
 
         var query = _context.Fleets
             .AsNoTracking()
-            .AsSplitQuery()
-            .Include(f => f.FleetDrivers).ThenInclude(fd => fd.Driver)
-            .Include(f => f.FleetVehicles).ThenInclude(fv => fv.Vehicle)
+            .Include(f => f.FleetDrivers)
+            .Include(f => f.FleetVehicles)
             .Where(f => !orgId.HasValue || f.OrganizationId == orgId)
             .Where(f => f.ParentFleetId == null)
             .AsQueryable();
@@ -50,9 +49,8 @@ public class FleetsController : ControllerBase
     {
         var fleet = await _context.Fleets
             .AsNoTracking()
-            .AsSplitQuery()
-            .Include(f => f.FleetDrivers).ThenInclude(fd => fd.Driver)
-            .Include(f => f.FleetVehicles).ThenInclude(fv => fv.Vehicle)
+            .Include(f => f.FleetDrivers)
+            .Include(f => f.FleetVehicles)
             .Include(f => f.SubFleets)
             .FirstOrDefaultAsync(f => f.Id == id);
 
