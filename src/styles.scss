@@ -72,6 +72,10 @@
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
+
+  --glass-bg: rgba(10, 10, 26, 0.6);
+  --glass-bg-strong: rgba(10, 10, 26, 0.75);
+  --glass-blur: blur(12px);
 }
 
 * {
@@ -89,121 +93,107 @@ html, body {
   overflow: hidden;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--accent-25); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-40); }
 
-::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
+a { color: var(--cyan); text-decoration: none; }
+button { cursor: pointer; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
 
-::-webkit-scrollbar-thumb {
-  background: var(--accent-25);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-40);
-}
-
-a {
-  color: var(--cyan);
-  text-decoration: none;
-}
-
-button {
-  cursor: pointer;
-  font-family: inherit;
-}
-
-input, select, textarea {
-  font-family: inherit;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
+table { border-collapse: collapse; width: 100%; }
 th {
-  text-align: left;
-  padding: 12px 16px;
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border-color);
+  text-align: left; padding: 12px 16px; font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-muted); border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
 }
+td { padding: 12px 16px; font-size: 13px; color: var(--text-primary); border-bottom: 1px solid var(--accent-05); }
+tr:hover td { background: var(--accent-03); }
 
-td {
-  padding: 12px 16px;
-  font-size: 13px;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--accent-05);
-}
-
-tr:hover td {
-  background: var(--accent-03);
-}
-
-// Glassmorphism panels - activated when background image is set
+// =============================================
+// GLASSMORPHISM - when background is active
+// =============================================
 .main-content[style*="background"] {
-  .page-header, .page-container > header,
-  .stats-grid, .stat-card, .stats-bar .stat-card,
-  .roster-page > .page-header,
-  .compliance-container .page-header {
-    background: rgba(10, 10, 26, 0.6);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 212, 255, 0.08);
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 12px;
+
+  // Kill all opaque backgrounds on host elements and containers
+  .content-area > *,
+  .content-area [class*="page"],
+  .content-area [class*="container"],
+  .content-area [class*="roster"],
+  .content-area [class*="fleet"],
+  .content-area [class*="compliance"] {
+    background: transparent !important;
   }
 
+  // Glass panels
   table {
-    background: rgba(10, 10, 26, 0.55);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 10px;
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border-radius: 10px !important;
     overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05) !important;
   }
 
   th {
-    background: rgba(10, 10, 26, 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: var(--glass-bg-strong) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
   }
 
-  td {
-    border-bottom-color: rgba(255, 255, 255, 0.04);
-  }
+  td { border-bottom-color: rgba(255, 255, 255, 0.04) !important; }
+  tr:hover td { background: rgba(0, 212, 255, 0.06) !important; }
 
-  tr:hover td {
-    background: rgba(0, 212, 255, 0.06);
-  }
-
+  // Common UI elements get glass treatment
+  .stat-card, .stats-grid > div, .stats-bar > div,
   .matrix-table-wrapper,
-  .profile-layout, .profile-sidebar,
-  .content-section,
-  .app-card, .apps-grid .app-card,
-  .filters-bar .search-box,
-  .status-tabs, .page-tabs,
-  .legend,
-  .details-panel {
-    background: rgba(10, 10, 26, 0.55);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 212, 255, 0.08);
-    border-radius: 10px;
+  .profile-layout, .profile-sidebar, .content-section,
+  .app-card,
+  .details-panel,
+  .legend {
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 10px !important;
   }
 
-  .sidebar-footer {
-    background: rgba(10, 10, 26, 0.4);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+  .filters-bar .search-box,
+  .search-box,
+  input[type="text"], input[type="email"], input[type="password"],
+  select {
+    background: rgba(10, 10, 26, 0.5) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  .status-tabs, .page-tabs {
+    background: transparent !important;
+  }
+
+  .status-tab, .page-tab {
+    background: rgba(10, 10, 26, 0.4) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+  }
+
+  // Header areas
+  .page-header, header {
+    background: rgba(10, 10, 26, 0.5) !important;
+    backdrop-filter: var(--glass-blur) !important;
+    -webkit-backdrop-filter: var(--glass-blur) !important;
+    border-radius: 10px !important;
+    padding: 16px !important;
+    margin-bottom: 12px !important;
+    border: 1px solid rgba(255,255,255,0.05) !important;
+  }
+
+  // Top bar glass
+  .topbar {
+    background: rgba(8, 8, 15, 0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
   }
 }
