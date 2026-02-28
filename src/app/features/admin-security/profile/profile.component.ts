@@ -449,10 +449,8 @@ export class ProfileComponent implements OnInit {
 
     if (id === 'none') {
       contentArea.style.backgroundImage = 'none';
-      const sidebar = document.querySelector('.sidebar') as HTMLElement;
-      const topbar = document.querySelector('.topbar') as HTMLElement;
-      if (sidebar) sidebar.style.removeProperty('background');
-      if (topbar) topbar.style.removeProperty('background');
+      document.documentElement.style.removeProperty('--sidebar-bg');
+      document.documentElement.style.removeProperty('--topbar-bg');
       return;
     }
 
@@ -514,10 +512,8 @@ export class ProfileComponent implements OnInit {
   }
 
   private applySidebarOpacity(val: number) {
-    const sidebar = document.querySelector('.sidebar') as HTMLElement;
-    const topbar = document.querySelector('.topbar') as HTMLElement;
-    if (sidebar) sidebar.style.setProperty('background', `rgba(13, 13, 26, ${val / 100})`, 'important');
-    if (topbar) topbar.style.setProperty('background', `rgba(8, 8, 15, ${val / 100})`, 'important');
+    document.documentElement.style.setProperty('--sidebar-bg', `rgba(13, 13, 26, ${val / 100})`);
+    document.documentElement.style.setProperty('--topbar-bg', `rgba(8, 8, 15, ${val / 100})`);
   }
 
   selectTheme(id: string) {
