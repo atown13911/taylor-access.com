@@ -122,12 +122,14 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
+  background: transparent !important;
 
   thead tr {
-    background: rgba(10, 10, 26, 0.7);
+    background: rgba(10, 10, 26, 0.7) !important;
   }
 
   th {
+    background: transparent !important;
     padding: 10px 8px;
     font-size: 10px;
     font-weight: 700;
@@ -160,9 +162,10 @@
 
   td {
     padding: 10px 8px;
-    border-bottom: 1px solid var(--accent-05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     text-align: center;
     vertical-align: middle;
+    background: transparent !important;
   }
 
   td.col-name {
@@ -171,7 +174,7 @@
   }
 
   tr:hover td {
-    background: var(--accent-03);
+    background: rgba(0, 212, 255, 0.06) !important;
   }
 }
 
@@ -389,7 +392,7 @@ tr { cursor: pointer; }
   max-height: calc(100vh - 200px);
   animation: slide-in 0.2s ease;
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(0, 212, 255, 0.08);
   flex-shrink: 0;
 }
 
