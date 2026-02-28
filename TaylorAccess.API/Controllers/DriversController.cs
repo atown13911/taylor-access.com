@@ -45,12 +45,10 @@ public class DriversController : ControllerBase
             .Include(d => d.DriverTerminal)
             .AsQueryable();
 
-        // Organization filter (product_owner/superadmin see all)
-        var isSuperAdmin = user!.Role == "superadmin" || user.Role == "product_owner";
-        query = query.Where(d => !orgId.HasValue || d.OrganizationId == orgId);
+        var isSuperAdmin = user!.Role == "superadmin" || user.Role == "product_owner" || user.Role == "admin";
 
-        // MULTI-TENANT DATA ISOLATION: Filter by user's entity (skip for admin roles and fleet_manager)
-        if (!isSuperAdmin && user.Role != "fleet_manager" && user.Role != "admin")
+        // Skip entity-level filtering for admin roles
+        if (!isSuperAdmin && user.Role != "fleet_manager")
         {
             if (user.SatelliteId.HasValue)
                 query = query.Where(d => d.SatelliteId == user.SatelliteId.Value);
@@ -97,13 +95,11 @@ public class DriversController : ControllerBase
     {
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized();
-        var isSA = user.Role == "superadmin" || user.Role == "product_owner";
-
         var driver = await _context.Drivers
             .Include(d => d.Division)
             .Include(d => d.DriverTerminal)
             .Include(d => d.AddressRef)
-            .FirstOrDefaultAsync(d => d.Id == id && (isSA || d.OrganizationId == (user.OrganizationId ?? 0)));
+            .FirstOrDefaultAsync(d => d.Id == id);
 
         if (driver == null)
             return NotFound(new { error = "Driver not found" });
