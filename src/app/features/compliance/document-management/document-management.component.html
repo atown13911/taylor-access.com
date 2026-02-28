@@ -35,19 +35,19 @@
     }
   </div>
 
-  <!-- Documents Table -->
+  <!-- Driver Roster Table per Category -->
   <div class="doc-content">
     <div class="doc-content-header">
-      <h3><i class='bx' [ngClass]="currentCategory()?.icon || 'bx-file'"></i> {{ currentCategory()?.label }}</h3>
+      <h3><i class='bx' [ngClass]="currentCategory()?.icon || 'bx-file'"></i> {{ currentCategory()?.label }} — Driver Roster</h3>
     </div>
 
     @if (loading()) {
       <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i> Loading...</div>
-    } @else if (filteredDocs().length === 0) {
+    } @else if (drivers().length === 0) {
       <div class="empty-state">
-        <i class='bx' [ngClass]="currentCategory()?.icon || 'bx-file'"></i>
-        <h4>No {{ currentCategory()?.label }} documents</h4>
-        <p>Upload a document to get started</p>
+        <i class='bx bx-group'></i>
+        <h4>No drivers found</h4>
+        <p>Add drivers to begin tracking compliance documents</p>
       </div>
     } @else {
       <div class="doc-table-wrap">
@@ -55,45 +55,85 @@
           <thead>
             <tr>
               <th>Driver</th>
-              <th>Document</th>
-              <th>Type</th>
-              <th>Doc #</th>
-              <th>Issued</th>
-              <th>Expires</th>
-              <th>File</th>
-              <th>Status</th>
-              <th>Actions</th>
+              @for (sub of currentCategory()?.subcategories || []; track sub.value) {
+                <th class="sub-col">{{ sub.label }}</th>
+              }
+              <th>Overall</th>
             </tr>
           </thead>
           <tbody>
-            @for (doc of filteredDocs(); track doc.id) {
+            @for (driver of rosterDrivers(); track driver.id) {
               <tr>
-                <td><strong>{{ doc.driverName }}</strong></td>
-                <td>{{ doc.documentName }}</td>
-                <td><span class="sub-badge">{{ getSubCategoryLabel(doc.category, doc.subCategory) }}</span></td>
-                <td class="mono">{{ doc.documentNumber || '—' }}</td>
-                <td>{{ formatDate(doc.issueDate) }}</td>
-                <td>{{ formatDate(doc.expiryDate) }}</td>
-                <td>
-                  @if (doc.hasFile) {
-                    <div class="file-btns">
-                      <button class="icon-btn" title="View" (click)="viewDoc(doc)"><i class='bx bx-show'></i></button>
-                      <button class="icon-btn" title="Download" (click)="downloadDoc(doc)"><i class='bx bx-download'></i></button>
-                    </div>
-                  } @else {
-                    <span class="no-file">No file</span>
-                  }
+                <td class="driver-cell">
+                  <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
+                  <div class="driver-info">
+                    <strong>{{ driver.name }}</strong>
+                    <span class="driver-sub">{{ driver.phone || driver.email || '' }}</span>
+                  </div>
                 </td>
-                <td><span class="status-badge" [class]="doc.status">{{ doc.status }}</span></td>
-                <td class="actions-cell">
-                  <button class="icon-btn" title="Edit" (click)="editDocument(doc)"><i class='bx bx-edit'></i></button>
-                  <button class="icon-btn danger" title="Delete" (click)="deleteDocument(doc)"><i class='bx bx-trash'></i></button>
+                @for (sub of currentCategory()?.subcategories || []; track sub.value) {
+                  <td class="status-cell" (click)="openSubDetail(driver, sub)">
+                    @if (getDriverSubDoc(driver.id, sub.value); as doc) {
+                      <span class="dot" [class]="'dot-' + doc.status" [title]="doc.status + (doc.expiryDate ? ' - Exp: ' + formatDate(doc.expiryDate) : '')"></span>
+                    } @else {
+                      <span class="dot dot-gray" title="Not on file"></span>
+                    }
+                  </td>
+                }
+                <td>
+                  <span class="overall-badge" [class]="getDriverOverallStatus(driver.id)">
+                    {{ getDriverOverallLabel(driver.id) }}
+                  </span>
                 </td>
               </tr>
             }
           </tbody>
         </table>
       </div>
+
+      <!-- Uploaded Documents for Selected Category -->
+      @if (filteredDocs().length > 0) {
+        <div class="doc-content-header" style="margin-top: 24px;">
+          <h3><i class='bx bx-file'></i> Uploaded Files — {{ currentCategory()?.label }}</h3>
+        </div>
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Driver</th>
+                <th>Document</th>
+                <th>Type</th>
+                <th>Doc #</th>
+                <th>Issued</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (doc of filteredDocs(); track doc.id) {
+                <tr>
+                  <td><strong>{{ doc.driverName }}</strong></td>
+                  <td>{{ doc.documentName }}</td>
+                  <td><span class="sub-badge">{{ getSubCategoryLabel(doc.category, doc.subCategory) }}</span></td>
+                  <td class="mono">{{ doc.documentNumber || '—' }}</td>
+                  <td>{{ formatDate(doc.issueDate) }}</td>
+                  <td>{{ formatDate(doc.expiryDate) }}</td>
+                  <td><span class="status-badge" [class]="doc.status">{{ doc.status }}</span></td>
+                  <td class="actions-cell">
+                    @if (doc.hasFile) {
+                      <button class="icon-btn" title="Preview" (click)="viewDoc(doc)"><i class='bx bx-show'></i></button>
+                      <button class="icon-btn" title="Download" (click)="downloadDoc(doc)"><i class='bx bx-download'></i></button>
+                    }
+                    <button class="icon-btn" title="Edit" (click)="editDocument(doc)"><i class='bx bx-edit'></i></button>
+                    <button class="icon-btn danger" title="Delete" (click)="deleteDocument(doc)"><i class='bx bx-trash'></i></button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     }
   </div>
 </div>

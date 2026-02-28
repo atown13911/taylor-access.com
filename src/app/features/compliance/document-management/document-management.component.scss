@@ -106,6 +106,81 @@
 }
 .existing-file { display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--cyan, #00e5ff); margin-top: 0.25rem; i { font-size: 0.9rem; } }
 
+// Driver roster cells
+.driver-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 180px;
+}
+
+.driver-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(136, 0, 255, 0.2));
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--cyan, #00e5ff);
+  flex-shrink: 0;
+}
+
+.driver-info {
+  display: flex;
+  flex-direction: column;
+  strong { font-size: 0.82rem; }
+}
+
+.driver-sub {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.sub-col {
+  text-align: center !important;
+  min-width: 70px;
+  max-width: 120px;
+}
+
+.status-cell {
+  text-align: center !important;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover { background: rgba(0, 229, 255, 0.06); }
+}
+
+.dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+
+  &.dot-active, &.dot-compliant { background: #00ff88; box-shadow: 0 0 6px rgba(0, 255, 136, 0.5); }
+  &.dot-expiring { background: #ffaa00; box-shadow: 0 0 6px rgba(255, 170, 0, 0.5); }
+  &.dot-expired { background: #ff4444; box-shadow: 0 0 6px rgba(255, 68, 68, 0.5); }
+  &.dot-pending { background: #6688aa; box-shadow: 0 0 6px rgba(102, 136, 170, 0.3); }
+  &.dot-gray, &.dot-missing { background: #444; }
+}
+
+.overall-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: capitalize;
+
+  &.compliant { background: rgba(0, 255, 136, 0.1); color: #00ff88; border: 1px solid rgba(0, 255, 136, 0.3); }
+  &.partial { background: rgba(0, 170, 255, 0.1); color: #00aaff; border: 1px solid rgba(0, 170, 255, 0.3); }
+  &.expiring { background: rgba(255, 170, 0, 0.1); color: #ffaa00; border: 1px solid rgba(255, 170, 0, 0.3); }
+  &.expired { background: rgba(255, 68, 68, 0.1); color: #ff4444; border: 1px solid rgba(255, 68, 68, 0.3); }
+  &.missing { background: rgba(136, 136, 170, 0.1); color: #8888aa; border: 1px solid rgba(136, 136, 170, 0.3); }
+}
+
 @media (max-width: 768px) {
   .stats-bar { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }

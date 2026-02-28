@@ -152,6 +152,64 @@ export class DocumentManagementComponent implements OnInit {
 
   currentCategory = computed(() => this.categories.find(c => c.key === this.activeTab()));
 
+  rosterDrivers = computed(() => {
+    const driverId = this.selectedDriverId();
+    if (driverId) return this.drivers().filter(d => d.id?.toString() === driverId);
+    return this.drivers();
+  });
+
+  getDriverSubDoc(driverId: any, subCategory: string): any {
+    const tab = this.activeTab();
+    return this.documents().find(d =>
+      d.driverId?.toString() === driverId?.toString() &&
+      d.category === tab &&
+      d.subCategory === subCategory
+    ) || null;
+  }
+
+  getDriverOverallStatus(driverId: any): string {
+    const tab = this.activeTab();
+    const cat = this.currentCategory();
+    if (!cat) return 'missing';
+
+    const docs = this.documents().filter(d =>
+      d.driverId?.toString() === driverId?.toString() && d.category === tab
+    );
+    if (docs.length === 0) return 'missing';
+    if (docs.some(d => d.status === 'expired')) return 'expired';
+    if (docs.some(d => d.status === 'expiring')) return 'expiring';
+    if (docs.length >= cat.subcategories.length) return 'compliant';
+    return 'partial';
+  }
+
+  getDriverOverallLabel(driverId: any): string {
+    const status = this.getDriverOverallStatus(driverId);
+    switch (status) {
+      case 'compliant': return 'Complete';
+      case 'partial': return 'Partial';
+      case 'expiring': return 'Expiring';
+      case 'expired': return 'Expired';
+      default: return 'Missing';
+    }
+  }
+
+  openSubDetail(driver: any, sub: any): void {
+    this.selectedDriverId.set(driver.id?.toString());
+    this.uploadForm.driverId = driver.id?.toString();
+    this.uploadForm.category = this.activeTab();
+    this.uploadForm.subCategory = sub.value;
+
+    const existing = this.getDriverSubDoc(driver.id, sub.value);
+    if (existing) {
+      this.editDocument(existing);
+    } else {
+      this.uploadForm.documentName = sub.label;
+      this.docFile = null;
+      this.editingDoc.set(null);
+      this.showUploadModal.set(true);
+    }
+  }
+
   tabDocCount(category: string): number {
     const driverId = this.selectedDriverId();
     let docs = this.documents().filter(d => d.category === category);
