@@ -753,12 +753,16 @@ import { AuthService } from '../../../core/services/auth.service';
                             <td><i class="bx bx-file-blank"></i> {{ doc.label }}</td>
                             <td><span class="category-badge">{{ doc.category }}</span></td>
                             <td>
-                              @if (getDocExpiration(doc.type); as exp) {
-                                <span class="expiry-date" [class.expiring]="isExpiringSoon(exp)" [class.expired]="isDocExpired(exp)">
+                              @if (editingExpiryType === doc.type) {
+                                <input type="date" class="expiry-input" [value]="getDocExpiration(doc.type) || ''" (change)="saveExpiration(doc.type, $event)" (blur)="editingExpiryType = ''">
+                              } @else if (getDocExpiration(doc.type); as exp) {
+                                <span class="expiry-date" [class.expiring]="isExpiringSoon(exp)" [class.expired]="isDocExpired(exp)" (click)="editingExpiryType = doc.type" style="cursor:pointer" title="Click to edit">
                                   {{ exp | date:'mediumDate' }}
                                 </span>
                               } @else {
-                                <span class="expiry-none">—</span>
+                                <button class="action-btn-inline" (click)="editingExpiryType = doc.type" title="Set expiration date">
+                                  <i class="bx bx-calendar-edit"></i>
+                                </button>
                               }
                             </td>
                             <td>
@@ -3497,8 +3501,22 @@ import { AuthService } from '../../../core/services/auth.service';
       color: #ccc;
       &.expiring { color: #ffaa00; }
       &.expired { color: #ff4444; font-weight: 600; }
+      &:hover { text-decoration: underline; }
     }
     .expiry-none { color: #555; font-size: 0.82rem; }
+    .expiry-input {
+      padding: 4px 8px; border: 1px solid var(--cyan, #00e5ff); border-radius: 6px;
+      background: rgba(0,0,0,0.3); color: #fff; font-size: 0.82rem; outline: none;
+      width: 140px;
+    }
+    .action-btn-inline {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid rgba(0, 212, 255, 0.2); background: transparent;
+      color: var(--cyan, #00e5ff); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all 0.2s;
+      &:hover { background: rgba(0, 212, 255, 0.1); border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.2); }
+    }
 
     .doc-expiry {
       display: inline-flex; align-items: center; gap: 4px;
@@ -4108,6 +4126,7 @@ export class EmployeeRosterComponent implements OnInit {
   bankForm: any = { bankName: '', accountNumber: '', routingNumber: '', accountType: 'checking', iban: '', swiftBic: '' };
   activeDetailsTab = signal<'details' | 'documents' | 'onboarding' | 'offboarding' | 'evaluations'>('details');
   employeeDocuments = signal<any[]>([]);
+  editingExpiryType = '';
   docCategories = signal<any[]>([]);
   addressSuggestions = signal<any[]>([]);
   private addressSearchTimeout: any;
@@ -5041,6 +5060,31 @@ export class EmployeeRosterComponent implements OnInit {
   isDocExpired(dateStr: string): boolean {
     if (!dateStr) return false;
     return new Date(dateStr) < new Date();
+  }
+
+  saveExpiration(docType: string, event: any): void {
+    const date = event.target?.value;
+    this.editingExpiryType = '';
+    if (!date) return;
+
+    const slug = docType.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const doc = this.employeeDocuments().find(d => {
+      const dType = (d.documentType || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+      return dType === slug || dType.includes(slug) || slug.includes(dType);
+    });
+
+    if (doc) {
+      this.http.put(`${this.apiUrl}/api/v1/employee-documents/${doc.id}`, { expirationDate: date }).subscribe({
+        next: () => {
+          doc.expirationDate = date;
+          this.employeeDocuments.set([...this.employeeDocuments()]);
+          this.toast.success('Expiration date saved', 'Updated');
+        },
+        error: () => this.toast.error('Failed to save expiration', 'Error')
+      });
+    } else {
+      this.toast.info('Upload the document first, then set the expiration', 'No Document');
+    }
   }
 
   uploadMandatoryDoc(docType: string) {
