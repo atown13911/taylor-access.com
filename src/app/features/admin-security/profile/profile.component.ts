@@ -427,6 +427,7 @@ export class ProfileComponent implements OnInit {
 
   selectedBg = signal(localStorage.getItem('ta_bg') || 'none');
   bgOpacity = signal(parseInt(localStorage.getItem('ta_bg_opacity') || '60'));
+  sidebarOpacity = signal(parseInt(localStorage.getItem('ta_sidebar_opacity') || '90'));
 
   backgrounds = [
     { id: 'grid-cyan', name: 'Cyber Grid', url: 'https://picsum.photos/id/1025/400/300' },
@@ -448,8 +449,19 @@ export class ProfileComponent implements OnInit {
 
     if (id === 'none') {
       contentArea.style.backgroundImage = 'none';
+      const sidebar = document.querySelector('.sidebar') as HTMLElement;
+      const topbar = document.querySelector('.topbar') as HTMLElement;
+      if (sidebar) sidebar.style.backgroundColor = '';
+      if (topbar) topbar.style.backgroundColor = '';
       return;
     }
+
+    // Apply sidebar opacity
+    const sidebarEl = document.querySelector('.sidebar') as HTMLElement;
+    const topbarEl = document.querySelector('.topbar') as HTMLElement;
+    const so = this.sidebarOpacity() / 100;
+    if (sidebarEl) sidebarEl.style.backgroundColor = `rgba(13, 13, 26, ${so})`;
+    if (topbarEl) topbarEl.style.backgroundColor = `rgba(8, 8, 15, ${so})`;
 
     if (id === 'custom') {
       const custom = localStorage.getItem('ta_bg_custom');
@@ -495,9 +507,18 @@ export class ProfileComponent implements OnInit {
     const val = parseInt(event.target.value);
     this.bgOpacity.set(val);
     localStorage.setItem('ta_bg_opacity', val.toString());
-    // Re-apply current background with new opacity
     const currentBg = this.selectedBg();
     if (currentBg !== 'none') this.selectBackground(currentBg);
+  }
+
+  adjustSidebarOpacity(event: any) {
+    const val = parseInt(event.target.value);
+    this.sidebarOpacity.set(val);
+    localStorage.setItem('ta_sidebar_opacity', val.toString());
+    const sidebar = document.querySelector('.sidebar') as HTMLElement;
+    const topbar = document.querySelector('.topbar') as HTMLElement;
+    if (sidebar) sidebar.style.backgroundColor = `rgba(13, 13, 26, ${val / 100})`;
+    if (topbar) topbar.style.backgroundColor = `rgba(8, 8, 15, ${val / 100})`;
   }
 
   selectTheme(id: string) {

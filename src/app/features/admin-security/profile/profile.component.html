@@ -367,11 +367,19 @@
 
               @if (selectedBg() !== 'none') {
                 <div class="opacity-control">
-                  <label>Overlay Opacity: <strong>{{ bgOpacity() }}%</strong></label>
+                  <label>Content Overlay: <strong>{{ bgOpacity() }}%</strong></label>
                   <input type="range" min="0" max="95" step="5" [value]="bgOpacity()" (input)="adjustOpacity($event)">
                   <div class="opacity-labels">
                     <span>Clear</span>
                     <span>Dark</span>
+                  </div>
+                </div>
+                <div class="opacity-control">
+                  <label>Sidebar Opacity: <strong>{{ sidebarOpacity() }}%</strong></label>
+                  <input type="range" min="30" max="100" step="5" [value]="sidebarOpacity()" (input)="adjustSidebarOpacity($event)">
+                  <div class="opacity-labels">
+                    <span>Transparent</span>
+                    <span>Solid</span>
                   </div>
                 </div>
               }
