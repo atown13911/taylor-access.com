@@ -28,6 +28,7 @@
   .stat-info { display: flex; flex-direction: column; }
   .stat-value { font-size: 1.5rem; font-weight: 700; }
   .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+  .stat-total { font-size: 0.9rem; font-weight: 400; color: var(--text-secondary); }
 
   &.compliant { .stat-icon, .stat-value { color: #00ff88; } border-color: rgba(0, 255, 136, 0.15); }
   &.expiring { .stat-icon, .stat-value { color: #ffaa00; } border-color: rgba(255, 170, 0, 0.15); }

@@ -27,8 +27,15 @@
     <div class="stat-card compliant">
       <i class='bx bx-check-shield stat-icon'></i>
       <div class="stat-info">
-        <span class="stat-value">{{ complianceStats().compliant }}</span>
-        <span class="stat-label">Compliant</span>
+        <span class="stat-value">{{ complianceStats().uploaded }}<span class="stat-total">/{{ complianceStats().totalSlots }}</span></span>
+        <span class="stat-label">Uploaded</span>
+      </div>
+    </div>
+    <div class="stat-card missing">
+      <i class='bx bx-file-blank stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ complianceStats().missing }}</span>
+        <span class="stat-label">Need Upload</span>
       </div>
     </div>
     <div class="stat-card expiring">
@@ -45,18 +52,11 @@
         <span class="stat-label">Expired</span>
       </div>
     </div>
-    <div class="stat-card missing">
-      <i class='bx bx-file-blank stat-icon'></i>
-      <div class="stat-info">
-        <span class="stat-value">{{ complianceStats().missing }}</span>
-        <span class="stat-label">Missing Docs</span>
-      </div>
-    </div>
     <div class="stat-card total-docs">
       <i class='bx bx-folder stat-icon'></i>
       <div class="stat-info">
         <span class="stat-value">{{ allDocs().length }}</span>
-        <span class="stat-label">Total Documents</span>
+        <span class="stat-label">Total Files</span>
       </div>
     </div>
   </div>

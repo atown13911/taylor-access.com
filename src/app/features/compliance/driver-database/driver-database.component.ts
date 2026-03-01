@@ -73,18 +73,27 @@ export class DriverDatabaseComponent implements OnInit {
 
   complianceStats = computed(() => {
     const drivers = this.drivers().filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched');
-    let compliant = 0, expiring = 0, expired = 0, missing = 0;
-    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    const docs = this.allDocs();
+    const requiredItems = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    const totalSlots = drivers.length * requiredItems.length;
+
+    let uploaded = 0, expiring = 0, expired = 0;
+
     for (const driver of drivers) {
-      for (const item of items) {
-        const cls = this.getComplianceClass(driver, item);
-        if (cls.includes('green')) compliant++;
-        else if (cls.includes('yellow')) expiring++;
-        else if (cls.includes('red')) expired++;
-        else missing++;
+      for (const item of requiredItems) {
+        const doc = this.getDocForDriver(driver.id, item);
+        if (doc) {
+          uploaded++;
+          if (doc.status === 'expired') expired++;
+          else if (doc.status === 'expiring') expiring++;
+        }
       }
     }
-    return { compliant, expiring, expired, missing };
+
+    const missing = totalSlots - uploaded;
+    const compliant = uploaded - expiring - expired;
+
+    return { compliant, expiring, expired, missing, uploaded, totalSlots, driverCount: drivers.length };
   });
 
   tabCounts = computed(() => {
