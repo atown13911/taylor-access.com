@@ -574,6 +574,14 @@ tr { cursor: pointer; }
   &:hover { background: rgba(0, 255, 136, 0.15); border-color: #00ff88; box-shadow: 0 0 8px rgba(0, 255, 136, 0.2); }
 }
 
+.comp-edit-btn {
+  width: 26px; height: 26px; border-radius: 6px;
+  border: 1px solid rgba(0, 170, 255, 0.25); background: rgba(0, 170, 255, 0.06);
+  color: #00aaff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; transition: all 0.2s; flex-shrink: 0;
+  &:hover { background: rgba(0, 170, 255, 0.15); border-color: #00aaff; box-shadow: 0 0 8px rgba(0, 170, 255, 0.2); }
+}
+
 .comp-upload-btn {
   width: 26px; height: 26px; border-radius: 6px;
   border: 1px solid rgba(0, 212, 255, 0.25); background: rgba(0, 212, 255, 0.06);

@@ -625,9 +625,26 @@ export class DriverDatabaseComponent implements OnInit {
     return 'pending';
   }
 
+  editCompDoc(item: any): void {
+    const doc = this.getCompDoc(this.selectedDriver(), item.key);
+    if (!doc) return;
+    this.compUploadItem.set(item);
+    this.compFile = null;
+    this.compForm = {
+      documentName: doc.documentName || item.label,
+      documentNumber: doc.documentNumber || '',
+      issueDate: doc.issueDate ? new Date(doc.issueDate).toISOString().split('T')[0] : '',
+      expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().split('T')[0] : '',
+      notes: doc.notes || ''
+    };
+    (this as any)._editingDocId = doc.id;
+    this.compUploadOpen.set(true);
+  }
+
   openCompUpload(item: any): void {
     this.compUploadItem.set(item);
     this.compFile = null;
+    (this as any)._editingDocId = null;
     this.compForm = { documentName: item.label, documentNumber: '', issueDate: '', expiryDate: '', notes: '' };
     this.compUploadOpen.set(true);
   }
@@ -639,27 +656,48 @@ export class DriverDatabaseComponent implements OnInit {
     if (!this.compForm.documentName.trim()) { this.toast.error('Document name required', 'Required'); return; }
 
     this.compSaving.set(true);
-    const fd = new FormData();
-    fd.append('driverId', driver.id);
-    fd.append('category', this.catMap[item.key] || item.key);
-    fd.append('subCategory', this.subMap[item.key] || item.key);
-    fd.append('documentName', this.compForm.documentName);
-    fd.append('documentNumber', this.compForm.documentNumber);
-    if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
-    if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
-    fd.append('notes', this.compForm.notes);
-    if (this.compFile) fd.append('file', this.compFile);
+    const editId = (this as any)._editingDocId;
 
-    this.api.createDriverDocument(fd).subscribe({
-      next: () => {
-        this.toast.success(`${item.label} uploaded`, 'Success');
-        this.compSaving.set(false);
-        this.compUploadOpen.set(false);
-      },
-      error: () => {
-        this.toast.error('Upload failed', 'Error');
-        this.compSaving.set(false);
-      }
-    });
+    if (editId) {
+      this.api.updateDriverDocument(editId, {
+        documentName: this.compForm.documentName,
+        documentNumber: this.compForm.documentNumber,
+        issueDate: this.compForm.issueDate || null,
+        expiryDate: this.compForm.expiryDate || null,
+        notes: this.compForm.notes
+      }).subscribe({
+        next: () => {
+          this.toast.success(`${item.label} updated`, 'Updated');
+          this.compSaving.set(false);
+          this.compUploadOpen.set(false);
+          (this as any)._editingDocId = null;
+          this.loadAllDocs();
+          this.loadDriverDocs(driver.id);
+        },
+        error: () => { this.toast.error('Update failed', 'Error'); this.compSaving.set(false); }
+      });
+    } else {
+      const fd = new FormData();
+      fd.append('driverId', driver.id);
+      fd.append('category', this.catMap[item.key] || item.key);
+      fd.append('subCategory', this.subMap[item.key] || item.key);
+      fd.append('documentName', this.compForm.documentName);
+      fd.append('documentNumber', this.compForm.documentNumber);
+      if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
+      if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
+      fd.append('notes', this.compForm.notes);
+      if (this.compFile) fd.append('file', this.compFile);
+
+      this.api.createDriverDocument(fd).subscribe({
+        next: () => {
+          this.toast.success(`${item.label} uploaded`, 'Success');
+          this.compSaving.set(false);
+          this.compUploadOpen.set(false);
+          this.loadAllDocs();
+          this.loadDriverDocs(driver.id);
+        },
+        error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
+      });
+    }
   }
 }
