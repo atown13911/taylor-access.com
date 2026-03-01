@@ -73,7 +73,7 @@
                   </div>
                 </td>
                 @for (sub of currentCategory()?.subcategories || []; track sub.value) {
-                  <td class="status-cell">
+                  <td class="status-cell" (click)="openSubDocs(driver, sub)">
                     @if (getDriverSubDoc(driver.id, sub.value); as doc) {
                       <span class="dot" [class]="'dot-' + doc.status" [title]="doc.status + (doc.expiryDate ? ' - Exp: ' + formatDate(doc.expiryDate) : '')"></span>
                     } @else {
@@ -190,6 +190,59 @@
       }
     </div>
   </aside>
+}
+
+<!-- Sub-Category Documents Popup -->
+@if (subDocPopup()) {
+  <div class="modal-overlay" (click)="closeSubDocPopup()">
+    <div class="subdoc-modal" (click)="$event.stopPropagation()">
+      <div class="subdoc-header">
+        <div>
+          <h3>{{ subDocPopup()!.sub.label }}</h3>
+          <span class="subdoc-driver">{{ subDocPopup()!.driver.name }}</span>
+        </div>
+        <button class="close-btn" (click)="closeSubDocPopup()"><i class='bx bx-x'></i></button>
+      </div>
+
+      <div class="subdoc-body">
+        @if (subDocList().length === 0) {
+          <div class="subdoc-empty">
+            <i class='bx bx-file'></i>
+            <p>No documents uploaded</p>
+            <button class="subdoc-upload-btn" (click)="openSubDetail(subDocPopup()!.driver, subDocPopup()!.sub); closeSubDocPopup()">
+              <i class='bx bx-upload'></i> Upload Document
+            </button>
+          </div>
+        } @else {
+          @for (doc of subDocList(); track doc.id) {
+            <div class="subdoc-item" (click)="viewSubDoc(doc)">
+              <div class="subdoc-icon"><i class='bx bx-file-blank'></i></div>
+              <div class="subdoc-info">
+                <strong>{{ doc.documentName || doc.fileName || 'Document' }}</strong>
+                <span class="subdoc-meta">
+                  {{ doc.documentNumber ? '#' + doc.documentNumber + ' · ' : '' }}
+                  {{ doc.issueDate ? formatDate(doc.issueDate) : '' }}
+                  {{ doc.createdAt ? ' · Uploaded ' + formatDate(doc.createdAt) : '' }}
+                </span>
+                @if (doc.expiryDate) {
+                  <span class="subdoc-expiry" [class.expiring]="isExpiringSoon(doc.expiryDate)" [class.expired]="isExpired(doc.expiryDate)">
+                    Exp: {{ formatDate(doc.expiryDate) }}
+                  </span>
+                }
+              </div>
+              <span class="subdoc-status" [class]="doc.status || 'active'">{{ doc.status || 'active' }}</span>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="subdoc-footer">
+        <button class="subdoc-upload-btn" (click)="openSubDetail(subDocPopup()!.driver, subDocPopup()!.sub); closeSubDocPopup()">
+          <i class='bx bx-upload'></i> Upload New
+        </button>
+      </div>
+    </div>
+  </div>
 }
 
 <!-- Upload / Edit Modal -->

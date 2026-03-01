@@ -34,6 +34,8 @@ export class DocumentManagementComponent implements OnInit {
   showUploadModal = signal(false);
   editingDoc = signal<any>(null);
   detailDriver = signal<any>(null);
+  subDocPopup = signal<{ driver: any; sub: any } | null>(null);
+  subDocList = signal<any[]>([]);
 
   complianceItems = [
     { key: 'cdl', label: 'CDL / License' }, { key: 'medical', label: 'Medical Certificate' },
@@ -216,6 +218,43 @@ export class DocumentManagementComponent implements OnInit {
       case 'expired': return 'Expired';
       default: return 'Missing';
     }
+  }
+
+  openSubDocs(driver: any, sub: any): void {
+    this.subDocPopup.set({ driver, sub });
+    const tab = this.activeTab();
+    const docs = this.documents().filter(d =>
+      d.driverId?.toString() === driver.id?.toString() &&
+      d.category === tab &&
+      d.subCategory === sub.value
+    );
+    this.subDocList.set(docs);
+  }
+
+  closeSubDocPopup(): void {
+    this.subDocPopup.set(null);
+    this.subDocList.set([]);
+  }
+
+  viewSubDoc(doc: any): void {
+    if (doc.id) {
+      this.api.downloadDriverDocumentFile(doc.id).subscribe({
+        next: (blob: Blob) => window.open(URL.createObjectURL(blob), '_blank'),
+        error: () => {}
+      });
+    }
+  }
+
+  isExpiringSoon(dateStr: string): boolean {
+    if (!dateStr) return false;
+    const exp = new Date(dateStr);
+    const days = Math.floor((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return days > 0 && days <= 90;
+  }
+
+  isExpired(dateStr: string): boolean {
+    if (!dateStr) return false;
+    return new Date(dateStr) < new Date();
   }
 
   selectDriverDetail(driver: any): void {

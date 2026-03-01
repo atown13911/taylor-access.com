@@ -207,6 +207,86 @@
   &.missing { background: rgba(136, 136, 170, 0.1); color: #8888aa; border: 1px solid rgba(136, 136, 170, 0.3); }
 }
 
+// Sub-doc popup
+.subdoc-modal {
+  background: rgba(13, 13, 20, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.subdoc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  h3 { margin: 0; color: var(--text-primary); font-size: 1rem; }
+}
+.subdoc-driver { font-size: 0.78rem; color: var(--cyan); }
+.subdoc-body { padding: 12px 20px; overflow-y: auto; flex: 1; }
+.subdoc-footer {
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.subdoc-empty {
+  text-align: center; padding: 30px 10px; color: #555;
+  i { display: block; font-size: 2rem; color: var(--cyan); opacity: 0.3; margin-bottom: 8px; }
+  p { margin: 0 0 12px; font-size: 0.85rem; }
+}
+
+.subdoc-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 8px; border-radius: 8px; cursor: pointer;
+  transition: background 0.15s; margin: 0 -8px;
+  &:hover { background: rgba(0, 212, 255, 0.06); }
+}
+
+.subdoc-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: rgba(0, 212, 255, 0.08);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cyan); flex-shrink: 0;
+}
+
+.subdoc-info {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+  strong { font-size: 0.85rem; color: var(--text-primary); }
+}
+.subdoc-meta { font-size: 0.72rem; color: var(--text-secondary); }
+.subdoc-expiry {
+  font-size: 0.7rem; color: #aaa;
+  &.expiring { color: #ffaa00; }
+  &.expired { color: #ff4444; }
+}
+.subdoc-status {
+  font-size: 0.65rem; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+  text-transform: capitalize; flex-shrink: 0;
+  &.active { background: rgba(0,255,136,0.1); color: #00ff88; }
+  &.expiring { background: rgba(255,170,0,0.1); color: #ffaa00; }
+  &.expired { background: rgba(255,68,68,0.1); color: #ff4444; }
+}
+.subdoc-upload-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 8px 16px; border-radius: 6px;
+  border: 1px solid rgba(0, 212, 255, 0.3); background: rgba(0, 212, 255, 0.08);
+  color: var(--cyan); font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+  &:hover { background: rgba(0, 212, 255, 0.15); }
+}
+
+.status-cell { cursor: pointer; }
+
 // Clickable driver cell
 .driver-cell.clickable { cursor: pointer; &:hover strong { color: var(--cyan); } }
 tr.selected td { background: rgba(0, 212, 255, 0.06) !important; }
