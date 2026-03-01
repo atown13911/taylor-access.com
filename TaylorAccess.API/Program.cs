@@ -267,6 +267,39 @@ using (var scope = app.Services.CreateScope())
         await context.SaveChangesAsync();
         Console.WriteLine($"Seeded {clients.Length} OAuth clients: VanTac TMS, Taylor CRM, Taylor Academy");
     }
+
+    // Seed additional OAuth clients (idempotent)
+    var newClients = new (string clientId, string secret, string name, string desc, string homepage, string[] uris)[]
+    {
+        ("ta_taylor_accounting", "taylor-accounting-sso-secret-2026", "TSS Accounting", "Financial Operations & Ledger", "https://taylor-accounting.net",
+            new[] { "https://taylor-accounting.net", "https://taylor-accounting.net/callback", "http://localhost:4203", "http://localhost:4203/callback" }),
+        ("ta_taylor_assets", "taylor-assets-sso-secret-2026", "Taylor Assets", "Asset & Document Management", "https://taylor-assets.com",
+            new[] { "https://taylor-assets.com", "https://taylor-assets.com/callback", "http://localhost:4204", "http://localhost:4204/callback" }),
+        ("ta_taylor_landstar", "taylor-landstar-sso-secret-2026", "Landstar", "Landstar Integration & Loads", "https://taylor-last.com",
+            new[] { "https://taylor-last.com", "https://taylor-last.com/callback", "http://localhost:4205", "http://localhost:4205/callback" }),
+        ("ta_tss_stream", "tss-stream-sso-secret-2026", "TSS Stream", "Media & Communications Hub", "https://taylorshippingsolutions.com",
+            new[] { "https://taylorshippingsolutions.com", "https://taylorshippingsolutions.com/callback", "http://localhost:3001", "http://localhost:3001/callback" }),
+        ("ta_tss_portal", "tss-portal-sso-secret-2026", "TSS Portal", "Centralized Command Portal", "https://tss-portal.com",
+            new[] { "https://tss-portal.com", "https://tss-portal.com/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
+    };
+
+    foreach (var (clientId, secret, name, desc, homepage, uris) in newClients)
+    {
+        if (!await context.OAuthClients.AnyAsync(c => c.ClientId == clientId))
+        {
+            context.OAuthClients.Add(new OAuthClient
+            {
+                ClientId = clientId,
+                ClientSecret = BCrypt.Net.BCrypt.HashPassword(secret),
+                Name = name,
+                Description = desc,
+                HomepageUrl = homepage,
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(uris)
+            });
+            Console.WriteLine($"Seeded OAuth client: {name} ({clientId})");
+        }
+    }
+    await context.SaveChangesAsync();
 }
 
 Console.WriteLine("Taylor Access HR API is running!");

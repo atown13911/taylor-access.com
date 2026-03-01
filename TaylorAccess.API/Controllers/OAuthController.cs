@@ -76,6 +76,15 @@ public class OAuthController : ControllerBase
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return Unauthorized(new { error = "invalid_credentials", error_description = "Invalid email or password" });
 
+        // Check app access — admins bypass, others need an AppRoleAssignment
+        if (user.Role != "product_owner" && user.Role != "superadmin" && user.Role != "admin")
+        {
+            var hasAccess = await _context.AppRoleAssignments
+                .AnyAsync(a => a.UserId == user.Id && a.AppClientId == request.ClientId && a.Status == "active");
+            if (!hasAccess)
+                return StatusCode(403, new { error = "access_denied", error_description = "You do not have access to this application. Contact your administrator." });
+        }
+
         // Generate authorization code
         var code = OAuthAuthorizationCode.Generate();
         _context.OAuthAuthorizationCodes.Add(new OAuthAuthorizationCode
@@ -154,6 +163,18 @@ public class OAuthController : ControllerBase
 
         if (user == null) return NotFound();
 
+        var appAccess = await _context.AppRoleAssignments
+            .Where(a => a.UserId == userId && a.Status == "active")
+            .Select(a => new { a.AppClientId, a.Role, a.Permissions })
+            .ToListAsync();
+
+        var allApps = await _context.OAuthClients
+            .Where(c => c.Status == "active")
+            .Select(c => c.ClientId)
+            .ToListAsync();
+
+        var isAdmin = user.Role == "product_owner" || user.Role == "superadmin" || user.Role == "admin";
+
         return Ok(new
         {
             sub = user.Id.ToString(),
@@ -174,7 +195,9 @@ public class OAuthController : ControllerBase
             language = user.Language,
             country = user.Country,
             lastLoginAt = user.LastLoginAt,
-            createdAt = user.CreatedAt
+            createdAt = user.CreatedAt,
+            appAccess,
+            allowedApps = isAdmin ? allApps : appAccess.Select(a => a.AppClientId).ToList()
         });
     }
 
@@ -213,6 +236,14 @@ public class OAuthController : ControllerBase
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId && u.Status == "active");
         if (user == null)
             return Unauthorized(new { error = "user_not_found" });
+
+        if (user.Role != "product_owner" && user.Role != "superadmin" && user.Role != "admin")
+        {
+            var hasAccess = await _context.AppRoleAssignments
+                .AnyAsync(a => a.UserId == user.Id && a.AppClientId == request.ClientId && a.Status == "active");
+            if (!hasAccess)
+                return StatusCode(403, new { error = "access_denied", error_description = "You do not have access to this application." });
+        }
 
         var code = OAuthAuthorizationCode.Generate();
         _context.OAuthAuthorizationCodes.Add(new OAuthAuthorizationCode
@@ -359,6 +390,27 @@ public class OAuthController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Role assigned" });
+    }
+
+    /// <summary>
+    /// Remove app access for a user
+    /// </summary>
+    [HttpDelete("users/{userId}/apps/{appClientId}")]
+    [Authorize]
+    public async Task<ActionResult> RevokeAppRole(int userId, string appClientId)
+    {
+        var assignment = await _context.AppRoleAssignments
+            .FirstOrDefaultAsync(a => a.UserId == userId && a.AppClientId == appClientId);
+
+        if (assignment == null) return NotFound();
+
+        _context.AppRoleAssignments.Remove(assignment);
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("app_access_revoked", "AppRoleAssignment", assignment.Id,
+            $"Revoked {appClientId} access for user {userId}");
+
+        return Ok(new { message = "Access revoked" });
     }
 
     // ============ PRIVATE METHODS ============
