@@ -201,6 +201,8 @@ export class DriverListComponent implements OnInit {
   selectedDriver = signal<any>(null);
   detailTab = signal<'overview' | 'pm'>('overview');
   driverPmDocs = signal<any[]>([]);
+  pmManageMode = signal(false);
+  pmSelectedIds = signal<string[]>([]);
   // Profile modal popup (icon click)
   profileDriver = signal<any>(null);
   profileTab = signal<'profile' | 'documents'>('profile');
@@ -285,6 +287,49 @@ export class DriverListComponent implements OnInit {
     this.selectedDriver.set(null);
     this.detailTab.set('overview');
     this.driverPmDocs.set([]);
+    this.pmManageMode.set(false);
+    this.pmSelectedIds.set([]);
+  }
+
+  togglePmSelect(id: string): void {
+    this.pmSelectedIds.update(ids =>
+      ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]
+    );
+  }
+
+  toggleSelectAllPm(): void {
+    if (this.pmSelectedIds().length === this.driverPmDocs().length) {
+      this.pmSelectedIds.set([]);
+    } else {
+      this.pmSelectedIds.set(this.driverPmDocs().map(d => d.id));
+    }
+  }
+
+  archiveSelectedPm(): void {
+    const count = this.pmSelectedIds().length;
+    if (!confirm(`Archive ${count} document${count > 1 ? 's' : ''}?`)) return;
+
+    const ids = this.pmSelectedIds();
+    let completed = 0;
+    for (const id of ids) {
+      this.api.deleteDriverDocument(id).subscribe({
+        next: () => { completed++; if (completed === ids.length) { this.toast.success(`${count} document(s) archived`, 'Archived'); this.pmSelectedIds.set([]); this.loadDriverPmDocs(); } },
+        error: () => { completed++; }
+      });
+    }
+  }
+
+  verifySelectedPm(): void {
+    const count = this.pmSelectedIds().length;
+    const ids = this.pmSelectedIds();
+    let completed = 0;
+
+    for (const id of ids) {
+      this.api.updateDriverDocument(id, { status: 'verified', verifiedAt: new Date().toISOString() }).subscribe({
+        next: () => { completed++; if (completed === ids.length) { this.toast.success(`${count} document(s) verified`, 'Verified'); this.pmSelectedIds.set([]); this.loadDriverPmDocs(); } },
+        error: () => { completed++; }
+      });
+    }
   }
 
   viewPmDoc(doc: any): void {

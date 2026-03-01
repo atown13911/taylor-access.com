@@ -456,11 +456,35 @@
       <div class="panel-section">
         <div class="pm-header">
           <h4>Maintenance Records</h4>
-          <label class="pm-upload-btn">
-            <i class='bx bx-upload'></i> Upload
-            <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadPmDoc($event)">
-          </label>
+          <div class="pm-header-actions">
+            <button class="pm-gear-btn" [class.active]="pmManageMode()" (click)="pmManageMode.set(!pmManageMode())" title="Manage documents">
+              <i class='bx bx-cog'></i>
+            </button>
+            <label class="pm-upload-btn">
+              <i class='bx bx-upload'></i> Upload
+              <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadPmDoc($event)">
+            </label>
+          </div>
         </div>
+
+        <!-- Manage mode actions bar -->
+        @if (pmManageMode() && driverPmDocs().length > 0) {
+          <div class="pm-manage-bar">
+            <button class="pm-select-all" (click)="toggleSelectAllPm()">
+              {{ pmSelectedIds().length === driverPmDocs().length ? 'Deselect All' : 'Select All' }}
+            </button>
+            <span class="pm-selected-count">{{ pmSelectedIds().length }} selected</span>
+            <div class="pm-manage-actions">
+              <button class="pm-action-btn archive" [disabled]="pmSelectedIds().length === 0" (click)="archiveSelectedPm()">
+                <i class='bx bx-archive-in'></i> Archive
+              </button>
+              <button class="pm-action-btn verify" [disabled]="pmSelectedIds().length === 0" (click)="verifySelectedPm()">
+                <i class='bx bx-check-circle'></i> Verify
+              </button>
+            </div>
+          </div>
+        }
+
         @if (driverPmDocs().length === 0) {
           <div class="pm-empty">
             <i class='bx bx-wrench'></i>
@@ -472,8 +496,14 @@
           </div>
         } @else {
           @for (doc of driverPmDocs(); track doc.id) {
-            <div class="pm-item clickable" (click)="viewPmDoc(doc)">
-              <div class="pm-icon"><i class='bx bx-wrench'></i></div>
+            <div class="pm-item" [class.clickable]="!pmManageMode()" [class.selected]="pmSelectedIds().includes(doc.id)" (click)="pmManageMode() ? togglePmSelect(doc.id) : viewPmDoc(doc)">
+              @if (pmManageMode()) {
+                <div class="pm-checkbox" [class.checked]="pmSelectedIds().includes(doc.id)">
+                  <i class='bx' [class.bx-checkbox-checked]="pmSelectedIds().includes(doc.id)" [class.bx-checkbox]="!pmSelectedIds().includes(doc.id)"></i>
+                </div>
+              } @else {
+                <div class="pm-icon"><i class='bx bx-wrench'></i></div>
+              }
               <div class="pm-info">
                 <strong>{{ doc.documentName || doc.subCategory || 'PM Record' }}</strong>
                 <span class="pm-meta">
