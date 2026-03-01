@@ -27,7 +27,7 @@ export class DocumentManagementComponent implements OnInit {
   private tracking = inject(EventTrackingService);
   private confirm = inject(ConfirmService);
 
-  activeTab = signal('cdl_endorsements');
+  activeTab = signal('required');
   documents = signal<any[]>([]);
   drivers = signal<any[]>([]);
   selectedDriverId = signal<string>('');
@@ -87,6 +87,18 @@ export class DocumentManagementComponent implements OnInit {
   summary = signal<any>({ totalDocuments: 0, expiring: 0, expired: 0, data: [] });
 
   readonly categories: DocCategory[] = [
+    { key: 'required', label: 'Required', icon: 'bx-check-shield', subcategories: [
+      { value: 'cdl_license', label: 'CDL License' },
+      { value: 'medical_card', label: 'Medical Card' },
+      { value: 'annual_mvr', label: 'Annual MVR' },
+      { value: 'pre_employment', label: 'Drug Test (Pre-Emp)' },
+      { value: 'application', label: 'Employment App' },
+      { value: 'road_test', label: 'Road Test' },
+      { value: 'annual_review', label: 'Annual Review' },
+      { value: 'certificate_of_insurance', label: 'Insurance Cert' },
+      { value: 'registration', label: 'Vehicle Reg' },
+      { value: 'annual_inspection', label: 'Annual Inspection' },
+    ]},
     { key: 'cdl_endorsements', label: 'CDL & Endorsements', icon: 'bx-id-card', subcategories: [
       { value: 'cdl_license', label: 'CDL License' },
       { value: 'hazmat', label: 'Hazmat Endorsement' },
@@ -209,7 +221,16 @@ export class DocumentManagementComponent implements OnInit {
   filteredDocs = computed(() => {
     const tab = this.activeTab();
     const driverId = this.selectedDriverId();
-    let docs = this.documents().filter(d => d.category === tab);
+    const cat = this.currentCategory();
+    let docs: any[];
+
+    if (tab === 'required' && cat) {
+      const requiredSubs = cat.subcategories.map(s => s.value);
+      docs = this.documents().filter(d => requiredSubs.includes(d.subCategory));
+    } else {
+      docs = this.documents().filter(d => d.category === tab);
+    }
+
     if (driverId) docs = docs.filter(d => d.driverId?.toString() === driverId);
     return docs;
   });
@@ -224,6 +245,12 @@ export class DocumentManagementComponent implements OnInit {
 
   getDriverSubDoc(driverId: any, subCategory: string): any {
     const tab = this.activeTab();
+    if (tab === 'required') {
+      return this.documents().find(d =>
+        d.driverId?.toString() === driverId?.toString() &&
+        d.subCategory === subCategory
+      ) || null;
+    }
     return this.documents().find(d =>
       d.driverId?.toString() === driverId?.toString() &&
       d.category === tab &&
@@ -236,13 +263,24 @@ export class DocumentManagementComponent implements OnInit {
     const cat = this.currentCategory();
     if (!cat) return 'missing';
 
-    const docs = this.documents().filter(d =>
-      d.driverId?.toString() === driverId?.toString() && d.category === tab
-    );
-    if (docs.length === 0) return 'missing';
-    if (docs.some(d => d.status === 'expired')) return 'expired';
-    if (docs.some(d => d.status === 'expiring')) return 'expiring';
-    if (docs.length >= cat.subcategories.length) return 'compliant';
+    const subs = cat.subcategories;
+    let matched = 0;
+    let hasExpired = false;
+    let hasExpiring = false;
+
+    for (const sub of subs) {
+      const doc = this.getDriverSubDoc(driverId, sub.value);
+      if (doc) {
+        matched++;
+        if (doc.status === 'expired') hasExpired = true;
+        if (doc.status === 'expiring') hasExpiring = true;
+      }
+    }
+
+    if (matched === 0) return 'missing';
+    if (hasExpired) return 'expired';
+    if (hasExpiring) return 'expiring';
+    if (matched >= subs.length) return 'compliant';
     return 'partial';
   }
 
@@ -260,11 +298,12 @@ export class DocumentManagementComponent implements OnInit {
   openSubDocs(driver: any, sub: any): void {
     this.subDocPopup.set({ driver, sub });
     const tab = this.activeTab();
-    const docs = this.documents().filter(d =>
-      d.driverId?.toString() === driver.id?.toString() &&
-      d.category === tab &&
-      d.subCategory === sub.value
-    );
+    const docs = this.documents().filter(d => {
+      if (d.driverId?.toString() !== driver.id?.toString()) return false;
+      if (d.subCategory !== sub.value) return false;
+      if (tab !== 'required') return d.category === tab;
+      return true;
+    });
     this.subDocList.set(docs);
   }
 
