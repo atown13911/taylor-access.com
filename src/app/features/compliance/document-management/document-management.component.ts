@@ -1,4 +1,5 @@
 import { Component, signal, computed, inject, OnInit } from '@angular/core';
+
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
@@ -36,6 +37,42 @@ export class DocumentManagementComponent implements OnInit {
   detailDriver = signal<any>(null);
   subDocPopup = signal<{ driver: any; sub: any } | null>(null);
   subDocList = signal<any[]>([]);
+
+  driverSearch = signal('');
+  statusFilter = signal('');
+  yearFilter = signal('');
+
+  readonly availableYears = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
+
+  filteredRosterDrivers = computed(() => {
+    let list = this.rosterDrivers();
+    const search = this.driverSearch().toLowerCase();
+    if (search) {
+      list = list.filter((d: any) =>
+        (d.name || '').toLowerCase().includes(search) ||
+        (d.phone || '').includes(search) ||
+        (d.email || '').toLowerCase().includes(search)
+      );
+    }
+    const status = this.statusFilter();
+    if (status) {
+      list = list.filter((d: any) => this.getDriverOverallStatus(d.id) === status);
+    }
+    const year = this.yearFilter();
+    if (year) {
+      const tab = this.activeTab();
+      list = list.filter((d: any) => {
+        const docs = this.documents().filter(doc =>
+          doc.driverId?.toString() === d.id?.toString() && doc.category === tab
+        );
+        return docs.some(doc => {
+          const date = doc.issueDate || doc.createdAt || '';
+          return date && new Date(date).getFullYear().toString() === year;
+        });
+      });
+    }
+    return list;
+  });
 
   complianceItems = [
     { key: 'cdl', label: 'CDL / License' }, { key: 'medical', label: 'Medical Certificate' },

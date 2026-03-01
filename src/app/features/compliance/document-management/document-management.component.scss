@@ -287,6 +287,55 @@
 
 .status-cell { cursor: pointer; }
 
+// Roster filters
+.roster-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+
+  i { color: var(--text-secondary); font-size: 1rem; }
+
+  input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    &::placeholder { color: #555; }
+  }
+
+  &:focus-within { border-color: var(--cyan); }
+}
+
+.filter-select {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  outline: none;
+  min-width: 130px;
+
+  &:focus { border-color: var(--cyan); }
+}
+
 // Clickable driver cell
 .driver-cell.clickable { cursor: pointer; &:hover strong { color: var(--cyan); } }
 tr.selected td { background: rgba(0, 212, 255, 0.06) !important; }

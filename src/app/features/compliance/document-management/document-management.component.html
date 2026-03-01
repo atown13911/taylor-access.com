@@ -41,6 +41,28 @@
       <h3><i class='bx' [ngClass]="currentCategory()?.icon || 'bx-file'"></i> {{ currentCategory()?.label }} — Driver Roster</h3>
     </div>
 
+    <!-- Search & Filters -->
+    <div class="roster-filters">
+      <div class="filter-search">
+        <i class='bx bx-search'></i>
+        <input type="text" placeholder="Search drivers..." [ngModel]="driverSearch()" (ngModelChange)="driverSearch.set($event)">
+      </div>
+      <select class="filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+        <option value="">All Statuses</option>
+        <option value="complete">Complete</option>
+        <option value="partial">Partial</option>
+        <option value="expiring">Expiring</option>
+        <option value="expired">Expired</option>
+        <option value="missing">Missing</option>
+      </select>
+      <select class="filter-select" [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)">
+        <option value="">All Years</option>
+        @for (y of availableYears; track y) {
+          <option [value]="y">{{ y }}</option>
+        }
+      </select>
+    </div>
+
     @if (loading()) {
       <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i> Loading...</div>
     } @else if (drivers().length === 0) {
@@ -63,7 +85,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (driver of rosterDrivers(); track driver.id) {
+            @for (driver of filteredRosterDrivers(); track driver.id) {
               <tr [class.selected]="detailDriver()?.id === driver.id">
                 <td class="driver-cell clickable" (click)="selectDriverDetail(driver)">
                   <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
