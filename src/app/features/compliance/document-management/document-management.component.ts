@@ -127,6 +127,22 @@ export class DocumentManagementComponent implements OnInit {
       { value: 'dot_warning', label: 'DOT Warning' },
       { value: 'csa_alert', label: 'CSA Alert' },
       { value: 'accident_report', label: 'Accident Report' }
+    ]},
+    { key: 'pm', label: 'PM', icon: 'bx-wrench', subcategories: [
+      { value: 'oil_change', label: 'Oil Change' },
+      { value: 'tire_rotation', label: 'Tire Rotation / Replacement' },
+      { value: 'brake_inspection', label: 'Brake Inspection / Service' },
+      { value: 'filter_replacement', label: 'Filter Replacement' },
+      { value: 'coolant_flush', label: 'Coolant Flush' },
+      { value: 'transmission_service', label: 'Transmission Service' },
+      { value: 'wheel_alignment', label: 'Wheel Alignment' },
+      { value: 'ac_service', label: 'A/C Service' },
+      { value: 'battery_check', label: 'Battery Check / Replace' },
+      { value: 'dot_annual_inspection', label: 'DOT Annual Inspection' },
+      { value: 'pm_a_service', label: 'PM-A Service' },
+      { value: 'pm_b_service', label: 'PM-B Service' },
+      { value: 'pm_c_service', label: 'PM-C Service' },
+      { value: 'other_pm', label: 'Other PM' }
     ]}
   ];
 
