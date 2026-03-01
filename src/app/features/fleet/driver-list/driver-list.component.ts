@@ -199,6 +199,8 @@ export class DriverListComponent implements OnInit {
 
   // Slide-out panel (row click)
   selectedDriver = signal<any>(null);
+  detailTab = signal<'overview' | 'pm'>('overview');
+  driverPmDocs = signal<any[]>([]);
   // Profile modal popup (icon click)
   profileDriver = signal<any>(null);
   profileTab = signal<'profile' | 'documents'>('profile');
@@ -281,6 +283,20 @@ export class DriverListComponent implements OnInit {
 
   closeProfile(): void {
     this.selectedDriver.set(null);
+    this.detailTab.set('overview');
+    this.driverPmDocs.set([]);
+  }
+
+  loadDriverPmDocs(): void {
+    const driver = this.selectedDriver();
+    if (!driver) return;
+    this.api.getDriverDocuments(driver.id).subscribe({
+      next: (res: any) => {
+        const docs = (res?.data || []).filter((d: any) => d.category === 'pm');
+        this.driverPmDocs.set(docs);
+      },
+      error: () => this.driverPmDocs.set([])
+    });
   }
 
   closeProfileModal(): void {

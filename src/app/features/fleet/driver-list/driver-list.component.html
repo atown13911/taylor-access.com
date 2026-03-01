@@ -402,41 +402,88 @@
       <span class="panel-status" [class]="'status-' + (selectedDriver()!.status || 'active')">{{ selectedDriver()!.status || 'active' }}</span>
     </div>
 
-    <div class="panel-section">
-      <h4>Contact</h4>
-      <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
-      <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
+    <!-- Panel Tabs -->
+    <div class="panel-tabs">
+      <button class="panel-tab" [class.active]="detailTab() === 'overview'" (click)="detailTab.set('overview')">
+        <i class='bx bx-info-circle'></i> Overview
+      </button>
+      <button class="panel-tab" [class.active]="detailTab() === 'pm'" (click)="detailTab.set('pm'); loadDriverPmDocs()">
+        <i class='bx bx-wrench'></i> PM
+      </button>
     </div>
 
-    <div class="panel-section">
-      <h4>License</h4>
-      <div class="detail-row"><span class="label">Number</span><span class="mono">{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
-      <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
-      <div class="detail-row">
-        <span class="label">Expires</span>
-        <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiry)" [class.expired]="isExpired(selectedDriver()!.licenseExpiry)">
-          {{ formatDate(selectedDriver()!.licenseExpiry) }}
-        </span>
+    <!-- Overview Tab -->
+    @if (detailTab() === 'overview') {
+      <div class="panel-section">
+        <h4>Contact</h4>
+        <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
+        <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
       </div>
-      <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
-    </div>
 
-    <div class="panel-section">
-      <h4>Employment</h4>
-      <div class="detail-row"><span class="label">Type</span><span>{{ selectedDriver()!.type || '—' }}</span></div>
-      <div class="detail-row"><span class="label">Hire Date</span><span>{{ formatDate(selectedDriver()!.hireDate) }}</span></div>
-      <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
-    </div>
-
-    <div class="panel-section">
-      <h4>Compliance Summary</h4>
-      @for (doc of complianceItems; track doc.key) {
-        <div class="compliance-row">
-          <span class="dot" [class]="getComplianceStatus(selectedDriver()!, doc.key)"></span>
-          <span class="comp-label">{{ doc.label }}</span>
+      <div class="panel-section">
+        <h4>License</h4>
+        <div class="detail-row"><span class="label">Number</span><span class="mono">{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
+        <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
+        <div class="detail-row">
+          <span class="label">Expires</span>
+          <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiry)" [class.expired]="isExpired(selectedDriver()!.licenseExpiry)">
+            {{ formatDate(selectedDriver()!.licenseExpiry) }}
+          </span>
         </div>
-      }
-    </div>
+        <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Employment</h4>
+        <div class="detail-row"><span class="label">Type</span><span>{{ selectedDriver()!.type || '—' }}</span></div>
+        <div class="detail-row"><span class="label">Hire Date</span><span>{{ formatDate(selectedDriver()!.hireDate) }}</span></div>
+        <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h4>Compliance Summary</h4>
+        @for (doc of complianceItems; track doc.key) {
+          <div class="compliance-row">
+            <span class="dot" [class]="getComplianceStatus(selectedDriver()!, doc.key)"></span>
+            <span class="comp-label">{{ doc.label }}</span>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- PM Tab -->
+    @if (detailTab() === 'pm') {
+      <div class="panel-section">
+        <div class="pm-header">
+          <h4>Maintenance Records</h4>
+        </div>
+        @if (driverPmDocs().length === 0) {
+          <div class="pm-empty">
+            <i class='bx bx-wrench'></i>
+            <p>No PM records yet</p>
+          </div>
+        } @else {
+          @for (doc of driverPmDocs(); track doc.id) {
+            <div class="pm-item">
+              <div class="pm-icon"><i class='bx bx-wrench'></i></div>
+              <div class="pm-info">
+                <strong>{{ doc.documentName || doc.subCategory || 'PM Record' }}</strong>
+                <span class="pm-meta">
+                  {{ doc.documentNumber ? '#' + doc.documentNumber + ' · ' : '' }}
+                  {{ doc.issueDate ? formatDate(doc.issueDate) : '' }}
+                </span>
+                @if (doc.expiryDate) {
+                  <span class="pm-expiry" [class.expiring]="isExpiringSoon(doc.expiryDate)" [class.expired]="isExpired(doc.expiryDate)">
+                    Exp: {{ formatDate(doc.expiryDate) }}
+                  </span>
+                }
+              </div>
+              <span class="pm-status" [class]="doc.status || 'active'">{{ doc.status || 'active' }}</span>
+            </div>
+          }
+        }
+      </div>
+    }
   </aside>
 }
 

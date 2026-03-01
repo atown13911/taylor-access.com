@@ -668,6 +668,103 @@
   }
 }
 
+// Panel tabs
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.08);
+}
+
+.panel-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #8899aa);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+
+  &:hover { color: var(--text-primary); }
+  &.active {
+    color: var(--cyan);
+    border-bottom-color: var(--cyan);
+  }
+  i { font-size: 1rem; }
+}
+
+// PM items
+.pm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pm-empty {
+  text-align: center;
+  padding: 30px 10px;
+  color: #555;
+  i { display: block; font-size: 2rem; color: var(--cyan); opacity: 0.3; margin-bottom: 8px; }
+  p { margin: 0; font-size: 0.82rem; }
+}
+
+.pm-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+
+  &:last-child { border-bottom: none; }
+}
+
+.pm-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(0, 212, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan);
+  flex-shrink: 0;
+  i { font-size: 1rem; }
+}
+
+.pm-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  strong { font-size: 0.82rem; color: var(--text-primary); }
+}
+
+.pm-meta { font-size: 0.72rem; color: var(--text-secondary); }
+
+.pm-expiry {
+  font-size: 0.7rem;
+  color: #aaa;
+  &.expiring { color: #ffaa00; }
+  &.expired { color: #ff4444; }
+}
+
+.pm-status {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: capitalize;
+  flex-shrink: 0;
+  &.active { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
+  &.expiring { background: rgba(255, 170, 0, 0.1); color: #ffaa00; }
+  &.expired { background: rgba(255, 68, 68, 0.1); color: #ff4444; }
+}
+
 .panel-section {
   padding: 16px 20px;
   border-bottom: 1px solid rgba(0, 212, 255, 0.06);
