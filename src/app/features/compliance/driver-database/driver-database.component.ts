@@ -404,8 +404,42 @@ export class DriverDatabaseComponent implements OnInit {
 
   getCompDoc(driver: any, key: string): any {
     const sub = this.subMap[key];
-    if (!sub) return null;
-    return this.driverDocs().find(d => d.subCategory === sub) || null;
+    const cat = this.catMap[key];
+    const docs = this.driverDocs();
+    if (docs.length === 0) return null;
+
+    // Try exact subcategory match first
+    let doc = docs.find(d => d.subCategory === sub);
+    if (doc) return doc;
+
+    // Try by category
+    if (cat) {
+      doc = docs.find(d => d.category === cat);
+      if (doc) return doc;
+    }
+
+    // Try by label match in document name
+    const labels: Record<string, string[]> = {
+      cdl: ['cdl', 'license', 'cdl_license'],
+      medical: ['medical', 'dot physical', 'medical_card'],
+      mvr: ['mvr', 'motor vehicle', 'annual_mvr'],
+      drug: ['drug', 'alcohol', 'drug_test', 'pre_employment'],
+      dqf: ['dqf', 'qualification', 'application'],
+      employment: ['employment', 'verification', 'offer_letter', 'w4', 'i9'],
+      training: ['training', 'entry_level'],
+      insurance: ['insurance', 'certificate_of_insurance'],
+      vehicle: ['vehicle', 'registration', 'inspection'],
+      permits: ['permit', 'twic', 'oversize'],
+      ifta: ['ifta', 'irp'],
+      safety: ['safety', 'award'],
+      violations: ['violation', 'accident']
+    };
+
+    const terms = labels[key] || [key];
+    return docs.find(d => {
+      const name = ((d.documentName || '') + ' ' + (d.documentType || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
+      return terms.some(t => name.includes(t));
+    }) || null;
   }
 
   viewCompDoc(item: any): void {
