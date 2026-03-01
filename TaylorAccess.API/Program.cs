@@ -129,8 +129,17 @@ builder.Services.AddCors(options =>
                 return uri.Host == "localhost"
                     || uri.Host == "taylor-access.com"
                     || uri.Host == "www.taylor-access.com"
-                    || uri.Host.EndsWith(".taylor-access-com.pages.dev")
-                    || uri.Host == "taylor-access-com.pages.dev";
+                    || uri.Host.EndsWith(".pages.dev")
+                    || uri.Host == "taylor-tms.net"
+                    || uri.Host == "www.taylor-tms.net"
+                    || uri.Host == "taylor-assets.com"
+                    || uri.Host == "www.taylor-assets.com"
+                    || uri.Host == "taylor-crm.com"
+                    || uri.Host == "www.taylor-crm.com"
+                    || uri.Host == "taylor-academy.net"
+                    || uri.Host == "www.taylor-academy.net"
+                    || uri.Host == "tss-portal.com"
+                    || uri.Host == "www.tss-portal.com";
             })
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -190,45 +199,6 @@ using (var scope = app.Services.CreateScope())
     {
         context.Database.EnsureCreated();
     }
-
-    // Ensure Taylor Access-specific tables exist with correct schema (shared DB)
-    var tableStatements = new[]
-    {
-        @"CREATE TABLE IF NOT EXISTS ""OAuthClients"" (""Id"" SERIAL PRIMARY KEY, ""ClientId"" TEXT NOT NULL DEFAULT '', ""ClientSecret"" TEXT NOT NULL DEFAULT '', ""Name"" TEXT NOT NULL DEFAULT '', ""Description"" TEXT, ""LogoUrl"" TEXT, ""RedirectUris"" TEXT NOT NULL DEFAULT '[]', ""HomepageUrl"" TEXT, ""Status"" TEXT DEFAULT 'active', ""Scopes"" TEXT DEFAULT '[]', ""OrganizationId"" INTEGER, ""CreatedBy"" INTEGER, ""CreatedAt"" TIMESTAMP DEFAULT NOW(), ""UpdatedAt"" TIMESTAMP DEFAULT NOW())",
-        @"CREATE TABLE IF NOT EXISTS ""OAuthAuthorizationCodes"" (""Id"" SERIAL PRIMARY KEY, ""Code"" TEXT NOT NULL, ""ClientId"" TEXT NOT NULL, ""UserId"" INTEGER NOT NULL, ""RedirectUri"" TEXT, ""Scope"" TEXT, ""ExpiresAt"" TIMESTAMP NOT NULL, ""IsUsed"" BOOLEAN DEFAULT FALSE, ""CreatedAt"" TIMESTAMP DEFAULT NOW())",
-        @"CREATE TABLE IF NOT EXISTS ""OAuthAccessTokens"" (""Id"" SERIAL PRIMARY KEY, ""Token"" TEXT NOT NULL, ""ClientId"" TEXT NOT NULL, ""UserId"" INTEGER NOT NULL, ""Scope"" TEXT, ""ExpiresAt"" TIMESTAMP NOT NULL, ""IsRevoked"" BOOLEAN DEFAULT FALSE, ""CreatedAt"" TIMESTAMP DEFAULT NOW())",
-        @"CREATE TABLE IF NOT EXISTS ""OAuthRefreshTokens"" (""Id"" SERIAL PRIMARY KEY, ""Token"" TEXT NOT NULL, ""ClientId"" TEXT NOT NULL, ""UserId"" INTEGER NOT NULL, ""ExpiresAt"" TIMESTAMP NOT NULL, ""IsRevoked"" BOOLEAN DEFAULT FALSE, ""CreatedAt"" TIMESTAMP DEFAULT NOW())",
-        @"CREATE TABLE IF NOT EXISTS ""AppRoleAssignments"" (""Id"" SERIAL PRIMARY KEY, ""UserId"" INTEGER NOT NULL, ""AppClientId"" TEXT NOT NULL, ""Role"" TEXT DEFAULT 'user', ""CreatedAt"" TIMESTAMP DEFAULT NOW())",
-        @"CREATE TABLE IF NOT EXISTS ""Vehicles"" (""Id"" SERIAL PRIMARY KEY, ""Name"" TEXT NOT NULL DEFAULT '', ""Make"" TEXT, ""Model"" TEXT, ""Year"" INTEGER, ""Vin"" TEXT, ""PlateNumber"" TEXT, ""PlateState"" TEXT, ""Status"" TEXT DEFAULT 'active', ""OrganizationId"" INTEGER, ""FleetId"" INTEGER, ""CreatedAt"" TIMESTAMP DEFAULT NOW(), ""UpdatedAt"" TIMESTAMP DEFAULT NOW())",
-        @"CREATE TABLE IF NOT EXISTS ""FleetDrivers"" (""FleetId"" INTEGER NOT NULL, ""DriverId"" INTEGER NOT NULL, ""AssignedAt"" TIMESTAMP DEFAULT NOW(), PRIMARY KEY (""FleetId"", ""DriverId""))",
-        @"CREATE TABLE IF NOT EXISTS ""FleetVehicles"" (""FleetId"" INTEGER NOT NULL, ""VehicleId"" INTEGER NOT NULL, ""AssignedAt"" TIMESTAMP DEFAULT NOW(), PRIMARY KEY (""FleetId"", ""VehicleId""))"
-    };
-
-    foreach (var sql in tableStatements)
-    {
-        try { await context.Database.ExecuteSqlRawAsync(sql); }
-        catch (Exception ex) { Console.WriteLine($"Table note: {ex.Message}"); }
-    }
-
-    // Add any missing columns to existing tables
-    var alterStatements = new[]
-    {
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""ClientSecret"" TEXT NOT NULL DEFAULT ''",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""LogoUrl"" TEXT",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""HomepageUrl"" TEXT",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""Status"" TEXT DEFAULT 'active'",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""Scopes"" TEXT DEFAULT '[]'",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""OrganizationId"" INTEGER",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""CreatedBy"" INTEGER",
-        @"ALTER TABLE ""OAuthClients"" ADD COLUMN IF NOT EXISTS ""UpdatedAt"" TIMESTAMP DEFAULT NOW()",
-    };
-
-    foreach (var sql in alterStatements)
-    {
-        try { await context.Database.ExecuteSqlRawAsync(sql); }
-        catch { }
-    }
-    Console.WriteLine("All required tables verified/created");
 
     await roleService.SeedDefaultRolesAsync();
 
