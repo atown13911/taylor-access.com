@@ -91,6 +91,20 @@ public class Driver
     [MaxLength(50)]
     public string? TruckNumber { get; set; }
 
+    [MaxLength(50)]
+    public string? TruckMake { get; set; }
+
+    [MaxLength(50)]
+    public string? TruckModel { get; set; }
+
+    public int? TruckYear { get; set; }
+
+    [MaxLength(17)]
+    public string? TruckVin { get; set; }
+
+    [MaxLength(20)]
+    public string? TruckTag { get; set; }
+
     [ForeignKey("DriverTerminalId")]
     public DriverTerminal? DriverTerminal { get; set; }
 
