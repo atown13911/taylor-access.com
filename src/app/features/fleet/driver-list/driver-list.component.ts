@@ -289,8 +289,11 @@ export class DriverListComponent implements OnInit {
 
   viewPmDoc(doc: any): void {
     if (doc.id) {
-      this.api.viewDriverDocumentFile(doc.id).subscribe({
-        next: (blob: Blob) => window.open(URL.createObjectURL(blob), '_blank'),
+      this.api.downloadDriverDocumentFile(doc.id).subscribe({
+        next: (blob: Blob) => {
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+        },
         error: () => this.toast.error('Failed to load document', 'Error')
       });
     }
