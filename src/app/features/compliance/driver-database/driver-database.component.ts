@@ -43,6 +43,7 @@ export class DriverDatabaseComponent implements OnInit {
   drivers = signal<any[]>([]);
   selectedDriver = signal<any | null>(null);
   driverDocs = signal<any[]>([]);
+  allDocs = signal<any[]>([]);
   showDetailsModal = signal(false);
   
   // Filters
@@ -104,6 +105,7 @@ export class DriverDatabaseComponent implements OnInit {
   });
   
   ngOnInit() {
+    this.loadAllDocs();
     this.loadDrivers().then(() => {
       // Check for driverId query param to auto-open profile
       this.route.queryParams.subscribe(params => {
@@ -395,11 +397,22 @@ export class DriverDatabaseComponent implements OnInit {
     }
   }
 
-  loadDriverDocs(driverId: any): void {
-    this.api.getDriverDocuments(driverId).subscribe({
-      next: (res: any) => this.driverDocs.set(res?.data || []),
-      error: () => this.driverDocs.set([])
+  loadAllDocs(): void {
+    this.api.getDriverDocuments().subscribe({
+      next: (res: any) => this.allDocs.set(res?.data || []),
+      error: () => this.allDocs.set([])
     });
+  }
+
+  loadDriverDocs(driverId: any): void {
+    const filtered = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
+    this.driverDocs.set(filtered);
+    if (filtered.length === 0) {
+      this.api.getDriverDocuments(driverId).subscribe({
+        next: (res: any) => this.driverDocs.set(res?.data || []),
+        error: () => this.driverDocs.set([])
+      });
+    }
   }
 
   getCompDoc(driver: any, key: string): any {
@@ -468,23 +481,44 @@ export class DriverDatabaseComponent implements OnInit {
 
   getComplianceClass(driver: any, item: string): string {
     const status = this.getItemStatus(driver, item);
-    if (status === 'compliant' || status === 'expiring' || status === 'expired') {
-      if (status === 'compliant') return 'dot dot-green';
-      if (status === 'expiring') return 'dot dot-yellow';
-      return 'dot dot-red';
-    }
+    if (status === 'compliant') return 'dot dot-green';
+    if (status === 'expiring') return 'dot dot-yellow';
+    if (status === 'expired') return 'dot dot-red';
 
-    // Also check uploaded docs if driver properties don't show status
-    if (this.selectedDriver()?.id === driver.id) {
-      const doc = this.getCompDoc(driver, item);
-      if (doc) {
-        if (doc.status === 'expired') return 'dot dot-red';
-        if (doc.status === 'expiring') return 'dot dot-yellow';
-        return 'dot dot-green';
-      }
+    // Check uploaded docs for any driver
+    const doc = this.getDocForDriver(driver.id, item);
+    if (doc) {
+      if (doc.status === 'expired') return 'dot dot-red';
+      if (doc.status === 'expiring') return 'dot dot-yellow';
+      return 'dot dot-green';
     }
 
     return 'dot dot-gray';
+  }
+
+  private getDocForDriver(driverId: any, key: string): any {
+    const sub = this.subMap[key];
+    const cat = this.catMap[key];
+    const docs = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
+    if (docs.length === 0) return null;
+
+    let doc = docs.find(d => d.subCategory === sub);
+    if (doc) return doc;
+    if (cat) { doc = docs.find(d => d.category === cat); if (doc) return doc; }
+
+    const labels: Record<string, string[]> = {
+      cdl: ['cdl', 'license'], medical: ['medical', 'dot physical'],
+      mvr: ['mvr', 'motor vehicle'], drug: ['drug', 'alcohol'],
+      dqf: ['dqf', 'qualification'], employment: ['employment', 'verification'],
+      training: ['training'], insurance: ['insurance'],
+      vehicle: ['vehicle', 'registration'], permits: ['permit', 'twic'],
+      ifta: ['ifta', 'irp'], safety: ['safety', 'award'], violations: ['violation', 'accident']
+    };
+    const terms = labels[key] || [key];
+    return docs.find(d => {
+      const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
+      return terms.some(t => name.includes(t));
+    }) || null;
   }
 
   getComplianceTooltip(driver: any, item: string): string {
