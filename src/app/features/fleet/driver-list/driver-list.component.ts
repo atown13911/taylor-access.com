@@ -203,6 +203,11 @@ export class DriverListComponent implements OnInit {
   driverPmDocs = signal<any[]>([]);
   pmManageMode = signal(false);
   pmSelectedIds = signal<string[]>([]);
+  compUploadOpen = signal(false);
+  compUploadItem = signal<any>(null);
+  compUploading = signal(false);
+  compUploadFile: File | null = null;
+  compUploadForm = { documentName: '', documentNumber: '', issueDate: '', expiryDate: '', notes: '' };
   // Profile modal popup (icon click)
   profileDriver = signal<any>(null);
   profileTab = signal<'profile' | 'documents'>('profile');
@@ -330,6 +335,57 @@ export class DriverListComponent implements OnInit {
         error: () => { completed++; }
       });
     }
+  }
+
+  private readonly compCategoryMap: Record<string, string> = {
+    cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drugTest: 'drug_tests',
+    dqf: 'dqf', employment: 'employment', training: 'training',
+    insurance: 'insurance', vehicleDocs: 'vehicle', permits: 'permits'
+  };
+
+  private readonly compSubMap: Record<string, string> = {
+    cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drugTest: 'pre_employment',
+    dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
+    insurance: 'certificate_of_insurance', vehicleDocs: 'registration', permits: 'oversize'
+  };
+
+  openComplianceUpload(item: any): void {
+    this.compUploadItem.set(item);
+    this.compUploadFile = null;
+    this.compUploadForm = { documentName: item.label, documentNumber: '', issueDate: '', expiryDate: '', notes: '' };
+    this.compUploadOpen.set(true);
+  }
+
+  submitComplianceUpload(): void {
+    const driver = this.selectedDriver();
+    const item = this.compUploadItem();
+    if (!driver || !item) return;
+    if (!this.compUploadForm.documentName.trim()) { this.toast.error('Document name required', 'Required'); return; }
+
+    this.compUploading.set(true);
+
+    const fd = new FormData();
+    fd.append('driverId', driver.id);
+    fd.append('category', this.compCategoryMap[item.key] || item.key);
+    fd.append('subCategory', this.compSubMap[item.key] || item.key);
+    fd.append('documentName', this.compUploadForm.documentName);
+    fd.append('documentNumber', this.compUploadForm.documentNumber);
+    if (this.compUploadForm.issueDate) fd.append('issueDate', this.compUploadForm.issueDate);
+    if (this.compUploadForm.expiryDate) fd.append('expiryDate', this.compUploadForm.expiryDate);
+    fd.append('notes', this.compUploadForm.notes);
+    if (this.compUploadFile) fd.append('file', this.compUploadFile);
+
+    this.api.createDriverDocument(fd).subscribe({
+      next: () => {
+        this.toast.success(`${item.label} uploaded`, 'Success');
+        this.compUploading.set(false);
+        this.compUploadOpen.set(false);
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.error || 'Upload failed', 'Error');
+        this.compUploading.set(false);
+      }
+    });
   }
 
   viewPmDoc(doc: any): void {
