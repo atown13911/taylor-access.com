@@ -33,6 +33,15 @@ export class DocumentManagementComponent implements OnInit {
   loading = signal(false);
   showUploadModal = signal(false);
   editingDoc = signal<any>(null);
+  detailDriver = signal<any>(null);
+
+  complianceItems = [
+    { key: 'cdl', label: 'CDL / License' }, { key: 'medical', label: 'Medical Certificate' },
+    { key: 'mvr', label: 'Motor Vehicle Record' }, { key: 'drug', label: 'Drug & Alcohol Test' },
+    { key: 'dqf', label: 'Driver Qualification File' }, { key: 'employment', label: 'Employment Verification' },
+    { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
+    { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
+  ];
   saving = signal(false);
   docFile: File | null = null;
 
@@ -207,6 +216,28 @@ export class DocumentManagementComponent implements OnInit {
       case 'expired': return 'Expired';
       default: return 'Missing';
     }
+  }
+
+  selectDriverDetail(driver: any): void {
+    this.api.getDriver(driver.id).subscribe({
+      next: (res: any) => this.detailDriver.set(res?.data || driver),
+      error: () => this.detailDriver.set(driver)
+    });
+  }
+
+  getComplianceDotClass(driver: any, key: string): string {
+    const docs = this.documents().filter(d => d.driverId?.toString() === driver.id?.toString());
+    const catMap: Record<string, string> = {
+      cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drug: 'drug_tests',
+      dqf: 'dqf', employment: 'employment', training: 'training',
+      insurance: 'insurance', vehicle: 'vehicle', permits: 'permits'
+    };
+    const cat = catMap[key];
+    const matched = docs.filter(d => d.category === cat);
+    if (matched.length === 0) return 'dot dot-gray';
+    if (matched.some(d => d.status === 'expired')) return 'dot dot-red';
+    if (matched.some(d => d.status === 'expiring')) return 'dot dot-yellow';
+    return 'dot dot-green';
   }
 
   openUploadForDriver(driver: any): void {

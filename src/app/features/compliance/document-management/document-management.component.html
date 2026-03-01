@@ -64,8 +64,8 @@
           </thead>
           <tbody>
             @for (driver of rosterDrivers(); track driver.id) {
-              <tr>
-                <td class="driver-cell">
+              <tr [class.selected]="detailDriver()?.id === driver.id">
+                <td class="driver-cell clickable" (click)="selectDriverDetail(driver)">
                   <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
                   <div class="driver-info">
                     <strong>{{ driver.name }}</strong>
@@ -143,6 +143,54 @@
     }
   </div>
 </div>
+
+<!-- Driver Details Slide-out Panel -->
+@if (detailDriver()) {
+  <div class="panel-overlay" (click)="detailDriver.set(null)"></div>
+  <aside class="details-panel">
+    <div class="panel-header">
+      <h2>Driver Details</h2>
+      <button class="close-btn" (click)="detailDriver.set(null)"><i class='bx bx-x'></i></button>
+    </div>
+
+    <div class="panel-avatar">
+      <div class="big-avatar">{{ detailDriver()!.name?.charAt(0) || '?' }}</div>
+      <h3>{{ detailDriver()!.name }}</h3>
+      <span class="panel-status" [class]="'status-' + (detailDriver()!.status || 'active')">{{ detailDriver()!.status || 'active' }}</span>
+    </div>
+
+    <div class="panel-section">
+      <h4>Contact</h4>
+      <div class="detail-row"><span class="label">Phone</span><span>{{ detailDriver()!.phone || '—' }}</span></div>
+      <div class="detail-row"><span class="label">Email</span><span>{{ detailDriver()!.email || '—' }}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h4>License</h4>
+      <div class="detail-row"><span class="label">Number</span><span class="mono">{{ detailDriver()!.licenseNumber || '—' }}</span></div>
+      <div class="detail-row"><span class="label">State</span><span>{{ detailDriver()!.licenseState || '—' }}</span></div>
+      <div class="detail-row"><span class="label">Expires</span><span>{{ detailDriver()!.licenseExpiry ? formatDate(detailDriver()!.licenseExpiry) : '—' }}</span></div>
+      <div class="detail-row"><span class="label">Class</span><span>{{ detailDriver()!.licenseClass || '—' }}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h4>Employment</h4>
+      <div class="detail-row"><span class="label">Type</span><span>{{ detailDriver()!.driverType || '—' }}</span></div>
+      <div class="detail-row"><span class="label">Hire Date</span><span>{{ detailDriver()!.hireDate ? formatDate(detailDriver()!.hireDate) : '—' }}</span></div>
+      <div class="detail-row"><span class="label">Fleet</span><span>{{ detailDriver()!.fleet?.name || '—' }}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <h4>Compliance Summary</h4>
+      @for (item of complianceItems; track item.key) {
+        <div class="compliance-row">
+          <span class="dot" [class]="getComplianceDotClass(detailDriver()!, item.key)"></span>
+          <span class="comp-label">{{ item.label }}</span>
+        </div>
+      }
+    </div>
+  </aside>
+}
 
 <!-- Upload / Edit Modal -->
 @if (showUploadModal()) {
