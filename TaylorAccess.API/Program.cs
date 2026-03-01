@@ -139,7 +139,9 @@ builder.Services.AddCors(options =>
                     || uri.Host == "taylor-academy.net"
                     || uri.Host == "www.taylor-academy.net"
                     || uri.Host == "tss-portal.com"
-                    || uri.Host == "www.tss-portal.com";
+                    || uri.Host == "www.tss-portal.com"
+                    || uri.Host == "taylorshippingsolutions.com"
+                    || uri.Host == "www.taylorshippingsolutions.com";
             })
             .AllowAnyMethod()
             .AllowAnyHeader()
