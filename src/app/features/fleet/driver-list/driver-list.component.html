@@ -472,7 +472,7 @@
           </div>
         } @else {
           @for (doc of driverPmDocs(); track doc.id) {
-            <div class="pm-item">
+            <div class="pm-item clickable" (click)="viewPmDoc(doc)">
               <div class="pm-icon"><i class='bx bx-wrench'></i></div>
               <div class="pm-info">
                 <strong>{{ doc.documentName || doc.subCategory || 'PM Record' }}</strong>

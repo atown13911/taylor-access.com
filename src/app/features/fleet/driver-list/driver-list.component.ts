@@ -287,6 +287,15 @@ export class DriverListComponent implements OnInit {
     this.driverPmDocs.set([]);
   }
 
+  viewPmDoc(doc: any): void {
+    if (doc.id) {
+      this.api.viewDriverDocumentFile(doc.id).subscribe({
+        next: (blob: Blob) => window.open(URL.createObjectURL(blob), '_blank'),
+        error: () => this.toast.error('Failed to load document', 'Error')
+      });
+    }
+  }
+
   uploadPmDoc(event: any): void {
     const file = event.target?.files?.[0];
     if (!file) return;

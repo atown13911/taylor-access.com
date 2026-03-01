@@ -739,8 +739,12 @@
   gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s;
+  border-radius: 6px;
 
   &:last-child { border-bottom: none; }
+  &.clickable { cursor: pointer; padding: 10px 8px; margin: 0 -8px; }
+  &.clickable:hover { background: rgba(0, 212, 255, 0.06); }
 }
 
 .pm-icon {
