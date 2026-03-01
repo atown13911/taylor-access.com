@@ -468,9 +468,22 @@ export class DriverDatabaseComponent implements OnInit {
 
   getComplianceClass(driver: any, item: string): string {
     const status = this.getItemStatus(driver, item);
-    if (status === 'compliant') return 'dot dot-green';
-    if (status === 'expiring') return 'dot dot-yellow';
-    if (status === 'expired') return 'dot dot-red';
+    if (status === 'compliant' || status === 'expiring' || status === 'expired') {
+      if (status === 'compliant') return 'dot dot-green';
+      if (status === 'expiring') return 'dot dot-yellow';
+      return 'dot dot-red';
+    }
+
+    // Also check uploaded docs if driver properties don't show status
+    if (this.selectedDriver()?.id === driver.id) {
+      const doc = this.getCompDoc(driver, item);
+      if (doc) {
+        if (doc.status === 'expired') return 'dot dot-red';
+        if (doc.status === 'expiring') return 'dot dot-yellow';
+        return 'dot dot-green';
+      }
+    }
+
     return 'dot dot-gray';
   }
 
