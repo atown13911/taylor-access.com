@@ -2,6 +2,43 @@
   max-width: 100%;
 }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s;
+
+  &:hover { transform: translateY(-2px); box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+
+  .stat-icon { font-size: 1.8rem; }
+  .stat-info { display: flex; flex-direction: column; }
+  .stat-value { font-size: 1.5rem; font-weight: 700; }
+  .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+
+  &.compliant { .stat-icon, .stat-value { color: #00ff88; } border-color: rgba(0, 255, 136, 0.15); }
+  &.expiring { .stat-icon, .stat-value { color: #ffaa00; } border-color: rgba(255, 170, 0, 0.15); }
+  &.expired { .stat-icon, .stat-value { color: #ff4444; } border-color: rgba(255, 68, 68, 0.15); }
+  &.missing { .stat-icon, .stat-value { color: #8888aa; } border-color: rgba(136, 136, 170, 0.15); }
+  &.total-docs { .stat-icon, .stat-value { color: var(--cyan); } border-color: rgba(0, 212, 255, 0.15); }
+}
+
+@media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
 .table-panel-row {
   display: flex;
   gap: 16px;

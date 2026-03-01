@@ -22,6 +22,45 @@
     </button>
   </div>
 
+  <!-- Stats Cards -->
+  <div class="stats-grid">
+    <div class="stat-card compliant">
+      <i class='bx bx-check-shield stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ complianceStats().compliant }}</span>
+        <span class="stat-label">Compliant</span>
+      </div>
+    </div>
+    <div class="stat-card expiring">
+      <i class='bx bx-error stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ complianceStats().expiring }}</span>
+        <span class="stat-label">Expiring Soon</span>
+      </div>
+    </div>
+    <div class="stat-card expired">
+      <i class='bx bx-x-circle stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ complianceStats().expired }}</span>
+        <span class="stat-label">Expired</span>
+      </div>
+    </div>
+    <div class="stat-card missing">
+      <i class='bx bx-file-blank stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ complianceStats().missing }}</span>
+        <span class="stat-label">Missing Docs</span>
+      </div>
+    </div>
+    <div class="stat-card total-docs">
+      <i class='bx bx-folder stat-icon'></i>
+      <div class="stat-info">
+        <span class="stat-value">{{ allDocs().length }}</span>
+        <span class="stat-label">Total Documents</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Search -->
   <div class="filters-bar">
     <div class="search-box">

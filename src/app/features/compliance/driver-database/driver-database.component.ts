@@ -71,6 +71,22 @@ export class DriverDatabaseComponent implements OnInit {
     return list;
   });
 
+  complianceStats = computed(() => {
+    const drivers = this.drivers().filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched');
+    let compliant = 0, expiring = 0, expired = 0, missing = 0;
+    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    for (const driver of drivers) {
+      for (const item of items) {
+        const cls = this.getComplianceClass(driver, item);
+        if (cls.includes('green')) compliant++;
+        else if (cls.includes('yellow')) expiring++;
+        else if (cls.includes('red')) expired++;
+        else missing++;
+      }
+    }
+    return { compliant, expiring, expired, missing };
+  });
+
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
