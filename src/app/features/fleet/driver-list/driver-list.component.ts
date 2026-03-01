@@ -287,6 +287,31 @@ export class DriverListComponent implements OnInit {
     this.driverPmDocs.set([]);
   }
 
+  uploadPmDoc(event: any): void {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    const driver = this.selectedDriver();
+    if (!driver) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('driverId', driver.id);
+    formData.append('category', 'pm');
+    formData.append('subCategory', 'other_pm');
+    formData.append('documentName', file.name);
+
+    this.toast.success(`Uploading ${file.name}...`, 'Upload');
+    this.api.createDriverDocument(formData).subscribe({
+      next: () => {
+        this.toast.success('PM document uploaded', 'Success');
+        this.loadDriverPmDocs();
+      },
+      error: () => this.toast.error('Failed to upload', 'Error')
+    });
+
+    event.target.value = '';
+  }
+
   loadDriverPmDocs(): void {
     const driver = this.selectedDriver();
     if (!driver) return;

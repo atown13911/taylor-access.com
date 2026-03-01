@@ -705,12 +705,32 @@
   align-items: center;
 }
 
+.pm-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--cyan);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover { background: rgba(0, 212, 255, 0.15); box-shadow: 0 0 10px rgba(0, 212, 255, 0.2); }
+  &.lg { margin-top: 12px; padding: 10px 20px; font-size: 0.82rem; }
+
+  input[type="file"] { display: none; }
+}
+
 .pm-empty {
   text-align: center;
   padding: 30px 10px;
   color: #555;
   i { display: block; font-size: 2rem; color: var(--cyan); opacity: 0.3; margin-bottom: 8px; }
-  p { margin: 0; font-size: 0.82rem; }
+  p { margin: 0 0 4px; font-size: 0.82rem; }
 }
 
 .pm-item {

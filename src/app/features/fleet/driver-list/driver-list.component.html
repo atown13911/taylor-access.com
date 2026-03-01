@@ -456,11 +456,19 @@
       <div class="panel-section">
         <div class="pm-header">
           <h4>Maintenance Records</h4>
+          <label class="pm-upload-btn">
+            <i class='bx bx-upload'></i> Upload
+            <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadPmDoc($event)">
+          </label>
         </div>
         @if (driverPmDocs().length === 0) {
           <div class="pm-empty">
             <i class='bx bx-wrench'></i>
             <p>No PM records yet</p>
+            <label class="pm-upload-btn lg">
+              <i class='bx bx-upload'></i> Upload First PM Record
+              <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadPmDoc($event)">
+            </label>
           </div>
         } @else {
           @for (doc of driverPmDocs(); track doc.id) {
