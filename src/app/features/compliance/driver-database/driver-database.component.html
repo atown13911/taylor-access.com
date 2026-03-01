@@ -151,6 +151,11 @@
             <div class="compliance-row">
               <span class="dot" [class]="getComplianceClass(selectedDriver()!, item.key)"></span>
               <span class="comp-label">{{ item.label }}</span>
+              @if (getCompDoc(selectedDriver()!, item.key)) {
+                <button class="comp-view-btn" (click)="viewCompDoc(item)" title="View {{ item.label }}">
+                  <i class='bx bx-show'></i>
+                </button>
+              }
               <button class="comp-upload-btn" (click)="openCompUpload(item)" title="Upload {{ item.label }}">
                 <i class='bx bx-upload'></i>
               </button>

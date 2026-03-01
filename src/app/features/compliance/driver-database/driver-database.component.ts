@@ -42,6 +42,7 @@ export class DriverDatabaseComponent implements OnInit {
   loading = signal(false);
   drivers = signal<any[]>([]);
   selectedDriver = signal<any | null>(null);
+  driverDocs = signal<any[]>([]);
   showDetailsModal = signal(false);
   
   // Filters
@@ -385,7 +386,36 @@ export class DriverDatabaseComponent implements OnInit {
   ];
 
   selectDriver(driver: any) {
-    this.selectedDriver.set(this.selectedDriver()?.id === driver.id ? null : driver);
+    if (this.selectedDriver()?.id === driver.id) {
+      this.selectedDriver.set(null);
+      this.driverDocs.set([]);
+    } else {
+      this.selectedDriver.set(driver);
+      this.loadDriverDocs(driver.id);
+    }
+  }
+
+  loadDriverDocs(driverId: any): void {
+    this.api.getDriverDocuments(driverId).subscribe({
+      next: (res: any) => this.driverDocs.set(res?.data || []),
+      error: () => this.driverDocs.set([])
+    });
+  }
+
+  getCompDoc(driver: any, key: string): any {
+    const sub = this.subMap[key];
+    if (!sub) return null;
+    return this.driverDocs().find(d => d.subCategory === sub) || null;
+  }
+
+  viewCompDoc(item: any): void {
+    const doc = this.getCompDoc(this.selectedDriver(), item.key);
+    if (doc?.id) {
+      this.api.downloadDriverDocumentFile(doc.id).subscribe({
+        next: (blob: Blob) => window.open(URL.createObjectURL(blob), '_blank'),
+        error: () => this.toast.error('Failed to load document', 'Error')
+      });
+    }
   }
 
   suspendDriver(driver: any) {
