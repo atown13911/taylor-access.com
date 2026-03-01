@@ -59,6 +59,7 @@
                 <th class="sub-col">{{ sub.label }}</th>
               }
               <th>Overall</th>
+              <th class="actions-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -72,7 +73,7 @@
                   </div>
                 </td>
                 @for (sub of currentCategory()?.subcategories || []; track sub.value) {
-                  <td class="status-cell" (click)="openSubDetail(driver, sub)">
+                  <td class="status-cell">
                     @if (getDriverSubDoc(driver.id, sub.value); as doc) {
                       <span class="dot" [class]="'dot-' + doc.status" [title]="doc.status + (doc.expiryDate ? ' - Exp: ' + formatDate(doc.expiryDate) : '')"></span>
                     } @else {
@@ -84,6 +85,11 @@
                   <span class="overall-badge" [class]="getDriverOverallStatus(driver.id)">
                     {{ getDriverOverallLabel(driver.id) }}
                   </span>
+                </td>
+                <td class="actions-col">
+                  <button class="icon-btn" title="Upload Document" (click)="openUploadForDriver(driver)">
+                    <i class='bx bx-upload'></i>
+                  </button>
                 </td>
               </tr>
             }

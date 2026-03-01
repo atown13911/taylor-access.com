@@ -99,6 +99,7 @@
 .file-btns { display: flex; gap: 0.3rem; }
 .no-file { color: var(--text-muted, #555); font-size: 0.75rem; }
 .actions-cell { white-space: nowrap; display: flex; gap: 0.3rem; }
+.actions-col { text-align: center !important; width: 60px; }
 .icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem; transition: all 0.2s;
   &:hover { color: var(--cyan, #00e5ff); border-color: var(--cyan, #00e5ff); }
   &.danger:hover { color: #ff4444; border-color: #ff4444; }

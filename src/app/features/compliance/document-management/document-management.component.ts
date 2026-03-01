@@ -209,6 +209,24 @@ export class DocumentManagementComponent implements OnInit {
     }
   }
 
+  openUploadForDriver(driver: any): void {
+    this.selectedDriverId.set(driver.id?.toString());
+    this.editingDoc.set(null);
+    this.docFile = null;
+    this.uploadForm = {
+      driverId: driver.id?.toString(),
+      category: this.activeTab(),
+      subCategory: '',
+      documentName: '',
+      documentNumber: '',
+      issueDate: '',
+      expiryDate: '',
+      notes: '',
+      remindExpiry: true
+    };
+    this.showUploadModal.set(true);
+  }
+
   openSubDetail(driver: any, sub: any): void {
     this.selectedDriverId.set(driver.id?.toString());
     this.uploadForm.driverId = driver.id?.toString();
