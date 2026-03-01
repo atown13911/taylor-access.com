@@ -273,6 +273,12 @@
           <h4>Employment</h4>
           <div class="form-row">
             <div class="form-group">
+              <label>Truck Number</label>
+              <input type="text" [ngModel]="driverForm().truckNumber" (ngModelChange)="updateField('truckNumber', $event)" placeholder="e.g., T-1042">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Driver Type</label>
               <select [ngModel]="driverForm().driverType" (ngModelChange)="updateField('driverType', $event)">
                 <option value="company">Company</option>

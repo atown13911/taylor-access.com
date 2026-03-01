@@ -235,6 +235,7 @@ public class DriversController : ControllerBase
         if (request.IsOnline.HasValue) driver.IsOnline = request.IsOnline.Value;
         if (request.DriverType != null) driver.DriverType = request.DriverType;
         if (request.Ssn != null) driver.Ssn = request.Ssn;
+        if (request.TruckNumber != null) driver.TruckNumber = request.TruckNumber;
         
         // Address: create or update the linked Address record
         var hasAddressFields = request.Address != null || request.City != null || request.State != null || request.ZipCode != null || request.Zip != null;
@@ -435,6 +436,7 @@ public record UpdateDriverRequest(
     bool? IsOnline,
     string? DriverType,
     string? Ssn,
+    string? TruckNumber,
     string? Address,
     string? City,
     string? State,

@@ -88,6 +88,9 @@ public class Driver
 
     public string? Ssn { get; set; }
 
+    [MaxLength(50)]
+    public string? TruckNumber { get; set; }
+
     [ForeignKey("DriverTerminalId")]
     public DriverTerminal? DriverTerminal { get; set; }
 
