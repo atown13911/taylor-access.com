@@ -281,6 +281,8 @@ using (var scope = app.Services.CreateScope())
             new[] { "https://taylorshippingsolutions.com", "https://taylorshippingsolutions.com/callback", "http://localhost:3001", "http://localhost:3001/callback" }),
         ("ta_tss_portal", "tss-portal-sso-secret-2026", "TSS Portal", "Centralized Command Portal", "https://tss-portal.com",
             new[] { "https://tss-portal.com", "https://tss-portal.com/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
+        ("ta_taylor_access", "taylor-access-sso-secret-2026", "Taylor Access", "Identity & Access Management", "https://taylor-access.com",
+            new[] { "https://taylor-access.com", "https://taylor-access.com/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
     };
 
     foreach (var (clientId, secret, name, desc, homepage, uris) in newClients)
