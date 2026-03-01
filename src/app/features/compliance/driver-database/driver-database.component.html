@@ -151,12 +151,77 @@
             <div class="compliance-row">
               <span class="dot" [class]="getComplianceClass(selectedDriver()!, item.key)"></span>
               <span class="comp-label">{{ item.label }}</span>
+              <button class="comp-upload-btn" (click)="openCompUpload(item)" title="Upload {{ item.label }}">
+                <i class='bx bx-upload'></i>
+              </button>
             </div>
           }
         </div>
       </aside>
     }
   </div>
+
+  <!-- Compliance Upload Modal -->
+  @if (compUploadOpen()) {
+    <div class="modal-overlay" (click)="compUploadOpen.set(false)">
+      <div class="comp-modal" (click)="$event.stopPropagation()">
+        <div class="comp-modal-header">
+          <h3>Upload {{ compUploadItem()?.label }}</h3>
+          <button class="close-btn" (click)="compUploadOpen.set(false)"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="comp-modal-body">
+          <div class="comp-form-row">
+            <div class="comp-form-group">
+              <label>Driver</label>
+              <input type="text" [value]="selectedDriver()?.name" disabled>
+            </div>
+            <div class="comp-form-group">
+              <label>Category</label>
+              <input type="text" [value]="compUploadItem()?.label" disabled>
+            </div>
+          </div>
+          <div class="comp-form-row">
+            <div class="comp-form-group">
+              <label>Document Name *</label>
+              <input type="text" [(ngModel)]="compForm.documentName" placeholder="e.g., CDL Class A">
+            </div>
+            <div class="comp-form-group">
+              <label>Document Number</label>
+              <input type="text" [(ngModel)]="compForm.documentNumber" placeholder="License #, cert #">
+            </div>
+          </div>
+          <div class="comp-form-row">
+            <div class="comp-form-group">
+              <label>Issue Date</label>
+              <input type="date" [(ngModel)]="compForm.issueDate">
+            </div>
+            <div class="comp-form-group">
+              <label>Expiry Date</label>
+              <input type="date" [(ngModel)]="compForm.expiryDate">
+            </div>
+          </div>
+          <div class="comp-form-group">
+            <label>Notes</label>
+            <textarea [(ngModel)]="compForm.notes" rows="2" placeholder="Additional notes..."></textarea>
+          </div>
+          <div class="comp-form-group">
+            <label>Upload File (PDF, JPG, PNG)</label>
+            <input type="file" (change)="compFile = $any($event).target.files[0]" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+          </div>
+        </div>
+        <div class="comp-modal-footer">
+          <button class="comp-btn-cancel" (click)="compUploadOpen.set(false)">Cancel</button>
+          <button class="comp-btn-submit" (click)="submitCompUpload()" [disabled]="compSaving()">
+            @if (compSaving()) {
+              <i class='bx bx-loader-alt bx-spin'></i> Uploading...
+            } @else {
+              <i class='bx bx-upload'></i> Upload
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 
   <!-- Legend -->
   <div class="legend">

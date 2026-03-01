@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-driver-database',
@@ -17,7 +18,27 @@ export class DriverDatabaseComponent implements OnInit {
   private http = inject(HttpClient);
   private route = inject(ActivatedRoute);
   private api = inject(VanTacApiService);
-  
+  private toast = inject(ToastService);
+
+  compUploadOpen = signal(false);
+  compUploadItem = signal<any>(null);
+  compSaving = signal(false);
+  compFile: File | null = null;
+  compForm = { documentName: '', documentNumber: '', issueDate: '', expiryDate: '', notes: '' };
+
+  private readonly catMap: Record<string, string> = {
+    cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drug: 'drug_tests',
+    dqf: 'dqf', employment: 'employment', training: 'training',
+    insurance: 'insurance', vehicle: 'vehicle', permits: 'permits',
+    ifta: 'ifta', safety: 'safety', violations: 'violations'
+  };
+  private readonly subMap: Record<string, string> = {
+    cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drug: 'pre_employment',
+    dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
+    insurance: 'certificate_of_insurance', vehicle: 'registration', permits: 'oversize',
+    ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation'
+  };
+
   loading = signal(false);
   drivers = signal<any[]>([]);
   selectedDriver = signal<any | null>(null);
@@ -475,5 +496,43 @@ export class DriverDatabaseComponent implements OnInit {
     if (hasExpiring) return 'warning';
     if (compliantCount >= 5) return 'good';
     return 'pending';
+  }
+
+  openCompUpload(item: any): void {
+    this.compUploadItem.set(item);
+    this.compFile = null;
+    this.compForm = { documentName: item.label, documentNumber: '', issueDate: '', expiryDate: '', notes: '' };
+    this.compUploadOpen.set(true);
+  }
+
+  submitCompUpload(): void {
+    const driver = this.selectedDriver();
+    const item = this.compUploadItem();
+    if (!driver || !item) return;
+    if (!this.compForm.documentName.trim()) { this.toast.error('Document name required', 'Required'); return; }
+
+    this.compSaving.set(true);
+    const fd = new FormData();
+    fd.append('driverId', driver.id);
+    fd.append('category', this.catMap[item.key] || item.key);
+    fd.append('subCategory', this.subMap[item.key] || item.key);
+    fd.append('documentName', this.compForm.documentName);
+    fd.append('documentNumber', this.compForm.documentNumber);
+    if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
+    if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
+    fd.append('notes', this.compForm.notes);
+    if (this.compFile) fd.append('file', this.compFile);
+
+    this.api.createDriverDocument(fd).subscribe({
+      next: () => {
+        this.toast.success(`${item.label} uploaded`, 'Success');
+        this.compSaving.set(false);
+        this.compUploadOpen.set(false);
+      },
+      error: () => {
+        this.toast.error('Upload failed', 'Error');
+        this.compSaving.set(false);
+      }
+    });
   }
 }
