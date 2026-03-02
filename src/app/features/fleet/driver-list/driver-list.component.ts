@@ -237,6 +237,13 @@ export class DriverListComponent implements OnInit {
              this.isExpiringSoon(driver.medicalCardExpiry) ? 'dot-yellow' : 'dot-green';
     }
     if (key === 'employment' && driver.hireDate) return 'dot-green';
+
+    const doc = this.getPanelDoc(key);
+    if (doc) {
+      if (doc.status === 'expired') return 'dot-red';
+      if (doc.status === 'expiring') return 'dot-yellow';
+      return 'dot-green';
+    }
     return 'dot-gray';
   }
 
