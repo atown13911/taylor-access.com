@@ -123,6 +123,10 @@ export class RoleManagementComponent implements OnInit {
   oauthApps = signal<any[]>([]);
   roleAppAccess = signal<Record<string, boolean>>({});
 
+  pageTab = signal<'roles' | 'program-access'>('roles');
+  allAppsData = signal<any[]>([]);
+  expandedApps = signal<Record<string, boolean>>({});
+
   // Navigation visibility
   navSections: NavSection[] = getNavSections();
   navSearchTerm = signal('');
@@ -187,6 +191,35 @@ export class RoleManagementComponent implements OnInit {
 
   getAppAccessCount(): number {
     return Object.values(this.roleAppAccess()).filter(v => v).length;
+  }
+
+  loadAllAppsAccess(): void {
+    this.http.get<any>(`${environment.apiUrl}/oauth/clients`).subscribe({
+      next: (res) => {
+        const clients = res?.data || res || [];
+        const promises = clients.map((c: any) =>
+          this.http.get<any>(`${environment.apiUrl}/oauth/clients/${c.clientId}/users`).toPromise()
+            .then((r: any) => ({ ...c, users: r?.data || [], userCount: (r?.data || []).length }))
+            .catch(() => ({ ...c, users: [], userCount: 0 }))
+        );
+        Promise.all(promises).then(data => this.allAppsData.set(data));
+      },
+      error: () => this.allAppsData.set([])
+    });
+  }
+
+  toggleAppExpand(clientId: string): void {
+    this.expandedApps.update(e => ({ ...e, [clientId]: !e[clientId] }));
+  }
+
+  revokeUserApp(userId: number, clientId: string): void {
+    this.http.delete(`${environment.apiUrl}/oauth/users/${userId}/apps/${clientId}`).subscribe({
+      next: () => {
+        this.allAppsData.update(apps => apps.map(a =>
+          a.clientId === clientId ? { ...a, users: a.users.filter((u: any) => u.id !== userId), userCount: a.userCount - 1 } : a
+        ));
+      }
+    });
   }
 
   async loadOrganizations() {

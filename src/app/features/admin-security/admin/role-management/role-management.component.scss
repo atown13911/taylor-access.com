@@ -1580,3 +1580,96 @@ input:checked + .toggle-slider {
   &::before { transform: translateX(20px); background: #00ff88; }
 }
 input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }
+
+// Page-Level Tabs
+.page-level-tabs {
+  display: flex; gap: 4px; margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0;
+}
+.pl-tab {
+  display: flex; align-items: center; gap: 8px; padding: 12px 24px;
+  border: none; background: none; color: var(--text-secondary); font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+  i { font-size: 1.2rem; }
+  &:hover { color: var(--text-primary); }
+  &.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+}
+
+// Program Access Page
+.pa-page { }
+.pa-page-header {
+  margin-bottom: 20px;
+  h2 { color: var(--text-primary); font-size: 1.2rem; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; i { color: var(--cyan); } }
+  p { color: var(--text-secondary); font-size: 0.85rem; margin: 0; }
+}
+.pa-page-loading { text-align: center; padding: 40px; color: var(--text-secondary); }
+.pa-apps-list { display: flex; flex-direction: column; gap: 12px; }
+.pa-app-section {
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; overflow: hidden;
+}
+.pa-app-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; cursor: pointer; transition: background 0.15s;
+  &:hover { background: rgba(255,255,255,0.02); }
+}
+.pa-app-title { display: flex; align-items: center; gap: 12px;
+  strong { font-size: 0.95rem; color: var(--text-primary); display: block; }
+}
+.pa-app-icon {
+  width: 42px; height: 42px; border-radius: 10px;
+  background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  i { font-size: 1.4rem; color: var(--cyan); }
+}
+.pa-app-desc { font-size: 0.78rem; color: var(--text-secondary); }
+.pa-app-meta { display: flex; align-items: center; gap: 12px; }
+.pa-user-count {
+  padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+  background: rgba(0,212,255,0.1); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2);
+}
+.pa-app-users { padding: 0 20px 16px; }
+.pa-no-users { color: var(--text-secondary); font-size: 0.85rem; text-align: center; padding: 20px; }
+.pa-users-table {
+  width: 100%; border-collapse: collapse;
+  th, td { padding: 10px 12px; text-align: left; font-size: 0.82rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  th { color: var(--cyan); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { color: var(--text-primary); }
+  tbody tr:last-child td { border-bottom: none; }
+}
+.pa-user-cell {
+  display: flex; align-items: center; gap: 8px;
+  strong { display: block; font-size: 0.82rem; }
+  span { font-size: 0.72rem; color: var(--text-secondary); }
+}
+.pa-user-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(136,0,255,0.2));
+  border: 1px solid rgba(0,212,255,0.3); display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; color: var(--cyan); flex-shrink: 0;
+}
+.pa-role-badge {
+  padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 500;
+  background: rgba(0,212,255,0.08); color: var(--cyan); border: 1px solid rgba(0,212,255,0.15); text-transform: capitalize;
+}
+.pa-status {
+  padding: 2px 8px; border-radius: 10px; font-size: 0.68rem; font-weight: 600; text-transform: capitalize;
+  &.active { background: rgba(0,255,136,0.1); color: #00ff88; }
+  &.inactive { background: rgba(136,136,170,0.1); color: #8888aa; }
+}
+.pa-switch-sm {
+  position: relative; width: 36px; height: 20px;
+  input { opacity: 0; width: 0; height: 0; }
+}
+.pa-slider-sm {
+  position: absolute; cursor: pointer; inset: 0;
+  background: rgba(0,255,136,0.2); border-radius: 20px; transition: all 0.3s;
+  &::before {
+    content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    left: 3px; bottom: 3px; background: #00ff88; transition: all 0.3s; transform: translateX(16px);
+  }
+}
+input:not(:checked) + .pa-slider-sm {
+  background: rgba(255,255,255,0.1);
+  &::before { background: #888; transform: translateX(0); }
+}

@@ -16,6 +16,17 @@
     }
   </header>
 
+  <!-- Page Tabs -->
+  <div class="page-level-tabs">
+    <button class="pl-tab" [class.active]="pageTab() === 'roles'" (click)="pageTab.set('roles')">
+      <i class="bx bx-lock-alt"></i> Roles & Permissions
+    </button>
+    <button class="pl-tab" [class.active]="pageTab() === 'program-access'" (click)="pageTab.set('program-access'); loadAllAppsAccess()">
+      <i class="bx bx-grid-alt"></i> Program Access
+    </button>
+  </div>
+
+  @if (pageTab() === 'roles') {
   <!-- Organization Filter (Product Owner Only) -->
   @if (currentUserIsProductOwner()) {
     <div class="filters-bar">
@@ -417,6 +428,83 @@
       }
     </div>
   }
+
+  } <!-- end roles tab -->
+
+  @if (pageTab() === 'program-access') {
+    <div class="pa-page">
+      <div class="pa-page-header">
+        <h2><i class="bx bx-grid-alt"></i> Program Access</h2>
+        <p>Manage which users have access to each application</p>
+      </div>
+
+      @if (allAppsData().length === 0) {
+        <div class="pa-page-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading applications...</div>
+      } @else {
+        <div class="pa-apps-list">
+          @for (app of allAppsData(); track app.clientId) {
+            <div class="pa-app-section">
+              <div class="pa-app-header" (click)="toggleAppExpand(app.clientId)">
+                <div class="pa-app-title">
+                  <div class="pa-app-icon"><i class="bx bx-cube-alt"></i></div>
+                  <div>
+                    <strong>{{ app.name }}</strong>
+                    <span class="pa-app-desc">{{ app.description || '' }}</span>
+                  </div>
+                </div>
+                <div class="pa-app-meta">
+                  <span class="pa-user-count">{{ app.userCount }} users</span>
+                  <i class="bx" [class.bx-chevron-down]="!expandedApps()[app.clientId]" [class.bx-chevron-up]="expandedApps()[app.clientId]"></i>
+                </div>
+              </div>
+
+              @if (expandedApps()[app.clientId]) {
+                <div class="pa-app-users">
+                  @if (app.users.length === 0) {
+                    <p class="pa-no-users">No users have access to this application</p>
+                  } @else {
+                    <table class="pa-users-table">
+                      <thead>
+                        <tr>
+                          <th>User</th>
+                          <th>Role</th>
+                          <th>Status</th>
+                          <th>Access</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (user of app.users; track user.id) {
+                          <tr>
+                            <td>
+                              <div class="pa-user-cell">
+                                <div class="pa-user-avatar">{{ (user.name || 'U').charAt(0) }}</div>
+                                <div>
+                                  <strong>{{ user.name }}</strong>
+                                  <span>{{ user.email }}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td><span class="pa-role-badge">{{ user.appRole || 'user' }}</span></td>
+                            <td><span class="pa-status" [class]="user.status || 'active'">{{ user.status || 'active' }}</span></td>
+                            <td>
+                              <label class="pa-switch-sm">
+                                <input type="checkbox" [checked]="true" (change)="revokeUserApp(user.id, app.clientId)">
+                                <span class="pa-slider-sm"></span>
+                              </label>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  } <!-- end program-access tab -->
 
   <!-- Create Role Modal -->
   @if (showCreateModal()) {

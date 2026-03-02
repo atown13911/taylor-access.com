@@ -290,6 +290,28 @@ public class OAuthController : ControllerBase
         return Ok(clients);
     }
 
+    [HttpGet("clients/{clientId}/users")]
+    [Authorize]
+    public async Task<ActionResult> GetClientUsers(string clientId)
+    {
+        var assignments = await _context.AppRoleAssignments
+            .Where(a => a.AppClientId == clientId && a.Status == "active")
+            .ToListAsync();
+
+        var userIds = assignments.Select(a => a.UserId).ToList();
+        var users = await _context.Users
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.Name, u.Email, u.Role, u.Status })
+            .ToListAsync();
+
+        var result = users.Select(u => {
+            var assignment = assignments.First(a => a.UserId == u.Id);
+            return new { u.Id, u.Name, u.Email, u.Role, u.Status, appRole = assignment.Role };
+        });
+
+        return Ok(new { data = result });
+    }
+
     /// <summary>
     /// Register a new OAuth client (app)
     /// </summary>
