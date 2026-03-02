@@ -43,7 +43,7 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   avatarUrl = computed(() => {
     const user = this.currentUser();
-    const url = user?.avatarUrl || user?.avatar;
+    const url = user?.avatarUrl;
     if (!url) return null;
     if (url.startsWith('data:') || url.startsWith('http')) return url;
     return null;

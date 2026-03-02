@@ -105,7 +105,7 @@ export class ProfileComponent implements OnInit {
         phone: currentUser.phone || '',
         role: currentUser.role || 'user',
         status: currentUser.status || 'active',
-        avatarUrl: currentUser.avatarUrl || currentUser.avatar,
+        avatarUrl: currentUser.avatarUrl || '',
         timezone: currentUser.timezone || 'America/Chicago',
         language: currentUser.language || 'en',
         jobTitle: currentUser.jobTitle || '',

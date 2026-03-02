@@ -1,10 +1,8 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap, catchError, of } from 'rxjs';
+import { Observable, tap, catchError, of, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
-
-// ============ INTERFACES ============
 
 export interface User {
   id: string;
@@ -16,7 +14,6 @@ export interface User {
   organizationId?: string;
   organizationName?: string;
   apiKey?: string;
-  avatar?: string;
   avatarUrl?: string;
   timezone?: string;
   language?: string;
@@ -38,6 +35,7 @@ export interface AuthResponse {
   token: string;
   user: User;
   organization?: Organization;
+  permissions?: string[];
 }
 
 export interface RegisterRequest {
@@ -58,44 +56,61 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
-  
+
   private readonly TOKEN_KEY = 'vantac_token';
   private readonly USER_KEY = 'vantac_user';
   private readonly ORG_KEY = 'vantac_org';
   private readonly PERMS_KEY = 'vantac_permissions';
-  private baseUrl = environment.apiUrl;
-  
-  currentUser = signal<User | null>(this.getStoredUser());
-  currentOrganization = signal<Organization | null>(this.getStoredOrganization());
-  isAuthenticated = signal<boolean>(!!this.getToken());
-  permissions = signal<string[]>(this.getStoredPermissions());
 
-  // ============ TOKEN MANAGEMENT ============
+  private readonly authUrl = `${environment.apiUrl}${environment.api.auth}`;
+  private readonly passwordUrl = `${environment.apiUrl}/api/v1/password`;
+
+  currentUser = signal<User | null>(null);
+  currentOrganization = signal<Organization | null>(null);
+  isAuthenticated = signal<boolean>(false);
+  permissions = signal<string[]>([]);
+
+  private onLogoutCallback: ((reason: string) => void) | null = null;
+
+  constructor() {
+    this.hydrateFromStorage();
+  }
+
+  private hydrateFromStorage(): void {
+    const token = this.getToken();
+    if (token && !this.isTokenExpired()) {
+      this.currentUser.set(this.getStored<User>(this.USER_KEY));
+      this.currentOrganization.set(this.getStored<Organization>(this.ORG_KEY));
+      this.permissions.set(this.getStored<string[]>(this.PERMS_KEY) ?? []);
+      this.isAuthenticated.set(true);
+    } else if (token) {
+      this.clearStorage();
+    }
+  }
 
   getToken(): string | null {
     return localStorage.getItem(this.TOKEN_KEY);
   }
 
-  private setToken(token: string): void {
-    localStorage.setItem(this.TOKEN_KEY, token);
+  private isTokenExpired(): boolean {
+    const token = this.getToken();
+    if (!token) return true;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return (payload.exp * 1000) < Date.now();
+    } catch {
+      return true;
+    }
   }
 
-  private getStoredUser(): User | null {
-    const stored = localStorage.getItem(this.USER_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {
-        return null;
-      }
-    }
-    return null;
+  private getStored<T>(key: string): T | null {
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    try { return JSON.parse(stored); } catch { return null; }
   }
 
   private setStoredUser(user: User): void {
@@ -103,25 +118,11 @@ export class AuthService {
     this.currentUser.set(user);
   }
 
-  // Update user avatar (called after avatar upload)
   updateUserAvatar(avatarUrl: string): void {
-    const currentUser = this.currentUser();
-    if (currentUser) {
-      const updatedUser = { ...currentUser, avatarUrl, avatar: avatarUrl };
-      this.setStoredUser(updatedUser);
+    const user = this.currentUser();
+    if (user) {
+      this.setStoredUser({ ...user, avatarUrl });
     }
-  }
-
-  private getStoredOrganization(): Organization | null {
-    const stored = localStorage.getItem(this.ORG_KEY);
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch {
-        return null;
-      }
-    }
-    return null;
   }
 
   private setStoredOrganization(org: Organization): void {
@@ -129,98 +130,55 @@ export class AuthService {
     this.currentOrganization.set(org);
   }
 
-  private getStoredPermissions(): string[] {
-    const stored = localStorage.getItem(this.PERMS_KEY);
-    if (stored) {
-      try { return JSON.parse(stored); } catch { return []; }
+  register(request: RegisterRequest): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.authUrl}/register`, request).pipe(
+      tap(response => this.handleAuthResponse(response)),
+      catchError(error => { console.error('Registration failed:', error); throw error; })
+    );
+  }
+
+  login(email: string, password: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.authUrl}/login`, { email, password }).pipe(
+      tap(response => this.handleAuthResponse(response)),
+      catchError(error => { console.error('Login failed:', error); throw error; })
+    );
+  }
+
+  private handleAuthResponse(response: AuthResponse): void {
+    localStorage.setItem(this.TOKEN_KEY, response.token);
+    this.setStoredUser(response.user);
+    if (response.organization) {
+      this.setStoredOrganization(response.organization);
     }
-    return this.extractPermissionsFromToken();
+    const perms = response.permissions ?? this.extractPermissionsFromToken();
+    localStorage.setItem(this.PERMS_KEY, JSON.stringify(perms));
+    this.permissions.set(perms);
+    this.isAuthenticated.set(true);
   }
 
   private extractPermissionsFromToken(): string[] {
     const token = this.getToken();
     if (!token) return [];
     try {
-      const payload = token.split('.')[1];
-      const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-      if (decoded.permissions) {
-        const perms = typeof decoded.permissions === 'string'
-          ? JSON.parse(decoded.permissions)
-          : decoded.permissions;
-        if (Array.isArray(perms)) {
-          localStorage.setItem(this.PERMS_KEY, JSON.stringify(perms));
-          return perms;
-        }
-      }
-    } catch { }
-    return [];
-  }
-
-  // ============ AUTHENTICATION ============
-
-  /**
-   * Register a new user
-   */
-  register(request: RegisterRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(
-      `${this.baseUrl}${environment.api.auth}/register`,
-      request
-    ).pipe(
-      tap(response => this.handleAuthResponse(response)),
-      catchError(error => {
-        console.error('Registration failed:', error);
-        throw error;
-      })
-    );
-  }
-
-  /**
-   * Login with email and password
-   */
-  login(email: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(
-      `${this.baseUrl}${environment.api.auth}/login`,
-      { email, password }
-    ).pipe(
-      tap(response => this.handleAuthResponse(response)),
-      catchError(error => {
-        console.error('Login failed:', error);
-        throw error;
-      })
-    );
-  }
-
-  /**
-   * Handle successful auth response
-   */
-  private handleAuthResponse(response: AuthResponse): void {
-    this.setToken(response.token);
-    this.setStoredUser(response.user);
-    if (response.organization) {
-      this.setStoredOrganization(response.organization);
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const perms = typeof payload.permissions === 'string'
+        ? JSON.parse(payload.permissions)
+        : payload.permissions;
+      return Array.isArray(perms) ? perms : [];
+    } catch {
+      return [];
     }
-    this.isAuthenticated.set(true);
-    const perms = this.extractPermissionsFromToken();
-    this.permissions.set(perms);
   }
-
-  private onLogoutCallback: ((reason: string) => void) | null = null;
 
   registerLogoutCallback(cb: (reason: string) => void): void {
     this.onLogoutCallback = cb;
   }
 
-  /**
-   * Logout user
-   */
   logout(reason: string = 'manual'): void {
     if (this.onLogoutCallback) {
       try { this.onLogoutCallback(reason); } catch {}
     }
-    localStorage.removeItem(this.TOKEN_KEY);
-    localStorage.removeItem(this.USER_KEY);
-    localStorage.removeItem(this.ORG_KEY);
-    localStorage.removeItem(this.PERMS_KEY);
+    this.clearStorage();
     this.currentUser.set(null);
     this.currentOrganization.set(null);
     this.isAuthenticated.set(false);
@@ -228,142 +186,75 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
-  /**
-   * Get current user profile from API
-   */
+  private clearStorage(): void {
+    localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.USER_KEY);
+    localStorage.removeItem(this.ORG_KEY);
+    localStorage.removeItem(this.PERMS_KEY);
+  }
+
   getCurrentUser(): Observable<{ data: User }> {
-    return this.http.get<{ data: User }>(
-      `${this.baseUrl}${environment.api.auth}/me`
-    ).pipe(
-      tap(response => {
-        if (response.data) {
-          this.setStoredUser(response.data);
-        }
-      })
+    return this.http.get<{ data: User }>(`${this.authUrl}/me`).pipe(
+      tap(response => { if (response.data) this.setStoredUser(response.data); })
     );
   }
 
-  /**
-   * Check if user is logged in
-   */
   checkAuth(): Observable<boolean> {
-    const token = this.getToken();
-    if (!token) {
+    if (!this.getToken() || this.isTokenExpired()) {
       this.isAuthenticated.set(false);
       return of(false);
     }
 
-    return new Observable<boolean>(observer => {
-      this.getCurrentUser().pipe(
-        catchError(() => {
-          this.logout();
-          return of(null);
-        })
-      ).subscribe({
-        next: (response) => {
-          if (response?.data) {
-            this.isAuthenticated.set(true);
-            observer.next(true);
-          } else {
-            observer.next(false);
-          }
-          observer.complete();
-        },
-        error: () => {
-          this.logout();
-          observer.next(false);
-          observer.complete();
+    return this.getCurrentUser().pipe(
+      map(response => {
+        if (response?.data) {
+          this.isAuthenticated.set(true);
+          return true;
         }
-      });
-    });
-  }
-
-  // ============ PASSWORD MANAGEMENT ============
-
-  /**
-   * Change user password
-   */
-  changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(
-      `${this.baseUrl}/api/v1/password/change`,
-      { currentPassword, newPassword, confirmPassword }
-    );
-  }
-
-  /**
-   * Request password reset email
-   */
-  forgotPassword(email: string): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(
-      `${this.baseUrl}/api/v1/password/forgot`,
-      { email }
-    );
-  }
-
-  /**
-   * Verify password reset token
-   */
-  verifyResetToken(token: string): Observable<{ valid: boolean; email?: string }> {
-    return this.http.get<{ valid: boolean; email?: string }>(
-      `${this.baseUrl}/api/v1/password/verify-token?token=${token}`
-    );
-  }
-
-  /**
-   * Reset password with token
-   */
-  resetPassword(token: string, newPassword: string, confirmPassword: string): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(
-      `${this.baseUrl}/api/v1/password/reset`,
-      { token, newPassword, confirmPassword }
-    );
-  }
-
-  // ============ API KEY MANAGEMENT ============
-
-  /**
-   * Refresh API credentials
-   */
-  refreshApiKey(): Observable<{ apiKey: string; apiSecret: string }> {
-    return this.http.post<{ apiKey: string; apiSecret: string }>(
-      `${this.baseUrl}${environment.api.auth}/refresh-api-key`,
-      {}
-    ).pipe(
-      tap(response => {
-        const user = this.currentUser();
-        if (user) {
-          user.apiKey = response.apiKey;
-          this.setStoredUser(user);
-        }
+        return false;
+      }),
+      catchError(() => {
+        this.logout('session_invalid');
+        return of(false);
       })
     );
   }
 
-  // ============ ROLE HELPERS ============
-
-  /**
-   * Check if current user has a specific role
-   */
-  hasRole(role: string): boolean {
-    const user = this.currentUser();
-    return user?.role === role;
+  changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.passwordUrl}/change`, { currentPassword, newPassword, confirmPassword });
   }
 
-  /**
-   * Check if current user is admin
-   */
+  forgotPassword(email: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.passwordUrl}/forgot`, { email });
+  }
+
+  verifyResetToken(token: string): Observable<{ valid: boolean; email?: string }> {
+    return this.http.get<{ valid: boolean; email?: string }>(`${this.passwordUrl}/verify-token?token=${token}`);
+  }
+
+  resetPassword(token: string, newPassword: string, confirmPassword: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.passwordUrl}/reset`, { token, newPassword, confirmPassword });
+  }
+
+  refreshApiKey(): Observable<{ apiKey: string; apiSecret: string }> {
+    return this.http.post<{ apiKey: string; apiSecret: string }>(`${this.authUrl}/refresh-api-key`, {}).pipe(
+      tap(response => {
+        const user = this.currentUser();
+        if (user) this.setStoredUser({ ...user, apiKey: response.apiKey });
+      })
+    );
+  }
+
+  hasRole(role: string): boolean {
+    return this.currentUser()?.role === role;
+  }
+
   isAdmin(): boolean {
     return this.hasRole('admin');
   }
 
-  /**
-   * Get authorization header
-   */
-  getAuthHeader(): { Authorization: string } | {} {
+  getAuthHeader(): { Authorization: string } | Record<string, never> {
     const token = this.getToken();
-    if (token) {
-      return { Authorization: `Bearer ${token}` };
-    }
-    return {};
+    return token ? { Authorization: `Bearer ${token}` } : {};
   }
 }
