@@ -203,6 +203,7 @@ export class DriverListComponent implements OnInit {
   driverPmDocs = signal<any[]>([]);
   pmManageMode = signal(false);
   pmSelectedIds = signal<string[]>([]);
+  panelDocs = signal<any[]>([]);
   compUploadOpen = signal(false);
   compUploadItem = signal<any>(null);
   compUploading = signal(false);
@@ -279,6 +280,45 @@ export class DriverListComponent implements OnInit {
   selectDriverRow(driver: DriverRow): void {
     this._fetchTarget = 'panel';
     this.fetchFullDriver(driver);
+    this.loadPanelDocs(driver.id);
+  }
+
+  loadPanelDocs(driverId: string): void {
+    this.api.getDriverDocuments(driverId).subscribe({
+      next: (res: any) => this.panelDocs.set(res?.data || []),
+      error: () => this.panelDocs.set([])
+    });
+  }
+
+  getPanelDoc(key: string): any {
+    const sub = this.compSubMap[key];
+    const cat = this.compCategoryMap[key];
+    const docs = this.panelDocs();
+    if (!docs.length) return null;
+    let doc = docs.find((d: any) => d.subCategory === sub);
+    if (doc) return doc;
+    if (cat) { doc = docs.find((d: any) => d.category === cat); if (doc) return doc; }
+    const labels: Record<string, string[]> = {
+      cdl: ['cdl', 'license'], medical: ['medical', 'dot physical'], mvr: ['mvr', 'motor vehicle'],
+      drugTest: ['drug', 'alcohol'], dqf: ['dqf', 'qualification'], employment: ['employment', 'verification'],
+      training: ['training'], insurance: ['insurance'], vehicleDocs: ['vehicle', 'registration'],
+      permits: ['permit', 'twic']
+    };
+    const terms = labels[key] || [key];
+    return docs.find((d: any) => {
+      const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
+      return terms.some((t: string) => name.includes(t));
+    }) || null;
+  }
+
+  viewPanelDoc(item: any): void {
+    const doc = this.getPanelDoc(item.key);
+    if (doc?.id) {
+      this.api.downloadDriverDocumentFile(doc.id).subscribe({
+        next: (blob: Blob) => window.open(URL.createObjectURL(blob), '_blank'),
+        error: () => this.toast.error('Failed to load document', 'Error')
+      });
+    }
   }
 
   viewDriver(driver: DriverRow): void {
@@ -292,6 +332,7 @@ export class DriverListComponent implements OnInit {
     this.selectedDriver.set(null);
     this.detailTab.set('overview');
     this.driverPmDocs.set([]);
+    this.panelDocs.set([]);
     this.pmManageMode.set(false);
     this.pmSelectedIds.set([]);
   }
