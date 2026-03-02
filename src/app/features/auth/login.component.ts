@@ -1,8 +1,9 @@
-import { Component, signal, inject } from '@angular/core';
+import { Component, signal, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -282,15 +283,63 @@ import { AuthService } from '../../core/services/auth.service';
     }
   `]
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   private authService = inject(AuthService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   email = '';
   password = '';
   loading = signal(false);
   error = signal('');
   showPassword = signal(false);
+
+  ngOnInit(): void {
+    const token = this.route.snapshot.queryParamMap.get('token');
+    if (token) {
+      this.handleTokenHandoff(token);
+    }
+  }
+
+  private async handleTokenHandoff(token: string): Promise<void> {
+    this.loading.set(true);
+    try {
+      const res = await fetch(`${environment.apiUrl}/oauth/userinfo`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Token invalid');
+      const userInfo = await res.json();
+
+      localStorage.setItem('vantac_token', token);
+      localStorage.setItem('vantac_user', JSON.stringify({
+        id: userInfo.sub,
+        email: userInfo.email,
+        name: userInfo.name,
+        role: userInfo.role,
+        phone: userInfo.phone,
+        status: userInfo.status,
+        avatarUrl: userInfo.avatar,
+        organizationId: userInfo.organizationId?.toString(),
+        organizationName: userInfo.organizationName,
+        jobTitle: userInfo.jobTitle,
+        timezone: userInfo.timezone,
+        language: userInfo.language,
+      }));
+      if (userInfo.organizationId) {
+        localStorage.setItem('vantac_org', JSON.stringify({
+          id: userInfo.organizationId.toString(),
+          name: userInfo.organizationName || '',
+          status: 'active',
+        }));
+      }
+
+      this.authService.isAuthenticated.set(true);
+      this.router.navigate(['/dashboard']);
+    } catch {
+      this.error.set('SSO token expired. Please log in.');
+      this.loading.set(false);
+    }
+  }
 
   login(): void {
     if (!this.email || !this.password) {
