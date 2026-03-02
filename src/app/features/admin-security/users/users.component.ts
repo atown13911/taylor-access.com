@@ -63,6 +63,8 @@ export class UsersComponent implements OnInit {
   editingUser = signal<User | null>(null);
   saving = signal(false);
   formError = signal('');
+  userModalTab = signal<'roles' | 'apps'>('roles');
+  userApps = signal<any[]>([]);
   
   // Password set modal
   showPasswordModal = signal(false);
@@ -703,10 +705,54 @@ export class UsersComponent implements OnInit {
     }
   }
 
+  loadUserApps(): void {
+    const user = this.editingUser();
+    if (!user) return;
+    const userId = user.id;
+
+    Promise.all([
+      this.http.get<any>(`${environment.apiUrl}/oauth/clients`).toPromise(),
+      this.http.get<any>(`${environment.apiUrl}/oauth/users/${userId}/apps`).toPromise()
+    ]).then(([clientsRes, assignmentsRes]) => {
+      const clients = clientsRes?.data || clientsRes || [];
+      const assignments = assignmentsRes?.data || assignmentsRes || [];
+      const assignedIds = new Set(assignments.filter((a: any) => a.status === 'active').map((a: any) => a.appClientId));
+
+      this.userApps.set(clients.map((c: any) => ({
+        ...c,
+        hasAccess: assignedIds.has(c.clientId)
+      })));
+    }).catch(() => this.userApps.set([]));
+  }
+
+  toggleUserApp(app: any): void {
+    const user = this.editingUser();
+    if (!user) return;
+
+    if (app.hasAccess) {
+      this.http.delete(`${environment.apiUrl}/oauth/users/${user.id}/apps/${app.clientId}`).subscribe({
+        next: () => {
+          this.userApps.update(apps => apps.map(a => a.clientId === app.clientId ? { ...a, hasAccess: false } : a));
+        }
+      });
+    } else {
+      this.http.post(`${environment.apiUrl}/oauth/users/${user.id}/apps`, {
+        appClientId: app.clientId,
+        role: 'user'
+      }).subscribe({
+        next: () => {
+          this.userApps.update(apps => apps.map(a => a.clientId === app.clientId ? { ...a, hasAccess: true } : a));
+        }
+      });
+    }
+  }
+
   closeModal() {
     this.showAddModal.set(false);
     this.editingUser.set(null);
     this.formError.set('');
+    this.userModalTab.set('roles');
+    this.userApps.set([]);
     this.formData = { name: '', email: '', personalEmail: '', phone: '', roleId: '', organizationId: '', departmentId: null, satelliteId: null, agencyId: null, terminalId: null, jobTitle: '', zoomEmail: '', password: '', status: 'active' };
     this.phoneEntries = [{ id: ++this.phoneIdCounter, type: 'cell', countryCode: '+1', number: '' }];
   }

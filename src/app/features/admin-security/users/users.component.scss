@@ -1448,3 +1448,55 @@ body.theme-grid-neon .access-mode-toggle button {
 .page-info { color: #ccc; font-size: 0.85rem; font-weight: 600; padding: 0 8px; }
 .page-showing { color: #666; font-size: 0.75rem; margin-left: 12px; }
 @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+// User Modal Tabs
+.user-modal-tabs {
+  display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); margin: -8px -24px 16px; padding: 0 24px;
+}
+.um-tab {
+  display: flex; align-items: center; gap: 6px; padding: 12px 20px;
+  border: none; background: none; color: var(--text-secondary); font-size: 0.88rem; font-weight: 500;
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+  i { font-size: 1.1rem; }
+  &:hover { color: var(--text-primary); }
+  &.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+}
+
+// Program Access Panel
+.program-access-panel { padding: 8px 0; }
+.pa-subtitle { color: var(--text-secondary); font-size: 0.82rem; margin: 0 0 16px; }
+.pa-loading { text-align: center; padding: 30px; color: var(--text-secondary); i { margin-right: 8px; } }
+.pa-grid { display: flex; flex-direction: column; gap: 8px; }
+.pa-card {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px; background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; transition: all 0.2s;
+  &.granted { border-color: rgba(0,255,136,0.15); background: rgba(0,255,136,0.03); }
+}
+.pa-info { display: flex; align-items: center; gap: 10px; }
+.pa-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  i { font-size: 1.2rem; color: var(--cyan); }
+}
+.pa-details { display: flex; flex-direction: column; strong { font-size: 0.85rem; color: var(--text-primary); } }
+.pa-desc { font-size: 0.72rem; color: var(--text-secondary); }
+.pa-toggle { display: flex; align-items: center; gap: 8px; }
+.pa-label {
+  font-size: 0.72rem; font-weight: 600; text-transform: uppercase; color: #ff4444; min-width: 50px;
+  &.granted { color: #00ff88; }
+}
+.pa-switch {
+  position: relative; width: 40px; height: 22px;
+  input { opacity: 0; width: 0; height: 0; }
+}
+.pa-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: rgba(255,255,255,0.1); border-radius: 22px; transition: all 0.3s;
+  &::before {
+    content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+    left: 3px; bottom: 3px; background: #888; transition: all 0.3s;
+  }
+}
+input:checked + .pa-slider { background: rgba(0,255,136,0.2); &::before { transform: translateX(18px); background: #00ff88; } }

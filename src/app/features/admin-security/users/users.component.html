@@ -349,6 +349,17 @@
           <button class="btn-close" (click)="closeModal()"><i class='bx bx-x'></i></button>
         </div>
         
+        <!-- User Modal Tabs -->
+        <div class="user-modal-tabs">
+          <button class="um-tab" [class.active]="userModalTab() === 'roles'" (click)="userModalTab.set('roles')">
+            <i class='bx bx-user-check'></i> User Roles
+          </button>
+          <button class="um-tab" [class.active]="userModalTab() === 'apps'" (click)="userModalTab.set('apps'); loadUserApps()">
+            <i class='bx bx-grid-alt'></i> Program Access
+          </button>
+        </div>
+
+        @if (userModalTab() === 'roles') {
         <form (ngSubmit)="saveUser()" class="user-form">
           <div class="form-grid">
             <div class="input-group">
@@ -577,6 +588,37 @@
             </button>
           </div>
         </form>
+        } <!-- end roles tab -->
+
+        @if (userModalTab() === 'apps') {
+          <div class="program-access-panel">
+            <p class="pa-subtitle">Control which applications this user can access via SSO</p>
+            @if (userApps().length === 0) {
+              <div class="pa-loading"><i class='bx bx-loader-alt bx-spin'></i> Loading apps...</div>
+            } @else {
+              <div class="pa-grid">
+                @for (app of userApps(); track app.clientId) {
+                  <div class="pa-card" [class.granted]="app.hasAccess">
+                    <div class="pa-info">
+                      <div class="pa-icon"><i class='bx bx-cube-alt'></i></div>
+                      <div class="pa-details">
+                        <strong>{{ app.name }}</strong>
+                        <span class="pa-desc">{{ app.description || '' }}</span>
+                      </div>
+                    </div>
+                    <div class="pa-toggle">
+                      <label class="pa-switch">
+                        <input type="checkbox" [checked]="app.hasAccess" (change)="toggleUserApp(app)">
+                        <span class="pa-slider"></span>
+                      </label>
+                      <span class="pa-label" [class.granted]="app.hasAccess">{{ app.hasAccess ? 'Granted' : 'Denied' }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        } <!-- end apps tab -->
       </div>
     </div>
   }
