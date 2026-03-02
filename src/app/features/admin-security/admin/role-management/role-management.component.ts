@@ -134,6 +134,10 @@ export class RoleManagementComponent implements OnInit {
   showAppRoleModal = signal(false);
   editingAppRole = signal<any | null>(null);
 
+  selectedProgramTab = signal<string | null>(null);
+  programTabApps = signal<any[]>([]);
+  selectedAppRoleForEdit = signal<any | null>(null);
+
   // Navigation visibility
   navSections: NavSection[] = getNavSections();
   navSearchTerm = signal('');
@@ -169,6 +173,7 @@ export class RoleManagementComponent implements OnInit {
     this.loadPermissions();
     this.loadUsers();
     this.loadOAuthApps();
+    this.loadProgramTabApps();
   }
 
   loadOAuthApps(): void {
@@ -176,6 +181,31 @@ export class RoleManagementComponent implements OnInit {
       next: (res) => this.oauthApps.set(res?.data || res || []),
       error: () => this.oauthApps.set([])
     });
+  }
+
+  loadProgramTabApps(): void {
+    this.http.get<any>(`${environment.apiUrl}/oauth/clients`).subscribe({
+      next: (res) => this.programTabApps.set(res?.data || res || []),
+      error: () => this.programTabApps.set([])
+    });
+  }
+
+  selectProgramTab(app: any | null): void {
+    if (app) {
+      this.selectedProgramTab.set(app.clientId);
+      this.selectedApp.set(app);
+      this.loadAppRoles(app.clientId);
+      this.selectedAppRoleForEdit.set(null);
+    } else {
+      this.selectedProgramTab.set(null);
+      this.selectedApp.set(null);
+      this.appRoles.set([]);
+      this.selectedAppRoleForEdit.set(null);
+    }
+  }
+
+  selectAppRoleForEdit(role: any): void {
+    this.selectedAppRoleForEdit.set(role);
   }
 
   loadRoleAppAccess(role: any): void {

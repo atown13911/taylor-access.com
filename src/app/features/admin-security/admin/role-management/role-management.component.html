@@ -27,6 +27,22 @@
   </div>
 
   @if (pageTab() === 'roles') {
+
+  <!-- Program Sub-Tabs -->
+  <div class="program-tabs-bar">
+    <button class="program-tab" [class.active]="!selectedProgramTab()" (click)="selectProgramTab(null)">
+      <i class="bx bx-globe"></i> Global
+    </button>
+    @for (app of programTabApps(); track app.clientId) {
+      <button class="program-tab" [class.active]="selectedProgramTab() === app.clientId" (click)="selectProgramTab(app)">
+        <i class="bx bx-cube-alt"></i> {{ app.name }}
+      </button>
+    }
+  </div>
+
+  @if (!selectedProgramTab()) {
+  <!-- GLOBAL Roles & Permissions -->
+
   <!-- Organization Filter (Product Owner Only) -->
   @if (currentUserIsProductOwner()) {
     <div class="filters-bar">
@@ -383,6 +399,101 @@
           <p>Click on a role in the table above to view and edit its permissions</p>
         </div>
       }
+    </div>
+  }
+
+  } <!-- end global roles -->
+
+  @if (selectedProgramTab()) {
+    <!-- PER-PROGRAM Roles & Permissions -->
+    <div class="app-roles-page">
+      <div class="app-roles-header">
+        <h2><i class="bx bx-shield-quarter"></i> Roles & Permissions for {{ selectedApp()?.name }}</h2>
+        <button class="btn-primary btn-sm" (click)="openAppRoleModal()">
+          <i class="bx bx-plus"></i> Create Role
+        </button>
+      </div>
+
+      <div class="app-roles-layout">
+        <!-- Roles Table -->
+        <div class="app-roles-table-section">
+          <div class="section-header">
+            <h3><i class="bx bx-user-check"></i> Roles</h3>
+          </div>
+          <div class="roles-table-container">
+            <table class="roles-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Description</th>
+                  <th class="center">Permissions</th>
+                  <th class="center">Type</th>
+                  <th class="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (role of appRoles(); track role.id) {
+                  <tr [class.selected]="selectedAppRoleForEdit()?.id === role.id"
+                      (click)="selectAppRoleForEdit(role)">
+                    <td class="role-name-cell">
+                      <span class="role-name">{{ role.name }}</span>
+                    </td>
+                    <td class="description-cell">{{ role.description || 'No description' }}</td>
+                    <td class="center">
+                      <span class="count-badge cyan">{{ getAppRolePermissions(role).length }}</span>
+                    </td>
+                    <td class="center">
+                      @if (role.isSystem) {
+                        <span class="badge system">SYSTEM</span>
+                      } @else {
+                        <span class="badge custom">CUSTOM</span>
+                      }
+                    </td>
+                    <td class="actions-col">
+                      <button class="btn-icon" (click)="openAppRoleModal(role); $event.stopPropagation()" title="Edit">
+                        <i class="bx bx-edit"></i>
+                      </button>
+                      @if (!role.isSystem) {
+                        <button class="btn-icon danger" (click)="deleteAppRole(role); $event.stopPropagation()" title="Delete">
+                          <i class="bx bx-trash"></i>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="5" class="empty-message">No roles defined for this application</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Permission Editor for Selected App Role -->
+        <div class="app-perm-editor">
+          @if (selectedAppRoleForEdit()) {
+            <div class="section-header">
+              <h3><i class="bx bx-lock-alt"></i> Permissions for {{ selectedAppRoleForEdit().name }}</h3>
+            </div>
+            <p class="app-perm-hint">Toggle permissions for this role. Changes are saved automatically.</p>
+            <div class="app-perm-grid">
+              @for (perm of ['admin:full','read:all','write:all','delete:all','manage:users','manage:settings','manage:roles','view:reports','view:dashboard','export:data','import:data','manage:billing']; track perm) {
+                <label class="app-perm-item">
+                  <input type="checkbox"
+                    [checked]="appRoleHasPermission(selectedAppRoleForEdit(), perm)"
+                    (change)="toggleAppRolePermission(selectedAppRoleForEdit(), perm)">
+                  <span class="checkbox-custom"></span>
+                  <span class="app-perm-label">{{ perm }}</span>
+                </label>
+              }
+            </div>
+          } @else {
+            <div class="no-selection">
+              <i class="bx bx-pointer"></i>
+              <p>Select a role from the table to edit its permissions</p>
+            </div>
+          }
+        </div>
+      </div>
     </div>
   }
 

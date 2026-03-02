@@ -1674,6 +1674,147 @@ input:not(:checked) + .pa-slider-sm {
   &::before { background: #888; transform: translateX(0); }
 }
 
+// Program Sub-Tabs Bar (under Roles & Permissions)
+.program-tabs-bar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow-x: auto;
+  &::-webkit-scrollbar { height: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+}
+.program-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: all 0.2s;
+  i { font-size: 1rem; }
+  &:hover {
+    background: rgba(0, 212, 255, 0.05);
+    color: var(--text-primary);
+  }
+  &.active {
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--cyan);
+    border-color: rgba(0, 212, 255, 0.25);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
+  }
+}
+
+// App Roles Page (per-program view)
+.app-roles-page {
+  margin-top: 0;
+}
+.app-roles-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    i { color: var(--cyan); }
+  }
+}
+.app-roles-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.app-roles-table-section {
+  .section-header h3 {
+    margin: 0 0 12px;
+    font-size: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    i { color: var(--cyan); }
+  }
+}
+
+// App Permission Editor
+.app-perm-editor {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid rgba(var(--cyan), 0.15);
+  box-shadow: 0 0 10px rgba(var(--cyan), 0.05);
+}
+.app-perm-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0 0 16px;
+  font-style: italic;
+}
+.app-perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+}
+.app-perm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  &:hover {
+    background: rgba(0, 212, 255, 0.05);
+  }
+  input[type="checkbox"] { display: none; }
+  .checkbox-custom {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(var(--text-muted), 0.4);
+    border-radius: 4px;
+    flex-shrink: 0;
+    position: relative;
+    transition: all 0.2s;
+    &::after {
+      content: '\2713';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: transparent;
+      font-size: 12px;
+      font-weight: bold;
+      transition: color 0.2s;
+    }
+  }
+  input:checked + .checkbox-custom {
+    background: rgba(var(--cyan), 0.2);
+    border-color: var(--cyan);
+    &::after { color: var(--cyan); }
+  }
+  .app-perm-label {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    font-family: 'Fira Code', 'Consolas', monospace;
+  }
+}
+
 // Selected app highlight
 .pa-app-selected {
   border-color: rgba(0, 212, 255, 0.3) !important;
