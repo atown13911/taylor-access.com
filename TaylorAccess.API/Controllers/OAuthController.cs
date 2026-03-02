@@ -197,7 +197,7 @@ public class OAuthController : ControllerBase
             lastLoginAt = user.LastLoginAt,
             createdAt = user.CreatedAt,
             appAccess,
-            allowedApps = isAdmin ? allApps : appAccess.Select(a => a.AppClientId).ToList()
+            allowedApps = appAccess.Select(a => a.AppClientId).ToList()
         });
     }
 
