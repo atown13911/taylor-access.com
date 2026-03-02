@@ -186,9 +186,19 @@ export class OAuthConsentComponent implements OnInit {
   authError = signal<string | null>(null);
   authorizing = signal(false);
 
-  isLoggedIn = this.authService.isAuthenticated;
+  isLoggedIn = signal(false);
 
   ngOnInit() {
+    const token = this.authService.getToken();
+    if (token) {
+      this.http.get(`${this.baseUrl}/oauth/userinfo`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).subscribe({
+        next: () => this.isLoggedIn.set(true),
+        error: () => this.isLoggedIn.set(false)
+      });
+    }
+
     const params = this.route.snapshot.queryParams;
     if (!params['client_id'] || !params['redirect_uri']) {
       this.error.set('Missing required parameters (client_id, redirect_uri)');
