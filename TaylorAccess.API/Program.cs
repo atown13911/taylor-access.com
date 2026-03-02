@@ -147,7 +147,9 @@ builder.Services.AddCors(options =>
                     || uri.Host == "taylor-accounting.net"
                     || uri.Host == "www.taylor-accounting.net"
                     || uri.Host == "taylor-last.com"
-                    || uri.Host == "www.taylor-last.com";
+                    || uri.Host == "www.taylor-last.com"
+                    || uri.Host == "taylorcommlink.com"
+                    || uri.Host == "www.taylorcommlink.com";
             })
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -248,7 +250,7 @@ using (var scope = app.Services.CreateScope())
                 Name = "Van-Tac TMS",
                 Description = "Transportation Management System",
                 HomepageUrl = "https://taylor-tms.net",
-                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-tms.net", "https://taylor-tms.net/callback", "https://van-tac-v2.pages.dev", "https://van-tac-v2.pages.dev/callback", "http://localhost:4200", "http://localhost:4200/callback" })
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-tms.net", "https://taylor-tms.net/callback", "http://localhost:4200", "http://localhost:4200/callback" })
             },
             new OAuthClient
             {
@@ -257,7 +259,7 @@ using (var scope = app.Services.CreateScope())
                 Name = "Taylor CRM",
                 Description = "Customer Relationship Management",
                 HomepageUrl = "https://taylor-crm.com",
-                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "http://localhost:4201", "http://localhost:4201/callback" })
+                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "https://taylor-crm.pages.dev", "https://taylor-crm.pages.dev/callback", "http://localhost:4201", "http://localhost:4201/callback" })
             },
             new OAuthClient
             {
@@ -312,21 +314,6 @@ using (var scope = app.Services.CreateScope())
         }
     }
     await context.SaveChangesAsync();
-
-    // Ensure VanTac TMS has Cloudflare Pages redirect URI
-    var vantacClient = await context.OAuthClients.FirstOrDefaultAsync(c => c.ClientId == "ta_vantac_tms");
-    if (vantacClient != null)
-    {
-        var uris2 = System.Text.Json.JsonSerializer.Deserialize<List<string>>(vantacClient.RedirectUris) ?? new();
-        if (!uris2.Contains("https://van-tac-v2.pages.dev/callback"))
-        {
-            uris2.Add("https://van-tac-v2.pages.dev");
-            uris2.Add("https://van-tac-v2.pages.dev/callback");
-            vantacClient.RedirectUris = System.Text.Json.JsonSerializer.Serialize(uris2);
-            await context.SaveChangesAsync();
-            Console.WriteLine("Added Cloudflare Pages redirect URI to VanTac TMS OAuth client");
-        }
-    }
 }
 
 Console.WriteLine("Taylor Access HR API is running!");
