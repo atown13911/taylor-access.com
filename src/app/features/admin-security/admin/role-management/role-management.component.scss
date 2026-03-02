@@ -1673,3 +1673,280 @@ input:not(:checked) + .pa-slider-sm {
   background: rgba(255,255,255,0.1);
   &::before { background: #888; transform: translateX(0); }
 }
+
+// Selected app highlight
+.pa-app-selected {
+  border-color: rgba(0, 212, 255, 0.3) !important;
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
+}
+
+// App body container
+.pa-app-body {
+  padding: 0 20px 16px;
+}
+
+// Sub-tabs inside expanded app
+.pa-sub-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 16px;
+}
+.pa-sub-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+  i { font-size: 1rem; }
+  &:hover { color: var(--text-primary); }
+  &.active {
+    color: var(--cyan);
+    border-bottom-color: var(--cyan);
+  }
+}
+
+// Super Admin toggle
+.pa-superadmin-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  display: inline-block;
+  input { opacity: 0; width: 0; height: 0; }
+}
+.pa-sa-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  transition: all 0.3s;
+  &::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    left: 3px;
+    bottom: 3px;
+    background: #888;
+    transition: all 0.3s;
+  }
+}
+input:checked + .pa-sa-slider {
+  background: rgba($gold, 0.3);
+  border: 1px solid rgba($gold, 0.5);
+  &::before {
+    transform: translateX(16px);
+    background: $gold;
+    box-shadow: 0 0 8px rgba($gold, 0.5);
+  }
+}
+.pa-superadmin-row {
+  background: linear-gradient(90deg, rgba($gold, 0.04), transparent) !important;
+}
+
+// Role select dropdown
+.pa-role-select {
+  padding: 4px 8px;
+  background: rgba(var(--bg-primary), 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:focus {
+    outline: none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+  }
+  option {
+    background: #0a0a0f;
+    color: white;
+  }
+}
+
+// Roles sub-tab
+.pa-roles-section {
+  padding: 4px 0;
+}
+.pa-roles-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    i { color: var(--cyan); }
+  }
+}
+.pa-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.pa-role-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color 0.2s;
+  &:hover {
+    border-color: rgba(0, 212, 255, 0.2);
+  }
+  &.pa-role-system {
+    border-color: rgba(0, 255, 136, 0.15);
+    background: rgba(0, 255, 136, 0.02);
+  }
+}
+.pa-role-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.pa-role-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  strong {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+  }
+}
+.pa-role-card-actions {
+  display: flex;
+  gap: 4px;
+}
+.pa-role-card-desc {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+.pa-role-card-perms {
+  .pa-perm-count {
+    font-size: 0.72rem;
+    color: var(--cyan);
+    background: rgba(0, 212, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 212, 255, 0.15);
+  }
+}
+
+// Permissions sub-tab
+.pa-perms-section {
+  padding: 4px 0;
+  h3 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    i { color: var(--cyan); }
+  }
+}
+.pa-perms-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0 0 16px;
+  font-style: italic;
+}
+.pa-perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.pa-perm-role-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.pa-perm-role-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(0, 212, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+  strong {
+    font-size: 0.88rem;
+    color: var(--cyan);
+  }
+  .pa-perm-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: rgba(var(--bg-primary), 0.5);
+    padding: 2px 6px;
+    border-radius: 8px;
+  }
+}
+.pa-perm-list {
+  padding: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+}
+.pa-perm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  &:hover {
+    background: rgba(0, 212, 255, 0.05);
+  }
+  input[type="checkbox"] {
+    display: none;
+  }
+  .checkbox-custom {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(var(--text-muted), 0.4);
+    border-radius: 3px;
+    flex-shrink: 0;
+    position: relative;
+    transition: all 0.2s;
+    &::after {
+      content: '\2713';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: transparent;
+      font-size: 11px;
+      font-weight: bold;
+      transition: color 0.2s;
+    }
+  }
+  input:checked + .checkbox-custom {
+    background: rgba(var(--cyan), 0.2);
+    border-color: var(--cyan);
+    &::after {
+      color: var(--cyan);
+    }
+  }
+}

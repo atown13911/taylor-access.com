@@ -177,8 +177,32 @@ public class AppRoleAssignment
     [MaxLength(20)]
     public string Status { get; set; } = "active";
 
+    public bool IsSuperAdmin { get; set; } = false;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class AppRole
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string AppClientId { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public string Permissions { get; set; } = "[]";
+
+    public bool IsSystem { get; set; } = false;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 // DTOs

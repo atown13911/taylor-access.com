@@ -127,6 +127,13 @@ export class RoleManagementComponent implements OnInit {
   allAppsData = signal<any[]>([]);
   expandedApps = signal<Record<string, boolean>>({});
 
+  selectedApp = signal<any | null>(null);
+  appSubTab = signal<'users' | 'roles' | 'permissions'>('users');
+  appRoles = signal<any[]>([]);
+  appRoleForm = { name: '', description: '' };
+  showAppRoleModal = signal(false);
+  editingAppRole = signal<any | null>(null);
+
   // Navigation visibility
   navSections: NavSection[] = getNavSections();
   navSearchTerm = signal('');
@@ -220,6 +227,150 @@ export class RoleManagementComponent implements OnInit {
         ));
       }
     });
+  }
+
+  selectApp(app: any): void {
+    if (this.selectedApp()?.clientId === app.clientId) {
+      this.selectedApp.set(null);
+      return;
+    }
+    this.selectedApp.set(app);
+    this.appSubTab.set('users');
+    this.loadAppRoles(app.clientId);
+  }
+
+  loadAppRoles(clientId: string): void {
+    this.http.get<any>(`${environment.apiUrl}/oauth/clients/${clientId}/roles`).subscribe({
+      next: (res) => this.appRoles.set(res?.data || []),
+      error: () => this.appRoles.set([])
+    });
+  }
+
+  openAppRoleModal(role?: any): void {
+    this.editingAppRole.set(role || null);
+    this.appRoleForm = role
+      ? { name: role.name, description: role.description || '' }
+      : { name: '', description: '' };
+    this.showAppRoleModal.set(true);
+  }
+
+  closeAppRoleModal(): void {
+    this.showAppRoleModal.set(false);
+    this.editingAppRole.set(null);
+    this.appRoleForm = { name: '', description: '' };
+  }
+
+  saveAppRole(): void {
+    const app = this.selectedApp();
+    if (!app) return;
+    const editing = this.editingAppRole();
+
+    if (editing) {
+      this.http.put(`${environment.apiUrl}/oauth/clients/${app.clientId}/roles/${editing.id}`, {
+        name: this.appRoleForm.name,
+        description: this.appRoleForm.description
+      }).subscribe({
+        next: () => {
+          this.loadAppRoles(app.clientId);
+          this.closeAppRoleModal();
+          this.toast.champagne('Role updated', 'Success');
+        },
+        error: (err) => this.toast.error(err?.error?.error || 'Failed to update role', 'Error')
+      });
+    } else {
+      this.http.post(`${environment.apiUrl}/oauth/clients/${app.clientId}/roles`, {
+        name: this.appRoleForm.name,
+        description: this.appRoleForm.description,
+        permissions: '[]'
+      }).subscribe({
+        next: () => {
+          this.loadAppRoles(app.clientId);
+          this.closeAppRoleModal();
+          this.toast.champagne('Role created', 'Success');
+        },
+        error: (err) => this.toast.error(err?.error?.error || 'Failed to create role', 'Error')
+      });
+    }
+  }
+
+  deleteAppRole(role: any): void {
+    const app = this.selectedApp();
+    if (!app || role.isSystem) return;
+
+    this.http.delete(`${environment.apiUrl}/oauth/clients/${app.clientId}/roles/${role.id}`).subscribe({
+      next: () => {
+        this.loadAppRoles(app.clientId);
+        this.toast.champagne('Role deleted', 'Success');
+      },
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to delete role', 'Error')
+    });
+  }
+
+  toggleAppSuperAdmin(user: any, clientId: string, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.http.put(`${environment.apiUrl}/oauth/users/${user.id}/apps/${clientId}/superadmin`, {
+      isSuperAdmin: checked
+    }).subscribe({
+      next: () => {
+        this.allAppsData.update(apps => apps.map(a =>
+          a.clientId === clientId
+            ? { ...a, users: a.users.map((u: any) => u.id === user.id ? { ...u, isSuperAdmin: checked } : u) }
+            : a
+        ));
+        this.toast.champagne(`Super Admin ${checked ? 'granted' : 'revoked'} for ${user.name}`, 'Updated');
+      },
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to update super admin', 'Error')
+    });
+  }
+
+  updateUserAppRole(user: any, clientId: string, event: Event): void {
+    const newRole = (event.target as HTMLSelectElement).value;
+    this.http.post(`${environment.apiUrl}/oauth/users/${user.id}/apps`, {
+      appClientId: clientId,
+      role: newRole
+    }).subscribe({
+      next: () => {
+        this.allAppsData.update(apps => apps.map(a =>
+          a.clientId === clientId
+            ? { ...a, users: a.users.map((u: any) => u.id === user.id ? { ...u, appRole: newRole } : u) }
+            : a
+        ));
+      },
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to update role', 'Error')
+    });
+  }
+
+  toggleAppRolePermission(role: any, permission: string): void {
+    const app = this.selectedApp();
+    if (!app) return;
+
+    let perms: string[];
+    try {
+      perms = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : (role.permissions || []);
+    } catch { perms = []; }
+
+    if (perms.includes(permission)) {
+      perms = perms.filter((p: string) => p !== permission);
+    } else {
+      perms = [...perms, permission];
+    }
+
+    this.http.put(`${environment.apiUrl}/oauth/clients/${app.clientId}/roles/${role.id}`, {
+      permissions: JSON.stringify(perms)
+    }).subscribe({
+      next: () => this.loadAppRoles(app.clientId)
+    });
+  }
+
+  getAppRolePermissions(role: any): string[] {
+    try {
+      const p = typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions;
+      return Array.isArray(p) ? p : [];
+    } catch { return []; }
+  }
+
+  appRoleHasPermission(role: any, perm: string): boolean {
+    return this.getAppRolePermissions(role).includes(perm);
   }
 
   async loadOrganizations() {

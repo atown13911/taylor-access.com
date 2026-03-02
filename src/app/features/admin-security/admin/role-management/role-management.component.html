@@ -400,8 +400,8 @@
       } @else {
         <div class="pa-apps-list">
           @for (app of allAppsData(); track app.clientId) {
-            <div class="pa-app-section">
-              <div class="pa-app-header" (click)="toggleAppExpand(app.clientId)">
+            <div class="pa-app-section" [class.pa-app-selected]="selectedApp()?.clientId === app.clientId">
+              <div class="pa-app-header" (click)="selectApp(app)">
                 <div class="pa-app-title">
                   <div class="pa-app-icon"><i class="bx bx-cube-alt"></i></div>
                   <div>
@@ -411,48 +411,154 @@
                 </div>
                 <div class="pa-app-meta">
                   <span class="pa-user-count">{{ app.userCount }} users</span>
-                  <i class="bx" [class.bx-chevron-down]="!expandedApps()[app.clientId]" [class.bx-chevron-up]="expandedApps()[app.clientId]"></i>
+                  <i class="bx" [class.bx-chevron-down]="selectedApp()?.clientId !== app.clientId" [class.bx-chevron-up]="selectedApp()?.clientId === app.clientId"></i>
                 </div>
               </div>
 
-              @if (expandedApps()[app.clientId]) {
-                <div class="pa-app-users">
-                  @if (app.users.length === 0) {
-                    <p class="pa-no-users">No users have access to this application</p>
-                  } @else {
-                    <table class="pa-users-table">
-                      <thead>
-                        <tr>
-                          <th>User</th>
-                          <th>Role</th>
-                          <th>Status</th>
-                          <th>Access</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (user of app.users; track user.id) {
-                          <tr>
-                            <td>
-                              <div class="pa-user-cell">
-                                <div class="pa-user-avatar">{{ (user.name || 'U').charAt(0) }}</div>
-                                <div>
-                                  <strong>{{ user.name }}</strong>
-                                  <span>{{ user.email }}</span>
-                                </div>
+              @if (selectedApp()?.clientId === app.clientId) {
+                <div class="pa-app-body">
+                  <!-- Sub-tabs -->
+                  <div class="pa-sub-tabs">
+                    <button class="pa-sub-tab" [class.active]="appSubTab() === 'users'" (click)="appSubTab.set('users')">
+                      <i class="bx bx-user"></i> Users
+                    </button>
+                    <button class="pa-sub-tab" [class.active]="appSubTab() === 'roles'" (click)="appSubTab.set('roles')">
+                      <i class="bx bx-shield-quarter"></i> Roles
+                    </button>
+                    <button class="pa-sub-tab" [class.active]="appSubTab() === 'permissions'" (click)="appSubTab.set('permissions')">
+                      <i class="bx bx-lock-alt"></i> Permissions
+                    </button>
+                  </div>
+
+                  <!-- Users Sub-Tab -->
+                  @if (appSubTab() === 'users') {
+                    <div class="pa-app-users">
+                      @if (app.users.length === 0) {
+                        <p class="pa-no-users">No users have access to this application</p>
+                      } @else {
+                        <table class="pa-users-table">
+                          <thead>
+                            <tr>
+                              <th>User</th>
+                              <th>Role</th>
+                              <th>Super Admin</th>
+                              <th>Status</th>
+                              <th>Access</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (user of app.users; track user.id) {
+                              <tr [class.pa-superadmin-row]="user.isSuperAdmin">
+                                <td>
+                                  <div class="pa-user-cell">
+                                    <div class="pa-user-avatar">{{ (user.name || 'U').charAt(0) }}</div>
+                                    <div>
+                                      <strong>{{ user.name }}</strong>
+                                      <span>{{ user.email }}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td>
+                                  <select class="pa-role-select" [value]="user.appRole || 'user'" (change)="updateUserAppRole(user, app.clientId, $event)">
+                                    @for (role of appRoles(); track role.id) {
+                                      <option [value]="role.name" [selected]="(user.appRole || 'user').toLowerCase() === role.name.toLowerCase()">{{ role.name }}</option>
+                                    }
+                                  </select>
+                                </td>
+                                <td>
+                                  <label class="pa-superadmin-toggle">
+                                    <input type="checkbox" [checked]="user.isSuperAdmin" (change)="toggleAppSuperAdmin(user, app.clientId, $event)">
+                                    <span class="pa-sa-slider"></span>
+                                  </label>
+                                </td>
+                                <td><span class="pa-status" [class]="user.status || 'active'">{{ user.status || 'active' }}</span></td>
+                                <td>
+                                  <label class="pa-switch-sm">
+                                    <input type="checkbox" [checked]="true" (change)="revokeUserApp(user.id, app.clientId)">
+                                    <span class="pa-slider-sm"></span>
+                                  </label>
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      }
+                    </div>
+                  }
+
+                  <!-- Roles Sub-Tab -->
+                  @if (appSubTab() === 'roles') {
+                    <div class="pa-roles-section">
+                      <div class="pa-roles-header">
+                        <h3><i class="bx bx-shield-quarter"></i> Roles for {{ app.name }}</h3>
+                        <button class="btn-primary btn-sm" (click)="openAppRoleModal()">
+                          <i class="bx bx-plus"></i> Create Role
+                        </button>
+                      </div>
+                      <div class="pa-roles-grid">
+                        @for (role of appRoles(); track role.id) {
+                          <div class="pa-role-card" [class.pa-role-system]="role.isSystem">
+                            <div class="pa-role-card-header">
+                              <div class="pa-role-card-title">
+                                <strong>{{ role.name }}</strong>
+                                @if (role.isSystem) {
+                                  <span class="badge system">SYSTEM</span>
+                                } @else {
+                                  <span class="badge custom">CUSTOM</span>
+                                }
                               </div>
-                            </td>
-                            <td><span class="pa-role-badge">{{ user.appRole || 'user' }}</span></td>
-                            <td><span class="pa-status" [class]="user.status || 'active'">{{ user.status || 'active' }}</span></td>
-                            <td>
-                              <label class="pa-switch-sm">
-                                <input type="checkbox" [checked]="true" (change)="revokeUserApp(user.id, app.clientId)">
-                                <span class="pa-slider-sm"></span>
-                              </label>
-                            </td>
-                          </tr>
+                              <div class="pa-role-card-actions">
+                                <button class="btn-icon" (click)="openAppRoleModal(role)" title="Edit">
+                                  <i class="bx bx-edit"></i>
+                                </button>
+                                @if (!role.isSystem) {
+                                  <button class="btn-icon danger" (click)="deleteAppRole(role)" title="Delete">
+                                    <i class="bx bx-trash"></i>
+                                  </button>
+                                }
+                              </div>
+                            </div>
+                            <p class="pa-role-card-desc">{{ role.description || 'No description' }}</p>
+                            <div class="pa-role-card-perms">
+                              <span class="pa-perm-count">{{ getAppRolePermissions(role).length }} permissions</span>
+                            </div>
+                          </div>
                         }
-                      </tbody>
-                    </table>
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Permissions Sub-Tab -->
+                  @if (appSubTab() === 'permissions') {
+                    <div class="pa-perms-section">
+                      <h3><i class="bx bx-lock-alt"></i> Permissions by Role for {{ app.name }}</h3>
+                      <p class="pa-perms-hint">Toggle permissions for each role. Changes are saved automatically.</p>
+                      @if (appRoles().length === 0) {
+                        <p class="pa-no-users">No roles defined for this application</p>
+                      } @else {
+                        <div class="pa-perm-grid">
+                          @for (role of appRoles(); track role.id) {
+                            <div class="pa-perm-role-card">
+                              <div class="pa-perm-role-header">
+                                <strong>{{ role.name }}</strong>
+                                <span class="pa-perm-count">{{ getAppRolePermissions(role).length }}</span>
+                              </div>
+                              <div class="pa-perm-list">
+                                @for (perm of ['admin:full','read:all','write:all','delete:all','manage:users','manage:settings','manage:roles','view:reports','export:data']; track perm) {
+                                  <label class="pa-perm-item">
+                                    <input type="checkbox"
+                                      [checked]="appRoleHasPermission(role, perm)"
+                                      (change)="toggleAppRolePermission(role, perm)">
+                                    <span class="checkbox-custom"></span>
+                                    <span>{{ perm }}</span>
+                                  </label>
+                                }
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
                   }
                 </div>
               }
@@ -462,6 +568,35 @@
       }
     </div>
   } <!-- end program-access tab -->
+
+  <!-- App Role Create/Edit Modal -->
+  @if (showAppRoleModal()) {
+    <div class="modal-overlay" (click)="closeAppRoleModal()">
+      <div class="modal modal-small" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>{{ editingAppRole() ? 'Edit' : 'Create' }} App Role</h2>
+          <button class="btn-close" (click)="closeAppRoleModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Role Name</label>
+            <input type="text" [(ngModel)]="appRoleForm.name" placeholder="e.g., editor, viewer" [disabled]="editingAppRole()?.isSystem">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea [(ngModel)]="appRoleForm.description" placeholder="Describe this role..." rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeAppRoleModal()">Cancel</button>
+          <button class="btn-primary" (click)="saveAppRole()" [disabled]="!appRoleForm.name">
+            <i class="bx" [class.bx-plus]="!editingAppRole()" [class.bx-check]="editingAppRole()"></i>
+            {{ editingAppRole() ? 'Update' : 'Create' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
 
   <!-- Create Role Modal -->
   @if (showCreateModal()) {

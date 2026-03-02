@@ -312,6 +312,34 @@ using (var scope = app.Services.CreateScope())
         }
     }
     await context.SaveChangesAsync();
+
+    // Seed default AppRoles for each OAuth client (idempotent)
+    var allClients = await context.OAuthClients.Select(c => c.ClientId).ToListAsync();
+    var defaultAppRoles = new (string name, string desc, string perms)[]
+    {
+        ("Admin", "Full administrative access", "[\"admin:full\",\"read:all\",\"write:all\",\"delete:all\",\"manage:users\",\"manage:settings\"]"),
+        ("Manager", "Management-level access", "[\"read:all\",\"write:all\",\"manage:users\"]"),
+        ("User", "Standard read-only access", "[\"read:all\"]")
+    };
+
+    foreach (var cid in allClients)
+    {
+        foreach (var (roleName, roleDesc, rolePerms) in defaultAppRoles)
+        {
+            if (!await context.AppRoles.AnyAsync(r => r.AppClientId == cid && r.Name == roleName))
+            {
+                context.AppRoles.Add(new AppRole
+                {
+                    AppClientId = cid,
+                    Name = roleName,
+                    Description = roleDesc,
+                    Permissions = rolePerms,
+                    IsSystem = true
+                });
+            }
+        }
+    }
+    await context.SaveChangesAsync();
 }
 
 Console.WriteLine("Taylor Access HR API is running!");

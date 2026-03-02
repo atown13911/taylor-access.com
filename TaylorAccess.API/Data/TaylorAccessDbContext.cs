@@ -61,6 +61,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<OAuthAccessToken> OAuthAccessTokens => Set<OAuthAccessToken>();
     public DbSet<OAuthRefreshToken> OAuthRefreshTokens => Set<OAuthRefreshToken>();
     public DbSet<AppRoleAssignment> AppRoleAssignments => Set<AppRoleAssignment>();
+    public DbSet<AppRole> AppRoles => Set<AppRole>();
 
     // Chat
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
@@ -188,6 +189,10 @@ public class TaylorAccessDbContext : DbContext
 
         modelBuilder.Entity<AppRoleAssignment>()
             .HasIndex(a => new { a.UserId, a.AppClientId })
+            .IsUnique();
+
+        modelBuilder.Entity<AppRole>()
+            .HasIndex(ar => new { ar.AppClientId, ar.Name })
             .IsUnique();
     }
 }
