@@ -46,11 +46,6 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             localStorage.setItem(SESSION_VERSION_KEY, serverVersion);
           } else if (storedVersion !== serverVersion) {
             localStorage.setItem(SESSION_VERSION_KEY, serverVersion);
-            // Product owner is exempt from force logout
-            const user = authService.currentUser();
-            if (user?.role?.toLowerCase() !== 'product_owner') {
-              authService.logout();
-            }
           }
         }
       }
@@ -61,16 +56,25 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       if (error.status === 401) {
         const currentUrl = router.url;
         const isLoginPage = currentUrl.includes('/login') || currentUrl === '/';
-        const isOptionalEndpoint = req.url.includes('/notifications') || 
-                                   req.url.includes('/organizations') ||
-                                   req.url.includes('/setup/status') ||
-                                   req.url.includes('/oauth/');
         const isOAuthPage = currentUrl.includes('/oauth/');
+        const isBackgroundCall = req.url.includes('/notifications') || 
+                                 req.url.includes('/organizations') ||
+                                 req.url.includes('/setup/status') ||
+                                 req.url.includes('/oauth/') ||
+                                 req.url.includes('/sessions') ||
+                                 req.url.includes('/events') ||
+                                 req.url.includes('/employee-roster/summary') ||
+                                 req.url.includes('/employee-snapshots') ||
+                                 req.url.includes('/employee-documents') ||
+                                 req.url.includes('/driver-documents') ||
+                                 req.url.includes('/paychecks') ||
+                                 req.url.includes('/attendance') ||
+                                 req.url.includes('/time-off') ||
+                                 req.url.includes('/employee-data/staging');
         
-        if (!isLoginPage && !isOAuthPage && !isOptionalEndpoint) {
-          console.warn('Unauthorized request - redirecting to login');
+        if (!isLoginPage && !isOAuthPage && !isBackgroundCall) {
+          console.warn('Unauthorized request - redirecting to login:', req.url);
           authService.logout();
-          router.navigate(['/login']);
         }
       }
       
