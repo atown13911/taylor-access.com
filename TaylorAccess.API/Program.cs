@@ -142,6 +142,8 @@ builder.Services.AddCors(options =>
                     || uri.Host == "www.tss-portal.com"
                     || uri.Host == "taylorshippingsolutions.com"
                     || uri.Host == "www.taylorshippingsolutions.com"
+                    || uri.Host == "taylorcommlink.com"
+                    || uri.Host == "www.taylorcommlink.com"
                     || uri.Host == "taylor-accounting.net"
                     || uri.Host == "www.taylor-accounting.net"
                     || uri.Host == "taylor-last.com"
@@ -287,6 +289,10 @@ using (var scope = app.Services.CreateScope())
             new[] { "https://tss-portal.com", "https://tss-portal.com/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
         ("ta_taylor_access", "taylor-access-sso-secret-2026", "Taylor Access", "Identity & Access Management", "https://taylor-access.com",
             new[] { "https://taylor-access.com", "https://taylor-access.com/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
+        ("ta_taylor_commlink", "taylor-commlink-sso-secret-2026", "TaylorCommLink", "Internal Communications Platform", "https://taylorcommlink.com",
+            new[] { "https://taylorcommlink.com", "https://taylorcommlink.com/callback", "http://localhost:4206", "http://localhost:4206/callback" }),
+        ("ta_taylor_shipping", "taylor-shipping-sso-secret-2026", "Taylor Shipping Solutions", "Shipping & Logistics Portal", "https://taylorshippingsolutions.com",
+            new[] { "https://taylorshippingsolutions.com", "https://taylorshippingsolutions.com/callback", "http://localhost:3002", "http://localhost:3002/callback" }),
     };
 
     foreach (var (clientId, secret, name, desc, homepage, uris) in newClients)
