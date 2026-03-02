@@ -1509,3 +1509,74 @@ $violet: #a855f7; // Superadmin color (purple/violet for queen)
   color: var(--red);
   font-size: 0.9rem;
 }
+
+// Apps Access Tab
+.apps-access-container { padding: 0 4px; }
+.apps-header {
+  margin-bottom: 16px;
+  h3 { color: var(--text-primary); font-size: 1rem; margin: 0 0 4px; }
+}
+.apps-subtitle { color: var(--text-secondary); font-size: 0.82rem; margin: 0; }
+
+.apps-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: all 0.2s;
+
+  &.granted { border-color: rgba(0, 255, 136, 0.15); background: rgba(0, 255, 136, 0.03); }
+  &:hover { border-color: rgba(0, 212, 255, 0.2); }
+}
+
+.app-info { display: flex; align-items: center; gap: 12px; }
+.app-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(0, 212, 255, 0.08); border: 1px solid rgba(0, 212, 255, 0.15);
+  display: flex; align-items: center; justify-content: center;
+  i { font-size: 1.3rem; color: var(--cyan); }
+}
+.app-details {
+  display: flex; flex-direction: column; gap: 1px;
+  strong { font-size: 0.9rem; color: var(--text-primary); }
+}
+.app-desc { font-size: 0.75rem; color: var(--text-secondary); }
+.app-id { font-size: 0.7rem; color: var(--text-muted); font-family: monospace; }
+
+.app-toggle { display: flex; align-items: center; gap: 10px; }
+.access-label {
+  font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  color: #ff4444; min-width: 55px;
+  &.granted { color: #00ff88; }
+}
+
+.toggle-switch {
+  position: relative;
+  width: 44px; height: 24px;
+  input { opacity: 0; width: 0; height: 0; }
+}
+.toggle-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: rgba(255, 255, 255, 0.1); border-radius: 24px;
+  transition: all 0.3s;
+  &::before {
+    content: ''; position: absolute;
+    width: 18px; height: 18px; border-radius: 50%;
+    left: 3px; bottom: 3px;
+    background: #888; transition: all 0.3s;
+  }
+}
+input:checked + .toggle-slider {
+  background: rgba(0, 255, 136, 0.2);
+  &::before { transform: translateX(20px); background: #00ff88; }
+}
+input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }

@@ -119,7 +119,9 @@ export class RoleManagementComponent implements OnInit {
   };
 
   // Tab selection for permissions panel
-  activePermissionTab = signal<'permissions' | 'navigation'>('permissions');
+  activePermissionTab = signal<'permissions' | 'navigation' | 'apps'>('permissions');
+  oauthApps = signal<any[]>([]);
+  roleAppAccess = signal<Record<string, boolean>>({});
 
   // Navigation visibility
   navSections: NavSection[] = getNavSections();
@@ -155,6 +157,36 @@ export class RoleManagementComponent implements OnInit {
     this.loadRoles();
     this.loadPermissions();
     this.loadUsers();
+    this.loadOAuthApps();
+  }
+
+  loadOAuthApps(): void {
+    this.http.get<any>(`${environment.apiUrl}/oauth/clients`).subscribe({
+      next: (res) => this.oauthApps.set(res?.data || res || []),
+      error: () => this.oauthApps.set([])
+    });
+  }
+
+  loadRoleAppAccess(role: any): void {
+    const permsStr = role.permissions || '[]';
+    try {
+      const perms = typeof permsStr === 'string' ? JSON.parse(permsStr) : permsStr;
+      const access: Record<string, boolean> = {};
+      for (const app of this.oauthApps()) {
+        access[app.clientId] = Array.isArray(perms) && perms.includes('app:' + app.clientId);
+      }
+      this.roleAppAccess.set(access);
+    } catch {
+      this.roleAppAccess.set({});
+    }
+  }
+
+  toggleAppAccess(clientId: string): void {
+    this.roleAppAccess.update(acc => ({ ...acc, [clientId]: !acc[clientId] }));
+  }
+
+  getAppAccessCount(): number {
+    return Object.values(this.roleAppAccess()).filter(v => v).length;
   }
 
   async loadOrganizations() {

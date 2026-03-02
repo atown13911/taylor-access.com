@@ -253,6 +253,15 @@
             <span>Navigation</span>
             <span class="tab-badge">{{ getTotalNavSelectedCount(selectedRoleForEdit()!) }}/{{ getTotalNavItemCount() }}</span>
           </button>
+          <button 
+            class="tab-btn" 
+            [class.active]="activePermissionTab() === 'apps'"
+            (click)="activePermissionTab.set('apps'); loadRoleAppAccess(selectedRoleForEdit()!)"
+          >
+            <i class="bx bx-grid-alt"></i>
+            <span>Apps</span>
+            <span class="tab-badge">{{ getAppAccessCount() }}/{{ oauthApps().length }}</span>
+          </button>
         </div>
 
         <!-- ===== Permissions Tab ===== -->
@@ -364,6 +373,41 @@
             </div>
           </div>
         }
+        <!-- ===== Apps Tab ===== -->
+        @if (activePermissionTab() === 'apps') {
+          <div class="apps-access-container">
+            <div class="apps-header">
+              <h3>Application Access</h3>
+              <p class="apps-subtitle">Control which applications this role can access via SSO</p>
+            </div>
+            <div class="apps-grid">
+              @for (app of oauthApps(); track app.clientId) {
+                <div class="app-card" [class.granted]="roleAppAccess()[app.clientId]">
+                  <div class="app-info">
+                    <div class="app-icon">
+                      <i class="bx bx-cube-alt"></i>
+                    </div>
+                    <div class="app-details">
+                      <strong>{{ app.name }}</strong>
+                      <span class="app-desc">{{ app.description || app.homepageUrl || '' }}</span>
+                      <span class="app-id">{{ app.clientId }}</span>
+                    </div>
+                  </div>
+                  <div class="app-toggle">
+                    <label class="toggle-switch">
+                      <input type="checkbox" [checked]="roleAppAccess()[app.clientId]" (change)="toggleAppAccess(app.clientId)" [disabled]="!canEditSelectedRole()">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span class="access-label" [class.granted]="roleAppAccess()[app.clientId]">
+                      {{ roleAppAccess()[app.clientId] ? 'Granted' : 'Denied' }}
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         } <!-- End of @else (non-product-owner) -->
       } @else {
         <div class="no-selection">
