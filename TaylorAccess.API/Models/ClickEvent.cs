@@ -102,4 +102,3 @@ public class UserSession
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
 }
-

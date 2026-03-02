@@ -9,13 +9,13 @@ export class InactivityService implements OnDestroy {
   private http = inject(HttpClient);
   private zone = inject(NgZone);
 
-  private readonly TIMEOUT_MS = 15 * 60 * 1000;
-  private readonly WARNING_MS = 13 * 60 * 1000;
-  private readonly THROTTLE_MS = 30_000;
+  private readonly TIMEOUT_MS = 4 * 60 * 60 * 1000;   // 4 hours
+  private readonly WARNING_MS = 3 * 60 * 60 * 1000 + 55 * 60 * 1000; // 3h 55m
+  private readonly THROTTLE_MS = 60_000;
   private readonly SESSION_KEY = 'ta_session_id';
 
   showWarning = signal(false);
-  countdownSeconds = signal(120);
+  countdownSeconds = signal(300);
 
   private timer: any;
   private warningTimer: any;
@@ -92,7 +92,7 @@ export class InactivityService implements OnDestroy {
     this.warningTimer = setTimeout(() => {
       this.zone.run(() => {
         this.showWarning.set(true);
-        this.countdownSeconds.set(120);
+        this.countdownSeconds.set(300);
         this.countdownInterval = setInterval(() => {
           const s = this.countdownSeconds() - 1;
           this.countdownSeconds.set(s);
