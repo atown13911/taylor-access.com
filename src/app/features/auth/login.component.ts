@@ -310,8 +310,7 @@ export class LoginComponent implements OnInit {
       if (!res.ok) throw new Error('Token invalid');
       const userInfo = await res.json();
 
-      localStorage.setItem('vantac_token', token);
-      localStorage.setItem('vantac_user', JSON.stringify({
+      const user = {
         id: userInfo.sub,
         email: userInfo.email,
         name: userInfo.name,
@@ -324,16 +323,24 @@ export class LoginComponent implements OnInit {
         jobTitle: userInfo.jobTitle,
         timezone: userInfo.timezone,
         language: userInfo.language,
-      }));
-      if (userInfo.organizationId) {
-        localStorage.setItem('vantac_org', JSON.stringify({
-          id: userInfo.organizationId.toString(),
-          name: userInfo.organizationName || '',
-          status: 'active',
-        }));
-      }
+      };
 
+      const org = userInfo.organizationId ? {
+        id: userInfo.organizationId.toString(),
+        name: userInfo.organizationName || '',
+        status: 'active',
+      } : null;
+
+      localStorage.setItem('vantac_token', token);
+      localStorage.setItem('vantac_user', JSON.stringify(user));
+      if (org) localStorage.setItem('vantac_org', JSON.stringify(org));
+      localStorage.setItem('vantac_permissions', JSON.stringify([]));
+      sessionStorage.setItem('access_token_validated', 'true');
+
+      this.authService.currentUser.set(user as any);
+      if (org) this.authService.currentOrganization.set(org as any);
       this.authService.isAuthenticated.set(true);
+
       this.router.navigate(['/dashboard']);
     } catch {
       this.error.set('SSO token expired. Please log in.');
