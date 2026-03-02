@@ -450,6 +450,9 @@
               <button class="comp-view-btn" (click)="viewPanelDoc(item)" title="View {{ item.label }}">
                 <i class='bx bx-show'></i>
               </button>
+              <button class="comp-remove-btn" (click)="archivePanelDoc(item)" title="Remove & Replace">
+                <i class='bx bx-x'></i>
+              </button>
             }
             <button class="comp-upload-btn" (click)="openComplianceUpload(item)" title="Upload {{ item.label }}">
               <i class='bx bx-upload'></i>

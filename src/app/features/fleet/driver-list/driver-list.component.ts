@@ -318,6 +318,20 @@ export class DriverListComponent implements OnInit {
     }) || null;
   }
 
+  archivePanelDoc(item: any): void {
+    const doc = this.getPanelDoc(item.key);
+    if (!doc?.id) return;
+    if (!confirm(`Archive "${item.label}"? The document will be saved in history but removed from the active view.`)) return;
+
+    this.api.updateDriverDocument(doc.id, { status: 'archived' }).subscribe({
+      next: () => {
+        this.toast.success(`${item.label} archived`, 'Archived');
+        this.panelDocs.update(docs => docs.filter(d => d.id !== doc.id));
+      },
+      error: () => this.toast.error('Failed to archive', 'Error')
+    });
+  }
+
   viewPanelDoc(item: any): void {
     const doc = this.getPanelDoc(item.key);
     if (doc?.id) {
