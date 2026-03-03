@@ -230,6 +230,10 @@ export class DriverListComponent implements OnInit {
     { key: 'insurance', label: 'Insurance' },
     { key: 'vehicleDocs', label: 'Vehicle Docs' },
     { key: 'permits', label: 'Permits' },
+    { key: 'i9', label: 'I-9' },
+    { key: 'w9', label: 'W-9' },
+    { key: 'directDeposit', label: 'Direct Deposit' },
+    { key: 'deduction', label: 'Deduction' },
   ];
 
   getComplianceStatus(driver: any, key: string): string {
