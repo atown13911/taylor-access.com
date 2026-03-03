@@ -108,6 +108,15 @@ public class Driver
     [MaxLength(50)]
     public string? TwiccCardNumber { get; set; }
 
+    [MaxLength(100)]
+    public string? TruckOwnerName { get; set; }
+
+    [MaxLength(20)]
+    public string? TruckOwnerPhone { get; set; }
+
+    [MaxLength(100)]
+    public string? TruckOwnerCompany { get; set; }
+
     [ForeignKey("DriverTerminalId")]
     public DriverTerminal? DriverTerminal { get; set; }
 

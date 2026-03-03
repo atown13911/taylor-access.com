@@ -310,6 +310,26 @@
         </div>
 
         <div class="form-section">
+          <h4>Truck Owner</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Owner Name</label>
+              <input type="text" [ngModel]="driverForm().truckOwnerName" (ngModelChange)="updateField('truckOwnerName', $event)" placeholder="Truck owner full name">
+            </div>
+            <div class="form-group">
+              <label>Owner Phone</label>
+              <input type="text" [ngModel]="driverForm().truckOwnerPhone" (ngModelChange)="updateField('truckOwnerPhone', $event)" placeholder="Owner phone number">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Owner Company</label>
+              <input type="text" [ngModel]="driverForm().truckOwnerCompany" (ngModelChange)="updateField('truckOwnerCompany', $event)" placeholder="Owner company name">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
           <h4>Employment</h4>
           <div class="form-row">
             <div class="form-group">

@@ -230,6 +230,9 @@ using (var scope = app.Services.CreateScope())
         ");
         await context.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccCardNumber"" VARCHAR(50);
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerName"" VARCHAR(100);
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerPhone"" VARCHAR(20);
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerCompany"" VARCHAR(100);
         ");
     }
     catch (Exception ex)
