@@ -12,6 +12,7 @@ namespace TaylorAccess.API.Services;
 public interface IJwtService
 {
     string GenerateToken(User user);
+    string GenerateTokenForApp(User user, string clientId);
     Task<string> GenerateTokenAsync(User user);
     ClaimsPrincipal? ValidateToken(string token);
 }
@@ -39,7 +40,18 @@ public class JwtService : IJwtService
         _expirationHours = int.Parse(_configuration["Jwt:ExpirationHours"] ?? "24");
     }
 
-    public string GenerateToken(User user) => GenerateTokenWithPermissions(user, null);
+    public string GenerateToken(User user) => GenerateTokenWithPermissions(user, null, null, null);
+
+    public string GenerateTokenForApp(User user, string clientId)
+    {
+        var assignment = _context.AppRoleAssignments
+            .FirstOrDefault(a => a.UserId == user.Id && a.AppClientId == clientId && a.Status == "active");
+
+        string? appRole = assignment?.Role;
+        string? appPermissions = assignment?.Permissions;
+
+        return GenerateTokenWithPermissions(user, null, appRole, appPermissions);
+    }
 
     public async Task<string> GenerateTokenAsync(User user)
     {
@@ -66,10 +78,10 @@ public class JwtService : IJwtService
         }
         catch { }
 
-        return GenerateTokenWithPermissions(user, permissions);
+        return GenerateTokenWithPermissions(user, permissions, null, null);
     }
 
-    private string GenerateTokenWithPermissions(User user, List<string>? permissions)
+    private string GenerateTokenWithPermissions(User user, List<string>? permissions, string? appRole, string? appPermissions)
     {
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secretKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -101,6 +113,17 @@ public class JwtService : IJwtService
 
         if (permissions != null)
             claims.Add(new("permissions", JsonSerializer.Serialize(permissions)));
+
+        if (!string.IsNullOrEmpty(appRole))
+        {
+            claims.Add(new("app_role", appRole));
+            claims.Add(new(ClaimTypes.Role, appRole));
+            var existingRole = claims.FindIndex(c => c.Type == "role");
+            if (existingRole >= 0) claims[existingRole] = new("role", appRole);
+        }
+
+        if (!string.IsNullOrEmpty(appPermissions))
+            claims.Add(new("app_permissions", appPermissions));
 
         var token = new JwtSecurityToken(
             issuer: _issuer,

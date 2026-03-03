@@ -197,7 +197,7 @@ public class OAuthController : ControllerBase
             lastLoginAt = user.LastLoginAt,
             createdAt = user.CreatedAt,
             appAccess,
-            allowedApps = appAccess.Select(a => a.AppClientId).ToList()
+            allowedApps = isAdmin ? allApps : appAccess.Select(a => a.AppClientId).ToList()
         });
     }
 
@@ -306,105 +306,10 @@ public class OAuthController : ControllerBase
 
         var result = users.Select(u => {
             var assignment = assignments.First(a => a.UserId == u.Id);
-            return new { u.Id, u.Name, u.Email, u.Role, u.Status, appRole = assignment.Role, assignment.IsSuperAdmin };
+            return new { u.Id, u.Name, u.Email, u.Role, u.Status, appRole = assignment.Role };
         });
 
         return Ok(new { data = result });
-    }
-
-    // ============ APP-SCOPED ROLES ============
-
-    [HttpGet("clients/{clientId}/roles")]
-    [Authorize]
-    public async Task<ActionResult> GetAppRoles(string clientId)
-    {
-        var roles = await _context.AppRoles
-            .Where(r => r.AppClientId == clientId)
-            .OrderBy(r => r.Name)
-            .Select(r => new { r.Id, r.AppClientId, r.Name, r.Description, r.Permissions, r.IsSystem, r.CreatedAt })
-            .ToListAsync();
-
-        return Ok(new { data = roles });
-    }
-
-    [HttpPost("clients/{clientId}/roles")]
-    [Authorize]
-    public async Task<ActionResult> CreateAppRole(string clientId, [FromBody] CreateAppRoleRequest request)
-    {
-        var exists = await _context.AppRoles.AnyAsync(r => r.AppClientId == clientId && r.Name == request.Name);
-        if (exists)
-            return BadRequest(new { error = "A role with this name already exists for this application" });
-
-        var role = new AppRole
-        {
-            AppClientId = clientId,
-            Name = request.Name,
-            Description = request.Description,
-            Permissions = request.Permissions ?? "[]",
-            IsSystem = false
-        };
-
-        _context.AppRoles.Add(role);
-        await _context.SaveChangesAsync();
-
-        await _auditService.LogAsync("app_role_created", "AppRole", role.Id, $"Created role '{role.Name}' for app {clientId}");
-
-        return Ok(new { data = role });
-    }
-
-    [HttpPut("clients/{clientId}/roles/{roleId}")]
-    [Authorize]
-    public async Task<ActionResult> UpdateAppRole(string clientId, int roleId, [FromBody] UpdateAppRoleRequest request)
-    {
-        var role = await _context.AppRoles.FirstOrDefaultAsync(r => r.Id == roleId && r.AppClientId == clientId);
-        if (role == null) return NotFound();
-
-        if (request.Name != null) role.Name = request.Name;
-        if (request.Description != null) role.Description = request.Description;
-        if (request.Permissions != null) role.Permissions = request.Permissions;
-
-        await _context.SaveChangesAsync();
-
-        await _auditService.LogAsync("app_role_updated", "AppRole", role.Id, $"Updated role '{role.Name}' for app {clientId}");
-
-        return Ok(new { data = role });
-    }
-
-    [HttpDelete("clients/{clientId}/roles/{roleId}")]
-    [Authorize]
-    public async Task<ActionResult> DeleteAppRole(string clientId, int roleId)
-    {
-        var role = await _context.AppRoles.FirstOrDefaultAsync(r => r.Id == roleId && r.AppClientId == clientId);
-        if (role == null) return NotFound();
-        if (role.IsSystem)
-            return BadRequest(new { error = "Cannot delete a system role" });
-
-        _context.AppRoles.Remove(role);
-        await _context.SaveChangesAsync();
-
-        await _auditService.LogAsync("app_role_deleted", "AppRole", roleId, $"Deleted role '{role.Name}' from app {clientId}");
-
-        return Ok(new { message = $"Role '{role.Name}' deleted" });
-    }
-
-    [HttpPut("users/{userId}/apps/{appClientId}/superadmin")]
-    [Authorize]
-    public async Task<ActionResult> ToggleSuperAdmin(int userId, string appClientId, [FromBody] ToggleSuperAdminRequest request)
-    {
-        var assignment = await _context.AppRoleAssignments
-            .FirstOrDefaultAsync(a => a.UserId == userId && a.AppClientId == appClientId);
-
-        if (assignment == null)
-            return NotFound(new { error = "User does not have access to this application" });
-
-        assignment.IsSuperAdmin = request.IsSuperAdmin;
-        assignment.UpdatedAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        await _auditService.LogAsync("app_superadmin_toggled", "AppRoleAssignment", assignment.Id,
-            $"User {userId} super admin for {appClientId} set to {request.IsSuperAdmin}");
-
-        return Ok(new { message = "Super admin status updated", isSuperAdmin = assignment.IsSuperAdmin });
     }
 
     /// <summary>
@@ -492,8 +397,6 @@ public class OAuthController : ControllerBase
         {
             existing.Role = request.Role;
             existing.Permissions = request.Permissions;
-            if (request.IsSuperAdmin.HasValue)
-                existing.IsSuperAdmin = request.IsSuperAdmin.Value;
             existing.UpdatedAt = DateTime.UtcNow;
         }
         else
@@ -503,8 +406,7 @@ public class OAuthController : ControllerBase
                 UserId = userId,
                 AppClientId = request.AppClientId,
                 Role = request.Role,
-                Permissions = request.Permissions,
-                IsSuperAdmin = request.IsSuperAdmin ?? false
+                Permissions = request.Permissions
             });
         }
 
@@ -563,14 +465,14 @@ public class OAuthController : ControllerBase
         if (user == null)
             return BadRequest(new { error = "invalid_grant", error_description = "User not found" });
 
-        // Generate tokens
-        var accessToken = _jwtService.GenerateToken(user);
+        // Generate tokens with app-specific role
+        var accessToken = _jwtService.GenerateTokenForApp(user, clientId!);
         var refreshTokenValue = OAuthRefreshToken.Generate();
 
         _context.OAuthAccessTokens.Add(new OAuthAccessToken
         {
             Token = accessToken,
-            ClientId = clientId,
+            ClientId = clientId!,
             UserId = user.Id,
             Scopes = authCode.Scopes,
             ExpiresAt = DateTime.UtcNow.AddHours(1)
@@ -615,7 +517,7 @@ public class OAuthController : ControllerBase
         // Revoke old refresh token and issue new ones
         token.IsRevoked = true;
 
-        var newAccessToken = _jwtService.GenerateToken(user);
+        var newAccessToken = _jwtService.GenerateTokenForApp(user, token.ClientId);
         var newRefreshToken = OAuthRefreshToken.Generate();
 
         _context.OAuthAccessTokens.Add(new OAuthAccessToken
@@ -646,7 +548,4 @@ public class OAuthController : ControllerBase
 public record OAuthLoginRequest(string Email, string Password, string ClientId, string RedirectUri, string? Scope, string? State);
 public record OAuthConsentRequest(string ClientId, string RedirectUri, string? Scope, string? State);
 public record RevokeRequest(string Token);
-public record AssignAppRoleRequest(string AppClientId, string Role, string? Permissions, bool? IsSuperAdmin);
-public record CreateAppRoleRequest(string Name, string? Description, string? Permissions);
-public record UpdateAppRoleRequest(string? Name, string? Description, string? Permissions);
-public record ToggleSuperAdminRequest(bool IsSuperAdmin);
+public record AssignAppRoleRequest(string AppClientId, string Role, string? Permissions);
