@@ -752,7 +752,8 @@ export class DriverListComponent implements OnInit {
       name: '', email: '', phone: '', organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
       address: '', city: '', state: '', zip: '', ssn: '',
-      truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '',
+      truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '',
+      truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
       emergencyContact: '', emergencyPhone: '',
       hireDate: '', payRate: 0, payType: 'mile', driverType: 'company',
       teamDriverId: null, teamDriverName: ''
