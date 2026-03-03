@@ -12,6 +12,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/oauth/oauth-consent.component').then(m => m.OAuthConsentComponent)
   },
   {
+    path: 'callback',
+    loadComponent: () => import('./features/sso/sso-callback.component').then(m => m.SsoCallbackComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],
