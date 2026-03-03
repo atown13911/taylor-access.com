@@ -203,8 +203,9 @@ export class DriverListComponent implements OnInit {
 
   // Slide-out panel (row click)
   selectedDriver = signal<any>(null);
-  detailTab = signal<'overview' | 'pm'>('overview');
+  detailTab = signal<'overview' | 'pm' | 'paperlogs'>('overview');
   driverPmDocs = signal<any[]>([]);
+  driverPaperLogs = signal<any[]>([]);
   pmManageMode = signal(false);
   pmSelectedIds = signal<string[]>([]);
   panelDocs = signal<any[]>([]);
@@ -357,6 +358,7 @@ export class DriverListComponent implements OnInit {
     this.selectedDriver.set(null);
     this.detailTab.set('overview');
     this.driverPmDocs.set([]);
+    this.driverPaperLogs.set([]);
     this.panelDocs.set([]);
     this.pmManageMode.set(false);
     this.pmSelectedIds.set([]);
@@ -501,6 +503,49 @@ export class DriverListComponent implements OnInit {
       },
       error: () => this.driverPmDocs.set([])
     });
+  }
+
+  uploadPaperLog(event: any): void {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    const driver = this.selectedDriver();
+    if (!driver) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('driverId', driver.id);
+    formData.append('category', 'paper_log');
+    formData.append('subCategory', 'paper_log');
+    formData.append('documentName', file.name);
+
+    this.toast.success(`Uploading ${file.name}...`, 'Upload');
+    this.api.createDriverDocument(formData).subscribe({
+      next: () => {
+        this.toast.success('Paper log uploaded', 'Success');
+        this.loadDriverPaperLogs();
+      },
+      error: () => this.toast.error('Failed to upload', 'Error')
+    });
+
+    event.target.value = '';
+  }
+
+  loadDriverPaperLogs(): void {
+    const driver = this.selectedDriver();
+    if (!driver) return;
+    this.api.getDriverDocuments(driver.id).subscribe({
+      next: (res: any) => {
+        const docs = (res?.data || []).filter((d: any) => d.category === 'paper_log');
+        this.driverPaperLogs.set(docs);
+      },
+      error: () => this.driverPaperLogs.set([])
+    });
+  }
+
+  viewPaperLog(doc: any): void {
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, '_blank');
+    }
   }
 
   closeProfileModal(): void {

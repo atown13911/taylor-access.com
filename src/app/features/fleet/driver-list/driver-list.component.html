@@ -436,6 +436,9 @@
       <button class="panel-tab" [class.active]="detailTab() === 'pm'" (click)="detailTab.set('pm'); loadDriverPmDocs()">
         <i class='bx bx-wrench'></i> PM
       </button>
+      <button class="panel-tab" [class.active]="detailTab() === 'paperlogs'" (click)="detailTab.set('paperlogs'); loadDriverPaperLogs()">
+        <i class='bx bx-file'></i> Paper Logs
+      </button>
     </div>
 
     <!-- Overview Tab -->
@@ -552,6 +555,45 @@
                     Exp: {{ formatDate(doc.expiryDate) }}
                   </span>
                 }
+              </div>
+              <span class="pm-status" [class]="doc.status || 'active'">{{ doc.status || 'active' }}</span>
+            </div>
+          }
+        }
+      </div>
+    }
+
+    <!-- Paper Logs Tab -->
+    @if (detailTab() === 'paperlogs') {
+      <div class="panel-section">
+        <div class="pm-header">
+          <h4>Paper Logs</h4>
+          <div class="pm-header-actions">
+            <label class="pm-upload-btn">
+              <i class='bx bx-upload'></i> Upload
+              <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadPaperLog($event)">
+            </label>
+          </div>
+        </div>
+
+        @if (driverPaperLogs().length === 0) {
+          <div class="pm-empty">
+            <i class='bx bx-file'></i>
+            <p>No paper logs yet</p>
+            <label class="pm-upload-btn lg">
+              <i class='bx bx-upload'></i> Upload First Paper Log
+              <input type="file" hidden accept=".pdf,.jpg,.png,.doc,.docx" (change)="uploadPaperLog($event)">
+            </label>
+          </div>
+        } @else {
+          @for (doc of driverPaperLogs(); track doc.id) {
+            <div class="pm-item clickable" (click)="viewPaperLog(doc)">
+              <div class="pm-icon"><i class='bx bx-file'></i></div>
+              <div class="pm-info">
+                <strong>{{ doc.documentName || 'Paper Log' }}</strong>
+                <span class="pm-meta">
+                  {{ doc.issueDate ? formatDate(doc.issueDate) : formatDate(doc.createdAt) }}
+                </span>
               </div>
               <span class="pm-status" [class]="doc.status || 'active'">{{ doc.status || 'active' }}</span>
             </div>
