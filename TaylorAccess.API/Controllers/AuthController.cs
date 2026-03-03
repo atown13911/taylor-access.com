@@ -111,6 +111,16 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "Account is not active" });
         }
 
+        if (user.Role != "product_owner" && user.Role != "superadmin" && user.Role != "admin")
+        {
+            var hasAccess = await _context.AppRoleAssignments
+                .AnyAsync(a => a.UserId == user.Id && a.AppClientId == "ta_taylor_access" && a.Status == "active");
+            if (!hasAccess)
+            {
+                return StatusCode(403, new { error = "You do not have access to Taylor Access. Contact your administrator." });
+            }
+        }
+
         user.LastLoginAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
