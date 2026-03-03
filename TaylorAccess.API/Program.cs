@@ -228,6 +228,9 @@ using (var scope = app.Services.CreateScope())
         await context.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""AppRoleAssignments"" ADD COLUMN IF NOT EXISTS ""IsSuperAdmin"" BOOLEAN NOT NULL DEFAULT FALSE;
         ");
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccCardNumber"" VARCHAR(50);
+        ");
     }
     catch (Exception ex)
     {

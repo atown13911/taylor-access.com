@@ -301,6 +301,12 @@
               <input type="text" [ngModel]="driverForm().truckTag" (ngModelChange)="updateField('truckTag', $event)" placeholder="License plate number">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>TWIC Card Number</label>
+              <input type="text" [ngModel]="driverForm().twiccCardNumber" (ngModelChange)="updateField('twiccCardNumber', $event)" placeholder="TWIC card number">
+            </div>
+          </div>
         </div>
 
         <div class="form-section">
