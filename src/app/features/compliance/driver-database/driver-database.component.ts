@@ -409,7 +409,9 @@ export class DriverDatabaseComponent implements OnInit {
     { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
     { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
     { key: 'ifta', label: 'IFTA' }, { key: 'safety', label: 'Safety Awards' },
-    { key: 'violations', label: 'Violations' }
+    { key: 'violations', label: 'Violations' },
+    { key: 'i9', label: 'I-9' }, { key: 'w9', label: 'W-9' },
+    { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' }
   ];
 
   selectDriver(driver: any) {
@@ -537,7 +539,8 @@ export class DriverDatabaseComponent implements OnInit {
       dqf: ['dqf', 'qualification'], employment: ['employment', 'verification'],
       training: ['training'], insurance: ['insurance'],
       vehicle: ['vehicle', 'registration'], permits: ['permit', 'twic'],
-      ifta: ['ifta', 'irp'], safety: ['safety', 'award'], violations: ['violation', 'accident']
+      ifta: ['ifta', 'irp'], safety: ['safety', 'award'], violations: ['violation', 'accident'],
+      i9: ['i-9', 'i9'], w9: ['w-9', 'w9'], directDeposit: ['direct deposit', 'direct_deposit'], deduction: ['deduction']
     };
     const terms = labels[key] || [key];
     return docs.find(d => {
@@ -551,7 +554,8 @@ export class DriverDatabaseComponent implements OnInit {
       cdl: 'CDL / License', medical: 'Medical Certificate', mvr: 'Motor Vehicle Record',
       drug: 'Drug & Alcohol Test', dqf: 'Driver Qualification File', employment: 'Employment Verification',
       training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
-      permits: 'Permits', ifta: 'IFTA', safety: 'Safety Awards', violations: 'Violations'
+      permits: 'Permits', ifta: 'IFTA', safety: 'Safety Awards', violations: 'Violations',
+      i9: 'I-9', w9: 'W-9', directDeposit: 'Direct Deposit', deduction: 'Deduction'
     };
     const status = this.getItemStatus(driver, item);
     const statusLabel = status === 'compliant' ? 'Compliant' : status === 'expiring' ? 'Expiring Soon' : status === 'expired' ? 'Expired' : 'Not on File';
