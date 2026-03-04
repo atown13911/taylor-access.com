@@ -158,10 +158,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.12);
   border-radius: 14px;
   padding: 18px 22px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), inset 0 0 30px rgba(0, 212, 255, 0.02);
 }
 .detail-employee {
   display: flex;
@@ -190,12 +193,15 @@
   justify-content: center;
   color: #666;
   text-align: center;
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.1);
   border-radius: 14px;
   padding: 60px 20px;
-  i { font-size: 4rem; color: #444; margin-bottom: 12px; }
-  h4 { color: #aaa; margin: 0 0 6px; }
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), inset 0 0 30px rgba(0, 212, 255, 0.02);
+  i { font-size: 4rem; color: rgba(0, 212, 255, 0.3); margin-bottom: 12px; }
+  h4 { color: var(--text-secondary); margin: 0 0 6px; }
   p { margin: 0; font-size: 0.9rem; }
 }
 
@@ -210,9 +216,12 @@
   align-items: center;
   gap: 10px;
   padding: 14px 18px;
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.1);
   border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   i { font-size: 1.2rem; }
   &.pto { i { color: #00ff88; } .chip-value { color: #00ff88; } border-left: 3px solid #00ff88; }
   &.sick { i { color: #ff2a6d; } .chip-value { color: #ff2a6d; } border-left: 3px solid #ff2a6d; }
@@ -344,10 +353,13 @@
 
 // Upcoming Section
 .upcoming-section {
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 212, 255, 0.12);
   border-radius: 14px;
   padding: 18px 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), inset 0 0 30px rgba(0, 212, 255, 0.02);
   h4 {
     margin: 0 0 14px;
     font-size: 0.95rem;
@@ -374,9 +386,11 @@
   align-items: center;
   gap: 14px;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 212, 255, 0.03);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(0, 212, 255, 0.08);
+  transition: all 0.2s;
+  &:hover { background: rgba(0, 212, 255, 0.06); }
 }
 .upcoming-dates { color: #aaa; font-size: 0.82rem; display: flex; align-items: center; gap: 6px; flex: 1; i { color: #666; } }
 .upcoming-days { color: var(--cyan); font-weight: 700; font-size: 0.85rem; }
