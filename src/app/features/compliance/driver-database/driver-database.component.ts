@@ -131,10 +131,12 @@ export class DriverDatabaseComponent implements OnInit {
       }, 0);
   });
   
+  docsReady = signal(false);
+
   ngOnInit() {
     this.loadAllDocs();
     this.loadDrivers().then(() => {
-      this.loadDriverDocsForCompliance();
+      this.attachDocsToDrivers();
       // Check for driverId query param to auto-open profile
       this.route.queryParams.subscribe(params => {
         const driverId = params['driverId'];
@@ -476,12 +478,14 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getComplianceClass(driver: any, item: string): string {
+    const ready = this.docsReady();
     const status = this.getItemStatus(driver, item);
     if (status === 'compliant') return 'dot dot-green';
     if (status === 'expiring') return 'dot dot-yellow';
     if (status === 'expired') return 'dot dot-red';
 
-    const doc = this.getDocForDriver(driver.id, item);
+    const driverDocs: any[] = driver._docs || [];
+    const doc = this.findDocInList(driverDocs, item);
     if (doc) {
       if (doc.expiryDate) {
         const days = this.getDaysUntilExpiration(doc.expiryDate);
@@ -496,27 +500,30 @@ export class DriverDatabaseComponent implements OnInit {
     return 'dot dot-gray';
   }
 
-  private loadedDriverIds = new Set<string>();
-
-  loadDriverDocsForCompliance(): void {
+  attachDocsToDrivers(): void {
     const drivers = this.drivers();
+    let completed = 0;
+    const total = drivers.length;
+
     for (const driver of drivers) {
-      const id = driver.id?.toString();
-      if (id && !this.loadedDriverIds.has(id)) {
-        this.loadedDriverIds.add(id);
-        this.api.getDriverDocuments(driver.id).subscribe({
-          next: (res: any) => {
-            const newDocs = res?.data || [];
-            if (newDocs.length > 0) {
-              const existingIds = new Set(this.allDocs().map((d: any) => d.id));
-              const uniqueNew = newDocs.filter((d: any) => !existingIds.has(d.id));
-              if (uniqueNew.length > 0) {
-                this.allDocs.update(docs => [...docs, ...uniqueNew]);
-              }
-            }
+      this.api.getDriverDocuments(driver.id).subscribe({
+        next: (res: any) => {
+          driver._docs = res?.data || [];
+          completed++;
+          if (completed >= total) {
+            this.drivers.set([...drivers]);
+            this.docsReady.set(true);
           }
-        });
-      }
+        },
+        error: () => {
+          driver._docs = [];
+          completed++;
+          if (completed >= total) {
+            this.drivers.set([...drivers]);
+            this.docsReady.set(true);
+          }
+        }
+      });
     }
   }
 
@@ -556,12 +563,6 @@ export class DriverDatabaseComponent implements OnInit {
     directDeposit: ['direct deposit', 'direct_deposit', 'direct_deposit_form', 'bank'],
     deduction: ['deduction', 'deduction_form', 'payroll deduction']
   };
-
-  private getDocForDriver(driverId: any, key: string): any {
-    const docs = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
-    if (docs.length === 0) return null;
-    return this.findDocInList(docs, key);
-  }
 
   getComplianceTooltip(driver: any, item: string): string {
     const labels: any = {
