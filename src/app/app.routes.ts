@@ -62,6 +62,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/hr/time-off/time-off.component').then(m => m.TimeOffComponent)
       },
       {
+        path: 'hr/payroll',
+        loadComponent: () => import('./features/hr/payroll/payroll.component').then(m => m.PayrollComponent)
+      },
+      {
         path: 'hr/benefits',
         loadComponent: () => import('./features/hr/benefits/benefits.component').then(m => m.BenefitsComponent)
       },

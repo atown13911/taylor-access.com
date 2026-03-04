@@ -71,8 +71,7 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   { label: 'Finance Settings', icon: 'bx-cog', route: '/finance/settings' },
   // HR & People
   { label: 'Employee Roster', icon: 'bx-id-card', route: '/hr/roster', section: 'HR & People' },
-  { label: 'Payroll Parameters', icon: 'bx-wallet', route: '/payroll' },
-  { label: 'Paychecks', icon: 'bx-money', route: '/hr/paychecks' },
+  { label: 'Payroll', icon: 'bx-dollar-circle', route: '/hr/payroll' },
   { label: 'Time Off', icon: 'bx-calendar-event', route: '/hr/time-off' },
   { label: 'Attendance', icon: 'bx-time-five', route: '/hr/attendance' },
   { label: 'Timesheets', icon: 'bx-spreadsheet', route: '/hr/timesheets' },
