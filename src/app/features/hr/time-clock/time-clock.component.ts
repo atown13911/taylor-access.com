@@ -14,27 +14,16 @@ import { AuthService } from '../../../core/services/auth.service';
       <div class="tc-header">
         <div>
           <h1><i class="bx bx-time-five"></i> Time Clock</h1>
-          <p class="tc-sub">Employee time tracking overview</p>
+          <p class="tc-sub">Employee hours overview</p>
         </div>
         <div class="tc-header-actions">
-          <div class="tc-filter-group">
-            <button class="tc-period-btn" [class.active]="periodFilter() === 'today'" (click)="periodFilter.set('today')">Today</button>
-            <button class="tc-period-btn" [class.active]="periodFilter() === 'week'" (click)="periodFilter.set('week')">This Week</button>
-            <button class="tc-period-btn" [class.active]="periodFilter() === 'month'" (click)="periodFilter.set('month')">This Month</button>
-            <button class="tc-period-btn" [class.active]="periodFilter() === 'all'" (click)="periodFilter.set('all')">All Time</button>
-          </div>
+          <select class="tc-filter" [ngModel]="selectedWeek()" (ngModelChange)="selectedWeek.set($event)">
+            @for (w of weekOptions; track w.value) {
+              <option [value]="w.value">{{ w.label }}</option>
+            }
+          </select>
           <button class="tc-btn" (click)="loadSessions(); loadSummary()"><i class="bx bx-refresh"></i> Refresh</button>
         </div>
-      </div>
-
-      <!-- Current Session -->
-      <div class="tc-current">
-        <div class="tc-status-dot active"></div>
-        <div class="tc-status-text">
-          <span class="tc-status-label">Currently Active</span>
-          <span class="tc-status-since">Session started {{ currentSessionTime() }}</span>
-        </div>
-        <div class="tc-live-clock">{{ liveTimer() }}</div>
       </div>
 
       <!-- Summary Cards -->
@@ -42,29 +31,22 @@ import { AuthService } from '../../../core/services/auth.service';
         <div class="tc-stat">
           <i class="bx bx-group"></i>
           <div class="tc-stat-info">
-            <span class="tc-stat-val">{{ employeeRoster().length }}</span>
-            <span class="tc-stat-lbl">Employees</span>
+            <span class="tc-stat-val">{{ filteredRoster().length }}</span>
+            <span class="tc-stat-lbl">Active Employees</span>
           </div>
         </div>
         <div class="tc-stat">
           <i class="bx bx-user-check"></i>
           <div class="tc-stat-info">
             <span class="tc-stat-val">{{ activeCount() }}</span>
-            <span class="tc-stat-lbl">Currently Active</span>
+            <span class="tc-stat-lbl">Online Now</span>
           </div>
         </div>
         <div class="tc-stat">
-          <i class="bx bx-calendar-week"></i>
+          <i class="bx bx-time"></i>
           <div class="tc-stat-info">
             <span class="tc-stat-val">{{ totalHoursFiltered() }}h</span>
-            <span class="tc-stat-lbl">Total Hours ({{ periodFilter() }})</span>
-          </div>
-        </div>
-        <div class="tc-stat">
-          <i class="bx bx-log-in-circle"></i>
-          <div class="tc-stat-info">
-            <span class="tc-stat-val">{{ summary().sessionsToday }}</span>
-            <span class="tc-stat-lbl">Sessions Today</span>
+            <span class="tc-stat-lbl">Total Hours</span>
           </div>
         </div>
       </div>
@@ -82,9 +64,7 @@ import { AuthService } from '../../../core/services/auth.service';
             <tr>
               <th>Employee</th>
               <th>Status</th>
-              <th>Today</th>
-              <th>This Week</th>
-              <th>This Month</th>
+              <th class="tc-hours-col">Total Hours</th>
               <th>Sessions</th>
               <th>Last Active</th>
             </tr>
@@ -106,14 +86,12 @@ import { AuthService } from '../../../core/services/auth.service';
                     <span class="tc-inactive-badge">Offline</span>
                   }
                 </td>
-                <td><span class="tc-hours">{{ emp.hoursToday }}h</span></td>
-                <td><span class="tc-hours">{{ emp.hoursWeek }}h</span></td>
-                <td><span class="tc-hours">{{ emp.hoursMonth }}h</span></td>
+                <td class="tc-hours-col"><span class="tc-hours">{{ getHoursForPeriod(emp) }}h</span></td>
                 <td><span class="tc-sessions-count">{{ emp.sessionCount }}</span></td>
                 <td class="tc-last-active">{{ emp.lastActive ? formatDateTime(emp.lastActive) : '—' }}</td>
               </tr>
             } @empty {
-              <tr><td colspan="7" class="tc-empty">No employee data found</td></tr>
+              <tr><td colspan="5" class="tc-empty">No active employees found</td></tr>
             }
           </tbody>
         </table>
@@ -252,6 +230,21 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   private sessionStart = new Date();
   periodFilter = signal<'today' | 'week' | 'month' | 'all'>('week');
   searchTerm = signal('');
+  selectedWeek = signal('current');
+
+  weekOptions = (() => {
+    const weeks: { value: string; label: string }[] = [{ value: 'current', label: 'Current Week' }];
+    const now = new Date();
+    for (let i = 1; i <= 12; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (i * 7));
+      const sun = new Date(d); sun.setDate(sun.getDate() - sun.getDay());
+      const sat = new Date(sun); sat.setDate(sat.getDate() + 6);
+      const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      weeks.push({ value: i.toString(), label: `Week of ${fmt(sun)} – ${fmt(sat)}` });
+    }
+    return weeks;
+  })();
 
   currentPage = signal(1);
   pageSize = 10;
@@ -273,13 +266,24 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     return pages;
   });
 
+  private getWeekRange(): { start: Date; end: Date } {
+    const now = new Date();
+    const weekVal = this.selectedWeek();
+    const weeksAgo = weekVal === 'current' ? 0 : parseInt(weekVal) || 0;
+    const ref = new Date(now);
+    ref.setDate(ref.getDate() - (weeksAgo * 7));
+    const start = new Date(ref);
+    start.setDate(start.getDate() - start.getDay());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start, end };
+  }
+
   employeeRoster = computed(() => {
     const allSessions = this.sessions();
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const _ = this.selectedWeek();
+    const { start, end } = this.getWeekRange();
 
     const userMap = new Map<string, any>();
 
@@ -287,14 +291,14 @@ export class TimeClockComponent implements OnInit, OnDestroy {
       const key = s.userId?.toString() || s.userEmail || s.userName;
       if (!key) continue;
 
+      const loginTime = new Date(s.loginTime);
+
       if (!userMap.has(key)) {
         userMap.set(key, {
           userId: s.userId,
           userName: s.userName || 'Unknown',
           userEmail: s.userEmail || '',
-          hoursToday: 0,
-          hoursWeek: 0,
-          hoursMonth: 0,
+          totalHours: 0,
           sessionCount: 0,
           isActive: false,
           lastActive: null
@@ -302,25 +306,20 @@ export class TimeClockComponent implements OnInit, OnDestroy {
       }
 
       const emp = userMap.get(key)!;
-      const loginTime = new Date(s.loginTime);
-      const mins = s.durationMinutes || 0;
-      const hours = Math.round((mins / 60) * 10) / 10;
-
-      emp.sessionCount++;
       if (!s.logoutTime) emp.isActive = true;
       if (!emp.lastActive || loginTime > new Date(emp.lastActive)) emp.lastActive = s.loginTime;
 
-      if (loginTime >= todayStart) emp.hoursToday += hours;
-      if (loginTime >= weekStart) emp.hoursWeek += hours;
-      if (loginTime >= monthStart) emp.hoursMonth += hours;
+      if (loginTime >= start && loginTime < end) {
+        const mins = s.durationMinutes || 0;
+        emp.totalHours += mins / 60;
+        emp.sessionCount++;
+      }
     }
 
     return Array.from(userMap.values()).map(e => ({
       ...e,
-      hoursToday: Math.round(e.hoursToday * 10) / 10,
-      hoursWeek: Math.round(e.hoursWeek * 10) / 10,
-      hoursMonth: Math.round(e.hoursMonth * 10) / 10
-    })).sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0) || b.hoursWeek - a.hoursWeek);
+      totalHours: Math.round(e.totalHours * 10) / 10
+    })).sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0) || b.totalHours - a.totalHours);
   });
 
   filteredRoster = computed(() => {
@@ -338,17 +337,12 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   activeCount = computed(() => this.employeeRoster().filter(e => e.isActive).length);
 
   totalHoursFiltered = computed(() => {
-    const period = this.periodFilter();
-    const roster = this.employeeRoster();
-    let total = 0;
-    for (const e of roster) {
-      if (period === 'today') total += e.hoursToday;
-      else if (period === 'week') total += e.hoursWeek;
-      else if (period === 'month') total += e.hoursMonth;
-      else total += e.hoursMonth;
-    }
-    return Math.round(total * 10) / 10;
+    return Math.round(this.employeeRoster().reduce((sum, e) => sum + e.totalHours, 0) * 10) / 10;
   });
+
+  getHoursForPeriod(emp: any): number {
+    return emp.totalHours;
+  }
 
   ngOnInit(): void {
     this.loadSessions();
