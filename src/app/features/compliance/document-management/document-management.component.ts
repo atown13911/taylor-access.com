@@ -86,6 +86,46 @@ export class DocumentManagementComponent implements OnInit {
 
   summary = signal<any>({ totalDocuments: 0, expiring: 0, expired: 0, data: [] });
 
+  historicalDocs = computed(() => {
+    let docs = this.documents();
+    const tab = this.activeTab();
+    const search = this.driverSearch().toLowerCase();
+    const status = this.statusFilter();
+    const year = this.yearFilter();
+
+    if (tab && tab !== 'all' && tab !== 'required') {
+      docs = docs.filter(d => d.category === tab);
+    }
+    if (search) {
+      docs = docs.filter(d =>
+        (d.driverName || '').toLowerCase().includes(search) ||
+        (d.documentName || '').toLowerCase().includes(search) ||
+        (d.documentNumber || '').toLowerCase().includes(search) ||
+        (d.category || '').toLowerCase().includes(search) ||
+        (d.subCategory || '').toLowerCase().includes(search)
+      );
+    }
+    if (status) {
+      docs = docs.filter(d => d.status === status);
+    }
+    if (year) {
+      docs = docs.filter(d => {
+        const date = d.issueDate || d.createdAt || '';
+        return date && new Date(date).getFullYear().toString() === year;
+      });
+    }
+    return docs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  });
+
+  getCategoryLabel(cat: string): string {
+    const found = this.categories.find(c => c.key === cat);
+    return found?.label || cat || 'Other';
+  }
+
+  getCategorySubcategories(catKey: string): { value: string; label: string }[] {
+    return this.categories.find(c => c.key === catKey)?.subcategories || [];
+  }
+
   readonly categories: DocCategory[] = [
     { key: 'required', label: 'Required', icon: 'bx-check-shield', subcategories: [
       { value: 'cdl_license', label: 'CDL / License' },

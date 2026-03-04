@@ -2,10 +2,10 @@
   <header class="page-header">
     <div class="header-left">
       <h1><i class='bx bx-shield-alt-2'></i> DOT & Compliance Documents</h1>
-      <p class="subtitle">Upload, track, and manage all driver compliance documents</p>
+      <p class="subtitle">Historical listing of all driver compliance documents</p>
     </div>
     <div class="header-actions">
-      <select class="driver-filter" [ngModel]="selectedDriverId()" (ngModelChange)="selectedDriverId.set($event)">
+      <select class="driver-filter" [ngModel]="selectedDriverId()" (ngModelChange)="selectedDriverId.set($event); loadDocuments()">
         <option value="">All Drivers</option>
         @for (driver of drivers(); track driver.id) {
           <option [value]="driver.id">{{ driver.name }}</option>
@@ -24,6 +24,11 @@
 
   <!-- Category Tabs -->
   <div class="category-tabs">
+    <button class="cat-tab" [class.active]="activeTab() === 'all'" (click)="activeTab.set('all')">
+      <i class='bx bx-list-ul'></i>
+      <span class="cat-label">All</span>
+      <span class="cat-count">{{ documents().length }}</span>
+    </button>
     @for (cat of categories; track cat.key) {
       <button class="cat-tab" [class.active]="activeTab() === cat.key" (click)="activeTab.set(cat.key)">
         <i class='bx' [ngClass]="cat.icon"></i>
@@ -35,41 +40,35 @@
     }
   </div>
 
-  <!-- Driver Roster Table per Category -->
+  <!-- Search & Filters -->
+  <div class="roster-filters">
+    <div class="filter-search">
+      <i class='bx bx-search'></i>
+      <input type="text" placeholder="Search documents..." [ngModel]="driverSearch()" (ngModelChange)="driverSearch.set($event)">
+    </div>
+    <select class="filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="expiring">Expiring</option>
+      <option value="expired">Expired</option>
+    </select>
+    <select class="filter-select" [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)">
+      <option value="">All Years</option>
+      @for (y of availableYears; track y) {
+        <option [value]="y">{{ y }}</option>
+      }
+    </select>
+  </div>
+
+  <!-- Document Listing Table -->
   <div class="doc-content">
-    <div class="doc-content-header">
-      <h3><i class='bx' [ngClass]="currentCategory()?.icon || 'bx-file'"></i> {{ currentCategory()?.label }} — Driver Roster</h3>
-    </div>
-
-    <!-- Search & Filters -->
-    <div class="roster-filters">
-      <div class="filter-search">
-        <i class='bx bx-search'></i>
-        <input type="text" placeholder="Search drivers..." [ngModel]="driverSearch()" (ngModelChange)="driverSearch.set($event)">
-      </div>
-      <select class="filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
-        <option value="">All Statuses</option>
-        <option value="complete">Complete</option>
-        <option value="partial">Partial</option>
-        <option value="expiring">Expiring</option>
-        <option value="expired">Expired</option>
-        <option value="missing">Missing</option>
-      </select>
-      <select class="filter-select" [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)">
-        <option value="">All Years</option>
-        @for (y of availableYears; track y) {
-          <option [value]="y">{{ y }}</option>
-        }
-      </select>
-    </div>
-
     @if (loading()) {
       <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i> Loading...</div>
-    } @else if (drivers().length === 0) {
+    } @else if (historicalDocs().length === 0) {
       <div class="empty-state">
-        <i class='bx bx-group'></i>
-        <h4>No drivers found</h4>
-        <p>Add drivers to begin tracking compliance documents</p>
+        <i class='bx bx-file'></i>
+        <h4>No documents found</h4>
+        <p>Upload documents to start building compliance history</p>
       </div>
     } @else {
       <div class="doc-table-wrap">
@@ -77,278 +76,143 @@
           <thead>
             <tr>
               <th>Driver</th>
-              @for (sub of currentCategory()?.subcategories || []; track sub.value) {
-                <th class="sub-col">{{ sub.label }}</th>
-              }
-              <th>Overall</th>
-              <th class="actions-col">Actions</th>
+              <th>Document</th>
+              <th>Category</th>
+              <th>Type</th>
+              <th>Doc #</th>
+              <th>Issued</th>
+              <th>Expires</th>
+              <th>Status</th>
+              <th>Uploaded</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            @for (driver of filteredRosterDrivers(); track driver.id) {
-              <tr [class.selected]="detailDriver()?.id === driver.id">
-                <td class="driver-cell clickable" (click)="selectDriverDetail(driver)">
-                  <div class="driver-avatar">{{ driver.name?.charAt(0) || '?' }}</div>
-                  <div class="driver-info">
-                    <strong>{{ driver.name }}</strong>
-                    <span class="driver-sub">{{ driver.phone || driver.email || '' }}</span>
+            @for (doc of historicalDocs(); track doc.id) {
+              <tr [class.expired-row]="doc.status === 'expired'" [class.expiring-row]="doc.status === 'expiring'">
+                <td class="driver-cell">
+                  <div class="driver-avatar">{{ (doc.driverName || '?').charAt(0) }}</div>
+                  <strong>{{ doc.driverName || 'Unknown' }}</strong>
+                </td>
+                <td>
+                  <div class="doc-name-cell">
+                    <i class='bx bx-file'></i>
+                    <span>{{ doc.documentName }}</span>
                   </div>
                 </td>
-                @for (sub of currentCategory()?.subcategories || []; track sub.value) {
-                  <td class="status-cell" (click)="openSubDocs(driver, sub)">
-                    @if (getDriverSubDoc(driver.id, sub.value); as doc) {
-                      <span class="dot" [class]="'dot-' + doc.status" [title]="doc.status + (doc.expiryDate ? ' - Exp: ' + formatDate(doc.expiryDate) : '')"></span>
-                    } @else {
-                      <span class="dot dot-gray" title="Not on file"></span>
-                    }
-                  </td>
-                }
+                <td><span class="category-badge">{{ getCategoryLabel(doc.category) }}</span></td>
+                <td><span class="sub-badge">{{ getSubCategoryLabel(doc.category, doc.subCategory) }}</span></td>
+                <td class="mono">{{ doc.documentNumber || '—' }}</td>
+                <td>{{ formatDate(doc.issueDate) }}</td>
                 <td>
-                  <span class="overall-badge" [class]="getDriverOverallStatus(driver.id)">
-                    {{ getDriverOverallLabel(driver.id) }}
-                  </span>
+                  @if (doc.expiryDate) {
+                    <span [class.text-red]="doc.status === 'expired'" [class.text-yellow]="doc.status === 'expiring'">
+                      {{ formatDate(doc.expiryDate) }}
+                    </span>
+                  } @else {
+                    <span class="text-muted">—</span>
+                  }
                 </td>
-                <td class="actions-col">
-                  <button class="icon-btn" title="Upload Document" (click)="openUploadForDriver(driver)">
-                    <i class='bx bx-upload'></i>
-                  </button>
+                <td><span class="status-badge" [class]="doc.status">{{ doc.status }}</span></td>
+                <td class="text-muted">{{ formatDate(doc.createdAt) }}</td>
+                <td class="actions-cell">
+                  @if (doc.hasFile) {
+                    <button class="icon-btn" title="Preview" (click)="viewDoc(doc)"><i class='bx bx-show'></i></button>
+                    <button class="icon-btn" title="Download" (click)="downloadDoc(doc)"><i class='bx bx-download'></i></button>
+                  }
+                  <button class="icon-btn" title="Edit" (click)="editDocument(doc)"><i class='bx bx-edit'></i></button>
+                  <button class="icon-btn danger" title="Delete" (click)="deleteDocument(doc)"><i class='bx bx-trash'></i></button>
                 </td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-
-      <!-- Uploaded Documents for Selected Category -->
-      @if (filteredDocs().length > 0) {
-        <div class="doc-content-header" style="margin-top: 24px;">
-          <h3><i class='bx bx-file'></i> Uploaded Files — {{ currentCategory()?.label }}</h3>
-        </div>
-        <div class="doc-table-wrap">
-          <table class="doc-table">
-            <thead>
-              <tr>
-                <th>Driver</th>
-                <th>Document</th>
-                <th>Type</th>
-                <th>Doc #</th>
-                <th>Issued</th>
-                <th>Expires</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (doc of filteredDocs(); track doc.id) {
-                <tr>
-                  <td><strong>{{ doc.driverName }}</strong></td>
-                  <td>{{ doc.documentName }}</td>
-                  <td><span class="sub-badge">{{ getSubCategoryLabel(doc.category, doc.subCategory) }}</span></td>
-                  <td class="mono">{{ doc.documentNumber || '—' }}</td>
-                  <td>{{ formatDate(doc.issueDate) }}</td>
-                  <td>{{ formatDate(doc.expiryDate) }}</td>
-                  <td><span class="status-badge" [class]="doc.status">{{ doc.status }}</span></td>
-                  <td class="actions-cell">
-                    @if (doc.hasFile) {
-                      <button class="icon-btn" title="Preview" (click)="viewDoc(doc)"><i class='bx bx-show'></i></button>
-                      <button class="icon-btn" title="Download" (click)="downloadDoc(doc)"><i class='bx bx-download'></i></button>
-                    }
-                    <button class="icon-btn" title="Edit" (click)="editDocument(doc)"><i class='bx bx-edit'></i></button>
-                    <button class="icon-btn danger" title="Delete" (click)="deleteDocument(doc)"><i class='bx bx-trash'></i></button>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      }
     }
   </div>
-</div>
 
-<!-- Driver Details Slide-out Panel -->
-@if (detailDriver()) {
-  <div class="panel-overlay" (click)="detailDriver.set(null)"></div>
-  <aside class="details-panel">
-    <div class="panel-header">
-      <h2>Driver Details</h2>
-      <button class="close-btn" (click)="detailDriver.set(null)"><i class='bx bx-x'></i></button>
-    </div>
-
-    <div class="panel-avatar">
-      <div class="big-avatar">{{ detailDriver()!.name?.charAt(0) || '?' }}</div>
-      <h3>{{ detailDriver()!.name }}</h3>
-      <span class="panel-status" [class]="'status-' + (detailDriver()!.status || 'active')">{{ detailDriver()!.status || 'active' }}</span>
-    </div>
-
-    <div class="panel-section">
-      <h4>Contact</h4>
-      <div class="detail-row"><span class="label">Phone</span><span>{{ detailDriver()!.phone || '—' }}</span></div>
-      <div class="detail-row"><span class="label">Email</span><span>{{ detailDriver()!.email || '—' }}</span></div>
-    </div>
-
-    <div class="panel-section">
-      <h4>License</h4>
-      <div class="detail-row"><span class="label">Number</span><span class="mono">{{ detailDriver()!.licenseNumber || '—' }}</span></div>
-      <div class="detail-row"><span class="label">State</span><span>{{ detailDriver()!.licenseState || '—' }}</span></div>
-      <div class="detail-row"><span class="label">Expires</span><span>{{ detailDriver()!.licenseExpiry ? formatDate(detailDriver()!.licenseExpiry) : '—' }}</span></div>
-      <div class="detail-row"><span class="label">Class</span><span>{{ detailDriver()!.licenseClass || '—' }}</span></div>
-    </div>
-
-    <div class="panel-section">
-      <h4>Employment</h4>
-      <div class="detail-row"><span class="label">Type</span><span>{{ detailDriver()!.driverType || '—' }}</span></div>
-      <div class="detail-row"><span class="label">Hire Date</span><span>{{ detailDriver()!.hireDate ? formatDate(detailDriver()!.hireDate) : '—' }}</span></div>
-      <div class="detail-row"><span class="label">Fleet</span><span>{{ detailDriver()!.fleet?.name || '—' }}</span></div>
-    </div>
-
-    <div class="panel-section">
-      <h4>Compliance Summary</h4>
-      @for (item of complianceItems; track item.key) {
-        <div class="compliance-row">
-          <span class="dot" [class]="getComplianceDotClass(detailDriver()!, item.key)"></span>
-          <span class="comp-label">{{ item.label }}</span>
+  <!-- Upload Modal -->
+  @if (showUploadModal()) {
+    <div class="modal-overlay" (click)="closeUploadModal()">
+      <div class="upload-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class='bx bx-upload'></i> {{ editingDoc() ? 'Edit' : 'Upload' }} Document</h2>
+          <button class="close-btn" (click)="closeUploadModal()"><i class='bx bx-x'></i></button>
         </div>
-      }
-    </div>
-  </aside>
-}
-
-<!-- Sub-Category Documents Popup -->
-@if (subDocPopup()) {
-  <div class="modal-overlay" (click)="closeSubDocPopup()">
-    <div class="subdoc-modal" (click)="$event.stopPropagation()">
-      <div class="subdoc-header">
-        <div>
-          <h3>{{ subDocPopup()!.sub.label }}</h3>
-          <span class="subdoc-driver">{{ subDocPopup()!.driver.name }}</span>
-        </div>
-        <button class="close-btn" (click)="closeSubDocPopup()"><i class='bx bx-x'></i></button>
-      </div>
-
-      <div class="subdoc-body">
-        @if (subDocList().length === 0) {
-          <div class="subdoc-empty">
-            <i class='bx bx-file'></i>
-            <p>No documents uploaded</p>
-            <button class="subdoc-upload-btn" (click)="openSubDetail(subDocPopup()!.driver, subDocPopup()!.sub); closeSubDocPopup()">
-              <i class='bx bx-upload'></i> Upload Document
-            </button>
-          </div>
-        } @else {
-          @for (doc of subDocList(); track doc.id) {
-            <div class="subdoc-item" (click)="viewSubDoc(doc)">
-              <div class="subdoc-icon"><i class='bx bx-file-blank'></i></div>
-              <div class="subdoc-info">
-                <strong>{{ doc.documentName || doc.fileName || 'Document' }}</strong>
-                <span class="subdoc-meta">
-                  {{ doc.documentNumber ? '#' + doc.documentNumber + ' · ' : '' }}
-                  {{ doc.issueDate ? formatDate(doc.issueDate) : '' }}
-                  {{ doc.createdAt ? ' · Uploaded ' + formatDate(doc.createdAt) : '' }}
-                </span>
-                @if (doc.expiryDate) {
-                  <span class="subdoc-expiry" [class.expiring]="isExpiringSoon(doc.expiryDate)" [class.expired]="isExpired(doc.expiryDate)">
-                    Exp: {{ formatDate(doc.expiryDate) }}
-                  </span>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Driver</label>
+              <select [(ngModel)]="uploadForm.driverId">
+                <option value="">Select Driver</option>
+                @for (driver of drivers(); track driver.id) {
+                  <option [value]="driver.id">{{ driver.name }}</option>
                 }
-              </div>
-              <span class="subdoc-status" [class]="doc.status || 'active'">{{ doc.status || 'active' }}</span>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select [(ngModel)]="uploadForm.category" (ngModelChange)="uploadForm.subCategory = ''">
+                @for (cat of categories; track cat.key) {
+                  <option [value]="cat.key">{{ cat.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Type</label>
+              <select [(ngModel)]="uploadForm.subCategory">
+                <option value="">Select type...</option>
+                @for (sub of getCategorySubcategories(uploadForm.category); track sub.value) {
+                  <option [value]="sub.value">{{ sub.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Document Name</label>
+              <input type="text" [(ngModel)]="uploadForm.documentName" placeholder="e.g., CDL Class A License">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Document Number</label>
+              <input type="text" [(ngModel)]="uploadForm.documentNumber" placeholder="Optional">
+            </div>
+            <div class="form-group">
+              <label>Issue Date</label>
+              <input type="date" [(ngModel)]="uploadForm.issueDate">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Expiry Date</label>
+              <input type="date" [(ngModel)]="uploadForm.expiryDate">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <input type="text" [(ngModel)]="uploadForm.notes" placeholder="Optional notes">
+            </div>
+          </div>
+          @if (!editingDoc()) {
+            <div class="form-group">
+              <label>File</label>
+              <input type="file" (change)="onFileChange($event)" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
             </div>
           }
-        }
-      </div>
-
-      <div class="subdoc-footer">
-        <button class="subdoc-upload-btn" (click)="openSubDetail(subDocPopup()!.driver, subDocPopup()!.sub); closeSubDocPopup()">
-          <i class='bx bx-upload'></i> Upload New
-        </button>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeUploadModal()">Cancel</button>
+          <button class="btn btn-primary" (click)="saveDocument()" [disabled]="saving()">
+            @if (saving()) {
+              <i class='bx bx-loader-alt bx-spin'></i> Saving...
+            } @else {
+              <i class='bx' [ngClass]="editingDoc() ? 'bx-check' : 'bx-upload'"></i>
+              {{ editingDoc() ? 'Update' : 'Upload' }}
+            }
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-}
-
-<!-- Upload / Edit Modal -->
-@if (showUploadModal()) {
-  <div class="modal-overlay" (click)="closeUploadModal()">
-    <div class="modal" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>{{ editingDoc() ? 'Edit Document' : 'Upload Document' }}</h3>
-        <button class="close-btn" (click)="closeUploadModal()"><i class='bx bx-x'></i></button>
-      </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group">
-            <label>Driver *</label>
-            <select [(ngModel)]="uploadForm.driverId">
-              <option value="">— Select Driver —</option>
-              @for (driver of drivers(); track driver.id) {
-                <option [value]="driver.id">{{ driver.name }}</option>
-              }
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Category</label>
-            <select [(ngModel)]="uploadForm.category">
-              @for (cat of categories; track cat.key) {
-                <option [value]="cat.key">{{ cat.label }}</option>
-              }
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Type / Sub-Category</label>
-            <select [(ngModel)]="uploadForm.subCategory">
-              <option value="">— Select Type —</option>
-              @for (sub of currentCategory()?.subcategories || []; track sub.value) {
-                <option [value]="sub.value">{{ sub.label }}</option>
-              }
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Document Name *</label>
-            <input type="text" [(ngModel)]="uploadForm.documentName" placeholder="e.g., CDL Class A License">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Document Number</label>
-            <input type="text" [(ngModel)]="uploadForm.documentNumber" placeholder="License #, cert #, etc.">
-          </div>
-          <div class="form-group">
-            <label>Issue Date</label>
-            <input type="date" [(ngModel)]="uploadForm.issueDate">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Expiry Date</label>
-            <input type="date" [(ngModel)]="uploadForm.expiryDate">
-          </div>
-          <div class="form-group reminder-check">
-            <label class="checkbox-label">
-              <input type="checkbox" [(ngModel)]="uploadForm.remindExpiry"> Send expiry reminders
-            </label>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Notes</label>
-          <textarea [(ngModel)]="uploadForm.notes" rows="2" placeholder="Additional notes..."></textarea>
-        </div>
-        <div class="form-group">
-          <label>Upload File (PDF, JPG, PNG)</label>
-          <input type="file" (change)="onFileChange($event)" accept=".pdf,.jpg,.jpeg,.png">
-          @if (editingDoc()?.fileName) {
-            <span class="existing-file"><i class='bx bx-file'></i> Current: {{ editingDoc()!.fileName }}</span>
-          }
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" (click)="closeUploadModal()">Cancel</button>
-        <button class="btn btn-primary" (click)="saveDocument()" [disabled]="saving()">
-          @if (saving()) { <i class='bx bx-loader-alt bx-spin'></i> Saving... } @else { <i class='bx bx-check'></i> {{ editingDoc() ? 'Save' : 'Upload' }} }
-        </button>
-      </div>
-    </div>
-  </div>
-}
+  }
+</div>
