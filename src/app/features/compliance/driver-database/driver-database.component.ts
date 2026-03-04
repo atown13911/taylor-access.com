@@ -83,7 +83,8 @@ export class DriverDatabaseComponent implements OnInit {
 
     for (const driver of drivers) {
       for (const item of requiredItems) {
-        const doc = this.getDocForDriver(driver.id, item);
+        const driverDocs: any[] = driver._docs || [];
+        const doc = this.findDocInList(driverDocs, item);
         if (doc) {
           uploaded++;
           if (doc.status === 'expired') expired++;
