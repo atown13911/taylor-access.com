@@ -282,11 +282,28 @@ export class TimeClockComponent implements OnInit, OnDestroy {
 
   employeeRoster = computed(() => {
     const allSessions = this.sessions();
+    const allUsers = this.users();
     const _ = this.selectedWeek();
     const { start, end } = this.getWeekRange();
 
     const userMap = new Map<string, any>();
 
+    // Add all roster employees first
+    for (const u of allUsers) {
+      const key = u.id?.toString();
+      if (!key) continue;
+      userMap.set(key, {
+        userId: u.id,
+        userName: u.name || u.email || 'Unknown',
+        userEmail: u.email || '',
+        totalHours: 0,
+        sessionCount: 0,
+        isActive: false,
+        lastActive: null
+      });
+    }
+
+    // Layer session data on top
     for (const s of allSessions) {
       const key = s.userId?.toString() || s.userEmail || s.userName;
       if (!key) continue;
