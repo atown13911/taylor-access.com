@@ -602,6 +602,7 @@ export class DriverDatabaseComponent implements OnInit {
         }
         return 'none';
       case 'permits':
+        if (driver.twiccExpiry) return this.getExpirationStatus(driver.twiccExpiry);
         if (driver.permitsOnFile) return 'compliant';
         return 'none';
       case 'ifta':
@@ -614,13 +615,18 @@ export class DriverDatabaseComponent implements OnInit {
         if (driver.violations && driver.violations > 0) return 'expired';
         if (driver.violationsChecked) return 'compliant';
         return 'none';
+      case 'i9':
+      case 'w9':
+      case 'directDeposit':
+      case 'deduction':
+        return 'none';
       default:
         return 'none';
     }
   }
 
   getOverallStatus(driver: any): string {
-    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations', 'i9', 'w9', 'directDeposit', 'deduction'];
     let hasExpired = false;
     let hasExpiring = false;
     let compliantCount = 0;

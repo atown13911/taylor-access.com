@@ -306,6 +306,10 @@
               <label>TWIC Card Number</label>
               <input type="text" [ngModel]="driverForm().twiccCardNumber" (ngModelChange)="updateField('twiccCardNumber', $event)" placeholder="TWIC card number">
             </div>
+            <div class="form-group">
+              <label>TWIC Expiration Date</label>
+              <input type="date" [ngModel]="driverForm().twiccExpiry" (ngModelChange)="updateField('twiccExpiry', $event)">
+            </div>
           </div>
         </div>
 

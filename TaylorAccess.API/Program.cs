@@ -257,6 +257,37 @@ using (var scope = app.Services.CreateScope())
         );
     ");
 
+    // Ensure AppRoles table and IsSuperAdmin column exist (handles existing databases)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""AppRoles"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""AppClientId"" VARCHAR(100) NOT NULL,
+                ""Name"" VARCHAR(100) NOT NULL,
+                ""Description"" TEXT,
+                ""Permissions"" TEXT NOT NULL DEFAULT '[]',
+                ""IsSystem"" BOOLEAN NOT NULL DEFAULT FALSE,
+                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AppRoles_AppClientId_Name"" ON ""AppRoles"" (""AppClientId"", ""Name"");
+        ");
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""AppRoleAssignments"" ADD COLUMN IF NOT EXISTS ""IsSuperAdmin"" BOOLEAN NOT NULL DEFAULT FALSE;
+        ");
+        await context.Database.ExecuteSqlRawAsync(@"
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccCardNumber"" VARCHAR(50);
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccExpiry"" DATE;
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerName"" VARCHAR(100);
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerPhone"" VARCHAR(20);
+            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerCompany"" VARCHAR(100);
+        ");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Schema update note: {ex.Message}");
+    }
+
     await roleService.SeedDefaultRolesAsync();
 
     if (!context.Users.Any())

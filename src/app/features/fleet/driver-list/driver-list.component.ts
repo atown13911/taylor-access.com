@@ -95,6 +95,7 @@ export class DriverListComponent implements OnInit {
     truckVin: '',
     truckTag: '',
     twiccCardNumber: '',
+    twiccExpiry: '',
     truckOwnerName: '',
     truckOwnerPhone: '',
     truckOwnerCompany: '',
@@ -246,6 +247,11 @@ export class DriverListComponent implements OnInit {
              this.isExpiringSoon(driver.medicalCardExpiry) ? 'dot-yellow' : 'dot-green';
     }
     if (key === 'employment' && driver.hireDate) return 'dot-green';
+
+    if (key === 'permits' && driver.twiccExpiry) {
+      return this.isExpired(driver.twiccExpiry) ? 'dot-red' :
+             this.isExpiringSoon(driver.twiccExpiry) ? 'dot-yellow' : 'dot-green';
+    }
 
     const doc = this.getPanelDoc(key);
     if (doc) {
@@ -708,6 +714,7 @@ export class DriverListComponent implements OnInit {
           truckVin: d.truckVin || '',
           truckTag: d.truckTag || '',
           twiccCardNumber: d.twiccCardNumber || '',
+          twiccExpiry: d.twiccExpiry ? d.twiccExpiry.split('T')[0] : '',
           truckOwnerName: d.truckOwnerName || '',
           truckOwnerPhone: d.truckOwnerPhone || '',
           truckOwnerCompany: d.truckOwnerCompany || '',
@@ -730,7 +737,7 @@ export class DriverListComponent implements OnInit {
           organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
           licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : '',
           dateOfBirth: '', address: '', city: '', state: '', zip: '', ssn: '',
-          truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '',
+          truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '',
           truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
           emergencyContact: '', emergencyPhone: '',
           hireDate: driver.hireDate ? driver.hireDate.split('T')[0] : '',
@@ -752,7 +759,7 @@ export class DriverListComponent implements OnInit {
       name: '', email: '', phone: '', organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
       address: '', city: '', state: '', zip: '', ssn: '',
-      truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '',
+      truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '',
       truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
       emergencyContact: '', emergencyPhone: '',
       hireDate: '', payRate: 0, payType: 'mile', driverType: 'company',
