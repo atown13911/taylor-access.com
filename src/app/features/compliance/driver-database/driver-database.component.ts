@@ -134,6 +134,7 @@ export class DriverDatabaseComponent implements OnInit {
   ngOnInit() {
     this.loadAllDocs();
     this.loadDrivers().then(() => {
+      this.loadDriverDocsForCompliance();
       // Check for driverId query param to auto-open profile
       this.route.queryParams.subscribe(params => {
         const driverId = params['driverId'];
@@ -445,43 +446,9 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getCompDoc(driver: any, key: string): any {
-    const sub = this.subMap[key];
-    const cat = this.catMap[key];
     const docs = this.driverDocs();
     if (docs.length === 0) return null;
-
-    // Try exact subcategory match first
-    let doc = docs.find(d => d.subCategory === sub);
-    if (doc) return doc;
-
-    // Try by category
-    if (cat) {
-      doc = docs.find(d => d.category === cat);
-      if (doc) return doc;
-    }
-
-    // Try by label match in document name
-    const labels: Record<string, string[]> = {
-      cdl: ['cdl', 'license', 'cdl_license'],
-      medical: ['medical', 'dot physical', 'medical_card'],
-      mvr: ['mvr', 'motor vehicle', 'annual_mvr'],
-      drug: ['drug', 'alcohol', 'drug_test', 'pre_employment'],
-      dqf: ['dqf', 'qualification', 'application'],
-      employment: ['employment', 'verification', 'offer_letter', 'w4', 'i9'],
-      training: ['training', 'entry_level'],
-      insurance: ['insurance', 'certificate_of_insurance'],
-      vehicle: ['vehicle', 'registration', 'inspection'],
-      permits: ['permit', 'twic', 'oversize'],
-      ifta: ['ifta', 'irp'],
-      safety: ['safety', 'award'],
-      violations: ['violation', 'accident']
-    };
-
-    const terms = labels[key] || [key];
-    return docs.find(d => {
-      const name = ((d.documentName || '') + ' ' + (d.documentType || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
-      return terms.some(t => name.includes(t));
-    }) || null;
+    return this.findDocInList(docs, key);
   }
 
   viewCompDoc(item: any): void {
@@ -514,7 +481,7 @@ export class DriverDatabaseComponent implements OnInit {
     if (status === 'expiring') return 'dot dot-yellow';
     if (status === 'expired') return 'dot dot-red';
 
-    // Check uploaded docs for any driver
+    // Check uploaded docs for this driver
     const doc = this.getDocForDriver(driver.id, item);
     if (doc) {
       if (doc.expiryDate) {
@@ -527,33 +494,80 @@ export class DriverDatabaseComponent implements OnInit {
       return 'dot dot-green';
     }
 
+    // Check driver-level cached docs (loaded when driver details are opened)
+    const driverDocs = this.driverDocsCache[driver.id?.toString()];
+    if (driverDocs) {
+      const cachedDoc = this.findDocInList(driverDocs, item);
+      if (cachedDoc) {
+        if (cachedDoc.expiryDate) {
+          const days = this.getDaysUntilExpiration(cachedDoc.expiryDate);
+          if (days < 0) return 'dot dot-red';
+          if (days < 30) return 'dot dot-yellow';
+        }
+        return 'dot dot-green';
+      }
+    }
+
     return 'dot dot-gray';
   }
 
-  private getDocForDriver(driverId: any, key: string): any {
+  private driverDocsCache: Record<string, any[]> = {};
+
+  loadDriverDocsForCompliance(): void {
+    const drivers = this.drivers();
+    for (const driver of drivers) {
+      const id = driver.id?.toString();
+      if (id && !this.driverDocsCache[id]) {
+        this.api.getDriverDocuments(driver.id).subscribe({
+          next: (res: any) => {
+            this.driverDocsCache[id] = res?.data || [];
+          }
+        });
+      }
+    }
+  }
+
+  private findDocInList(docs: any[], key: string): any {
+    if (!docs || docs.length === 0) return null;
+
     const sub = this.subMap[key];
     const cat = this.catMap[key];
+
+    let doc = docs.find((d: any) => d.subCategory === sub);
+    if (doc) return doc;
+    if (cat) { doc = docs.find((d: any) => d.category === cat); if (doc) return doc; }
+
+    const terms = this.docSearchTerms[key] || [key];
+    return docs.find((d: any) => {
+      const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
+      return terms.some((t: string) => name.includes(t));
+    }) || null;
+  }
+
+  private readonly docSearchTerms: Record<string, string[]> = {
+    cdl: ['cdl', 'license', 'cdl_license', 'cdl_endorsements'],
+    medical: ['medical', 'dot physical', 'medical_card', 'med cert', 'medical certificate'],
+    mvr: ['mvr', 'motor vehicle', 'annual_mvr', 'driving record'],
+    drug: ['drug', 'alcohol', 'drug_test', 'pre_employment', 'drug_tests', 'substance'],
+    dqf: ['dqf', 'qualification', 'driver qualification', 'application'],
+    employment: ['employment', 'verification', 'offer_letter', 'hire', 'employment_verification'],
+    training: ['training', 'entry_level', 'orientation', 'entry_level_driver'],
+    insurance: ['insurance', 'certificate_of_insurance', 'liability', 'policy'],
+    vehicle: ['vehicle', 'registration', 'inspection', 'truck'],
+    permits: ['permit', 'twic', 'oversize', 'hazmat'],
+    ifta: ['ifta', 'irp', 'fuel tax'],
+    safety: ['safety', 'award', 'safe_driver'],
+    violations: ['violation', 'accident', 'incident', 'moving_violation'],
+    i9: ['i-9', 'i9', 'i9_form', 'eligibility'],
+    w9: ['w-9', 'w9', 'w9_form', 'tax'],
+    directDeposit: ['direct deposit', 'direct_deposit', 'direct_deposit_form', 'bank'],
+    deduction: ['deduction', 'deduction_form', 'payroll deduction']
+  };
+
+  private getDocForDriver(driverId: any, key: string): any {
     const docs = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
     if (docs.length === 0) return null;
-
-    let doc = docs.find(d => d.subCategory === sub);
-    if (doc) return doc;
-    if (cat) { doc = docs.find(d => d.category === cat); if (doc) return doc; }
-
-    const labels: Record<string, string[]> = {
-      cdl: ['cdl', 'license'], medical: ['medical', 'dot physical'],
-      mvr: ['mvr', 'motor vehicle'], drug: ['drug', 'alcohol'],
-      dqf: ['dqf', 'qualification'], employment: ['employment', 'verification'],
-      training: ['training'], insurance: ['insurance'],
-      vehicle: ['vehicle', 'registration'], permits: ['permit', 'twic'],
-      ifta: ['ifta', 'irp'], safety: ['safety', 'award'], violations: ['violation', 'accident'],
-      i9: ['i-9', 'i9'], w9: ['w-9', 'w9'], directDeposit: ['direct deposit', 'direct_deposit'], deduction: ['deduction']
-    };
-    const terms = labels[key] || [key];
-    return docs.find(d => {
-      const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
-      return terms.some(t => name.includes(t));
-    }) || null;
+    return this.findDocInList(docs, key);
   }
 
   getComplianceTooltip(driver: any, item: string): string {
