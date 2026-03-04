@@ -481,7 +481,6 @@ export class DriverDatabaseComponent implements OnInit {
     if (status === 'expiring') return 'dot dot-yellow';
     if (status === 'expired') return 'dot dot-red';
 
-    // Check uploaded docs for this driver
     const doc = this.getDocForDriver(driver.id, item);
     if (doc) {
       if (doc.expiryDate) {
@@ -494,33 +493,27 @@ export class DriverDatabaseComponent implements OnInit {
       return 'dot dot-green';
     }
 
-    // Check driver-level cached docs (loaded when driver details are opened)
-    const driverDocs = this.driverDocsCache[driver.id?.toString()];
-    if (driverDocs) {
-      const cachedDoc = this.findDocInList(driverDocs, item);
-      if (cachedDoc) {
-        if (cachedDoc.expiryDate) {
-          const days = this.getDaysUntilExpiration(cachedDoc.expiryDate);
-          if (days < 0) return 'dot dot-red';
-          if (days < 30) return 'dot dot-yellow';
-        }
-        return 'dot dot-green';
-      }
-    }
-
     return 'dot dot-gray';
   }
 
-  private driverDocsCache: Record<string, any[]> = {};
+  private loadedDriverIds = new Set<string>();
 
   loadDriverDocsForCompliance(): void {
     const drivers = this.drivers();
     for (const driver of drivers) {
       const id = driver.id?.toString();
-      if (id && !this.driverDocsCache[id]) {
+      if (id && !this.loadedDriverIds.has(id)) {
+        this.loadedDriverIds.add(id);
         this.api.getDriverDocuments(driver.id).subscribe({
           next: (res: any) => {
-            this.driverDocsCache[id] = res?.data || [];
+            const newDocs = res?.data || [];
+            if (newDocs.length > 0) {
+              const existingIds = new Set(this.allDocs().map((d: any) => d.id));
+              const uniqueNew = newDocs.filter((d: any) => !existingIds.has(d.id));
+              if (uniqueNew.length > 0) {
+                this.allDocs.update(docs => [...docs, ...uniqueNew]);
+              }
+            }
           }
         });
       }
