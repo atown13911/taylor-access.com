@@ -41,6 +41,8 @@ export class DocumentManagementComponent implements OnInit {
   driverSearch = signal('');
   statusFilter = signal('');
   yearFilter = signal('');
+  currentPage = signal(1);
+  pageSize = signal(25);
 
   readonly availableYears = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
 
@@ -116,6 +118,32 @@ export class DocumentManagementComponent implements OnInit {
     }
     return docs.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   });
+
+  paginatedDocs = computed(() => {
+    const docs = this.historicalDocs();
+    const page = this.currentPage();
+    const size = this.pageSize();
+    const start = (page - 1) * size;
+    return docs.slice(start, start + size);
+  });
+
+  totalPages = computed(() => Math.ceil(this.historicalDocs().length / this.pageSize()) || 1);
+
+  goToPage(page: number): void {
+    if (page >= 1 && page <= this.totalPages()) {
+      this.currentPage.set(page);
+    }
+  }
+
+  getPageNumbers(): number[] {
+    const total = this.totalPages();
+    const current = this.currentPage();
+    const pages: number[] = [];
+    const start = Math.max(1, current - 2);
+    const end = Math.min(total, current + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  }
 
   getCategoryLabel(cat: string): string {
     const found = this.categories.find(c => c.key === cat);

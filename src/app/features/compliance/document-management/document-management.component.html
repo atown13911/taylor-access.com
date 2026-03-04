@@ -24,13 +24,13 @@
 
   <!-- Category Tabs -->
   <div class="category-tabs">
-    <button class="cat-tab" [class.active]="activeTab() === 'all'" (click)="activeTab.set('all')">
+    <button class="cat-tab" [class.active]="activeTab() === 'all'" (click)="activeTab.set('all'); currentPage.set(1)">
       <i class='bx bx-list-ul'></i>
       <span class="cat-label">All</span>
       <span class="cat-count">{{ documents().length }}</span>
     </button>
     @for (cat of categories; track cat.key) {
-      <button class="cat-tab" [class.active]="activeTab() === cat.key" (click)="activeTab.set(cat.key)">
+      <button class="cat-tab" [class.active]="activeTab() === cat.key" (click)="activeTab.set(cat.key); currentPage.set(1)">
         <i class='bx' [ngClass]="cat.icon"></i>
         <span class="cat-label">{{ cat.label }}</span>
         @if (tabDocCount(cat.key) > 0) {
@@ -44,15 +44,15 @@
   <div class="roster-filters">
     <div class="filter-search">
       <i class='bx bx-search'></i>
-      <input type="text" placeholder="Search documents..." [ngModel]="driverSearch()" (ngModelChange)="driverSearch.set($event)">
+      <input type="text" placeholder="Search documents..." [ngModel]="driverSearch()" (ngModelChange)="driverSearch.set($event); currentPage.set(1)">
     </div>
-    <select class="filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+    <select class="filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event); currentPage.set(1)">
       <option value="">All Statuses</option>
       <option value="active">Active</option>
       <option value="expiring">Expiring</option>
       <option value="expired">Expired</option>
     </select>
-    <select class="filter-select" [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event)">
+    <select class="filter-select" [ngModel]="yearFilter()" (ngModelChange)="yearFilter.set($event); currentPage.set(1)">
       <option value="">All Years</option>
       @for (y of availableYears; track y) {
         <option [value]="y">{{ y }}</option>
@@ -64,7 +64,7 @@
   <div class="doc-content">
     @if (loading()) {
       <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i> Loading...</div>
-    } @else if (historicalDocs().length === 0) {
+    } @else if (paginatedDocs().length === 0 && historicalDocs().length === 0) {
       <div class="empty-state">
         <i class='bx bx-file'></i>
         <h4>No documents found</h4>
@@ -88,7 +88,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (doc of historicalDocs(); track doc.id) {
+            @for (doc of paginatedDocs(); track doc.id) {
               <tr [class.expired-row]="doc.status === 'expired'" [class.expiring-row]="doc.status === 'expiring'">
                 <td class="driver-cell">
                   <div class="driver-avatar">{{ (doc.driverName || '?').charAt(0) }}</div>
@@ -127,6 +127,38 @@
             }
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-bar">
+        <div class="pagination-info">
+          Showing {{ ((currentPage() - 1) * pageSize()) + 1 }}–{{ currentPage() * pageSize() > historicalDocs().length ? historicalDocs().length : currentPage() * pageSize() }} of {{ historicalDocs().length }} documents
+        </div>
+        <div class="pagination-controls">
+          <button class="page-btn" [disabled]="currentPage() === 1" (click)="goToPage(1)" title="First">
+            <i class='bx bx-chevrons-left'></i>
+          </button>
+          <button class="page-btn" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)" title="Previous">
+            <i class='bx bx-chevron-left'></i>
+          </button>
+          @for (p of getPageNumbers(); track p) {
+            <button class="page-btn" [class.active]="p === currentPage()" (click)="goToPage(p)">{{ p }}</button>
+          }
+          <button class="page-btn" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)" title="Next">
+            <i class='bx bx-chevron-right'></i>
+          </button>
+          <button class="page-btn" [disabled]="currentPage() === totalPages()" (click)="goToPage(totalPages())" title="Last">
+            <i class='bx bx-chevrons-right'></i>
+          </button>
+        </div>
+        <div class="pagination-size">
+          <select [ngModel]="pageSize()" (ngModelChange)="pageSize.set(+$event); currentPage.set(1)">
+            <option [value]="10">10/page</option>
+            <option [value]="25">25/page</option>
+            <option [value]="50">50/page</option>
+            <option [value]="100">100/page</option>
+          </select>
+        </div>
       </div>
     }
   </div>
