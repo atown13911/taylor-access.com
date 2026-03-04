@@ -214,6 +214,18 @@ public class DriverDocumentsController : ControllerBase
         return File(bytes, doc.ContentType ?? "application/pdf", doc.FileName ?? "document");
     }
 
+    [HttpGet("debug-categories")]
+    public async Task<ActionResult> DebugCategories([FromQuery] int? driverId)
+    {
+        var query = _context.DriverDocuments.AsNoTracking().AsQueryable();
+        if (driverId.HasValue) query = query.Where(d => d.DriverId == driverId.Value);
+
+        var docs = await query.Select(d => new { d.Id, d.DriverId, d.DocumentName, d.Category, d.SubCategory, d.Status, d.ExpiryDate }).ToListAsync();
+        var categories = docs.GroupBy(d => d.Category).Select(g => new { category = g.Key, count = g.Count(), subs = g.Select(d => d.SubCategory).Distinct() });
+
+        return Ok(new { total = docs.Count, categories, docs });
+    }
+
     [HttpPost("fix-categories")]
     public async Task<ActionResult> FixDocumentCategories()
     {
