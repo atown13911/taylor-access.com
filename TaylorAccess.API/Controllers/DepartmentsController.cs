@@ -14,11 +14,13 @@ public class DepartmentsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public DepartmentsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public DepartmentsController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -245,6 +247,8 @@ public class DepartmentsController : ControllerBase
             }
         }
 
+        await _auditService.LogAsync("create", "Department", department.Id, $"Created department {department.Name}");
+
         return CreatedAtAction(nameof(GetDepartment), new { id = department.Id }, new { data = department });
     }
 
@@ -316,6 +320,8 @@ public class DepartmentsController : ControllerBase
         department.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "Department", department.Id, $"Updated department {department.Name}");
+
         return Ok(new { data = department });
     }
 
@@ -346,6 +352,8 @@ public class DepartmentsController : ControllerBase
 
         _context.Departments.Remove(department);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Department", department.Id, $"Deleted department {department.Name}");
 
         return Ok(new { deleted = true });
     }

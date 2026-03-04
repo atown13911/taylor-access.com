@@ -17,11 +17,13 @@ public class EmployeeRosterManagementController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public EmployeeRosterManagementController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public EmployeeRosterManagementController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -95,6 +97,8 @@ public class EmployeeRosterManagementController : ControllerBase
 
             await _context.SaveChangesAsync();
 
+            await _auditService.LogAsync("employee_data_updated", "EmployeeRoster", existing.Id, $"Updated employee data for user {existing.UserId}");
+
             return Ok(new { data = existing, message = "Employee data updated" });
         }
         else
@@ -108,6 +112,8 @@ public class EmployeeRosterManagementController : ControllerBase
 
             _context.EmployeeRosters.Add(employeeData);
             await _context.SaveChangesAsync();
+
+            await _auditService.LogAsync("employee_data_updated", "EmployeeRoster", employeeData.Id, $"Created employee data for user {employeeData.UserId}");
 
             return CreatedAtAction(nameof(GetEmployeeData), new { userId = employeeData.UserId }, new { data = employeeData });
         }
@@ -140,6 +146,8 @@ public class EmployeeRosterManagementController : ControllerBase
 
         employeeData.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("time_off_balance_updated", "EmployeeRoster", employeeData.Id, $"Updated time-off balance for user {userId}");
 
         return Ok(new { data = employeeData });
     }
@@ -174,6 +182,8 @@ public class EmployeeRosterManagementController : ControllerBase
 
         employeeData.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("compensation_updated", "EmployeeRoster", employeeData.Id, $"Updated compensation for user {userId}");
 
         return Ok(new { data = employeeData, message = "Compensation updated" });
     }
@@ -258,6 +268,8 @@ public class EmployeeRosterManagementController : ControllerBase
         staging.Status = "approved";
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("staging_approved", "EmployeeRoster", staging.Id, $"Approved staging import for {staging.Name}");
+
         return Ok(new { message = $"{staging.Name} activated as employee", userId = user.Id });
     }
 
@@ -302,6 +314,9 @@ public class EmployeeRosterManagementController : ControllerBase
             catch (Exception ex) { errors.Add($"{staging.Email}: {ex.Message}"); }
         }
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("staging_bulk_approved", "EmployeeRoster", null, $"Bulk approved {approved} staging imports, {errors.Count} failed");
+
         return Ok(new { approved, failed = errors.Count, errors = errors.Take(10) });
     }
 
@@ -312,6 +327,9 @@ public class EmployeeRosterManagementController : ControllerBase
         if (staging == null) return NotFound();
         _context.EmployeeStagingImports.Remove(staging);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("staging_rejected", "EmployeeRoster", staging.Id, $"Rejected staging import for {staging.Name}");
+
         return Ok(new { message = "Removed from staging" });
     }
 

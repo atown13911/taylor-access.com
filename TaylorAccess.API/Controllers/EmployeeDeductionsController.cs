@@ -14,11 +14,13 @@ public class EmployeeDeductionsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public EmployeeDeductionsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public EmployeeDeductionsController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -118,6 +120,8 @@ public class EmployeeDeductionsController : ControllerBase
         _context.EmployeeDeductions.Add(deduction);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "EmployeeDeduction", deduction.Id, $"Created deduction {deduction.Category} for user {deduction.UserId}");
+
         return Ok(new { data = deduction, message = "Deduction added" });
     }
 
@@ -139,6 +143,8 @@ public class EmployeeDeductionsController : ControllerBase
         deduction.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "EmployeeDeduction", deduction.Id, $"Updated deduction {deduction.Category} for user {deduction.UserId}");
+
         return Ok(new { data = deduction, message = "Deduction updated" });
     }
 
@@ -150,6 +156,8 @@ public class EmployeeDeductionsController : ControllerBase
 
         _context.EmployeeDeductions.Remove(deduction);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "EmployeeDeduction", deduction.Id, $"Deleted deduction {deduction.Category} for user {deduction.UserId}");
 
         return Ok(new { deleted = true });
     }

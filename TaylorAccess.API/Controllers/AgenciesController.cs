@@ -14,11 +14,13 @@ public class AgenciesController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public AgenciesController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public AgenciesController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -191,6 +193,8 @@ public class AgenciesController : ControllerBase
         _context.Agencies.Add(agency);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "Agency", agency.Id, $"Created agency {agency.Name}");
+
         return CreatedAtAction(nameof(GetAgency), new { id = agency.Id }, agency);
     }
 
@@ -262,6 +266,8 @@ public class AgenciesController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "Agency", agency.Id, $"Updated agency {agency.Name}");
+
         return Ok(agency);
     }
 
@@ -287,6 +293,8 @@ public class AgenciesController : ControllerBase
 
         _context.Agencies.Remove(agency);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Agency", agency.Id, $"Deleted agency {agency.Name}");
 
         return NoContent();
     }

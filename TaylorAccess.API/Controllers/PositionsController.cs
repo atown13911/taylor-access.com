@@ -14,11 +14,13 @@ public class PositionsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public PositionsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public PositionsController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -150,6 +152,8 @@ public class PositionsController : ControllerBase
         _context.Positions.Add(position);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "Position", position.Id, $"Created position {position.Title}");
+
         return CreatedAtAction(nameof(GetPosition), new { id = position.Id }, new { data = position });
     }
 
@@ -191,6 +195,8 @@ public class PositionsController : ControllerBase
         position.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "Position", position.Id, $"Updated position {position.Title}");
+
         return Ok(new { data = position });
     }
 
@@ -212,6 +218,8 @@ public class PositionsController : ControllerBase
 
         _context.Positions.Remove(position);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Position", position.Id, $"Deleted position {position.Title}");
 
         return Ok(new { deleted = true });
     }

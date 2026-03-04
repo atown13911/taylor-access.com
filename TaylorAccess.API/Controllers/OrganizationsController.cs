@@ -14,11 +14,13 @@ public class OrganizationsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly MetricCacheService _cache;
+    private readonly IAuditService _auditService;
 
-    public OrganizationsController(TaylorAccessDbContext context, MetricCacheService cache)
+    public OrganizationsController(TaylorAccessDbContext context, MetricCacheService cache, IAuditService auditService)
     {
         _context = context;
         _cache = cache;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -103,6 +105,8 @@ public class OrganizationsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "Organization", org.Id, $"Updated organization {org.Name}");
+
         return Ok(new { data = org });
     }
 
@@ -141,6 +145,8 @@ public class OrganizationsController : ControllerBase
         _context.Organizations.Add(org);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "Organization", org.Id, $"Created organization {org.Name}");
+
         return CreatedAtAction(nameof(GetOrganization), new { id = org.Id }, new { data = org });
     }
 
@@ -171,6 +177,8 @@ public class OrganizationsController : ControllerBase
 
         _context.Organizations.Remove(org);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Organization", org.Id, $"Deleted organization {org.Name}");
 
         return Ok(new { deleted = true, message = "Organization deleted successfully" });
     }
