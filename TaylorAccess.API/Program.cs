@@ -142,8 +142,6 @@ builder.Services.AddCors(options =>
                     || uri.Host == "www.tss-portal.com"
                     || uri.Host == "taylorshippingsolutions.com"
                     || uri.Host == "www.taylorshippingsolutions.com"
-                    || uri.Host == "taylorcommlink.com"
-                    || uri.Host == "www.taylorcommlink.com"
                     || uri.Host == "taylor-accounting.net"
                     || uri.Host == "www.taylor-accounting.net"
                     || uri.Host == "taylor-last.com"
@@ -210,35 +208,54 @@ using (var scope = app.Services.CreateScope())
         context.Database.EnsureCreated();
     }
 
-    // Ensure AppRoles table and IsSuperAdmin column exist (handles existing databases)
-    try
-    {
-        await context.Database.ExecuteSqlRawAsync(@"
-            CREATE TABLE IF NOT EXISTS ""AppRoles"" (
-                ""Id"" SERIAL PRIMARY KEY,
-                ""AppClientId"" VARCHAR(100) NOT NULL,
-                ""Name"" VARCHAR(100) NOT NULL,
-                ""Description"" TEXT,
-                ""Permissions"" TEXT NOT NULL DEFAULT '[]',
-                ""IsSystem"" BOOLEAN NOT NULL DEFAULT FALSE,
-                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AppRoles_AppClientId_Name"" ON ""AppRoles"" (""AppClientId"", ""Name"");
-        ");
-        await context.Database.ExecuteSqlRawAsync(@"
-            ALTER TABLE ""AppRoleAssignments"" ADD COLUMN IF NOT EXISTS ""IsSuperAdmin"" BOOLEAN NOT NULL DEFAULT FALSE;
-        ");
-        await context.Database.ExecuteSqlRawAsync(@"
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccCardNumber"" VARCHAR(50);
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerName"" VARCHAR(100);
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerPhone"" VARCHAR(20);
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerCompany"" VARCHAR(100);
-        ");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Schema update note: {ex.Message}");
-    }
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""TimeOffRequests"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+            ""EmployeeId"" INTEGER NOT NULL,
+            ""Type"" VARCHAR(30) NOT NULL DEFAULT 'pto',
+            ""StartDate"" DATE NOT NULL,
+            ""EndDate"" DATE NOT NULL,
+            ""Days"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""Reason"" VARCHAR(1000),
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'pending',
+            ""ApprovedById"" INTEGER,
+            ""ApprovedAt"" TIMESTAMP,
+            ""ApprovalNotes"" VARCHAR(500),
+            ""DenialReason"" VARCHAR(500),
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_TimeOffRequests_Users_EmployeeId"" FOREIGN KEY (""EmployeeId"") REFERENCES ""Users""(""Id"") ON DELETE CASCADE,
+            CONSTRAINT ""FK_TimeOffRequests_Users_ApprovedById"" FOREIGN KEY (""ApprovedById"") REFERENCES ""Users""(""Id"") ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ""TimeOffBalances"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+            ""EmployeeId"" INTEGER NOT NULL,
+            ""Year"" INTEGER NOT NULL DEFAULT 0,
+            ""PtoTotal"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""PtoUsed"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""SickTotal"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""SickUsed"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""PersonalTotal"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""PersonalUsed"" DECIMAL(10,2) NOT NULL DEFAULT 0,
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_TimeOffBalances_Users_EmployeeId"" FOREIGN KEY (""EmployeeId"") REFERENCES ""Users""(""Id"") ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS ""AttendanceRecords"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""EmployeeId"" INTEGER NOT NULL DEFAULT 0,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS ""Timesheets"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""EmployeeId"" INTEGER NOT NULL DEFAULT 0,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+    ");
 
     await roleService.SeedDefaultRolesAsync();
 
@@ -268,47 +285,15 @@ using (var scope = app.Services.CreateScope())
         await context.SaveChangesAsync();
     }
 
-    // Seed OAuth clients
-    if (!context.OAuthClients.Any())
+    // Seed all OAuth clients (idempotent — each client is created only if it doesn't already exist)
+    var allClients = new (string clientId, string secret, string name, string desc, string homepage, string[] uris)[]
     {
-        var clients = new[]
-        {
-            new OAuthClient
-            {
-                ClientId = "ta_vantac_tms",
-                ClientSecret = BCrypt.Net.BCrypt.HashPassword("vantac-sso-secret-2026"),
-                Name = "Van-Tac TMS",
-                Description = "Transportation Management System",
-                HomepageUrl = "https://taylor-tms.net",
-                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-tms.net", "https://taylor-tms.net/callback", "http://localhost:4200", "http://localhost:4200/callback" })
-            },
-            new OAuthClient
-            {
-                ClientId = "ta_taylor_crm",
-                ClientSecret = BCrypt.Net.BCrypt.HashPassword("crm-sso-secret-2026"),
-                Name = "Taylor CRM",
-                Description = "Customer Relationship Management",
-                HomepageUrl = "https://taylor-crm.com",
-                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "https://taylor-crm.pages.dev", "https://taylor-crm.pages.dev/callback", "http://localhost:4201", "http://localhost:4201/callback" })
-            },
-            new OAuthClient
-            {
-                ClientId = "ta_taylor_academy",
-                ClientSecret = BCrypt.Net.BCrypt.HashPassword("academy-sso-secret-2026"),
-                Name = "Taylor Academy",
-                Description = "Learning Management System",
-                HomepageUrl = "https://taylor-academy.net",
-                RedirectUris = System.Text.Json.JsonSerializer.Serialize(new[] { "https://taylor-academy.net", "https://taylor-academy.net/callback", "http://localhost:4202", "http://localhost:4202/callback" })
-            }
-        };
-        context.OAuthClients.AddRange(clients);
-        await context.SaveChangesAsync();
-        Console.WriteLine($"Seeded {clients.Length} OAuth clients: VanTac TMS, Taylor CRM, Taylor Academy");
-    }
-
-    // Seed additional OAuth clients (idempotent)
-    var newClients = new (string clientId, string secret, string name, string desc, string homepage, string[] uris)[]
-    {
+        ("ta_vantac_tms", "vantac-sso-secret-2026", "Van-Tac TMS", "Transportation Management System", "https://taylor-tms.net",
+            new[] { "https://taylor-tms.net", "https://taylor-tms.net/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
+        ("ta_taylor_crm", "crm-sso-secret-2026", "Taylor CRM", "Customer Relationship Management", "https://taylor-crm.com",
+            new[] { "https://taylor-crm.com", "https://taylor-crm.com/callback", "https://taylor-crm.pages.dev", "https://taylor-crm.pages.dev/callback", "http://localhost:4201", "http://localhost:4201/callback" }),
+        ("ta_taylor_academy", "academy-sso-secret-2026", "Taylor Academy", "Learning Management System", "https://taylor-academy.net",
+            new[] { "https://taylor-academy.net", "https://taylor-academy.net/callback", "http://localhost:4202", "http://localhost:4202/callback" }),
         ("ta_taylor_accounting", "taylor-accounting-sso-secret-2026", "TSS Accounting", "Financial Operations & Ledger", "https://taylor-accounting.net",
             new[] { "https://taylor-accounting.net", "https://taylor-accounting.net/callback", "http://localhost:4203", "http://localhost:4203/callback" }),
         ("ta_taylor_assets", "taylor-assets-sso-secret-2026", "Taylor Assets", "Asset & Document Management", "https://taylor-assets.com",
@@ -321,11 +306,11 @@ using (var scope = app.Services.CreateScope())
             new[] { "https://tss-portal.com", "https://tss-portal.com/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
         ("ta_taylor_access", "taylor-access-sso-secret-2026", "Taylor Access", "Identity & Access Management", "https://taylor-access.com",
             new[] { "https://taylor-access.com", "https://taylor-access.com/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
-        ("ta_taylor_commlink", "taylor-commlink-sso-secret-2026", "TaylorCommLink", "Internal Communications Platform", "https://taylorcommlink.com",
-            new[] { "https://taylorcommlink.com", "https://taylorcommlink.com/callback", "http://localhost:4206", "http://localhost:4206/callback" }),
+        ("ta_commlink", "commlink-sso-secret-2026", "CommLink", "Secure Logistics Communications", "https://taylorcommlink.com",
+            new[] { "https://taylorcommlink.com", "https://taylorcommlink.com/callback", "http://localhost:3002", "http://localhost:3002/callback" }),
     };
 
-    foreach (var (clientId, secret, name, desc, homepage, uris) in newClients)
+    foreach (var (clientId, secret, name, desc, homepage, uris) in allClients)
     {
         if (!await context.OAuthClients.AnyAsync(c => c.ClientId == clientId))
         {
@@ -339,34 +324,6 @@ using (var scope = app.Services.CreateScope())
                 RedirectUris = System.Text.Json.JsonSerializer.Serialize(uris)
             });
             Console.WriteLine($"Seeded OAuth client: {name} ({clientId})");
-        }
-    }
-    await context.SaveChangesAsync();
-
-    // Seed default AppRoles for each OAuth client (idempotent)
-    var allClients = await context.OAuthClients.Select(c => c.ClientId).ToListAsync();
-    var defaultAppRoles = new (string name, string desc, string perms)[]
-    {
-        ("Admin", "Full administrative access", "[\"admin:full\",\"read:all\",\"write:all\",\"delete:all\",\"manage:users\",\"manage:settings\"]"),
-        ("Manager", "Management-level access", "[\"read:all\",\"write:all\",\"manage:users\"]"),
-        ("User", "Standard read-only access", "[\"read:all\"]")
-    };
-
-    foreach (var cid in allClients)
-    {
-        foreach (var (roleName, roleDesc, rolePerms) in defaultAppRoles)
-        {
-            if (!await context.AppRoles.AnyAsync(r => r.AppClientId == cid && r.Name == roleName))
-            {
-                context.AppRoles.Add(new AppRole
-                {
-                    AppClientId = cid,
-                    Name = roleName,
-                    Description = roleDesc,
-                    Permissions = rolePerms,
-                    IsSystem = true
-                });
-            }
         }
     }
     await context.SaveChangesAsync();
