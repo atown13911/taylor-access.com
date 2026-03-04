@@ -51,10 +51,19 @@ import { AuthService } from '../../../core/services/auth.service';
         </div>
       </div>
 
-      <!-- Search -->
-      <div class="tc-search-bar">
-        <i class="bx bx-search"></i>
-        <input type="text" placeholder="Search employees..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+      <!-- Search & Filters -->
+      <div class="tc-filters-row">
+        <div class="tc-search-bar">
+          <i class="bx bx-search"></i>
+          <input type="text" placeholder="Search employees..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+        </div>
+        <select class="tc-filter" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+          <option value="all">All Employees</option>
+          <option value="active">Active (Online)</option>
+          <option value="offline">Offline</option>
+          <option value="has-hours">Has Hours</option>
+          <option value="no-hours">No Hours</option>
+        </select>
       </div>
 
       <!-- Employee Roster Table -->
@@ -179,8 +188,11 @@ import { AuthService } from '../../../core/services/auth.service';
       &:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
       &.active { background: rgba(0,212,255,0.12); color: var(--cyan); }
     }
+    .tc-filters-row {
+      display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;
+    }
     .tc-search-bar {
-      position: relative; margin-bottom: 1rem; display: flex; align-items: center;
+      position: relative; flex: 1; display: flex; align-items: center;
       i { position: absolute; left: 12px; color: var(--text-secondary); font-size: 1rem; }
       input { width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem;
         &:focus { outline: none; border-color: rgba(0,212,255,0.3); }
@@ -230,6 +242,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   private sessionStart = new Date();
   periodFilter = signal<'today' | 'week' | 'month' | 'all'>('week');
   searchTerm = signal('');
+  statusFilter = signal('all');
   selectedWeek = signal('current');
 
   weekOptions = (() => {
@@ -341,6 +354,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
 
   filteredRoster = computed(() => {
     const search = this.searchTerm().toLowerCase();
+    const status = this.statusFilter();
     let roster = this.employeeRoster();
     if (search) {
       roster = roster.filter(e =>
@@ -348,6 +362,10 @@ export class TimeClockComponent implements OnInit, OnDestroy {
         e.userEmail.toLowerCase().includes(search)
       );
     }
+    if (status === 'active') roster = roster.filter(e => e.isActive);
+    else if (status === 'offline') roster = roster.filter(e => !e.isActive);
+    else if (status === 'has-hours') roster = roster.filter(e => e.totalHours > 0);
+    else if (status === 'no-hours') roster = roster.filter(e => e.totalHours === 0);
     return roster;
   });
 
