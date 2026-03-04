@@ -564,62 +564,31 @@ export class DriverDatabaseComponent implements OnInit {
 
   getItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
     switch (item) {
-      case 'cdl':
-        if (!driver.licenseExpiry && !driver.licenseExpiration) return 'none';
-        return this.getExpirationStatus(driver.licenseExpiry || driver.licenseExpiration);
-      case 'medical':
-        if (!driver.medicalCardExpiry && !driver.medicalCardExpiration) return 'none';
-        return this.getExpirationStatus(driver.medicalCardExpiry || driver.medicalCardExpiration);
-      case 'mvr':
-        if (driver.mvrOnFile) return 'compliant';
+      case 'cdl': {
+        const exp = driver.licenseExpiry || driver.licenseExpiration;
+        if (exp) return this.getExpirationStatus(exp);
+        if (driver.licenseNumber) return 'compliant';
         return 'none';
-      case 'drug':
-        if (driver.drugTestDate) {
-          const days = this.getDaysUntilExpiration(driver.drugTestDate);
-          if (days < -365) return 'expired';
-          return 'compliant';
-        }
+      }
+      case 'medical': {
+        const exp = driver.medicalCardExpiry || driver.medicalCardExpiration;
+        if (exp) return this.getExpirationStatus(exp);
         return 'none';
-      case 'dqf':
-        if (driver.dqfComplete) return 'compliant';
-        if (driver.dqfOnFile) return 'expiring';
-        return 'none';
+      }
       case 'employment':
-        if (driver.employmentVerified || driver.hireDate) return 'compliant';
+        if (driver.hireDate || driver.employmentVerified) return 'compliant';
         return 'none';
-      case 'training':
-        if (driver.trainingComplete || driver.orientationDate) return 'compliant';
+      case 'permits': {
+        const twicExp = driver.twiccExpiry;
+        if (twicExp) return this.getExpirationStatus(twicExp);
+        if (driver.twiccCardNumber) return 'compliant';
         return 'none';
-      case 'insurance':
-        if (driver.insuranceExpiration) return this.getExpirationStatus(driver.insuranceExpiration);
+      }
+      case 'insurance': {
+        const exp = driver.insuranceExpiry || driver.insuranceExpiration;
+        if (exp) return this.getExpirationStatus(exp);
         return 'none';
-      case 'vehicle':
-        if (driver.vehicleInspectionDate) {
-          const days = this.getDaysUntilExpiration(driver.vehicleInspectionDate);
-          if (days < -90) return 'expired';
-          if (days < -60) return 'expiring';
-          return 'compliant';
-        }
-        return 'none';
-      case 'permits':
-        if (driver.twiccExpiry) return this.getExpirationStatus(driver.twiccExpiry);
-        if (driver.permitsOnFile) return 'compliant';
-        return 'none';
-      case 'ifta':
-        if (driver.iftaCompliant) return 'compliant';
-        return 'none';
-      case 'safety':
-        if (driver.safetyAwards) return 'compliant';
-        return 'none';
-      case 'violations':
-        if (driver.violations && driver.violations > 0) return 'expired';
-        if (driver.violationsChecked) return 'compliant';
-        return 'none';
-      case 'i9':
-      case 'w9':
-      case 'directDeposit':
-      case 'deduction':
-        return 'none';
+      }
       default:
         return 'none';
     }
