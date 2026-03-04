@@ -308,8 +308,8 @@ using (var scope = app.Services.CreateScope())
             new[] { "https://taylor-access.com", "https://taylor-access.com/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
         ("ta_commlink", "commlink-sso-secret-2026", "CommLink", "Secure Logistics Communications", "https://taylorcommlink.com",
             new[] { "https://taylorcommlink.com", "https://taylorcommlink.com/callback", "http://localhost:3002", "http://localhost:3002/callback" }),
-        ("ta_taylor_echo", "taylor-echo-sso-secret-2026", "Taylor Echo", "Audit Log & Activity Monitor", "https://taylor-echo.pages.dev",
-            new[] { "https://taylor-echo.pages.dev", "https://taylor-echo.pages.dev/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
+        ("ta_taylor_echo", "taylor-echo-sso-secret-2026", "Taylor Echo", "Audit Log & Activity Monitor", "https://echo-protocol.net",
+            new[] { "https://echo-protocol.net", "https://echo-protocol.net/callback", "https://taylor-echo.pages.dev", "https://taylor-echo.pages.dev/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
     };
 
     foreach (var (clientId, secret, name, desc, homepage, uris) in allClients)
