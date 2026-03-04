@@ -565,11 +565,11 @@ export class DriverDatabaseComponent implements OnInit {
   getItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
     switch (item) {
       case 'cdl':
-        if (!driver.licenseExpiration) return 'none';
-        return this.getExpirationStatus(driver.licenseExpiration);
+        if (!driver.licenseExpiry && !driver.licenseExpiration) return 'none';
+        return this.getExpirationStatus(driver.licenseExpiry || driver.licenseExpiration);
       case 'medical':
-        if (!driver.medicalCardExpiration) return 'none';
-        return this.getExpirationStatus(driver.medicalCardExpiration);
+        if (!driver.medicalCardExpiry && !driver.medicalCardExpiration) return 'none';
+        return this.getExpirationStatus(driver.medicalCardExpiry || driver.medicalCardExpiration);
       case 'mvr':
         if (driver.mvrOnFile) return 'compliant';
         return 'none';

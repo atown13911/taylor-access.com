@@ -170,8 +170,8 @@
           <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
           <div class="detail-row">
             <span class="label">Expires</span>
-            <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiration)" [class.expired]="isExpired(selectedDriver()!.licenseExpiration)">
-              {{ formatDate(selectedDriver()!.licenseExpiration) }}
+            <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiry || selectedDriver()!.licenseExpiration)" [class.expired]="isExpired(selectedDriver()!.licenseExpiry || selectedDriver()!.licenseExpiration)">
+              {{ formatDate(selectedDriver()!.licenseExpiry || selectedDriver()!.licenseExpiration) }}
             </span>
           </div>
           <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>
