@@ -501,31 +501,32 @@ export class DriverDatabaseComponent implements OnInit {
     return 'dot dot-gray';
   }
 
-  attachDocsToDrivers(): void {
+  async attachDocsToDrivers(): Promise<void> {
     const drivers = this.drivers();
-    let completed = 0;
-    const total = drivers.length;
 
+    // First, assign docs from the bulk allDocs load
+    const allDocs = this.allDocs();
     for (const driver of drivers) {
-      this.api.getDriverDocuments(driver.id).subscribe({
-        next: (res: any) => {
-          driver._docs = res?.data || [];
-          completed++;
-          if (completed >= total) {
-            this.drivers.set([...drivers]);
-            this.docsReady.set(true);
-          }
-        },
-        error: () => {
-          driver._docs = [];
-          completed++;
-          if (completed >= total) {
-            this.drivers.set([...drivers]);
-            this.docsReady.set(true);
-          }
-        }
-      });
+      const id = driver.id?.toString();
+      driver._docs = allDocs.filter((d: any) => d.driverId?.toString() === id);
     }
+    this.drivers.set([...drivers]);
+
+    // Then, fetch per-driver docs in batches of 5 to fill gaps
+    const batchSize = 5;
+    for (let i = 0; i < drivers.length; i += batchSize) {
+      const batch = drivers.slice(i, i + batchSize);
+      const promises = batch.map(driver =>
+        this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?driverId=${driver.id}&limit=500`)
+          .toPromise()
+          .then((res: any) => { driver._docs = res?.data || []; })
+          .catch(() => {})
+      );
+      await Promise.all(promises);
+      this.drivers.set([...drivers]);
+    }
+
+    this.docsReady.set(true);
   }
 
   private findDocInList(docs: any[], key: string): any {
