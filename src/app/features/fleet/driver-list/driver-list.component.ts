@@ -418,13 +418,15 @@ export class DriverListComponent implements OnInit {
   private readonly compCategoryMap: Record<string, string> = {
     cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drugTest: 'drug_tests',
     dqf: 'dqf', employment: 'employment', training: 'training',
-    insurance: 'insurance', vehicleDocs: 'vehicle', permits: 'permits'
+    insurance: 'insurance', vehicleDocs: 'vehicle', permits: 'permits',
+    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction'
   };
 
   private readonly compSubMap: Record<string, string> = {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drugTest: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
-    insurance: 'certificate_of_insurance', vehicleDocs: 'registration', permits: 'oversize'
+    insurance: 'certificate_of_insurance', vehicleDocs: 'registration', permits: 'oversize',
+    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form'
   };
 
   openComplianceUpload(item: any): void {

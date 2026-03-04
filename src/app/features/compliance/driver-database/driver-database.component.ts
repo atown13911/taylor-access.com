@@ -30,13 +30,15 @@ export class DriverDatabaseComponent implements OnInit {
     cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drug: 'drug_tests',
     dqf: 'dqf', employment: 'employment', training: 'training',
     insurance: 'insurance', vehicle: 'vehicle', permits: 'permits',
-    ifta: 'ifta', safety: 'safety', violations: 'violations'
+    ifta: 'ifta', safety: 'safety', violations: 'violations',
+    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction'
   };
   private readonly subMap: Record<string, string> = {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drug: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
     insurance: 'certificate_of_insurance', vehicle: 'registration', permits: 'oversize',
-    ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation'
+    ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation',
+    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form'
   };
 
   loading = signal(false);
@@ -515,6 +517,11 @@ export class DriverDatabaseComponent implements OnInit {
     // Check uploaded docs for any driver
     const doc = this.getDocForDriver(driver.id, item);
     if (doc) {
+      if (doc.expiryDate) {
+        const days = this.getDaysUntilExpiration(doc.expiryDate);
+        if (days < 0) return 'dot dot-red';
+        if (days < 30) return 'dot dot-yellow';
+      }
       if (doc.status === 'expired') return 'dot dot-red';
       if (doc.status === 'expiring') return 'dot dot-yellow';
       return 'dot dot-green';
