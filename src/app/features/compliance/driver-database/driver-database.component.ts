@@ -427,7 +427,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   loadAllDocs(): void {
-    this.api.getDriverDocuments().subscribe({
+    this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?limit=5000`).subscribe({
       next: (res: any) => this.allDocs.set(res?.data || []),
       error: () => this.allDocs.set([])
     });
