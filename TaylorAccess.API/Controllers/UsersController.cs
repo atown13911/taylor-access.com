@@ -378,10 +378,10 @@ public class UsersController : ControllerBase
             
             // Integration account credentials (passwords encrypted at rest)
             user.LandstarUsername = request.LandstarUsername ?? user.LandstarUsername;
-            if (!string.IsNullOrEmpty(request.LandstarPassword))
+            if (!string.IsNullOrEmpty(request.LandstarPassword) && request.LandstarPassword != user.LandstarPassword)
                 user.LandstarPassword = _encryption.Encrypt(request.LandstarPassword);
             user.PowerdatUsername = request.PowerdatUsername ?? user.PowerdatUsername;
-            if (!string.IsNullOrEmpty(request.PowerdatPassword))
+            if (!string.IsNullOrEmpty(request.PowerdatPassword) && request.PowerdatPassword != user.PowerdatPassword)
                 user.PowerdatPassword = _encryption.Encrypt(request.PowerdatPassword);
             
             // Handle multi-organization assignment
