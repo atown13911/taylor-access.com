@@ -314,7 +314,8 @@ using (var scope = app.Services.CreateScope())
 
     foreach (var (clientId, secret, name, desc, homepage, uris) in allClients)
     {
-        if (!await context.OAuthClients.AnyAsync(c => c.ClientId == clientId))
+        var existing = await context.OAuthClients.FirstOrDefaultAsync(c => c.ClientId == clientId);
+        if (existing == null)
         {
             context.OAuthClients.Add(new OAuthClient
             {
@@ -326,6 +327,19 @@ using (var scope = app.Services.CreateScope())
                 RedirectUris = System.Text.Json.JsonSerializer.Serialize(uris)
             });
             Console.WriteLine($"Seeded OAuth client: {name} ({clientId})");
+        }
+        else
+        {
+            var newUris = System.Text.Json.JsonSerializer.Serialize(uris);
+            if (existing.RedirectUris != newUris || existing.HomepageUrl != homepage)
+            {
+                existing.RedirectUris = newUris;
+                existing.HomepageUrl = homepage;
+                existing.Name = name;
+                existing.Description = desc;
+                existing.UpdatedAt = DateTime.UtcNow;
+                Console.WriteLine($"Updated OAuth client: {name} ({clientId})");
+            }
         }
     }
     await context.SaveChangesAsync();
