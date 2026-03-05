@@ -31,7 +31,7 @@ export class TagsPermitsComponent implements OnInit {
   permitForm: any = { permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
 
   filteredPermits = computed(() => {
-    let list = this.permits();
+    let list = this.permits().filter(p => !this.irpTypes.includes(p.permitType));
     const search = this.searchTerm().toLowerCase();
     const type = this.typeFilter();
     const status = this.statusFilter();
@@ -45,6 +45,25 @@ export class TagsPermitsComponent implements OnInit {
       );
     }
     if (type) list = list.filter(p => p.permitType === type);
+    if (status) list = list.filter(p => this.getPermitStatus(p) === status);
+    return list;
+  });
+
+  irpTypes = ['irp', 'ifta', 'cab_card'];
+
+  filteredIrpPermits = computed(() => {
+    let list = this.permits().filter(p => this.irpTypes.includes(p.permitType));
+    const search = this.searchTerm().toLowerCase();
+    const status = this.statusFilter();
+
+    if (search) {
+      list = list.filter(p =>
+        (p.permitNumber || '').toLowerCase().includes(search) ||
+        (p.assignedDriverName || '').toLowerCase().includes(search) ||
+        (p.assignedTruckNumber || '').toLowerCase().includes(search) ||
+        (p.state || '').toLowerCase().includes(search)
+      );
+    }
     if (status) list = list.filter(p => this.getPermitStatus(p) === status);
     return list;
   });
@@ -89,6 +108,13 @@ export class TagsPermitsComponent implements OnInit {
     if (days < 0) return 'expired';
     if (days <= 30) return 'expiring';
     return 'active';
+  }
+
+  openAddModal() {
+    const defaultType = this.activeTab() === 'irp' ? 'irp' : 'overweight';
+    this.permitForm = { permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.editingPermit.set(null);
+    this.showAddModal.set(true);
   }
 
   editPermit(p: any) {

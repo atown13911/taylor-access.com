@@ -5,7 +5,7 @@
       <p class="tp-sub">Manage company-owned overweight/oversize permits and IRP registrations</p>
     </div>
     <div class="tp-header-actions">
-      <button class="tp-btn primary" (click)="showAddModal.set(true)"><i class="bx bx-plus"></i> Add Permit</button>
+      <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : 'Add Permit' }}</button>
       <button class="tp-btn" (click)="loadData()"><i class="bx bx-refresh"></i> Refresh</button>
     </div>
   </div>
@@ -141,44 +141,49 @@
       <table class="tp-table">
         <thead>
           <tr>
-            <th>Driver</th>
+            <th>Permit #</th>
+            <th>Type</th>
+            <th>State</th>
+            <th>Assigned Driver</th>
             <th>Truck #</th>
-            <th>Year</th>
-            <th>Make / Model</th>
-            <th>VIN</th>
-            <th>Tag / Plate</th>
-            <th>CDL State</th>
-            <th>CDL Expiry</th>
-            <th>Fleet</th>
+            <th>Issued</th>
+            <th>Expires</th>
+            <th>Cost</th>
+            <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (d of filteredDrivers(); track d.id) {
+          @for (p of filteredIrpPermits(); track p.id) {
             <tr>
-              <td class="tp-driver-cell">
-                <div class="tp-avatar">{{ (d.name || 'D').charAt(0) }}</div>
-                <div class="tp-driver-info">
-                  <strong>{{ d.name }}</strong>
-                  <span>{{ d.phone || d.email || '' }}</span>
-                </div>
-              </td>
-              <td class="tp-mono">{{ d.truckNumber || '—' }}</td>
-              <td>{{ d.truckYear || '—' }}</td>
-              <td>{{ d.truckMake ? d.truckMake + ' ' + (d.truckModel || '') : '—' }}</td>
-              <td class="tp-mono tp-vin">{{ d.truckVin || '—' }}</td>
-              <td><span class="tp-tag-badge" [class.has-tag]="d.truckTag">{{ d.truckTag || 'None' }}</span></td>
-              <td>{{ d.licenseState || '—' }}</td>
+              <td class="tp-mono">{{ p.permitNumber }}</td>
+              <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
+              <td>{{ p.state || '—' }}</td>
               <td>
-                @if (d.licenseExpiry) {
-                  <span class="tp-expiry" [class]="getExpiryClass(d.licenseExpiry)">{{ formatDate(d.licenseExpiry) }}</span>
+                @if (p.assignedDriverName) {
+                  <span class="tp-driver-link">{{ p.assignedDriverName }}</span>
+                } @else {
+                  <span class="tp-muted">Unassigned</span>
+                }
+              </td>
+              <td class="tp-mono">{{ p.assignedTruckNumber || '—' }}</td>
+              <td>{{ formatDate(p.issueDate) }}</td>
+              <td>
+                @if (p.expiryDate) {
+                  <span class="tp-expiry" [class]="getExpiryClass(p.expiryDate)">{{ formatDate(p.expiryDate) }}</span>
                 } @else {
                   <span class="tp-muted">—</span>
                 }
               </td>
-              <td>{{ d.fleetName || d.division?.name || '—' }}</td>
+              <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
+              <td><span class="tp-status" [class]="getPermitStatus(p)">{{ getPermitStatus(p) }}</span></td>
+              <td class="tp-actions">
+                <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
+                <button class="tp-icon-btn danger" title="Delete" (click)="deletePermit(p)"><i class="bx bx-trash"></i></button>
+              </td>
             </tr>
           } @empty {
-            <tr><td colspan="9" class="tp-empty">No IRP data found</td></tr>
+            <tr><td colspan="10" class="tp-empty">No IRP tags found. Click "Add Permit" to create one.</td></tr>
           }
         </tbody>
       </table>
@@ -202,13 +207,19 @@
             <div class="tp-form-group">
               <label>Type</label>
               <select [(ngModel)]="permitForm.permitType">
-                <option value="overweight">Overweight</option>
-                <option value="oversize">Oversize</option>
-                <option value="trip">Trip Permit</option>
-                <option value="fuel">Fuel Permit</option>
-                <option value="irp">IRP</option>
-                <option value="ifta">IFTA</option>
-                <option value="other">Other</option>
+                <optgroup label="Permits">
+                  <option value="overweight">Overweight</option>
+                  <option value="oversize">Oversize</option>
+                  <option value="trip">Trip Permit</option>
+                  <option value="fuel">Fuel Permit</option>
+                  <option value="hazmat">Hazmat</option>
+                  <option value="other">Other</option>
+                </optgroup>
+                <optgroup label="IRP / Tags">
+                  <option value="irp">IRP Registration</option>
+                  <option value="ifta">IFTA</option>
+                  <option value="cab_card">Cab Card</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -268,7 +279,7 @@
   }
 
   <!-- Floating Add Button -->
-  <button class="tp-fab" (click)="showAddModal.set(true)" title="Add Permit">
+  <button class="tp-fab" (click)="openAddModal()" title="Add Permit">
     <i class="bx bx-plus"></i>
   </button>
 </div>
