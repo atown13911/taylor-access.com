@@ -68,6 +68,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Driver Compliance', icon: 'bx bx-search-alt', route: '/compliance/driver-database' },
         { label: 'Insurance', icon: 'bx bx-shield-alt-2', route: '/compliance/insurance' },
         { label: 'DOT Compliance', icon: 'bx bx-shield-alt-2', route: '/compliance/dot' },
+        { label: 'Tags & Permits', icon: 'bx bx-badge-check', route: '/compliance/tags-permits' },
       ]
     },
     {

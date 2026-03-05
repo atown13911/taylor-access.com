@@ -1,0 +1,167 @@
+<div class="tp-page">
+  <div class="tp-header">
+    <div>
+      <h1><i class="bx bx-badge-check"></i> Company Tags & Permits</h1>
+      <p class="tp-sub">Manage company-owned permits and IRP registrations assigned to drivers</p>
+    </div>
+    <button class="tp-btn" (click)="loadDrivers()"><i class="bx bx-refresh"></i> Refresh</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="tp-stats">
+    <div class="tp-stat">
+      <i class="bx bx-purchase-tag"></i>
+      <div class="tp-stat-info">
+        <span class="tp-stat-val">{{ totalPermits() }}</span>
+        <span class="tp-stat-lbl">Tags Registered</span>
+      </div>
+    </div>
+    <div class="tp-stat">
+      <i class="bx bx-id-card"></i>
+      <div class="tp-stat-info">
+        <span class="tp-stat-val">{{ totalTwic() }}</span>
+        <span class="tp-stat-lbl">TWIC Cards</span>
+      </div>
+    </div>
+    <div class="tp-stat">
+      <i class="bx bx-error"></i>
+      <div class="tp-stat-info">
+        <span class="tp-stat-val">{{ expiringPermits() }}</span>
+        <span class="tp-stat-lbl">Expiring Soon</span>
+      </div>
+    </div>
+    <div class="tp-stat">
+      <i class="bx bx-group"></i>
+      <div class="tp-stat-info">
+        <span class="tp-stat-val">{{ drivers().length }}</span>
+        <span class="tp-stat-lbl">Total Drivers</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tp-tabs">
+    <button class="tp-tab" [class.active]="activeTab() === 'permits'" (click)="activeTab.set('permits')">
+      <i class="bx bx-badge-check"></i> Permits & Tags
+    </button>
+    <button class="tp-tab" [class.active]="activeTab() === 'irp'" (click)="activeTab.set('irp')">
+      <i class="bx bx-globe"></i> IRP / Cab Cards
+    </button>
+  </div>
+
+  <!-- Search -->
+  <div class="tp-search">
+    <i class="bx bx-search"></i>
+    <input type="text" placeholder="Search by driver, truck number, or tag..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+  </div>
+
+  @if (loading()) {
+    <div class="tp-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading...</div>
+  }
+
+  <!-- Permits Tab -->
+  @if (activeTab() === 'permits' && !loading()) {
+    <div class="tp-table-wrap">
+      <table class="tp-table">
+        <thead>
+          <tr>
+            <th>Driver</th>
+            <th>Truck #</th>
+            <th>Make / Model</th>
+            <th>VIN</th>
+            <th>Tag / Plate</th>
+            <th>TWIC Card #</th>
+            <th>TWIC Expiry</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of filteredDrivers(); track d.id) {
+            <tr>
+              <td class="tp-driver-cell">
+                <div class="tp-avatar">{{ (d.name || 'D').charAt(0) }}</div>
+                <div class="tp-driver-info">
+                  <strong>{{ d.name }}</strong>
+                  <span>{{ d.phone || d.email || '' }}</span>
+                </div>
+              </td>
+              <td class="tp-mono">{{ d.truckNumber || '—' }}</td>
+              <td>{{ d.truckMake ? d.truckMake + ' ' + (d.truckModel || '') : '—' }}</td>
+              <td class="tp-mono tp-vin">{{ d.truckVin || '—' }}</td>
+              <td><span class="tp-tag-badge" [class.has-tag]="d.truckTag">{{ d.truckTag || 'None' }}</span></td>
+              <td class="tp-mono">{{ d.twiccCardNumber || '—' }}</td>
+              <td>
+                @if (d.twiccExpiry) {
+                  <span class="tp-expiry" [class]="getExpiryClass(d.twiccExpiry)">{{ formatDate(d.twiccExpiry) }}</span>
+                } @else {
+                  <span class="tp-muted">—</span>
+                }
+              </td>
+              <td>
+                @if (d.truckTag && d.twiccCardNumber) {
+                  <span class="tp-status complete">Complete</span>
+                } @else if (d.truckTag || d.twiccCardNumber) {
+                  <span class="tp-status partial">Partial</span>
+                } @else {
+                  <span class="tp-status missing">Missing</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="8" class="tp-empty">No permit data found</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- IRP Tab -->
+  @if (activeTab() === 'irp' && !loading()) {
+    <div class="tp-table-wrap">
+      <table class="tp-table">
+        <thead>
+          <tr>
+            <th>Driver</th>
+            <th>Truck #</th>
+            <th>Year</th>
+            <th>Make / Model</th>
+            <th>VIN</th>
+            <th>Tag / Plate</th>
+            <th>CDL State</th>
+            <th>CDL Expiry</th>
+            <th>Fleet</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of filteredDrivers(); track d.id) {
+            <tr>
+              <td class="tp-driver-cell">
+                <div class="tp-avatar">{{ (d.name || 'D').charAt(0) }}</div>
+                <div class="tp-driver-info">
+                  <strong>{{ d.name }}</strong>
+                  <span>{{ d.phone || d.email || '' }}</span>
+                </div>
+              </td>
+              <td class="tp-mono">{{ d.truckNumber || '—' }}</td>
+              <td>{{ d.truckYear || '—' }}</td>
+              <td>{{ d.truckMake ? d.truckMake + ' ' + (d.truckModel || '') : '—' }}</td>
+              <td class="tp-mono tp-vin">{{ d.truckVin || '—' }}</td>
+              <td><span class="tp-tag-badge" [class.has-tag]="d.truckTag">{{ d.truckTag || 'None' }}</span></td>
+              <td>{{ d.licenseState || '—' }}</td>
+              <td>
+                @if (d.licenseExpiry) {
+                  <span class="tp-expiry" [class]="getExpiryClass(d.licenseExpiry)">{{ formatDate(d.licenseExpiry) }}</span>
+                } @else {
+                  <span class="tp-muted">—</span>
+                }
+              </td>
+              <td>{{ d.fleetName || d.division?.name || '—' }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="9" class="tp-empty">No IRP data found</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

@@ -110,6 +110,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/compliance/document-management/document-management.component').then(m => m.DocumentManagementComponent)
       },
       {
+        path: 'compliance/tags-permits',
+        loadComponent: () => import('./features/compliance/tags-permits/tags-permits.component').then(m => m.TagsPermitsComponent)
+      },
+      {
         path: 'profile',
         loadComponent: () => import('./features/admin-security/profile/profile.component').then(m => m.ProfileComponent)
       },
