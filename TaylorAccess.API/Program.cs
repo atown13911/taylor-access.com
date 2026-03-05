@@ -283,6 +283,25 @@ using (var scope = app.Services.CreateScope())
             ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerCompany"" VARCHAR(100);
         ");
 
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""CompanyPermits"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+                ""PermitNumber"" VARCHAR(100) NOT NULL,
+                ""PermitType"" VARCHAR(50) NOT NULL DEFAULT 'overweight',
+                ""State"" VARCHAR(5),
+                ""IssueDate"" TIMESTAMP,
+                ""ExpiryDate"" TIMESTAMP,
+                ""Cost"" DECIMAL(10,2),
+                ""Status"" VARCHAR(20) NOT NULL DEFAULT 'active',
+                ""AssignedDriverId"" INTEGER,
+                ""AssignedTruckNumber"" VARCHAR(50),
+                ""Notes"" TEXT,
+                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+        ");
+
         // Increase VARCHAR limits on columns that are too restrictive
         await context.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""Users"" ALTER COLUMN ""Name"" TYPE VARCHAR(500);
