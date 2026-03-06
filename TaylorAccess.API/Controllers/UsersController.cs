@@ -16,13 +16,15 @@ public class UsersController : ControllerBase
     private readonly CurrentUserService _currentUserService;
     private readonly IAuditService _auditService;
     private readonly EncryptionService _encryption;
+    private readonly WebhookService _webhookService;
 
-    public UsersController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService, EncryptionService encryption)
+    public UsersController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService, EncryptionService encryption, WebhookService webhookService)
     {
         _context = context;
         _currentUserService = currentUserService;
         _auditService = auditService;
         _encryption = encryption;
+        _webhookService = webhookService;
     }
 
     [HttpGet]
@@ -204,6 +206,8 @@ public class UsersController : ControllerBase
         
         await _auditService.LogAsync(AuditActions.Create, "User", user.Id, 
             $"Created user {user.Name} ({user.Email}) with role {user.Role}");
+
+        _webhookService.FireEmployeeEvent("employee.created", user);
 
         return CreatedAtAction(nameof(GetUser), new { id = user.Id }, new { data = new UserDto(user) });
     }
@@ -417,6 +421,8 @@ public class UsersController : ControllerBase
         await _auditService.LogAsync(AuditActions.Update, "User", user.Id, 
             $"Updated user {user.Name} ({user.Email})");
 
+        _webhookService.FireEmployeeEvent("employee.updated", user);
+
         return Ok(new { data = new UserDto(user, _encryption) });
     }
 
@@ -481,6 +487,7 @@ public class UsersController : ControllerBase
                 user.Status = "inactive";
                 user.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
+                _webhookService.FireEmployeeEvent("employee.updated", user);
                 
                 return Ok(new { 
                     deleted = false, 
@@ -493,6 +500,8 @@ public class UsersController : ControllerBase
             // No dependencies - safe to delete
             await _auditService.LogAsync(AuditActions.Delete, "User", user.Id, 
                 $"Deleted user {user.Name} ({user.Email})");
+
+            _webhookService.FireEmployeeEvent("employee.deleted", user);
 
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
@@ -538,6 +547,7 @@ public class UsersController : ControllerBase
         user.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+        _webhookService.FireEmployeeEvent("employee.updated", user);
 
         return Ok(new { data = new UserDto(user) });
     }
@@ -553,6 +563,7 @@ public class UsersController : ControllerBase
         user.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+        _webhookService.FireEmployeeEvent("employee.updated", user);
 
         return Ok(new { data = new UserDto(user) });
     }

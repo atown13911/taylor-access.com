@@ -17,11 +17,13 @@ public class EmployeeRosterManagementController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly WebhookService _webhookService;
 
-    public EmployeeRosterManagementController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public EmployeeRosterManagementController(TaylorAccessDbContext context, CurrentUserService currentUserService, WebhookService webhookService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _webhookService = webhookService;
     }
 
     /// <summary>
@@ -258,6 +260,8 @@ public class EmployeeRosterManagementController : ControllerBase
         staging.Status = "approved";
         await _context.SaveChangesAsync();
 
+        _webhookService.FireEmployeeEvent("employee.created", user);
+
         return Ok(new { message = $"{staging.Name} activated as employee", userId = user.Id });
     }
 
@@ -297,6 +301,7 @@ public class EmployeeRosterManagementController : ControllerBase
                     EmergencyContactName = staging.EmergencyContactName, EmergencyContactPhone = staging.EmergencyContactPhone
                 });
                 staging.Status = "approved";
+                _webhookService.FireEmployeeEvent("employee.created", user);
                 approved++;
             }
             catch (Exception ex) { errors.Add($"{staging.Email}: {ex.Message}"); }

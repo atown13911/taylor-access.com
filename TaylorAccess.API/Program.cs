@@ -171,6 +171,7 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<TaylorAccessDbContext>();
 
 builder.Services.AddSingleton<MetricCacheService>();
+builder.Services.AddSingleton<WebhookService>();
 
 var app = builder.Build();
 
