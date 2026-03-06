@@ -388,7 +388,7 @@ using (var scope = app.Services.CreateScope())
         ("ta_taylor_academy", "academy-sso-secret-2026", "Taylor Academy", "Learning Management System", "https://taylor-academy.net",
             new[] { "https://taylor-academy.net", "https://taylor-academy.net/callback", "http://localhost:4202", "http://localhost:4202/callback" }),
         ("ta_taylor_accounting", "taylor-accounting-sso-secret-2026", "TSS Accounting", "Financial Operations & Ledger", "https://taylor-accounting.net",
-            new[] { "https://taylor-accounting.net", "https://taylor-accounting.net/callback", "http://localhost:4203", "http://localhost:4203/callback" }),
+            new[] { "https://taylor-accounting.net", "https://taylor-accounting.net/callback", "https://taylor-accounting.pages.dev", "https://taylor-accounting.pages.dev/callback", "http://localhost:4203", "http://localhost:4203/callback" }),
         ("ta_taylor_assets", "taylor-assets-sso-secret-2026", "Taylor Assets", "Asset & Document Management", "https://taylor-assets.com",
             new[] { "https://taylor-assets.com", "https://taylor-assets.com/callback", "http://localhost:4204", "http://localhost:4204/callback" }),
         ("ta_taylor_landstar", "taylor-landstar-sso-secret-2026", "Landstar", "Landstar Integration & Loads", "https://taylor-last.com",

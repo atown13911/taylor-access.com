@@ -87,9 +87,7 @@ public class UserSession
 {
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
-    public string? Id { get; set; }
-
-    public int UserId { get; set; }
+    public string? Id { get; set; }    public int UserId { get; set; }
     public string? UserName { get; set; }
     public string? UserEmail { get; set; }
     public int? OrganizationId { get; set; }    public DateTime LoginTime { get; set; } = DateTime.UtcNow;

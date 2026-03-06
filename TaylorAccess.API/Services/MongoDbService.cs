@@ -133,7 +133,7 @@ public class MongoDbService : IMongoDbService
 
             var client = new MongoClient(settings);
             var connUrl = new MongoUrl(connectionString);
-            var dbName = !string.IsNullOrEmpty(connUrl.DatabaseName) ? connUrl.DatabaseName : "taylor_access";
+            var dbName = !string.IsNullOrEmpty(connUrl.DatabaseName) ? connUrl.DatabaseName : "test";
             _database = client.GetDatabase(dbName);
 
             // Don't ping on startup -- lazy connect on first write
