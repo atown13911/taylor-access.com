@@ -302,6 +302,39 @@ using (var scope = app.Services.CreateScope())
             );
         ");
 
+        await context.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS ""Carriers"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+                ""Name"" VARCHAR(200) NOT NULL,
+                ""McNumber"" VARCHAR(50),
+                ""DotNumber"" VARCHAR(50),
+                ""ScacCode"" VARCHAR(10),
+                ""ContactName"" VARCHAR(100),
+                ""Phone"" VARCHAR(30),
+                ""Email"" VARCHAR(100),
+                ""Address"" VARCHAR(200),
+                ""City"" VARCHAR(100),
+                ""State"" VARCHAR(5),
+                ""ZipCode"" VARCHAR(10),
+                ""InsuranceProvider"" VARCHAR(100),
+                ""InsuranceExpiry"" TIMESTAMP,
+                ""InsuranceAmount"" DECIMAL(12,2),
+                ""PaymentTerms"" VARCHAR(20) DEFAULT 'net_30',
+                ""Rating"" INTEGER DEFAULT 0,
+                ""SafetyRating"" VARCHAR(20) DEFAULT 'none',
+                ""CsaScore"" INTEGER DEFAULT 0,
+                ""Status"" VARCHAR(20) DEFAULT 'active',
+                ""TotalLoads"" INTEGER DEFAULT 0,
+                ""OnTimeRate"" DECIMAL(5,2) DEFAULT 0,
+                ""AvgRate"" DECIMAL(10,2) DEFAULT 0,
+                ""Notes"" TEXT,
+                ""IsActive"" BOOLEAN DEFAULT TRUE,
+                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+        ");
+
         // Increase VARCHAR limits on columns that are too restrictive
         await context.Database.ExecuteSqlRawAsync(@"
             ALTER TABLE ""Users"" ALTER COLUMN ""Name"" TYPE VARCHAR(500);

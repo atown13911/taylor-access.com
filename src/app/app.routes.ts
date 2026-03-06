@@ -50,6 +50,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
       },
       {
+        path: 'carriers',
+        loadComponent: () => import('./features/fleet/carriers/carriers.component').then(m => m.CarriersComponent)
+      },
+      {
         path: 'fleet-entities',
         loadComponent: () => import('./features/fleet/fleets/fleets.component').then(m => m.FleetsComponent)
       },
