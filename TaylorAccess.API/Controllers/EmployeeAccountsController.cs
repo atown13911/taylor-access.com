@@ -14,11 +14,13 @@ public class EmployeeAccountsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public EmployeeAccountsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public EmployeeAccountsController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -68,6 +70,8 @@ public class EmployeeAccountsController : ControllerBase
         _context.EmployeeAccounts.Add(account);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "EmployeeAccount", account.Id, $"Created employee account {account.AccountName}");
+
         return CreatedAtAction(nameof(GetEmployeeAccounts), new { userId = account.UserId }, new { data = account });
     }
 
@@ -103,6 +107,8 @@ public class EmployeeAccountsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "EmployeeAccount", account.Id, $"Updated employee account {account.AccountName}");
+
         return Ok(new { data = account });
     }
 
@@ -122,6 +128,8 @@ public class EmployeeAccountsController : ControllerBase
 
         _context.EmployeeAccounts.Remove(account);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "EmployeeAccount", account.Id, $"Deleted employee account {account.AccountName}");
 
         return Ok(new { deleted = true });
     }
@@ -201,6 +209,8 @@ public class EmployeeAccountsController : ControllerBase
         account.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("transaction_created", "AccountTransaction", transaction.Id, $"Created {transaction.Type} transaction of {transaction.Amount} on account {accountId}");
 
         return Ok(new { data = transaction, newBalance });
     }

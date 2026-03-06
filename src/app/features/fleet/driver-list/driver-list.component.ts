@@ -95,6 +95,7 @@ export class DriverListComponent implements OnInit {
     truckVin: '',
     truckTag: '',
     twiccCardNumber: '',
+    twiccExpiry: '',
     truckOwnerName: '',
     truckOwnerPhone: '',
     truckOwnerCompany: '',
@@ -246,6 +247,11 @@ export class DriverListComponent implements OnInit {
              this.isExpiringSoon(driver.medicalCardExpiry) ? 'dot-yellow' : 'dot-green';
     }
     if (key === 'employment' && driver.hireDate) return 'dot-green';
+
+    if (key === 'permits' && driver.twiccExpiry) {
+      return this.isExpired(driver.twiccExpiry) ? 'dot-red' :
+             this.isExpiringSoon(driver.twiccExpiry) ? 'dot-yellow' : 'dot-green';
+    }
 
     const doc = this.getPanelDoc(key);
     if (doc) {
@@ -412,13 +418,15 @@ export class DriverListComponent implements OnInit {
   private readonly compCategoryMap: Record<string, string> = {
     cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drugTest: 'drug_tests',
     dqf: 'dqf', employment: 'employment', training: 'training',
-    insurance: 'insurance', vehicleDocs: 'vehicle', permits: 'permits'
+    insurance: 'insurance', vehicleDocs: 'vehicle', permits: 'permits',
+    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction'
   };
 
   private readonly compSubMap: Record<string, string> = {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drugTest: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
-    insurance: 'certificate_of_insurance', vehicleDocs: 'registration', permits: 'oversize'
+    insurance: 'certificate_of_insurance', vehicleDocs: 'registration', permits: 'oversize',
+    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form'
   };
 
   openComplianceUpload(item: any): void {
@@ -708,6 +716,7 @@ export class DriverListComponent implements OnInit {
           truckVin: d.truckVin || '',
           truckTag: d.truckTag || '',
           twiccCardNumber: d.twiccCardNumber || '',
+          twiccExpiry: d.twiccExpiry ? d.twiccExpiry.split('T')[0] : '',
           truckOwnerName: d.truckOwnerName || '',
           truckOwnerPhone: d.truckOwnerPhone || '',
           truckOwnerCompany: d.truckOwnerCompany || '',
@@ -730,7 +739,7 @@ export class DriverListComponent implements OnInit {
           organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
           licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : '',
           dateOfBirth: '', address: '', city: '', state: '', zip: '', ssn: '',
-          truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '',
+          truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '',
           truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
           emergencyContact: '', emergencyPhone: '',
           hireDate: driver.hireDate ? driver.hireDate.split('T')[0] : '',
@@ -752,7 +761,7 @@ export class DriverListComponent implements OnInit {
       name: '', email: '', phone: '', organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
       address: '', city: '', state: '', zip: '', ssn: '',
-      truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '',
+      truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '',
       truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
       emergencyContact: '', emergencyPhone: '',
       hireDate: '', payRate: 0, payType: 'mile', driverType: 'company',

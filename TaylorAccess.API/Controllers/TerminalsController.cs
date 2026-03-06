@@ -14,11 +14,13 @@ public class TerminalsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public TerminalsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public TerminalsController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -183,6 +185,8 @@ public class TerminalsController : ControllerBase
         _context.Terminals.Add(terminal);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "Terminal", terminal.Id, $"Created terminal {terminal.Name}");
+
         return CreatedAtAction(nameof(GetTerminal), new { id = terminal.Id }, terminal);
     }
 
@@ -256,6 +260,8 @@ public class TerminalsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "Terminal", terminal.Id, $"Updated terminal {terminal.Name}");
+
         return Ok(terminal);
     }
 
@@ -281,6 +287,8 @@ public class TerminalsController : ControllerBase
 
         _context.Terminals.Remove(terminal);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Terminal", terminal.Id, $"Deleted terminal {terminal.Name}");
 
         return NoContent();
     }

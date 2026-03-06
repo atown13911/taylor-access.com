@@ -50,6 +50,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
       },
       {
+        path: 'carriers',
+        loadComponent: () => import('./features/fleet/carriers/carriers.component').then(m => m.CarriersComponent)
+      },
+      {
         path: 'fleet-entities',
         loadComponent: () => import('./features/fleet/fleets/fleets.component').then(m => m.FleetsComponent)
       },
@@ -60,6 +64,10 @@ export const routes: Routes = [
       {
         path: 'hr/time-off',
         loadComponent: () => import('./features/hr/time-off/time-off.component').then(m => m.TimeOffComponent)
+      },
+      {
+        path: 'hr/payroll',
+        loadComponent: () => import('./features/hr/payroll/payroll.component').then(m => m.PayrollComponent)
       },
       {
         path: 'hr/benefits',
@@ -104,6 +112,10 @@ export const routes: Routes = [
       {
         path: 'compliance/dot',
         loadComponent: () => import('./features/compliance/document-management/document-management.component').then(m => m.DocumentManagementComponent)
+      },
+      {
+        path: 'compliance/tags-permits',
+        loadComponent: () => import('./features/compliance/tags-permits/tags-permits.component').then(m => m.TagsPermitsComponent)
       },
       {
         path: 'profile',

@@ -174,13 +174,13 @@ public class User
     [MaxLength(100)]
     public string? LandstarUsername { get; set; }
     
-    [MaxLength(200)]
+    [MaxLength(500)]
     public string? LandstarPassword { get; set; }
     
     [MaxLength(100)]
     public string? PowerdatUsername { get; set; }
     
-    [MaxLength(200)]
+    [MaxLength(500)]
     public string? PowerdatPassword { get; set; }
 
     [MaxLength(64)]

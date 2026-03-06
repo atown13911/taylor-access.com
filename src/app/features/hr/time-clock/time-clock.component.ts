@@ -14,128 +14,97 @@ import { AuthService } from '../../../core/services/auth.service';
       <div class="tc-header">
         <div>
           <h1><i class="bx bx-time-five"></i> Time Clock</h1>
-          <p class="tc-sub">Session tracking and activity log</p>
+          <p class="tc-sub">Employee hours overview</p>
         </div>
         <div class="tc-header-actions">
-          <select class="tc-filter" [ngModel]="selectedUserId()" (ngModelChange)="selectedUserId.set($event); loadSessions(); loadSummary()">
-            <option value="">My Sessions</option>
-            @for (u of users(); track u.id) {
-              <option [value]="u.id">{{ u.name || u.email }}</option>
+          <select class="tc-filter" [ngModel]="selectedWeek()" (ngModelChange)="selectedWeek.set($event)">
+            @for (w of weekOptions; track w.value) {
+              <option [value]="w.value">{{ w.label }}</option>
             }
           </select>
           <button class="tc-btn" (click)="loadSessions(); loadSummary()"><i class="bx bx-refresh"></i> Refresh</button>
         </div>
       </div>
 
-      <!-- Current Session -->
-      <div class="tc-current">
-        <div class="tc-status-dot active"></div>
-        <div class="tc-status-text">
-          <span class="tc-status-label">Currently Active</span>
-          <span class="tc-status-since">Session started {{ currentSessionTime() }}</span>
-        </div>
-        <div class="tc-live-clock">{{ liveTimer() }}</div>
-      </div>
-
       <!-- Summary Cards -->
       <div class="tc-stats">
         <div class="tc-stat">
-          <i class="bx bx-calendar-check"></i>
+          <i class="bx bx-group"></i>
           <div class="tc-stat-info">
-            <span class="tc-stat-val">{{ summary().hoursToday }}h</span>
-            <span class="tc-stat-lbl">Today</span>
+            <span class="tc-stat-val">{{ filteredRoster().length }}</span>
+            <span class="tc-stat-lbl">Active Employees</span>
           </div>
         </div>
         <div class="tc-stat">
-          <i class="bx bx-calendar-week"></i>
+          <i class="bx bx-user-check"></i>
           <div class="tc-stat-info">
-            <span class="tc-stat-val">{{ summary().hoursWeek }}h</span>
-            <span class="tc-stat-lbl">This Week</span>
+            <span class="tc-stat-val">{{ activeCount() }}</span>
+            <span class="tc-stat-lbl">Online Now</span>
           </div>
         </div>
         <div class="tc-stat">
-          <i class="bx bx-calendar"></i>
+          <i class="bx bx-time"></i>
           <div class="tc-stat-info">
-            <span class="tc-stat-val">{{ summary().hoursMonth }}h</span>
-            <span class="tc-stat-lbl">This Month</span>
-          </div>
-        </div>
-        <div class="tc-stat">
-          <i class="bx bx-log-in-circle"></i>
-          <div class="tc-stat-info">
-            <span class="tc-stat-val">{{ summary().sessionsToday }}</span>
-            <span class="tc-stat-lbl">Sessions Today</span>
+            <span class="tc-stat-val">{{ totalHoursFiltered() }}h</span>
+            <span class="tc-stat-lbl">Total Hours</span>
           </div>
         </div>
       </div>
 
-      <!-- Sessions Table -->
+      <!-- Search & Filters -->
+      <div class="tc-filters-row">
+        <div class="tc-search-bar">
+          <i class="bx bx-search"></i>
+          <input type="text" placeholder="Search employees..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+        </div>
+        <select class="tc-filter" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+          <option value="all">All Employees</option>
+          <option value="active">Active (Online)</option>
+          <option value="offline">Offline</option>
+          <option value="has-hours">Has Hours</option>
+          <option value="no-hours">No Hours</option>
+        </select>
+      </div>
+
+      <!-- Employee Roster Table -->
       <div class="tc-table-wrap">
         <table class="tc-table">
           <thead>
             <tr>
-              <th>User</th>
-              <th>Login Time</th>
-              <th>Logout Time</th>
-              <th>Duration</th>
-              <th>Logout Reason</th>
+              <th>Employee</th>
+              <th>Status</th>
+              <th class="tc-hours-col">Total Hours</th>
+              <th>Sessions</th>
+              <th>Last Active</th>
             </tr>
           </thead>
           <tbody>
-            @for (s of paginatedSessions(); track s.id) {
+            @for (emp of filteredRoster(); track emp.userId) {
               <tr>
                 <td class="tc-user-cell">
-                  <div class="tc-avatar">{{ (s.userName || 'U').charAt(0) }}</div>
+                  <div class="tc-avatar">{{ (emp.userName || 'U').charAt(0) }}</div>
                   <div class="tc-user-info">
-                    <strong>{{ s.userName || 'Unknown' }}</strong>
-                    <span>{{ s.userEmail || '' }}</span>
+                    <strong>{{ emp.userName }}</strong>
+                    <span>{{ emp.userEmail }}</span>
                   </div>
                 </td>
-                <td>{{ formatDateTime(s.loginTime) }}</td>
-                <td>{{ s.logoutTime ? formatDateTime(s.logoutTime) : '—' }}</td>
                 <td>
-                  @if (s.durationMinutes != null) {
-                    <span class="tc-duration">{{ formatDuration(s.durationMinutes) }}</span>
-                  } @else if (!s.logoutTime) {
+                  @if (emp.isActive) {
                     <span class="tc-active-badge">Active</span>
                   } @else {
-                    <span>—</span>
+                    <span class="tc-inactive-badge">Offline</span>
                   }
                 </td>
-                <td>
-                  <span class="tc-reason" [class]="s.logoutReason || 'active'">{{ getReasonLabel(s.logoutReason) }}</span>
-                </td>
+                <td class="tc-hours-col"><span class="tc-hours">{{ getHoursForPeriod(emp) }}h</span></td>
+                <td><span class="tc-sessions-count">{{ emp.sessionCount }}</span></td>
+                <td class="tc-last-active">{{ emp.lastActive ? formatDateTime(emp.lastActive) : '—' }}</td>
               </tr>
             } @empty {
-              <tr><td colspan="5" class="tc-empty">No sessions recorded yet</td></tr>
+              <tr><td colspan="5" class="tc-empty">No active employees found</td></tr>
             }
           </tbody>
         </table>
       </div>
-
-      <!-- Pagination -->
-      @if (totalPages() > 1) {
-        <div class="tc-pagination">
-          <span class="tc-page-info">Page {{ currentPage() }} of {{ totalPages() }} ({{ sessions().length }} sessions)</span>
-          <div class="tc-page-btns">
-            <button class="tc-page-btn" [disabled]="currentPage() <= 1" (click)="currentPage.set(1)" title="First">
-              <i class="bx bx-chevrons-left"></i>
-            </button>
-            <button class="tc-page-btn" [disabled]="currentPage() <= 1" (click)="currentPage.set(currentPage() - 1)" title="Previous">
-              <i class="bx bx-chevron-left"></i>
-            </button>
-            @for (p of visiblePages(); track p) {
-              <button class="tc-page-btn" [class.active]="p === currentPage()" (click)="currentPage.set(p)">{{ p }}</button>
-            }
-            <button class="tc-page-btn" [disabled]="currentPage() >= totalPages()" (click)="currentPage.set(currentPage() + 1)" title="Next">
-              <i class="bx bx-chevron-right"></i>
-            </button>
-            <button class="tc-page-btn" [disabled]="currentPage() >= totalPages()" (click)="currentPage.set(totalPages())" title="Last">
-              <i class="bx bx-chevrons-right"></i>
-            </button>
-          </div>
-        </div>
-      }
     </div>
   `,
   styles: [`
@@ -209,6 +178,27 @@ import { AuthService } from '../../../core/services/auth.service';
     .tc-user-info { display: flex; flex-direction: column; strong { font-size: 0.82rem; } span { font-size: 0.7rem; color: var(--text-secondary); } }
     .tc-duration { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
     .tc-active-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; background: rgba(0,255,136,0.1); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+    .tc-inactive-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; background: rgba(136,136,170,0.1); color: #8888aa; border: 1px solid rgba(136,136,170,0.3); }
+    .tc-hours { font-weight: 600; color: var(--text-primary); font-size: 0.9rem; }
+    .tc-sessions-count { font-weight: 600; color: var(--cyan); }
+    .tc-last-active { font-size: 0.78rem; color: var(--text-secondary); }
+    .tc-filter-group { display: flex; gap: 2px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; }
+    .tc-period-btn {
+      padding: 0.45rem 0.9rem; border: none; background: none; color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+      &:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+      &.active { background: rgba(0,212,255,0.12); color: var(--cyan); }
+    }
+    .tc-filters-row {
+      display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;
+    }
+    .tc-search-bar {
+      position: relative; flex: 1; display: flex; align-items: center;
+      i { position: absolute; left: 12px; color: var(--text-secondary); font-size: 1rem; }
+      input { width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem;
+        &:focus { outline: none; border-color: rgba(0,212,255,0.3); }
+        &::placeholder { color: var(--text-secondary); }
+      }
+    }
     .tc-reason {
       display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; text-transform: capitalize;
       &.manual { background: rgba(0,170,255,0.1); color: #00aaff; border: 1px solid rgba(0,170,255,0.3); }
@@ -250,6 +240,24 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   summary = signal<any>({ hoursToday: 0, hoursWeek: 0, hoursMonth: 0, sessionsToday: 0 });
   liveTimer = signal('0:00:00');
   private sessionStart = new Date();
+  periodFilter = signal<'today' | 'week' | 'month' | 'all'>('week');
+  searchTerm = signal('');
+  statusFilter = signal('all');
+  selectedWeek = signal('current');
+
+  weekOptions = (() => {
+    const weeks: { value: string; label: string }[] = [{ value: 'current', label: 'Current Week' }];
+    const now = new Date();
+    for (let i = 1; i <= 12; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (i * 7));
+      const sun = new Date(d); sun.setDate(sun.getDate() - sun.getDay());
+      const sat = new Date(sun); sat.setDate(sat.getDate() + 6);
+      const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      weeks.push({ value: i.toString(), label: `Week of ${fmt(sun)} – ${fmt(sat)}` });
+    }
+    return weeks;
+  })();
 
   currentPage = signal(1);
   pageSize = 10;
@@ -271,6 +279,106 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     return pages;
   });
 
+  private getWeekRange(): { start: Date; end: Date } {
+    const now = new Date();
+    const weekVal = this.selectedWeek();
+    const weeksAgo = weekVal === 'current' ? 0 : parseInt(weekVal) || 0;
+    const ref = new Date(now);
+    ref.setDate(ref.getDate() - (weeksAgo * 7));
+    const start = new Date(ref);
+    start.setDate(start.getDate() - start.getDay());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start, end };
+  }
+
+  employeeRoster = computed(() => {
+    const allSessions = this.sessions();
+    const allUsers = this.users();
+    const _ = this.selectedWeek();
+    const { start, end } = this.getWeekRange();
+
+    const userMap = new Map<string, any>();
+
+    // Add all roster employees first
+    for (const u of allUsers) {
+      const key = u.id?.toString();
+      if (!key) continue;
+      userMap.set(key, {
+        userId: u.id,
+        userName: u.name || u.email || 'Unknown',
+        userEmail: u.email || '',
+        totalHours: 0,
+        sessionCount: 0,
+        isActive: false,
+        lastActive: null
+      });
+    }
+
+    // Layer session data on top
+    for (const s of allSessions) {
+      const key = s.userId?.toString() || s.userEmail || s.userName;
+      if (!key) continue;
+
+      const loginTime = new Date(s.loginTime);
+
+      if (!userMap.has(key)) {
+        userMap.set(key, {
+          userId: s.userId,
+          userName: s.userName || 'Unknown',
+          userEmail: s.userEmail || '',
+          totalHours: 0,
+          sessionCount: 0,
+          isActive: false,
+          lastActive: null
+        });
+      }
+
+      const emp = userMap.get(key)!;
+      if (!s.logoutTime) emp.isActive = true;
+      if (!emp.lastActive || loginTime > new Date(emp.lastActive)) emp.lastActive = s.loginTime;
+
+      if (loginTime >= start && loginTime < end) {
+        const mins = s.durationMinutes || 0;
+        emp.totalHours += mins / 60;
+        emp.sessionCount++;
+      }
+    }
+
+    return Array.from(userMap.values()).map(e => ({
+      ...e,
+      totalHours: Math.round(e.totalHours * 10) / 10
+    })).sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0) || b.totalHours - a.totalHours);
+  });
+
+  filteredRoster = computed(() => {
+    const search = this.searchTerm().toLowerCase();
+    const status = this.statusFilter();
+    let roster = this.employeeRoster();
+    if (search) {
+      roster = roster.filter(e =>
+        e.userName.toLowerCase().includes(search) ||
+        e.userEmail.toLowerCase().includes(search)
+      );
+    }
+    if (status === 'active') roster = roster.filter(e => e.isActive);
+    else if (status === 'offline') roster = roster.filter(e => !e.isActive);
+    else if (status === 'has-hours') roster = roster.filter(e => e.totalHours > 0);
+    else if (status === 'no-hours') roster = roster.filter(e => e.totalHours === 0);
+    return roster;
+  });
+
+  activeCount = computed(() => this.employeeRoster().filter(e => e.isActive).length);
+
+  totalHoursFiltered = computed(() => {
+    return Math.round(this.employeeRoster().reduce((sum, e) => sum + e.totalHours, 0) * 10) / 10;
+  });
+
+  getHoursForPeriod(emp: any): number {
+    return emp.totalHours;
+  }
+
   ngOnInit(): void {
     this.loadSessions();
     this.loadSummary();
@@ -286,9 +394,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
 
   loadSessions(): void {
     this.currentPage.set(1);
-    const userId = this.selectedUserId();
-    const params = userId ? `?userId=${userId}&limit=200` : '?limit=200';
-    this.http.get<any>(`${this.apiUrl}/api/v1/sessions${params}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/v1/sessions?limit=2000`).subscribe({
       next: (res) => this.sessions.set(res?.data || []),
       error: () => this.sessions.set([])
     });

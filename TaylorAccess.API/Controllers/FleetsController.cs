@@ -15,12 +15,14 @@ public class FleetsController : ControllerBase
     private readonly TaylorAccessDbContext _context;
     private readonly ILogger<FleetsController> _logger;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public FleetsController(TaylorAccessDbContext context, ILogger<FleetsController> logger, CurrentUserService currentUserService)
+    public FleetsController(TaylorAccessDbContext context, ILogger<FleetsController> logger, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _logger = logger;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -108,6 +110,8 @@ public class FleetsController : ControllerBase
         _context.Fleets.Add(fleet);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "Fleet", fleet.Id, $"Created fleet {fleet.Name}");
+
         return CreatedAtAction(nameof(GetFleet), new { id = fleet.Id }, new { data = fleet });
     }
 
@@ -125,6 +129,9 @@ public class FleetsController : ControllerBase
         fleet.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("update", "Fleet", fleet.Id, $"Updated fleet {fleet.Name}");
+
         return Ok(new { data = fleet });
     }
 
@@ -139,6 +146,8 @@ public class FleetsController : ControllerBase
         {
             _context.FleetDrivers.Add(new FleetDriver { FleetId = id, DriverId = request.DriverId, AssignedAt = DateTime.UtcNow });
             await _context.SaveChangesAsync();
+
+            await _auditService.LogAsync("driver_assigned", "Fleet", id, $"Assigned driver {request.DriverId} to fleet {id}");
         }
         return await GetFleet(id);
     }
@@ -151,6 +160,8 @@ public class FleetsController : ControllerBase
         {
             _context.FleetDrivers.Remove(assignment);
             await _context.SaveChangesAsync();
+
+            await _auditService.LogAsync("driver_removed", "Fleet", id, $"Removed driver {request.DriverId} from fleet {id}");
         }
         return await GetFleet(id);
     }
@@ -166,6 +177,8 @@ public class FleetsController : ControllerBase
         {
             _context.FleetVehicles.Add(new FleetVehicle { FleetId = id, VehicleId = request.VehicleId, AssignedAt = DateTime.UtcNow });
             await _context.SaveChangesAsync();
+
+            await _auditService.LogAsync("vehicle_assigned", "Fleet", id, $"Assigned vehicle {request.VehicleId} to fleet {id}");
         }
         return await GetFleet(id);
     }
@@ -178,6 +191,8 @@ public class FleetsController : ControllerBase
         {
             _context.FleetVehicles.Remove(assignment);
             await _context.SaveChangesAsync();
+
+            await _auditService.LogAsync("vehicle_removed", "Fleet", id, $"Removed vehicle {request.VehicleId} from fleet {id}");
         }
         return await GetFleet(id);
     }
@@ -190,6 +205,9 @@ public class FleetsController : ControllerBase
 
         _context.Fleets.Remove(fleet);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Fleet", fleet.Id, $"Deleted fleet {fleet.Name}");
+
         return Ok(new { deleted = true });
     }
 }

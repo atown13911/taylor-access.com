@@ -214,6 +214,103 @@ public class DriverDocumentsController : ControllerBase
         return File(bytes, doc.ContentType ?? "application/pdf", doc.FileName ?? "document");
     }
 
+    [HttpGet("debug-categories")]
+    public async Task<ActionResult> DebugCategories([FromQuery] int? driverId)
+    {
+        var query = _context.DriverDocuments.AsNoTracking().AsQueryable();
+        if (driverId.HasValue) query = query.Where(d => d.DriverId == driverId.Value);
+
+        var docs = await query.Select(d => new { d.Id, d.DriverId, d.DocumentName, d.Category, d.SubCategory, d.Status, d.ExpiryDate }).ToListAsync();
+        var categories = docs.GroupBy(d => d.Category).Select(g => new { category = g.Key, count = g.Count(), subs = g.Select(d => d.SubCategory).Distinct() });
+
+        return Ok(new { total = docs.Count, categories, docs });
+    }
+
+    [HttpPost("fix-categories")]
+    public async Task<ActionResult> FixDocumentCategories()
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null || (user.Role != "product_owner" && user.Role != "superadmin" && user.Role != "admin"))
+            return Unauthorized(new { error = "Admin access required" });
+
+        var docs = await _context.DriverDocuments.ToListAsync();
+        int updated = 0;
+
+        var rules = new (string category, string subCategory, string[] terms)[]
+        {
+            ("cdl_endorsements", "cdl_license", new[] { "cdl", "license", "commercial driver", "class a", "class b" }),
+            ("medical", "medical_card", new[] { "medical", "dot physical", "med cert", "medical certificate", "medical card" }),
+            ("mvr", "annual_mvr", new[] { "mvr", "motor vehicle record", "driving record", "motor vehicle" }),
+            ("drug_tests", "pre_employment", new[] { "drug", "alcohol", "substance", "drug test", "drug & alcohol", "pre-employment" }),
+            ("dqf", "application", new[] { "dqf", "driver qualification", "qualification file" }),
+            ("employment", "offer_letter", new[] { "employment", "verification", "offer letter", "employment verification" }),
+            ("training", "entry_level_driver", new[] { "training", "orientation", "entry level", "safety training" }),
+            ("insurance", "certificate_of_insurance", new[] { "insurance", "liability", "policy", "certificate of insurance", "cargo" }),
+            ("vehicle", "registration", new[] { "vehicle", "registration", "inspection", "truck registration", "annual inspection" }),
+            ("permits", "oversize", new[] { "permit", "twic", "hazmat", "oversize", "overweight" }),
+            ("ifta", "ifta_license", new[] { "ifta", "irp", "fuel tax" }),
+            ("safety", "safe_driver", new[] { "safety", "award", "safe driver" }),
+            ("violations", "moving_violation", new[] { "violation", "accident", "incident", "citation" }),
+            ("i9", "i9_form", new[] { "i-9", "i9", "eligibility", "employment eligibility" }),
+            ("w9", "w9_form", new[] { "w-9", "w9", "tax form", "taxpayer" }),
+            ("direct_deposit", "direct_deposit_form", new[] { "direct deposit", "bank", "ach", "routing" }),
+            ("deduction", "deduction_form", new[] { "deduction", "payroll deduction", "garnishment" }),
+        };
+
+        foreach (var doc in docs)
+        {
+            var searchText = $"{doc.DocumentName} {doc.Category} {doc.SubCategory}".ToLower();
+            bool needsUpdate = string.IsNullOrWhiteSpace(doc.Category) || 
+                               doc.Category == "other" || 
+                               doc.Category == "general" ||
+                               string.IsNullOrWhiteSpace(doc.SubCategory);
+
+            if (!needsUpdate) continue;
+
+            foreach (var (cat, sub, terms) in rules)
+            {
+                if (terms.Any(t => searchText.Contains(t)))
+                {
+                    doc.Category = cat;
+                    doc.SubCategory = sub;
+                    doc.UpdatedAt = DateTime.UtcNow;
+                    doc.Status = CalculateStatus(doc.ExpiryDate);
+                    updated++;
+                    break;
+                }
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = $"Fixed {updated} documents out of {docs.Count} total", updated, total = docs.Count });
+    }
+
+    [HttpPost("refresh-status")]
+    public async Task<ActionResult> RefreshDocumentStatus()
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null || (user.Role != "product_owner" && user.Role != "superadmin" && user.Role != "admin"))
+            return Unauthorized(new { error = "Admin access required" });
+
+        var docs = await _context.DriverDocuments.ToListAsync();
+        int updated = 0;
+
+        foreach (var doc in docs)
+        {
+            var newStatus = CalculateStatus(doc.ExpiryDate);
+            if (doc.Status != newStatus)
+            {
+                doc.Status = newStatus;
+                doc.UpdatedAt = DateTime.UtcNow;
+                updated++;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = $"Updated status on {updated} documents", updated, total = docs.Count });
+    }
+
     private static string CalculateStatus(DateTime? expiryDate)
     {
         if (!expiryDate.HasValue) return "active";

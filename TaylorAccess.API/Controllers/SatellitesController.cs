@@ -14,11 +14,13 @@ public class SatellitesController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public SatellitesController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public SatellitesController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -166,6 +168,8 @@ public class SatellitesController : ControllerBase
         _context.Satellites.Add(satellite);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "Satellite", satellite.Id, $"Created satellite {satellite.Name}");
+
         return CreatedAtAction(nameof(GetSatellite), new { id = satellite.Id }, satellite);
     }
 
@@ -252,6 +256,8 @@ public class SatellitesController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "Satellite", satellite.Id, $"Updated satellite {satellite.Name}");
+
         return Ok(satellite);
     }
 
@@ -277,6 +283,8 @@ public class SatellitesController : ControllerBase
 
         _context.Satellites.Remove(satellite);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "Satellite", satellite.Id, $"Deleted satellite {satellite.Name}");
 
         return NoContent();
     }
@@ -357,6 +365,8 @@ public class SatellitesController : ControllerBase
         _context.SatelliteOwners.Add(owner);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("owner_added", "SatelliteOwner", owner.Id, $"Added owner {owner.Name} to satellite {satelliteId}");
+
         return Ok(new { data = owner, message = "Owner added" });
     }
 
@@ -374,6 +384,9 @@ public class SatellitesController : ControllerBase
         if (req.UserId.HasValue) owner.UserId = req.UserId;
 
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("owner_updated", "SatelliteOwner", owner.Id, $"Updated owner {owner.Name} on satellite {satelliteId}");
+
         return Ok(new { data = owner, message = "Owner updated" });
     }
 
@@ -385,6 +398,9 @@ public class SatellitesController : ControllerBase
 
         _context.SatelliteOwners.Remove(owner);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("owner_deleted", "SatelliteOwner", owner.Id, $"Deleted owner {owner.Name} from satellite {satelliteId}");
+
         return Ok(new { deleted = true });
     }
 }

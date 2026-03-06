@@ -17,11 +17,13 @@ public class JobTitlesController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public JobTitlesController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public JobTitlesController(TaylorAccessDbContext context, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     /// <summary>
@@ -174,6 +176,8 @@ public class JobTitlesController : ControllerBase
         _context.JobTitles.Add(jobTitle);
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("create", "JobTitle", jobTitle.Id, $"Created job title {jobTitle.Title}");
+
         return CreatedAtAction(nameof(GetJobTitles), new { id = jobTitle.Id }, jobTitle);
     }
 
@@ -209,6 +213,8 @@ public class JobTitlesController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "JobTitle", jobTitle.Id, $"Updated job title {jobTitle.Title}");
+
         return Ok(jobTitle);
     }
 
@@ -233,6 +239,8 @@ public class JobTitlesController : ControllerBase
 
         _context.JobTitles.Remove(jobTitle);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "JobTitle", jobTitle.Id, $"Deleted job title {jobTitle.Title}");
 
         return Ok(new { message = "Job title deleted successfully" });
     }

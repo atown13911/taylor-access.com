@@ -46,14 +46,14 @@ public class EmployeeRoster
     [MaxLength(20)]
     public string? SSN { get; set; }
     
-    [MaxLength(200)]
+    [MaxLength(500)]
     public string? HomeAddress { get; set; }
     public string? City { get; set; }
     public string? State { get; set; }
     public string? ZipCode { get; set; }
     public string? Country { get; set; }
 
-    [MaxLength(200)]
+    [MaxLength(500)]
     public string? EmergencyContactName { get; set; }
     
     [MaxLength(50)]

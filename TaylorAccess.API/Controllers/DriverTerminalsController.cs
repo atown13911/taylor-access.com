@@ -15,12 +15,14 @@ public class DriverTerminalsController : ControllerBase
     private readonly TaylorAccessDbContext _context;
     private readonly ILogger<DriverTerminalsController> _logger;
     private readonly CurrentUserService _currentUserService;
+    private readonly IAuditService _auditService;
 
-    public DriverTerminalsController(TaylorAccessDbContext context, ILogger<DriverTerminalsController> logger, CurrentUserService currentUserService)
+    public DriverTerminalsController(TaylorAccessDbContext context, ILogger<DriverTerminalsController> logger, CurrentUserService currentUserService, IAuditService auditService)
     {
         _context = context;
         _logger = logger;
         _currentUserService = currentUserService;
+        _auditService = auditService;
     }
 
     [HttpGet]
@@ -125,6 +127,7 @@ public class DriverTerminalsController : ControllerBase
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Created driver terminal {Name} in division {DivisionId}", terminal.Name, terminal.DivisionId);
+        await _auditService.LogAsync("create", "DriverTerminal", terminal.Id, $"Created driver terminal {terminal.Name}");
 
         return CreatedAtAction(nameof(GetDriverTerminal), new { id = terminal.Id }, new { data = terminal });
     }
@@ -145,6 +148,8 @@ public class DriverTerminalsController : ControllerBase
         terminal.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        await _auditService.LogAsync("update", "DriverTerminal", terminal.Id, $"Updated driver terminal {terminal.Name}");
+
         return Ok(new { data = terminal });
     }
 
@@ -161,6 +166,8 @@ public class DriverTerminalsController : ControllerBase
 
         _context.DriverTerminals.Remove(terminal);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync("delete", "DriverTerminal", terminal.Id, $"Deleted driver terminal {terminal.Name}");
 
         return Ok(new { deleted = true });
     }

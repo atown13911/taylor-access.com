@@ -30,13 +30,15 @@ export class DriverDatabaseComponent implements OnInit {
     cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drug: 'drug_tests',
     dqf: 'dqf', employment: 'employment', training: 'training',
     insurance: 'insurance', vehicle: 'vehicle', permits: 'permits',
-    ifta: 'ifta', safety: 'safety', violations: 'violations'
+    ifta: 'ifta', safety: 'safety', violations: 'violations',
+    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction'
   };
   private readonly subMap: Record<string, string> = {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drug: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
     insurance: 'certificate_of_insurance', vehicle: 'registration', permits: 'oversize',
-    ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation'
+    ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation',
+    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form'
   };
 
   loading = signal(false);
@@ -81,7 +83,8 @@ export class DriverDatabaseComponent implements OnInit {
 
     for (const driver of drivers) {
       for (const item of requiredItems) {
-        const doc = this.getDocForDriver(driver.id, item);
+        const driverDocs: any[] = driver._docs || [];
+        const doc = this.findDocInList(driverDocs, item);
         if (doc) {
           uploaded++;
           if (doc.status === 'expired') expired++;
@@ -129,9 +132,12 @@ export class DriverDatabaseComponent implements OnInit {
       }, 0);
   });
   
+  docsReady = signal(false);
+
   ngOnInit() {
     this.loadAllDocs();
     this.loadDrivers().then(() => {
+      this.attachDocsToDrivers();
       // Check for driverId query param to auto-open profile
       this.route.queryParams.subscribe(params => {
         const driverId = params['driverId'];
@@ -425,7 +431,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   loadAllDocs(): void {
-    this.api.getDriverDocuments().subscribe({
+    this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?limit=5000`).subscribe({
       next: (res: any) => this.allDocs.set(res?.data || []),
       error: () => this.allDocs.set([])
     });
@@ -443,43 +449,9 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getCompDoc(driver: any, key: string): any {
-    const sub = this.subMap[key];
-    const cat = this.catMap[key];
     const docs = this.driverDocs();
     if (docs.length === 0) return null;
-
-    // Try exact subcategory match first
-    let doc = docs.find(d => d.subCategory === sub);
-    if (doc) return doc;
-
-    // Try by category
-    if (cat) {
-      doc = docs.find(d => d.category === cat);
-      if (doc) return doc;
-    }
-
-    // Try by label match in document name
-    const labels: Record<string, string[]> = {
-      cdl: ['cdl', 'license', 'cdl_license'],
-      medical: ['medical', 'dot physical', 'medical_card'],
-      mvr: ['mvr', 'motor vehicle', 'annual_mvr'],
-      drug: ['drug', 'alcohol', 'drug_test', 'pre_employment'],
-      dqf: ['dqf', 'qualification', 'application'],
-      employment: ['employment', 'verification', 'offer_letter', 'w4', 'i9'],
-      training: ['training', 'entry_level'],
-      insurance: ['insurance', 'certificate_of_insurance'],
-      vehicle: ['vehicle', 'registration', 'inspection'],
-      permits: ['permit', 'twic', 'oversize'],
-      ifta: ['ifta', 'irp'],
-      safety: ['safety', 'award'],
-      violations: ['violation', 'accident']
-    };
-
-    const terms = labels[key] || [key];
-    return docs.find(d => {
-      const name = ((d.documentName || '') + ' ' + (d.documentType || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
-      return terms.some(t => name.includes(t));
-    }) || null;
+    return this.findDocInList(docs, key);
   }
 
   viewCompDoc(item: any): void {
@@ -507,14 +479,20 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getComplianceClass(driver: any, item: string): string {
+    const ready = this.docsReady();
     const status = this.getItemStatus(driver, item);
     if (status === 'compliant') return 'dot dot-green';
     if (status === 'expiring') return 'dot dot-yellow';
     if (status === 'expired') return 'dot dot-red';
 
-    // Check uploaded docs for any driver
-    const doc = this.getDocForDriver(driver.id, item);
+    const driverDocs: any[] = driver._docs || [];
+    const doc = this.findDocInList(driverDocs, item);
     if (doc) {
+      if (doc.expiryDate) {
+        const days = this.getDaysUntilExpiration(doc.expiryDate);
+        if (days < 0) return 'dot dot-red';
+        if (days < 30) return 'dot dot-yellow';
+      }
       if (doc.status === 'expired') return 'dot dot-red';
       if (doc.status === 'expiring') return 'dot dot-yellow';
       return 'dot dot-green';
@@ -523,31 +501,70 @@ export class DriverDatabaseComponent implements OnInit {
     return 'dot dot-gray';
   }
 
-  private getDocForDriver(driverId: any, key: string): any {
+  async attachDocsToDrivers(): Promise<void> {
+    const drivers = this.drivers();
+
+    // First, assign docs from the bulk allDocs load
+    const allDocs = this.allDocs();
+    for (const driver of drivers) {
+      const id = driver.id?.toString();
+      driver._docs = allDocs.filter((d: any) => d.driverId?.toString() === id);
+    }
+    this.drivers.set([...drivers]);
+
+    // Then, fetch per-driver docs in batches of 5 to fill gaps
+    const batchSize = 5;
+    for (let i = 0; i < drivers.length; i += batchSize) {
+      const batch = drivers.slice(i, i + batchSize);
+      const promises = batch.map(driver =>
+        this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?driverId=${driver.id}&limit=500`)
+          .toPromise()
+          .then((res: any) => { driver._docs = res?.data || []; })
+          .catch(() => {})
+      );
+      await Promise.all(promises);
+      this.drivers.set([...drivers]);
+    }
+
+    this.docsReady.set(true);
+  }
+
+  private findDocInList(docs: any[], key: string): any {
+    if (!docs || docs.length === 0) return null;
+
     const sub = this.subMap[key];
     const cat = this.catMap[key];
-    const docs = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
-    if (docs.length === 0) return null;
 
-    let doc = docs.find(d => d.subCategory === sub);
+    let doc = docs.find((d: any) => d.subCategory === sub);
     if (doc) return doc;
-    if (cat) { doc = docs.find(d => d.category === cat); if (doc) return doc; }
+    if (cat) { doc = docs.find((d: any) => d.category === cat); if (doc) return doc; }
 
-    const labels: Record<string, string[]> = {
-      cdl: ['cdl', 'license'], medical: ['medical', 'dot physical'],
-      mvr: ['mvr', 'motor vehicle'], drug: ['drug', 'alcohol'],
-      dqf: ['dqf', 'qualification'], employment: ['employment', 'verification'],
-      training: ['training'], insurance: ['insurance'],
-      vehicle: ['vehicle', 'registration'], permits: ['permit', 'twic'],
-      ifta: ['ifta', 'irp'], safety: ['safety', 'award'], violations: ['violation', 'accident'],
-      i9: ['i-9', 'i9'], w9: ['w-9', 'w9'], directDeposit: ['direct deposit', 'direct_deposit'], deduction: ['deduction']
-    };
-    const terms = labels[key] || [key];
-    return docs.find(d => {
+    const terms = this.docSearchTerms[key] || [key];
+    return docs.find((d: any) => {
       const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
-      return terms.some(t => name.includes(t));
+      return terms.some((t: string) => name.includes(t));
     }) || null;
   }
+
+  private readonly docSearchTerms: Record<string, string[]> = {
+    cdl: ['cdl', 'license', 'cdl_license', 'cdl_endorsements'],
+    medical: ['medical', 'dot physical', 'medical_card', 'med cert', 'medical certificate'],
+    mvr: ['mvr', 'motor vehicle', 'annual_mvr', 'driving record'],
+    drug: ['drug', 'alcohol', 'drug_test', 'pre_employment', 'drug_tests', 'substance'],
+    dqf: ['dqf', 'qualification', 'driver qualification', 'application'],
+    employment: ['employment', 'verification', 'offer_letter', 'hire', 'employment_verification'],
+    training: ['training', 'entry_level', 'orientation', 'entry_level_driver'],
+    insurance: ['insurance', 'certificate_of_insurance', 'liability', 'policy'],
+    vehicle: ['vehicle', 'registration', 'inspection', 'truck'],
+    permits: ['permit', 'twic', 'oversize', 'hazmat'],
+    ifta: ['ifta', 'irp', 'fuel tax'],
+    safety: ['safety', 'award', 'safe_driver'],
+    violations: ['violation', 'accident', 'incident', 'moving_violation'],
+    i9: ['i-9', 'i9', 'i9_form', 'eligibility'],
+    w9: ['w-9', 'w9', 'w9_form', 'tax'],
+    directDeposit: ['direct deposit', 'direct_deposit', 'direct_deposit_form', 'bank'],
+    deduction: ['deduction', 'deduction_form', 'payroll deduction']
+  };
 
   getComplianceTooltip(driver: any, item: string): string {
     const labels: any = {
@@ -564,63 +581,38 @@ export class DriverDatabaseComponent implements OnInit {
 
   getItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
     switch (item) {
-      case 'cdl':
-        if (!driver.licenseExpiration) return 'none';
-        return this.getExpirationStatus(driver.licenseExpiration);
-      case 'medical':
-        if (!driver.medicalCardExpiration) return 'none';
-        return this.getExpirationStatus(driver.medicalCardExpiration);
-      case 'mvr':
-        if (driver.mvrOnFile) return 'compliant';
+      case 'cdl': {
+        const exp = driver.licenseExpiry || driver.licenseExpiration;
+        if (exp) return this.getExpirationStatus(exp);
+        if (driver.licenseNumber) return 'compliant';
         return 'none';
-      case 'drug':
-        if (driver.drugTestDate) {
-          const days = this.getDaysUntilExpiration(driver.drugTestDate);
-          if (days < -365) return 'expired';
-          return 'compliant';
-        }
+      }
+      case 'medical': {
+        const exp = driver.medicalCardExpiry || driver.medicalCardExpiration;
+        if (exp) return this.getExpirationStatus(exp);
         return 'none';
-      case 'dqf':
-        if (driver.dqfComplete) return 'compliant';
-        if (driver.dqfOnFile) return 'expiring';
-        return 'none';
+      }
       case 'employment':
-        if (driver.employmentVerified || driver.hireDate) return 'compliant';
+        if (driver.hireDate || driver.employmentVerified) return 'compliant';
         return 'none';
-      case 'training':
-        if (driver.trainingComplete || driver.orientationDate) return 'compliant';
+      case 'permits': {
+        const twicExp = driver.twiccExpiry;
+        if (twicExp) return this.getExpirationStatus(twicExp);
+        if (driver.twiccCardNumber) return 'compliant';
         return 'none';
-      case 'insurance':
-        if (driver.insuranceExpiration) return this.getExpirationStatus(driver.insuranceExpiration);
+      }
+      case 'insurance': {
+        const exp = driver.insuranceExpiry || driver.insuranceExpiration;
+        if (exp) return this.getExpirationStatus(exp);
         return 'none';
-      case 'vehicle':
-        if (driver.vehicleInspectionDate) {
-          const days = this.getDaysUntilExpiration(driver.vehicleInspectionDate);
-          if (days < -90) return 'expired';
-          if (days < -60) return 'expiring';
-          return 'compliant';
-        }
-        return 'none';
-      case 'permits':
-        if (driver.permitsOnFile) return 'compliant';
-        return 'none';
-      case 'ifta':
-        if (driver.iftaCompliant) return 'compliant';
-        return 'none';
-      case 'safety':
-        if (driver.safetyAwards) return 'compliant';
-        return 'none';
-      case 'violations':
-        if (driver.violations && driver.violations > 0) return 'expired';
-        if (driver.violationsChecked) return 'compliant';
-        return 'none';
+      }
       default:
         return 'none';
     }
   }
 
   getOverallStatus(driver: any): string {
-    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations', 'i9', 'w9', 'directDeposit', 'deduction'];
     let hasExpired = false;
     let hasExpiring = false;
     let compliantCount = 0;
