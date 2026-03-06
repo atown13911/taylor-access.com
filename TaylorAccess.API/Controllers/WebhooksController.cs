@@ -8,23 +8,62 @@ namespace TaylorAccess.API.Controllers;
 
 [ApiController]
 [Route("api/v1/webhooks")]
-[Authorize(Roles = "product_owner,superadmin")]
 public class WebhooksController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly WebhookService _webhookService;
+    private readonly string _webhookSecret;
 
-    public WebhooksController(TaylorAccessDbContext context, WebhookService webhookService)
+    public WebhooksController(TaylorAccessDbContext context, WebhookService webhookService, IConfiguration configuration)
     {
         _context = context;
         _webhookService = webhookService;
+        _webhookSecret = Environment.GetEnvironmentVariable("WEBHOOK_SECRET")
+            ?? configuration["Webhooks:Secret"] ?? "";
     }
 
+    [Authorize(Roles = "product_owner,superadmin")]
     [HttpPost("replay-all")]
     public async Task<ActionResult> ReplayAll()
     {
         var users = await _context.Users.AsNoTracking().ToListAsync();
         _webhookService.FireEmployeeBulk(users);
         return Ok(new { message = $"Replaying {users.Count} employees to all webhook URLs" });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("roster")]
+    public async Task<ActionResult> GetRosterForSync()
+    {
+        if (!ValidateSecret())
+            return Unauthorized(new { error = "Invalid webhook secret" });
+
+        var users = await _context.Users
+            .AsNoTracking()
+            .Select(u => new
+            {
+                u.Id,
+                u.Name,
+                u.Email,
+                u.Role,
+                u.Status,
+                u.OrganizationId,
+                u.SatelliteId,
+                u.AgencyId,
+                u.TerminalId,
+                u.Phone,
+                u.JobTitle,
+                u.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { data = users, total = users.Count });
+    }
+
+    private bool ValidateSecret()
+    {
+        if (string.IsNullOrEmpty(_webhookSecret)) return true;
+        var provided = Request.Headers["X-Webhook-Secret"].FirstOrDefault();
+        return provided == _webhookSecret;
     }
 }
