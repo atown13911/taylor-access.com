@@ -171,6 +171,7 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<TaylorAccessDbContext>();
 
 builder.Services.AddSingleton<MetricCacheService>();
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<WebhookService>();
 
 var app = builder.Build();
@@ -258,99 +259,6 @@ using (var scope = app.Services.CreateScope())
         );
     ");
 
-    // Ensure AppRoles table and IsSuperAdmin column exist (handles existing databases)
-    try
-    {
-        await context.Database.ExecuteSqlRawAsync(@"
-            CREATE TABLE IF NOT EXISTS ""AppRoles"" (
-                ""Id"" SERIAL PRIMARY KEY,
-                ""AppClientId"" VARCHAR(100) NOT NULL,
-                ""Name"" VARCHAR(100) NOT NULL,
-                ""Description"" TEXT,
-                ""Permissions"" TEXT NOT NULL DEFAULT '[]',
-                ""IsSystem"" BOOLEAN NOT NULL DEFAULT FALSE,
-                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS ""IX_AppRoles_AppClientId_Name"" ON ""AppRoles"" (""AppClientId"", ""Name"");
-        ");
-        await context.Database.ExecuteSqlRawAsync(@"
-            ALTER TABLE ""AppRoleAssignments"" ADD COLUMN IF NOT EXISTS ""IsSuperAdmin"" BOOLEAN NOT NULL DEFAULT FALSE;
-        ");
-        await context.Database.ExecuteSqlRawAsync(@"
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccCardNumber"" VARCHAR(50);
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TwiccExpiry"" DATE;
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerName"" VARCHAR(100);
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerPhone"" VARCHAR(20);
-            ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TruckOwnerCompany"" VARCHAR(100);
-        ");
-
-        await context.Database.ExecuteSqlRawAsync(@"
-            CREATE TABLE IF NOT EXISTS ""CompanyPermits"" (
-                ""Id"" SERIAL PRIMARY KEY,
-                ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
-                ""PermitNumber"" VARCHAR(100) NOT NULL,
-                ""PermitType"" VARCHAR(50) NOT NULL DEFAULT 'overweight',
-                ""State"" VARCHAR(5),
-                ""IssueDate"" TIMESTAMP,
-                ""ExpiryDate"" TIMESTAMP,
-                ""Cost"" DECIMAL(10,2),
-                ""Status"" VARCHAR(20) NOT NULL DEFAULT 'active',
-                ""AssignedDriverId"" INTEGER,
-                ""AssignedTruckNumber"" VARCHAR(50),
-                ""Notes"" TEXT,
-                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
-                ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
-            );
-        ");
-
-        await context.Database.ExecuteSqlRawAsync(@"
-            CREATE TABLE IF NOT EXISTS ""Carriers"" (
-                ""Id"" SERIAL PRIMARY KEY,
-                ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
-                ""Name"" VARCHAR(200) NOT NULL,
-                ""McNumber"" VARCHAR(50),
-                ""DotNumber"" VARCHAR(50),
-                ""ScacCode"" VARCHAR(10),
-                ""ContactName"" VARCHAR(100),
-                ""Phone"" VARCHAR(30),
-                ""Email"" VARCHAR(100),
-                ""Address"" VARCHAR(200),
-                ""City"" VARCHAR(100),
-                ""State"" VARCHAR(5),
-                ""ZipCode"" VARCHAR(10),
-                ""InsuranceProvider"" VARCHAR(100),
-                ""InsuranceExpiry"" TIMESTAMP,
-                ""InsuranceAmount"" DECIMAL(12,2),
-                ""PaymentTerms"" VARCHAR(20) DEFAULT 'net_30',
-                ""Rating"" INTEGER DEFAULT 0,
-                ""SafetyRating"" VARCHAR(20) DEFAULT 'none',
-                ""CsaScore"" INTEGER DEFAULT 0,
-                ""Status"" VARCHAR(20) DEFAULT 'active',
-                ""TotalLoads"" INTEGER DEFAULT 0,
-                ""OnTimeRate"" DECIMAL(5,2) DEFAULT 0,
-                ""AvgRate"" DECIMAL(10,2) DEFAULT 0,
-                ""Notes"" TEXT,
-                ""IsActive"" BOOLEAN DEFAULT TRUE,
-                ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
-                ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
-            );
-        ");
-
-        // Increase VARCHAR limits on columns that are too restrictive
-        await context.Database.ExecuteSqlRawAsync(@"
-            ALTER TABLE ""Users"" ALTER COLUMN ""Name"" TYPE VARCHAR(500);
-            ALTER TABLE ""Users"" ALTER COLUMN ""PasswordHash"" TYPE VARCHAR(500);
-            ALTER TABLE ""Users"" ALTER COLUMN ""LandstarPassword"" TYPE VARCHAR(500);
-            ALTER TABLE ""Users"" ALTER COLUMN ""PowerdatPassword"" TYPE VARCHAR(500);
-            ALTER TABLE ""EmployeeRosters"" ALTER COLUMN ""HomeAddress"" TYPE VARCHAR(500);
-            ALTER TABLE ""EmployeeRosters"" ALTER COLUMN ""EmergencyContactName"" TYPE VARCHAR(500);
-        ");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Schema update note: {ex.Message}");
-    }
-
     await roleService.SeedDefaultRolesAsync();
 
     if (!context.Users.Any())
@@ -389,7 +297,7 @@ using (var scope = app.Services.CreateScope())
         ("ta_taylor_academy", "academy-sso-secret-2026", "Taylor Academy", "Learning Management System", "https://taylor-academy.net",
             new[] { "https://taylor-academy.net", "https://taylor-academy.net/callback", "http://localhost:4202", "http://localhost:4202/callback" }),
         ("ta_taylor_accounting", "taylor-accounting-sso-secret-2026", "TSS Accounting", "Financial Operations & Ledger", "https://taylor-accounting.net",
-            new[] { "https://taylor-accounting.net", "https://taylor-accounting.net/callback", "https://taylor-accounting.pages.dev", "https://taylor-accounting.pages.dev/callback", "http://localhost:4203", "http://localhost:4203/callback" }),
+            new[] { "https://taylor-accounting.net", "https://taylor-accounting.net/callback", "http://localhost:4203", "http://localhost:4203/callback" }),
         ("ta_taylor_assets", "taylor-assets-sso-secret-2026", "Taylor Assets", "Asset & Document Management", "https://taylor-assets.com",
             new[] { "https://taylor-assets.com", "https://taylor-assets.com/callback", "http://localhost:4204", "http://localhost:4204/callback" }),
         ("ta_taylor_landstar", "taylor-landstar-sso-secret-2026", "Landstar", "Landstar Integration & Loads", "https://taylor-last.com",
@@ -402,14 +310,11 @@ using (var scope = app.Services.CreateScope())
             new[] { "https://taylor-access.com", "https://taylor-access.com/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
         ("ta_commlink", "commlink-sso-secret-2026", "CommLink", "Secure Logistics Communications", "https://taylorcommlink.com",
             new[] { "https://taylorcommlink.com", "https://taylorcommlink.com/callback", "http://localhost:3002", "http://localhost:3002/callback" }),
-        ("ta_taylor_echo", "taylor-echo-sso-secret-2026", "Taylor Echo", "Audit Log & Activity Monitor", "https://echo-protocol.net",
-            new[] { "https://echo-protocol.net", "https://echo-protocol.net/callback", "https://taylor-echo.pages.dev", "https://taylor-echo.pages.dev/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
     };
 
     foreach (var (clientId, secret, name, desc, homepage, uris) in allClients)
     {
-        var existing = await context.OAuthClients.FirstOrDefaultAsync(c => c.ClientId == clientId);
-        if (existing == null)
+        if (!await context.OAuthClients.AnyAsync(c => c.ClientId == clientId))
         {
             context.OAuthClients.Add(new OAuthClient
             {
@@ -421,19 +326,6 @@ using (var scope = app.Services.CreateScope())
                 RedirectUris = System.Text.Json.JsonSerializer.Serialize(uris)
             });
             Console.WriteLine($"Seeded OAuth client: {name} ({clientId})");
-        }
-        else
-        {
-            var newUris = System.Text.Json.JsonSerializer.Serialize(uris);
-            if (existing.RedirectUris != newUris || existing.HomepageUrl != homepage)
-            {
-                existing.RedirectUris = newUris;
-                existing.HomepageUrl = homepage;
-                existing.Name = name;
-                existing.Description = desc;
-                existing.UpdatedAt = DateTime.UtcNow;
-                Console.WriteLine($"Updated OAuth client: {name} ({clientId})");
-            }
         }
     }
     await context.SaveChangesAsync();
