@@ -60,6 +60,43 @@ public class WebhooksController : ControllerBase
         return Ok(new { data = users, total = users.Count });
     }
 
+    [AllowAnonymous]
+    [HttpGet("drivers")]
+    public async Task<ActionResult> GetDriversForSync()
+    {
+        if (!ValidateSecret())
+            return Unauthorized(new { error = "Invalid webhook secret" });
+
+        var drivers = await _context.Drivers
+            .AsNoTracking()
+            .Select(d => new
+            {
+                d.Id,
+                d.Name,
+                d.Email,
+                d.Phone,
+                d.Status,
+                d.DriverType,
+                d.OrganizationId,
+                d.SatelliteId,
+                d.AgencyId,
+                d.HomeTerminalId,
+                d.LicenseNumber,
+                d.LicenseClass,
+                d.LicenseState,
+                d.LicenseExpiry,
+                d.MedicalCardExpiry,
+                d.TruckNumber,
+                d.PayRate,
+                d.PayType,
+                d.HireDate,
+                d.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { data = drivers, total = drivers.Count });
+    }
+
     private bool ValidateSecret()
     {
         if (string.IsNullOrEmpty(_webhookSecret)) return true;
