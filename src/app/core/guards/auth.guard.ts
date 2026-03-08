@@ -48,10 +48,4 @@ export const authGuard: CanActivateFn = async () => {
 function cleanup(auth: AuthService, _router: Router) {
   sessionStorage.removeItem(VALIDATED_KEY);
   auth.logout();
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('local')) {
-    _router.navigate(['/login']);
-  } else {
-    window.location.href = 'https://tss-portal.com';
-  }
 }
