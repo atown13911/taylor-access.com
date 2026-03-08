@@ -2060,9 +2060,9 @@ import { AuthService } from '../../../core/services/auth.service';
     }
 
     .stat-card {
-      background: rgba(26, 26, 46, 0.6);
+      background: rgba(10, 10, 20, 0.85);
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
       padding: 16px;
       display: flex;
@@ -2123,6 +2123,10 @@ import { AuthService } from '../../../core/services/auth.service';
       gap: 4px;
       margin-bottom: 16px;
       border-bottom: 1px solid #2a2a4e;
+      background: rgba(10, 10, 20, 0.85);
+      backdrop-filter: blur(12px);
+      border-radius: 10px 10px 0 0;
+      padding: 0 8px;
     }
 
     .roster-tab {
@@ -2160,7 +2164,8 @@ import { AuthService } from '../../../core/services/auth.service';
       gap: 2px;
       margin-bottom: 16px;
       padding: 4px;
-      background: rgba(0, 0, 0, 0.2);
+      background: rgba(10, 10, 20, 0.85);
+      backdrop-filter: blur(12px);
       border-radius: 10px;
       width: fit-content;
     }
