@@ -107,13 +107,6 @@
         <span>{{ currentTime | date:'h:mm:ss a' }}</span>
       </div>
 
-      <!-- Org Switcher -->
-      <div class="topbar-org" (click)="showOrgDropdown.set(!showOrgDropdown())">
-        <i class="bx bxs-buildings"></i>
-        <span>{{ currentUser()?.organizationName || 'All Organizations' }}</span>
-        <i class="bx bx-chevron-down"></i>
-      </div>
-
       <div class="topbar-right">
         <a class="topbar-btn" href="https://tss-portal.com" title="TSS Portal">
           <i class="bx bx-grid-alt"></i>
