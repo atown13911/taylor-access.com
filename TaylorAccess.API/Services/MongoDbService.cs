@@ -116,8 +116,14 @@ public class MongoDbService : IMongoDbService
         _logger = logger;
 
         var connectionString = Environment.GetEnvironmentVariable("MONGODB_URL")
-            ?? configuration.GetConnectionString("MongoDB")
-            ?? "mongodb://mongo:kKDhBeGiRQeUCWlIDTqfmzLINycCDvNf@caboose.proxy.rlwy.net:24075";
+            ?? configuration.GetConnectionString("MongoDB");
+
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            _logger.LogWarning("No MONGODB_URL configured — MongoDbService disabled (use GatewayMongoDbService instead)");
+            _isConnected = false;
+            return;
+        }
 
         if (!connectionString.Contains("authSource"))
             connectionString += (connectionString.Contains('?') ? "&" : "?") + "authSource=admin";
