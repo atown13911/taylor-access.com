@@ -38,8 +38,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
                              currentUrl.includes('/callback') ||
                              currentUrl.includes('/oauth/');
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.interceptor.ts:401',message:'Interceptor caught 401',data:{requestUrl:req.url,currentUrl:currentUrl,isPublicPage:isPublicPage},timestamp:Date.now(),hypothesisId:'F'}),keepalive:true}).catch(()=>{});
+        // #endregion
+
         if (!isPublicPage) {
-          console.warn('Token expired or invalid — redirecting to portal');
           authService.logout();
         }
       }

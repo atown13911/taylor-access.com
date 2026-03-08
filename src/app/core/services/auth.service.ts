@@ -122,6 +122,9 @@ export class AuthService {
   }
 
   logout(reason: string = 'manual'): void {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.service.ts:logout',message:'LOGOUT called',data:{reason:reason,stack:new Error().stack?.split('\n').slice(0,6)},timestamp:Date.now(),hypothesisId:'F,G,H'}),keepalive:true}).catch(()=>{});
+    // #endregion
     if (this.onLogoutCallback) {
       try { this.onLogoutCallback(reason); } catch {}
     }
