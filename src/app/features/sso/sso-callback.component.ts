@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -24,6 +25,7 @@ import { environment } from '../../../environments/environment';
 export class SsoCallbackComponent implements OnInit {
   private router = inject(Router);
   private http = inject(HttpClient);
+  private authService = inject(AuthService);
   private portalApiUrl = environment.portalApiUrl;
   portalUrl = environment.portalUrl;
 
@@ -67,17 +69,29 @@ export class SsoCallbackComponent implements OnInit {
           headers: { Authorization: `Bearer ${accessToken}` }
         }).subscribe({
           next: (userInfo) => {
-            localStorage.setItem('vantac_token', accessToken);
-            localStorage.setItem('vantac_user', JSON.stringify({
+            const user = {
               id: userInfo.sub,
               name: userInfo.name,
               email: userInfo.email,
               role: userInfo.role,
-              avatar: userInfo.avatar,
-              organizationId: userInfo.organizationId,
+              avatarUrl: userInfo.avatar,
+              organizationId: userInfo.organizationId?.toString(),
               organizationName: userInfo.organizationName,
-            }));
+            };
+            const org = userInfo.organizationId ? {
+              id: userInfo.organizationId.toString(),
+              name: userInfo.organizationName || '',
+              status: 'active',
+            } : null;
+
+            localStorage.setItem('vantac_token', accessToken);
+            localStorage.setItem('vantac_user', JSON.stringify(user));
+            if (org) localStorage.setItem('vantac_org', JSON.stringify(org));
             if (refreshToken) localStorage.setItem('sso_refresh_token', refreshToken);
+
+            this.authService.currentUser.set(user as any);
+            if (org) this.authService.currentOrganization.set(org as any);
+            this.authService.isAuthenticated.set(true);
 
             sessionStorage.setItem('access_token_validated', 'true');
             this.router.navigate(['/dashboard']);

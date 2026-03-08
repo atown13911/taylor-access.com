@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
+import { AuthService } from '../../../core/services/auth.service';
 import { ChatService, ChatChannel, ChatConversation, ChatMessage, ChatUser } from './services/chat.service';
 import { environment } from '../../../../environments/environment';
 
@@ -656,7 +657,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   goToLogin(): void {
-    this.router.navigate(['/login']);
+    inject(AuthService).logout();
   }
 
   // ========== Shipment View ==========

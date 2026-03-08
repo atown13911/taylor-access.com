@@ -14,9 +14,8 @@ export const navPermissionGuard: CanActivateFn = (route) => {
     return true;
   }
 
-  // Not logged in
   if (!user) {
-    router.navigate(['/login']);
+    inject(AuthService).logout();
     return false;
   }
 
