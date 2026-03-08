@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using MongoDB.Bson;
+using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +14,26 @@ var backendUrl = Environment.GetEnvironmentVariable("BACKEND_URL")
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
     ?? "TaylorAccess-Super-Secret-Key-Change-In-Production-2026!";
+
+var mongoUrl = Environment.GetEnvironmentVariable("MONGO_URL")
+    ?? builder.Configuration["MongoUrl"];
+
+// MongoDB for audit logging
+IMongoCollection<BsonDocument>? auditCollection = null;
+if (!string.IsNullOrEmpty(mongoUrl))
+{
+    try
+    {
+        var mongoClient = new MongoClient(mongoUrl);
+        var db = mongoClient.GetDatabase("taylor_access");
+        auditCollection = db.GetCollection<BsonDocument>("gateway_logs");
+        Console.WriteLine("MongoDB connected for gateway audit logging");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"MongoDB connection failed: {ex.Message} — gateway logging disabled");
+    }
+}
 
 // YARP Reverse Proxy
 builder.Services.AddReverseProxy()
@@ -96,8 +119,52 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 app.UseCors();
 app.UseAuthentication();
 
+// Request logging middleware — logs every request to MongoDB
+app.Use(async (context, next) =>
+{
+    var sw = Stopwatch.StartNew();
+    var method = context.Request.Method;
+    var path = context.Request.Path.ToString();
+    var query = context.Request.QueryString.ToString();
+    var ip = context.Connection.RemoteIpAddress?.ToString();
+    var userAgent = context.Request.Headers["User-Agent"].FirstOrDefault();
+    var origin = context.Request.Headers["Origin"].FirstOrDefault();
+    var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+    await next();
+
+    sw.Stop();
+    var statusCode = context.Response.StatusCode;
+
+    Console.WriteLine($"[{DateTime.UtcNow:HH:mm:ss}] {method} {path} → {statusCode} ({sw.ElapsedMilliseconds}ms) user={userId ?? "-"}");
+
+    if (auditCollection != null)
+    {
+        try
+        {
+            var doc = new BsonDocument
+            {
+                { "timestamp", DateTime.UtcNow },
+                { "method", method },
+                { "path", path },
+                { "query", query ?? "" },
+                { "statusCode", statusCode },
+                { "durationMs", sw.ElapsedMilliseconds },
+                { "userId", userId ?? BsonNull.Value.ToString() },
+                { "ip", ip ?? "" },
+                { "userAgent", userAgent ?? "" },
+                { "origin", origin ?? "" },
+                { "service", "gateway" }
+            };
+            _ = auditCollection.InsertOneAsync(doc);
+        }
+        catch { }
+    }
+});
+
 app.MapHealthChecks("/health");
 app.MapReverseProxy();
 
-Console.WriteLine($"Taylor Access Gateway started - forwarding to {backendUrl}");
+Console.WriteLine($"Taylor Access Gateway started — forwarding to {backendUrl}");
+Console.WriteLine($"MongoDB logging: {(auditCollection != null ? "enabled" : "disabled")}");
 app.Run();
