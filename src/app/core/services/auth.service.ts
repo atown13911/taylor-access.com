@@ -1,6 +1,5 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
 import { Observable, tap, catchError, of, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -31,43 +30,17 @@ export interface Organization {
   status: string;
 }
 
-export interface AuthResponse {
-  token: string;
-  user: User;
-  organization?: Organization;
-  permissions?: string[];
-}
-
-export interface RegisterRequest {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-  companyName?: string;
-}
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
-}
-
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
-  private router = inject(Router);
 
   private readonly TOKEN_KEY = 'vantac_token';
   private readonly USER_KEY = 'vantac_user';
   private readonly ORG_KEY = 'vantac_org';
   private readonly PERMS_KEY = 'vantac_permissions';
 
-  private readonly authUrl = `${environment.apiUrl}${environment.api.auth}`;
-  private readonly passwordUrl = `${environment.apiUrl}/api/v1/password`;
+  private readonly apiUrl = environment.apiUrl;
+  private readonly portalApiUrl = environment.portalApiUrl;
 
   currentUser = signal<User | null>(null);
   currentOrganization = signal<Organization | null>(null);
@@ -130,32 +103,6 @@ export class AuthService {
     this.currentOrganization.set(org);
   }
 
-  register(request: RegisterRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.authUrl}/register`, request).pipe(
-      tap(response => this.handleAuthResponse(response)),
-      catchError(error => { console.error('Registration failed:', error); throw error; })
-    );
-  }
-
-  login(email: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.authUrl}/login`, { email, password }).pipe(
-      tap(response => this.handleAuthResponse(response)),
-      catchError(error => { console.error('Login failed:', error); throw error; })
-    );
-  }
-
-  private handleAuthResponse(response: AuthResponse): void {
-    localStorage.setItem(this.TOKEN_KEY, response.token);
-    this.setStoredUser(response.user);
-    if (response.organization) {
-      this.setStoredOrganization(response.organization);
-    }
-    const perms = response.permissions ?? this.extractPermissionsFromToken();
-    localStorage.setItem(this.PERMS_KEY, JSON.stringify(perms));
-    this.permissions.set(perms);
-    this.isAuthenticated.set(true);
-  }
-
   private extractPermissionsFromToken(): string[] {
     const token = this.getToken();
     if (!token) return [];
@@ -183,7 +130,8 @@ export class AuthService {
     this.currentOrganization.set(null);
     this.isAuthenticated.set(false);
     this.permissions.set([]);
-    window.location.href = 'https://tss-portal.com';
+    sessionStorage.removeItem('access_token_validated');
+    window.location.href = environment.portalUrl;
   }
 
   private clearStorage(): void {
@@ -191,10 +139,11 @@ export class AuthService {
     localStorage.removeItem(this.USER_KEY);
     localStorage.removeItem(this.ORG_KEY);
     localStorage.removeItem(this.PERMS_KEY);
+    localStorage.removeItem('sso_refresh_token');
   }
 
   getCurrentUser(): Observable<{ data: User }> {
-    return this.http.get<{ data: User }>(`${this.authUrl}/me`).pipe(
+    return this.http.get<{ data: User }>(`${this.apiUrl}/api/v1/auth/me`).pipe(
       tap(response => { if (response.data) this.setStoredUser(response.data); })
     );
   }
@@ -216,31 +165,6 @@ export class AuthService {
       catchError(() => {
         this.logout('session_invalid');
         return of(false);
-      })
-    );
-  }
-
-  changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.passwordUrl}/change`, { currentPassword, newPassword, confirmPassword });
-  }
-
-  forgotPassword(email: string): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.passwordUrl}/forgot`, { email });
-  }
-
-  verifyResetToken(token: string): Observable<{ valid: boolean; email?: string }> {
-    return this.http.get<{ valid: boolean; email?: string }>(`${this.passwordUrl}/verify-token?token=${token}`);
-  }
-
-  resetPassword(token: string, newPassword: string, confirmPassword: string): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.passwordUrl}/reset`, { token, newPassword, confirmPassword });
-  }
-
-  refreshApiKey(): Observable<{ apiKey: string; apiSecret: string }> {
-    return this.http.post<{ apiKey: string; apiSecret: string }>(`${this.authUrl}/refresh-api-key`, {}).pipe(
-      tap(response => {
-        const user = this.currentUser();
-        if (user) this.setStoredUser({ ...user, apiKey: response.apiKey });
       })
     );
   }

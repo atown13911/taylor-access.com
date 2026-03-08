@@ -1,73 +1,23 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
-import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <div class="login-page">
       <div class="login-card">
         <div class="brand">
           <h1 class="app-name">Taylor Access HR</h1>
-          <p class="tagline">Sign in to access your HR dashboard</p>
+          <p class="tagline">Redirecting to TSS Portal...</p>
         </div>
-
-        <form (ngSubmit)="login()" class="login-form">
-          <div class="input-group">
-            <label class="label">Email</label>
-            <input
-              type="email"
-              class="input"
-              [(ngModel)]="email"
-              name="email"
-              placeholder="Enter your email"
-              autocomplete="email"
-            />
-          </div>
-
-          <div class="input-group">
-            <label class="label">Password</label>
-            <div class="password-wrap">
-              <input
-                [type]="showPassword() ? 'text' : 'password'"
-                class="input"
-                [(ngModel)]="password"
-                name="password"
-                placeholder="Enter your password"
-                autocomplete="current-password"
-              />
-              <button type="button" class="toggle-password" (click)="showPassword.set(!showPassword())" aria-label="Toggle password visibility">
-                <span class="toggle-icon">{{ showPassword() ? '🙈' : '👁' }}</span>
-              </button>
-            </div>
-          </div>
-
-          @if (error()) {
-            <div class="error-message">
-              <span class="error-icon">⚠</span>
-              {{ error() }}
-            </div>
-          }
-
-          <button type="submit" class="btn btn-primary" [disabled]="loading()">
-            @if (loading()) {
-              <span class="spinner"></span>
-              <span>Signing in...</span>
-            } @else {
-              <span class="btn-icon">→</span>
-              <span>Sign In</span>
-            }
-          </button>
-        </form>
-
-        <p class="footer-text">Taylor Access HR v1.0</p>
+        <div class="spinner-wrap">
+          <span class="spinner"></span>
+        </div>
+        <p class="footer-text">Authenticating via TSS Portal</p>
       </div>
-
       <div class="grid-overlay"></div>
     </div>
   `,
@@ -83,23 +33,8 @@ import { environment } from '../../../environments/environment';
         linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
       background-size: 100% 100%, 40px 40px, 40px 40px;
-      background-position: center, 0 0, 0 0;
       position: relative;
     }
-
-    .login-page::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(
-        circle at center,
-        transparent 0%,
-        rgba(0, 212, 255, 0.04) 40%,
-        rgba(0, 212, 255, 0.02) 100%
-      );
-      pointer-events: none;
-    }
-
     .login-card {
       width: 100%;
       max-width: 420px;
@@ -115,166 +50,38 @@ import { environment } from '../../../environments/environment';
       z-index: 1;
       backdrop-filter: blur(12px);
     }
-
-    .brand {
-      margin-bottom: 2rem;
-    }
-
+    .brand { margin-bottom: 2rem; }
     .app-name {
       font-size: 1.75rem;
       font-weight: 600;
       color: #e0f7ff;
       margin: 0 0 0.5rem 0;
-      letter-spacing: -0.02em;
       text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
     }
-
     .tagline {
       color: rgba(0, 212, 255, 0.6);
       font-size: 0.95rem;
       margin: 0;
     }
-
-    .login-form {
+    .spinner-wrap {
       display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-      text-align: left;
-    }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .label {
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: rgba(0, 212, 255, 0.8);
-    }
-
-    .input {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(0, 212, 255, 0.05);
-      border: 1px solid rgba(0, 212, 255, 0.2);
-      border-radius: 16px;
-      color: #e0f7ff;
-      font-size: 1rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .input::placeholder {
-      color: rgba(0, 212, 255, 0.35);
-    }
-
-    .input:focus {
-      outline: none;
-      border-color: #00d4ff;
-      box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
-    }
-
-    .password-wrap {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .password-wrap .input {
-      padding-right: 48px;
-    }
-
-    .toggle-password {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: transparent;
-      border: none;
-      color: rgba(0, 212, 255, 0.5);
-      cursor: pointer;
-      padding: 4px;
-      font-size: 1.1rem;
-      transition: color 0.2s;
-    }
-
-    .toggle-password:hover {
-      color: #00d4ff;
-    }
-
-    .error-message {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 12px 16px;
-      background: rgba(255, 42, 109, 0.1);
-      border: 1px solid rgba(255, 42, 109, 0.4);
-      border-radius: 12px;
-      color: #ff2a6d;
-      font-size: 0.95rem;
-    }
-
-    .error-icon {
-      font-size: 1.1rem;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
       justify-content: center;
-      gap: 0.5rem;
-      width: 100%;
-      padding: 14px 24px;
-      font-size: 1rem;
-      font-weight: 600;
-      border-radius: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: none;
-      margin-top: 0.5rem;
+      margin: 1.5rem 0;
     }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
-      color: #050508;
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background: linear-gradient(135deg, #00ffff 0%, #00d4ff 100%);
-      box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
-      transform: translateY(-1px);
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
-
-    .btn-icon {
-      font-size: 1.1rem;
-    }
-
     .spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(5, 5, 8, 0.3);
-      border-top-color: #050508;
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(0, 212, 255, 0.2);
+      border-top-color: #00d4ff;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
+    @keyframes spin { to { transform: rotate(360deg); } }
     .footer-text {
-      margin-top: 2rem;
+      margin-top: 1rem;
       font-size: 0.75rem;
       color: rgba(0, 212, 255, 0.35);
     }
-
     .grid-overlay {
       position: absolute;
       inset: 0;
@@ -284,109 +91,11 @@ import { environment } from '../../../environments/environment';
   `]
 })
 export class LoginComponent implements OnInit {
-  private authService = inject(AuthService);
-  private router = inject(Router);
-  private route = inject(ActivatedRoute);
-
-  email = '';
-  password = '';
-  loading = signal(false);
-  error = signal('');
-  showPassword = signal(false);
-
   ngOnInit(): void {
-    const token = this.route.snapshot.queryParamMap.get('token');
-    if (token) {
-      this.handleTokenHandoff(token);
-      return;
-    }
+    const redirectUri = encodeURIComponent(window.location.origin + '/callback');
+    const clientId = environment.oauthClientId;
+    const portalUrl = environment.portalUrl;
 
-    const existingToken = localStorage.getItem('vantac_token');
-    if (existingToken) {
-      this.router.navigate(['/dashboard']);
-      return;
-    }
-
-    if (!this.route.snapshot.queryParamMap.get('manual')) {
-      const redirectUri = encodeURIComponent(window.location.origin + '/callback');
-      window.location.href = `https://tss-portal.com/oauth/authorize?response_type=code&client_id=ta_taylor_access&redirect_uri=${redirectUri}&scope=openid%20profile%20email`;
-    }
-  }
-
-  private async handleTokenHandoff(token: string): Promise<void> {
-    this.loading.set(true);
-    try {
-      const res = await fetch(`${environment.apiUrl}/oauth/userinfo`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Token invalid');
-      const userInfo = await res.json();
-
-      const user = {
-        id: userInfo.sub,
-        email: userInfo.email,
-        name: userInfo.name,
-        role: userInfo.role,
-        phone: userInfo.phone,
-        status: userInfo.status,
-        avatarUrl: userInfo.avatar,
-        organizationId: userInfo.organizationId?.toString(),
-        organizationName: userInfo.organizationName,
-        jobTitle: userInfo.jobTitle,
-        timezone: userInfo.timezone,
-        language: userInfo.language,
-      };
-
-      const org = userInfo.organizationId ? {
-        id: userInfo.organizationId.toString(),
-        name: userInfo.organizationName || '',
-        status: 'active',
-      } : null;
-
-      localStorage.setItem('vantac_token', token);
-      localStorage.setItem('vantac_user', JSON.stringify(user));
-      if (org) localStorage.setItem('vantac_org', JSON.stringify(org));
-      localStorage.setItem('vantac_permissions', JSON.stringify([]));
-      sessionStorage.setItem('access_token_validated', 'true');
-
-      this.authService.currentUser.set(user as any);
-      if (org) this.authService.currentOrganization.set(org as any);
-      this.authService.isAuthenticated.set(true);
-
-      this.router.navigate(['/dashboard']);
-    } catch {
-      this.error.set('SSO token expired. Please log in.');
-      this.loading.set(false);
-    }
-  }
-
-  login(): void {
-    if (!this.email || !this.password) {
-      this.error.set('Please enter email and password');
-      return;
-    }
-
-    this.error.set('');
-    this.loading.set(true);
-
-    this.authService.login(this.email, this.password).subscribe({
-      next: (response) => {
-        this.loading.set(false);
-        if (response?.token) {
-          this.router.navigate(['/hr/roster']);
-        } else {
-          this.error.set('Login succeeded but no token received');
-        }
-      },
-      error: (err: any) => {
-        this.loading.set(false);
-        const errorMsg =
-          err?.error?.error ||
-          err?.error?.message ||
-          err?.message ||
-          'Invalid email or password';
-        this.error.set(errorMsg);
-      }
-    });
+    window.location.href = `${portalUrl}/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=openid%20profile%20email`;
   }
 }

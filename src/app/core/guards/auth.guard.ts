@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import { environment } from '../../../environments/environment';
 
 const VALIDATED_KEY = 'access_token_validated';
 
@@ -18,7 +19,7 @@ function isTokenExpired(token: string): boolean {
 async function validateTokenOnce(token: string): Promise<boolean> {
   if (sessionStorage.getItem(VALIDATED_KEY) === 'true') return true;
   try {
-    const res = await fetch('https://taylor-accesscom-production.up.railway.app/oauth/userinfo', {
+    const res = await fetch(`${environment.portalApiUrl}/oauth/userinfo`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) { sessionStorage.setItem(VALIDATED_KEY, 'true'); return true; }
@@ -28,24 +29,23 @@ async function validateTokenOnce(token: string): Promise<boolean> {
 
 export const authGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
-  const router = inject(Router);
 
   const token = localStorage.getItem('vantac_token');
   if (!token || isTokenExpired(token)) {
-    cleanup(auth, router);
+    cleanup(auth);
     return false;
   }
 
   const valid = await validateTokenOnce(token);
   if (!valid) {
-    cleanup(auth, router);
+    cleanup(auth);
     return false;
   }
 
   return true;
 };
 
-function cleanup(auth: AuthService, _router: Router) {
+function cleanup(auth: AuthService) {
   sessionStorage.removeItem(VALIDATED_KEY);
   auth.logout();
 }
