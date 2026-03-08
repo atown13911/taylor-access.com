@@ -35,32 +35,19 @@ export const authGuard: CanActivateFn = async () => {
   const pendingRedirect = sessionStorage.getItem(SPA_REDIRECT_KEY);
   const token = localStorage.getItem('vantac_token');
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.guard.ts:entry',message:'Auth guard fired',data:{pendingRedirect:pendingRedirect,hasToken:!!token,tokenExpired:token?isTokenExpired(token):null,validated:sessionStorage.getItem(VALIDATED_KEY),url:window.location.href},timestamp:Date.now(),hypothesisId:'A,C'})}).catch(()=>{});
-  // #endregion
-
   if (pendingRedirect?.startsWith('/callback')) {
     sessionStorage.removeItem(SPA_REDIRECT_KEY);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.guard.ts:redirect',message:'Redirecting to callback',data:{pendingRedirect:pendingRedirect},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     router.navigateByUrl(pendingRedirect);
     return false;
   }
 
   if (!token || isTokenExpired(token)) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.guard.ts:no-token',message:'No valid token, logging out',data:{hasToken:!!token,expired:token?isTokenExpired(token):null},timestamp:Date.now(),hypothesisId:'A,E'}),keepalive:true}).catch(()=>{});
-    // #endregion
     cleanup(auth);
     return false;
   }
 
   const valid = await validateTokenOnce(token);
   if (!valid) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.guard.ts:invalid-token',message:'Token validation failed',data:{},timestamp:Date.now(),hypothesisId:'E'}),keepalive:true}).catch(()=>{});
-    // #endregion
     cleanup(auth);
     return false;
   }

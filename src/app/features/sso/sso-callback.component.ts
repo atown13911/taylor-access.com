@@ -34,10 +34,6 @@ export class SsoCallbackComponent implements OnInit {
   ngOnInit() {
     const params = new URLSearchParams(window.location.search);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sso-callback.ts:ngOnInit',message:'SSO callback loaded',data:{hasCode:!!params.get('code'),hasError:!!params.get('error'),url:window.location.href},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
-
     if (params.get('error')) {
       this.error = params.get('error_description') || params.get('error') || 'Authentication failed';
       return;
@@ -99,24 +95,14 @@ export class SsoCallbackComponent implements OnInit {
 
             sessionStorage.setItem('access_token_validated', 'true');
 
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sso-callback.ts:success',message:'SSO exchange complete, navigating to dashboard',data:{hasToken:!!taToken,userId:user.id},timestamp:Date.now(),hypothesisId:'verify'})}).catch(()=>{});
-            // #endregion
-
             this.router.navigate(['/dashboard']);
           },
           error: (err: any) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sso-callback.ts:ssoExchangeError',message:'SSO exchange with TA backend failed',data:{status:err?.status,errorBody:err?.error},timestamp:Date.now(),hypothesisId:'F'})}).catch(()=>{});
-            // #endregion
             this.error = err?.error?.error || 'Failed to authenticate with Taylor Access';
           }
         });
       },
-      error: (err: any) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sso-callback.ts:exchangeError',message:'Code exchange failed',data:{status:err?.status,statusText:err?.statusText,errorBody:err?.error},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
+      error: () => {
         this.error = 'Failed to exchange authorization code';
       }
     });

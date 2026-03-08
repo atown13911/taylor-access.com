@@ -89,9 +89,6 @@ export class ShellComponent implements OnInit, OnDestroy {
   ];
 
   ngOnInit(): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'shell.component.ts:ngOnInit',message:'Shell ngOnInit',data:{isAuthenticated:this.authService.isAuthenticated(),hasToken:!!localStorage.getItem('vantac_token')},timestamp:Date.now(),hypothesisId:'shell'})}).catch(()=>{});
-    // #endregion
     if (!this.authService.isAuthenticated()) {
       this.authService.logout();
       return;

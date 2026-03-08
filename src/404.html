@@ -3,9 +3,7 @@
 <head>
   <meta charset="utf-8">
   <script>
-    var savedPath = location.pathname + location.search + location.hash;
-    sessionStorage.setItem('spa_redirect', savedPath);
-    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'404.html',message:'404 fallback fired',data:{savedPath:savedPath,href:location.href},timestamp:Date.now(),hypothesisId:'B'}),keepalive:true}).catch(function(){});
+    sessionStorage.setItem('spa_redirect', location.pathname + location.search + location.hash);
     location.replace('/');
   </script>
 </head>
