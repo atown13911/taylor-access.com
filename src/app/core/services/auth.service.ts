@@ -183,7 +183,7 @@ export class AuthService {
     this.currentOrganization.set(null);
     this.isAuthenticated.set(false);
     this.permissions.set([]);
-    this.router.navigate(['/login']);
+    window.location.href = 'https://tss-portal.com';
   }
 
   private clearStorage(): void {
