@@ -95,7 +95,11 @@ export class LoginComponent implements OnInit {
     const redirectUri = encodeURIComponent(window.location.origin + '/callback');
     const clientId = environment.oauthClientId;
     const portalUrl = environment.portalUrl;
+    const targetUrl = `${portalUrl}/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=openid%20profile%20email`;
 
-    window.location.href = `${portalUrl}/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=openid%20profile%20email`;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'login.component.ts:ngOnInit',message:'Login redirecting to portal',data:{targetUrl:targetUrl},timestamp:Date.now(),hypothesisId:'E'}),keepalive:true}).catch(()=>{});
+    // #endregion
+    window.location.href = targetUrl;
   }
 }
