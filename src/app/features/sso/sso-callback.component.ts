@@ -28,6 +28,7 @@ export class SsoCallbackComponent implements OnInit {
   private http = inject(HttpClient);
   private auth = inject(AuthService);
   private baseUrl = environment.apiUrl;
+  private portalUrl = 'https://tss-portalcom-production.up.railway.app';
 
   error = '';
 
@@ -56,7 +57,7 @@ export class SsoCallbackComponent implements OnInit {
 
   private async handleToken(token: string) {
     try {
-      const res = await fetch(`${this.baseUrl}/oauth/userinfo`, {
+      const res = await fetch(`${this.portalUrl}/oauth/userinfo`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error();
@@ -79,7 +80,7 @@ export class SsoCallbackComponent implements OnInit {
   private exchangeCode(code: string) {
     const redirectUri = window.location.origin + '/callback';
 
-    this.http.post<any>(`${this.baseUrl}/oauth/token`, {
+    this.http.post<any>(`${this.portalUrl}/oauth/token`, {
       grantType: 'authorization_code',
       code,
       redirectUri,
@@ -90,7 +91,7 @@ export class SsoCallbackComponent implements OnInit {
         const accessToken = tokenRes.accessToken || tokenRes.access_token;
         const refreshToken = tokenRes.refreshToken || tokenRes.refresh_token;
 
-        this.http.get<any>(`${this.baseUrl}/oauth/userinfo`, {
+        this.http.get<any>(`${this.portalUrl}/oauth/userinfo`, {
           headers: { Authorization: `Bearer ${accessToken}` }
         }).subscribe({
           next: (userInfo) => {
