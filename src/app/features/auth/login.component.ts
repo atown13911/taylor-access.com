@@ -298,6 +298,18 @@ export class LoginComponent implements OnInit {
     const token = this.route.snapshot.queryParamMap.get('token');
     if (token) {
       this.handleTokenHandoff(token);
+      return;
+    }
+
+    const existingToken = localStorage.getItem('vantac_token');
+    if (existingToken) {
+      this.router.navigate(['/dashboard']);
+      return;
+    }
+
+    if (!this.route.snapshot.queryParamMap.get('manual')) {
+      const redirectUri = encodeURIComponent(window.location.origin + '/callback');
+      window.location.href = `https://tss-portal.com/oauth/authorize?response_type=code&client_id=ta_taylor_access&redirect_uri=${redirectUri}&scope=openid%20profile%20email`;
     }
   }
 
