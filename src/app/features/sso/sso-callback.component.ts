@@ -62,41 +62,55 @@ export class SsoCallbackComponent implements OnInit {
       clientId: environment.oauthClientId,
     }).subscribe({
       next: (tokenRes) => {
-        const accessToken = tokenRes.accessToken || tokenRes.access_token;
-        const refreshToken = tokenRes.refreshToken || tokenRes.refresh_token;
+        const portalToken = tokenRes.accessToken || tokenRes.access_token;
 
-        this.http.get<any>(`${this.portalApiUrl}/oauth/userinfo`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
+        this.http.post<any>(`${environment.apiUrl}/api/v1/auth/sso-exchange`, {
+          portalToken: portalToken,
         }).subscribe({
-          next: (userInfo) => {
+          next: (exchangeRes) => {
+            const taToken = exchangeRes.token;
+            const userData = exchangeRes.user;
+            const orgData = exchangeRes.organization;
+
             const user = {
-              id: userInfo.sub,
-              name: userInfo.name,
-              email: userInfo.email,
-              role: userInfo.role,
-              avatarUrl: userInfo.avatar,
-              organizationId: userInfo.organizationId?.toString(),
-              organizationName: userInfo.organizationName,
+              id: userData.id?.toString(),
+              name: userData.name,
+              email: userData.email,
+              role: userData.role,
+              avatarUrl: userData.avatarUrl,
+              organizationId: userData.organizationId?.toString(),
+              organizationName: userData.organizationName,
+              jobTitle: userData.jobTitle,
+              timezone: userData.timezone,
             };
-            const org = userInfo.organizationId ? {
-              id: userInfo.organizationId.toString(),
-              name: userInfo.organizationName || '',
-              status: 'active',
+            const org = orgData ? {
+              id: orgData.id?.toString(),
+              name: orgData.name || '',
+              status: orgData.status || 'active',
             } : null;
 
-            localStorage.setItem('vantac_token', accessToken);
+            localStorage.setItem('vantac_token', taToken);
             localStorage.setItem('vantac_user', JSON.stringify(user));
             if (org) localStorage.setItem('vantac_org', JSON.stringify(org));
-            if (refreshToken) localStorage.setItem('sso_refresh_token', refreshToken);
 
             this.authService.currentUser.set(user as any);
             if (org) this.authService.currentOrganization.set(org as any);
             this.authService.isAuthenticated.set(true);
 
             sessionStorage.setItem('access_token_validated', 'true');
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sso-callback.ts:success',message:'SSO exchange complete, navigating to dashboard',data:{hasToken:!!taToken,userId:user.id},timestamp:Date.now(),hypothesisId:'verify'})}).catch(()=>{});
+            // #endregion
+
             this.router.navigate(['/dashboard']);
           },
-          error: () => { this.error = 'Failed to load user profile'; }
+          error: (err: any) => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/a50aa21d-15aa-4850-852f-91d136237950',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'sso-callback.ts:ssoExchangeError',message:'SSO exchange with TA backend failed',data:{status:err?.status,errorBody:err?.error},timestamp:Date.now(),hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
+            this.error = err?.error?.error || 'Failed to authenticate with Taylor Access';
+          }
         });
       },
       error: (err: any) => {

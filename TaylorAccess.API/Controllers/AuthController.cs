@@ -154,6 +154,82 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Exchange a portal SSO token for a Taylor Access token.
+    /// Validates the portal token via the portal's userinfo endpoint,
+    /// then finds the local user and issues a Taylor Access JWT.
+    /// </summary>
+    [HttpPost("sso-exchange")]
+    public async Task<ActionResult<AuthResponse>> SsoExchange([FromBody] SsoExchangeRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.PortalToken))
+            return BadRequest(new { error = "Portal token is required" });
+
+        var portalApiUrl = Environment.GetEnvironmentVariable("PORTAL_API_URL")
+                           ?? "https://tss-portalcom-production.up.railway.app";
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", request.PortalToken);
+
+            var response = await httpClient.GetAsync($"{portalApiUrl}/oauth/userinfo");
+            if (!response.IsSuccessStatusCode)
+                return Unauthorized(new { error = "Invalid portal token" });
+
+            var json = await response.Content.ReadAsStringAsync();
+            var userInfo = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+
+            var email = userInfo.GetProperty("email").GetString();
+            if (string.IsNullOrEmpty(email))
+                return Unauthorized(new { error = "Portal token missing email claim" });
+
+            var user = await _context.Users
+                .Include(u => u.Organization)
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+
+            if (user == null)
+                return StatusCode(403, new { error = "No Taylor Access account found for this email. Contact your administrator." });
+
+            if (user.Status != "active")
+                return StatusCode(403, new { error = "Account is not active" });
+
+            user.LastLoginAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var token = await _jwtService.GenerateTokenAsync(user);
+
+            await _auditService.LogAsync(new AuditLog
+            {
+                UserId = user.Id,
+                UserName = user.Name,
+                UserEmail = user.Email,
+                OrganizationId = user.OrganizationId,
+                Action = "sso_login",
+                EntityType = "User",
+                EntityId = user.Id,
+                EntityName = user.Name,
+                Description = $"{user.Name} ({user.Email}) logged in via SSO",
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent = Request.Headers["User-Agent"].FirstOrDefault(),
+                Timestamp = DateTime.UtcNow
+            });
+
+            return Ok(new AuthResponse
+            {
+                Token = token,
+                User = new UserDto(user),
+                Organization = user.Organization != null ? new OrganizationDto(user.Organization) : null
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SSO token exchange failed");
+            return StatusCode(500, new { error = "Token exchange failed" });
+        }
+    }
+
+    /// <summary>
     /// Get current user profile
     /// </summary>
     [Authorize]
@@ -715,6 +791,7 @@ public static class SessionState
 public record InitializeRequest(string? Email, string? Password, string? Name, string? CompanyName);
 public record CreateAdminRequest(string Email, string Password, string? Name, string? Phone, string? Role);
 public record UpdatePreferencesRequest(string? Preferences);
+public record SsoExchangeRequest(string PortalToken);
 
 
 
