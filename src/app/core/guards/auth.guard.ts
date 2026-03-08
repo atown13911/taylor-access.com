@@ -1,9 +1,10 @@
 import { inject } from '@angular/core';
-import { CanActivateFn } from '@angular/router';
+import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../../environments/environment';
 
 const VALIDATED_KEY = 'access_token_validated';
+const SPA_REDIRECT_KEY = 'spa_redirect';
 
 function isTokenExpired(token: string): boolean {
   try {
@@ -29,6 +30,14 @@ async function validateTokenOnce(token: string): Promise<boolean> {
 
 export const authGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
+  const router = inject(Router);
+
+  const pendingRedirect = sessionStorage.getItem(SPA_REDIRECT_KEY);
+  if (pendingRedirect?.startsWith('/callback')) {
+    sessionStorage.removeItem(SPA_REDIRECT_KEY);
+    router.navigateByUrl(pendingRedirect);
+    return false;
+  }
 
   const token = localStorage.getItem('vantac_token');
   if (!token || isTokenExpired(token)) {

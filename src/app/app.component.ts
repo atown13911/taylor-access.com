@@ -1,5 +1,5 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme.service';
 import { ToastContainerComponent } from './shared/components/toast-container/toast-container.component';
 import { ConfirmModalComponent } from './shared/components/confirm-modal/confirm-modal.component';
@@ -23,15 +23,8 @@ import { ConfirmModalComponent } from './shared/components/confirm-modal/confirm
 })
 export class AppComponent implements OnInit {
   private themeService = inject(ThemeService);
-  private router = inject(Router);
 
   ngOnInit(): void {
     this.themeService.enableDark();
-
-    const redirect = sessionStorage.getItem('spa_redirect');
-    if (redirect) {
-      sessionStorage.removeItem('spa_redirect');
-      this.router.navigateByUrl(redirect);
-    }
   }
 }
