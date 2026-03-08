@@ -75,10 +75,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     {
       label: 'Admin',
       items: [
-        { label: 'Users', icon: 'bx bx-user', route: '/users' },
-        { label: 'Roles & Permissions', icon: 'bx bx-lock-alt', route: '/admin/roles' },
         { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit' },
-        { label: 'Invite Users', icon: 'bx bx-user-plus', route: '/admin/invite' },
         { label: 'Connected Apps (SSO)', icon: 'bx bx-link', route: '/admin/apps' },
         { label: 'Fleet Entities', icon: 'bx bx-collection', route: '/fleet-entities' },
         { label: 'HR Documents', icon: 'bx bx-file', route: '/hr/documents' },

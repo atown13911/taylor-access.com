@@ -34,10 +34,6 @@ export const routes: Routes = [
         loadComponent: () => import('./features/hr/employee-roster/employee-roster.component').then(m => m.EmployeeRosterComponent)
       },
       {
-        path: 'users',
-        loadComponent: () => import('./features/admin-security/users/users.component').then(m => m.UsersComponent)
-      },
-      {
         path: 'structure',
         loadComponent: () => import('./features/admin-security/structure/structure.component').then(m => m.StructureComponent)
       },
@@ -126,16 +122,8 @@ export const routes: Routes = [
         loadComponent: () => import('./features/hr/my-hr-profile/my-hr-profile.component').then(m => m.MyHrProfileComponent)
       },
       {
-        path: 'admin/roles',
-        loadComponent: () => import('./features/admin-security/admin/role-management/role-management.component').then(m => m.RoleManagementComponent)
-      },
-      {
         path: 'admin/audit',
         loadComponent: () => import('./features/admin-security/admin/audit-log/audit-log.component').then(m => m.AuditLogComponent)
-      },
-      {
-        path: 'admin/invite',
-        loadComponent: () => import('./features/admin-security/admin/invite-users/invite-users.component').then(m => m.InviteUsersComponent)
       },
       {
         path: 'admin/apps',
@@ -161,6 +149,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'hr/roster'
+    redirectTo: 'dashboard'
   }
 ];
