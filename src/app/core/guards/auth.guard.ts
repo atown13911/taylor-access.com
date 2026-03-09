@@ -32,17 +32,32 @@ export const authGuard: CanActivateFn = async () => {
   const router = inject(Router);
 
   const token = localStorage.getItem('vantac_token');
+  // #region agent log
+  console.log('[DEBUG-GUARD] token exists:', !!token, 'length:', token?.length);
+  // #endregion
   if (!token || isTokenExpired(token)) {
+    // #region agent log
+    console.log('[DEBUG-GUARD] REJECTED: no token or expired. expired:', token ? isTokenExpired(token) : 'no token');
+    // #endregion
     cleanup(auth, router);
     return false;
   }
 
   const valid = await validateTokenOnce(token);
+  // #region agent log
+  console.log('[DEBUG-GUARD] validateTokenOnce result:', valid);
+  // #endregion
   if (!valid) {
+    // #region agent log
+    console.log('[DEBUG-GUARD] REJECTED: validation failed');
+    // #endregion
     cleanup(auth, router);
     return false;
   }
 
+  // #region agent log
+  console.log('[DEBUG-GUARD] ALLOWED');
+  // #endregion
   return true;
 };
 

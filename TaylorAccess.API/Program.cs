@@ -95,10 +95,13 @@ else
 builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// JWT Authentication
+// JWT Authentication — accept tokens from both Taylor Access and TSS Portal
 var jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
     ?? "TaylorAccess-Super-Secret-Key-Change-In-Production-2026!";
+var portalSecretKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET_KEY")
+    ?? builder.Configuration["Jwt:PortalSecretKey"]
+    ?? "TSSPortal-Local-Dev-Secret-Key-Change-In-Production-2026!";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -106,11 +109,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+            IssuerSigningKeys = new SecurityKey[]
+            {
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalSecretKey))
+            },
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "TaylorAccess.API",
+            ValidIssuers = new[] { builder.Configuration["Jwt:Issuer"] ?? "TaylorAccess.API", "TSSPortal.API" },
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "TaylorAccess.Client",
+            ValidAudiences = new[] { builder.Configuration["Jwt:Audience"] ?? "TaylorAccess.Client", "TSSPortal.Client" },
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(5)
         };
@@ -162,10 +169,7 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<EncryptionService>();
-if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL")))
-    builder.Services.AddSingleton<IMongoDbService, GatewayMongoDbService>();
-else
-    builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
+builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 builder.Services.AddScoped<ITotpService, TotpService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();

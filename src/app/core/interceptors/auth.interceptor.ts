@@ -1,17 +1,21 @@
-import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse, HttpResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, throwError } from 'rxjs';
+import { catchError, tap, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
+
+const SESSION_VERSION_KEY = 'vantac_session_version';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const router = inject(Router);
   const token = authService.getToken();
-
+  
+  
+  // Skip adding Content-Type for FormData (file uploads) - let browser set it with boundary
   let clonedReq = req;
   const isFormData = req.body instanceof FormData;
-
+  
   if (!isFormData) {
     clonedReq = req.clone({
       headers: req.headers
@@ -19,30 +23,50 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         .set('Accept', 'application/json')
     });
   } else {
+    // For FormData, only set Accept header, let browser handle Content-Type
     clonedReq = req.clone({
       headers: req.headers.set('Accept', 'application/json')
     });
   }
-
+  
+  // Add Authorization header if token exists
   if (token) {
     clonedReq = clonedReq.clone({
       headers: clonedReq.headers.set('Authorization', `Bearer ${token}`)
     });
   }
-
+  
   return next(clonedReq).pipe(
-    catchError((error: HttpErrorResponse) => {
-      if (error.status === 401) {
-        const currentUrl = router.url;
-        const isPublicPage = currentUrl.includes('/login') ||
-                             currentUrl.includes('/callback') ||
-                             currentUrl.includes('/oauth/');
-
-        if (!isPublicPage) {
-          authService.logout();
+    tap(event => {
+      if (event instanceof HttpResponse && token) {
+        const serverVersion = event.headers.get('X-Session-Version');
+        if (serverVersion) {
+          const storedVersion = localStorage.getItem(SESSION_VERSION_KEY);
+          if (!storedVersion) {
+            localStorage.setItem(SESSION_VERSION_KEY, serverVersion);
+          } else if (storedVersion !== serverVersion) {
+            localStorage.setItem(SESSION_VERSION_KEY, serverVersion);
+          }
         }
       }
-
+    }),
+    catchError((error: HttpErrorResponse) => {
+      if (error.status === 401) {
+        // #region agent log
+        console.warn('[DEBUG-INTERCEPT] 401 for:', req.url, '- NOT logging out (auth guard handles auth)');
+        // #endregion
+      }
+      
+      // Handle 403 Forbidden
+      if (error.status === 403) {
+        console.warn('Forbidden - insufficient permissions');
+      }
+      
+      // Handle 500 Server Error
+      if (error.status >= 500) {
+        console.error('Server error:', error.message);
+      }
+      
       return throwError(() => error);
     })
   );

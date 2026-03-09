@@ -57,7 +57,13 @@ export class SsoCallbackComponent implements OnInit {
 
   private async handleToken(token: string) {
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      // #region agent log
+      console.log('[DEBUG-SSO] handleToken called, token length:', token.length);
+      // #endregion
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      // #region agent log
+      console.log('[DEBUG-SSO] payload decoded:', { userId: payload.userId, name: payload.name, role: payload.role, app_role: payload.app_role, hasPerms: !!payload.app_permissions });
+      // #endregion
 
       localStorage.setItem('vantac_token', token);
       localStorage.setItem('vantac_user', JSON.stringify({
@@ -69,11 +75,20 @@ export class SsoCallbackComponent implements OnInit {
       }));
 
       const permissions = this.extractPermissionsFromToken(token);
+      // #region agent log
+      console.log('[DEBUG-SSO] permissions extracted:', permissions.length, permissions.slice(0, 5));
+      // #endregion
       localStorage.setItem('vantac_permissions', JSON.stringify(permissions));
 
       sessionStorage.setItem('access_token_validated', 'true');
-      this.router.navigate(['/dashboard']);
-    } catch {
+      // #region agent log
+      console.log('[DEBUG-SSO] localStorage written, navigating to /dashboard via full reload');
+      // #endregion
+      window.location.href = '/dashboard';
+    } catch (err) {
+      // #region agent log
+      console.error('[DEBUG-SSO] handleToken FAILED:', err);
+      // #endregion
       this.error = 'Session expired. Please log in again.';
     }
   }

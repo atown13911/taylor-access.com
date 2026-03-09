@@ -122,6 +122,10 @@ export class AuthService {
   }
 
   logout(reason: string = 'manual'): void {
+    // #region agent log
+    console.log('[DEBUG-AUTH] logout called, reason:', reason);
+    console.trace('[DEBUG-AUTH] logout stack trace');
+    // #endregion
     if (this.onLogoutCallback) {
       try { this.onLogoutCallback(reason); } catch {}
     }

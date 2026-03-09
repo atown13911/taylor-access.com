@@ -103,7 +103,13 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // #region agent log
+    console.log('[DEBUG-SHELL] ngOnInit, isAuthenticated:', this.authService.isAuthenticated(), 'user:', this.authService.currentUser()?.name);
+    // #endregion
     if (!this.authService.isAuthenticated()) {
+      // #region agent log
+      console.log('[DEBUG-SHELL] NOT authenticated, calling logout');
+      // #endregion
       this.authService.logout();
       return;
     }
