@@ -95,11 +95,10 @@ else
 builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// JWT Authentication — Portal is the sole authority
-var portalJwtKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET_KEY")
-    ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+// JWT Authentication — Portal is the sole authority, accept any valid Portal token
+var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
-    ?? "TSSPortal-Local-Dev-Secret-Key-Change-In-Production-2026!";
+    ?? "VanTacRailwaySecretKey123456789012345678901234567890";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -107,11 +106,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalJwtKey)),
-            ValidateIssuer = true,
-            ValidIssuer = "TSSPortal.API",
-            ValidateAudience = true,
-            ValidAudience = "TSSPortal.Client",
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateIssuer = false,
+            ValidateAudience = false,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(5)
         };
