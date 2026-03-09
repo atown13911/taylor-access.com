@@ -95,12 +95,10 @@ else
 builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// JWT Authentication — accept tokens from both Taylor Access and TSS Portal
-var jwtSecretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+// JWT Authentication — Portal is the sole authority
+var portalJwtKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET_KEY")
+    ?? Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
-    ?? "TaylorAccess-Super-Secret-Key-Change-In-Production-2026!";
-var portalSecretKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET_KEY")
-    ?? builder.Configuration["Jwt:PortalSecretKey"]
     ?? "TSSPortal-Local-Dev-Secret-Key-Change-In-Production-2026!";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -109,15 +107,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = new SecurityKey[]
-            {
-                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
-                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalSecretKey))
-            },
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalJwtKey)),
             ValidateIssuer = true,
-            ValidIssuers = new[] { builder.Configuration["Jwt:Issuer"] ?? "TaylorAccess.API", "TSSPortal.API" },
+            ValidIssuer = "TSSPortal.API",
             ValidateAudience = true,
-            ValidAudiences = new[] { builder.Configuration["Jwt:Audience"] ?? "TaylorAccess.Client", "TSSPortal.Client" },
+            ValidAudience = "TSSPortal.Client",
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(5)
         };
