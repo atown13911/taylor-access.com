@@ -48,11 +48,6 @@ public class EmployeeRosterController : ControllerBase
     {
         try
         {
-            // All authenticated users see all employees.
-            // Organizations/satellites/agencies/terminals are labels only — not access gates.
-            var user = await _currentUserService.GetUserAsync();
-            if (user == null) return Unauthorized();
-
             var query = _context.Users
             .Include(u => u.Organization)
                 .ThenInclude(o => o!.AddressRef)
