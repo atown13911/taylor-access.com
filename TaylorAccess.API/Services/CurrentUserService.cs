@@ -88,7 +88,7 @@ public class CurrentUserService
         var user = await GetUserAsync();
         if (user == null) return (null, null, "Not authenticated");
 
-        if (user.Role == "product_owner" || user.Role == "superadmin")
+        if (user.Role == "product_owner" || user.Role == "superadmin" || user.Role == "development")
             return (null, user, null);
 
         if (user.OrganizationId == null)

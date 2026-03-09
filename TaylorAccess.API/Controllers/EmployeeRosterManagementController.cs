@@ -278,44 +278,69 @@ public class EmployeeRosterManagementController : ControllerBase
         var currentUser = await _currentUserService.GetUserAsync();
         var fallbackOrgId = currentUser?.OrganizationId;
 
-        foreach (var staging in pending)
+        // Load existing emails in one query to avoid per-record DB roundtrips
+        var existingEmails = await _context.Users
+            .Select(u => u.Email.ToLower())
+            .ToHashSetAsync();
+
+        const int batchSize = 50;
+
+        for (int i = 0; i < pending.Count; i += batchSize)
         {
-            try
+            var batch = pending.Skip(i).Take(batchSize).ToList();
+
+            foreach (var staging in batch)
             {
-                if (await _context.Users.AnyAsync(u => u.Email == staging.Email))
-                { errors.Add($"{staging.Email}: already exists"); staging.Status = "rejected"; continue; }
-
-                var resolvedOrgId = staging.OrganizationId ?? fallbackOrgId;
-
-                var user = new User
+                try
                 {
-                    Name = staging.Name, Email = staging.Email, Phone = staging.Phone,
-                    Role = staging.Role ?? "user", Status = "active",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("ChangeMe123!"),
-                    City = staging.City, State = staging.State, ZipCode = staging.ZipCode,
-                    OrganizationId = resolvedOrgId,
-                    CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
-                };
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
+                    if (existingEmails.Contains(staging.Email.ToLower()))
+                    {
+                        errors.Add($"{staging.Email}: already exists");
+                        staging.Status = "rejected";
+                        continue;
+                    }
 
-                _context.EmployeeRosters.Add(new EmployeeRoster
-                {
-                    UserId = user.Id, OrganizationId = resolvedOrgId ?? 1,
-                    EmployeeNumber = staging.EmployeeNumber, EmploymentStatus = "active",
-                    EmploymentType = staging.EmploymentType ?? "full-time", PayType = staging.PayType,
-                    HourlyRate = staging.HourlyRate, AnnualSalary = staging.AnnualSalary,
-                    HireDate = staging.HireDate, City = staging.City, State = staging.State, ZipCode = staging.ZipCode,
-                    EmergencyContactName = staging.EmergencyContactName, EmergencyContactPhone = staging.EmergencyContactPhone
-                });
-                staging.Status = "approved";
-                _webhookService.FireEmployeeEvent("employee.created", user);
-                approved++;
+                    var resolvedOrgId = staging.OrganizationId ?? fallbackOrgId;
+
+                    var user = new User
+                    {
+                        Name = staging.Name, Email = staging.Email, Phone = staging.Phone,
+                        Role = staging.Role ?? "user", Status = "active",
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("ChangeMe123!"),
+                        City = staging.City, State = staging.State, ZipCode = staging.ZipCode,
+                        OrganizationId = resolvedOrgId,
+                        CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.Users.Add(user);
+
+                    // Save user first to get the generated Id for the EmployeeRoster FK
+                    await _context.SaveChangesAsync();
+
+                    _context.EmployeeRosters.Add(new EmployeeRoster
+                    {
+                        UserId = user.Id, OrganizationId = resolvedOrgId ?? 1,
+                        EmployeeNumber = staging.EmployeeNumber, EmploymentStatus = "active",
+                        EmploymentType = staging.EmploymentType ?? "full-time", PayType = staging.PayType,
+                        HourlyRate = staging.HourlyRate, AnnualSalary = staging.AnnualSalary,
+                        HireDate = staging.HireDate, City = staging.City, State = staging.State, ZipCode = staging.ZipCode,
+                        EmergencyContactName = staging.EmergencyContactName, EmergencyContactPhone = staging.EmergencyContactPhone
+                    });
+                    staging.Status = "approved";
+                    existingEmails.Add(staging.Email.ToLower());
+                    approved++;
+                }
+                catch (Exception ex) { errors.Add($"{staging.Email}: {ex.Message}"); }
             }
-            catch (Exception ex) { errors.Add($"{staging.Email}: {ex.Message}"); }
+
+            // Flush roster records and staging status updates after each batch
+            await _context.SaveChangesAsync();
         }
-        await _context.SaveChangesAsync();
-        return Ok(new { approved, failed = errors.Count, errors = errors.Take(10) });
+
+        // Fire a single bulk webhook instead of one per employee
+        if (approved > 0)
+            _webhookService.FireEmployeeEvent("employees.bulk_activated", new { count = approved });
+
+        return Ok(new { approved, failed = errors.Count, errors = errors.Take(20) });
     }
 
     [HttpDelete("staging/{id}")]

@@ -94,10 +94,11 @@ import { AuthService } from '../../../core/services/auth.service';
       <div class="filters-bar">
         <input type="text" [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event); rosterPage.set(1)" placeholder="Search employees..." class="search-input">
         
-        <select [(ngModel)]="statusFilter" (ngModelChange)="loadRoster()" class="filter-select">
+        <select [(ngModel)]="statusFilter" (ngModelChange)="onStatusFilterChange()" class="filter-select">
           <option value="">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="archived">Archived</option>
         </select>
         
         <select [(ngModel)]="entityFilter" (ngModelChange)="loadRoster()" class="filter-select">
@@ -109,15 +110,15 @@ import { AuthService } from '../../../core/services/auth.service';
 
       <!-- Tabs -->
       <div class="roster-tabs">
-        <button class="roster-tab" [class.active]="rosterTab() === 'live'" (click)="rosterTab.set('live'); rosterPage.set(1)">
+        <button class="roster-tab" [class.active]="rosterTab() === 'live'" (click)="rosterTab.set('live'); statusFilter = ''; rosterPage.set(1)">
           <i class="bx bx-user-check"></i> Active
           <span class="tab-count">{{ liveEmployees().length }}</span>
         </button>
-        <button class="roster-tab" [class.active]="rosterTab() === 'deactivated'" (click)="rosterTab.set('deactivated'); rosterPage.set(1)">
+        <button class="roster-tab" [class.active]="rosterTab() === 'deactivated'" (click)="rosterTab.set('deactivated'); statusFilter = ''; rosterPage.set(1)">
           <i class="bx bx-user-x"></i> Inactive
           <span class="tab-count">{{ deactivatedEmployees().length }}</span>
         </button>
-        <button class="roster-tab" [class.active]="rosterTab() === 'archived'" (click)="rosterTab.set('archived'); rosterPage.set(1)">
+        <button class="roster-tab" [class.active]="rosterTab() === 'archived'" (click)="rosterTab.set('archived'); statusFilter = ''; rosterPage.set(1)">
           <i class="bx bx-archive"></i> Archive
           <span class="tab-count">{{ archivedEmployees().length }}</span>
         </button>
@@ -160,8 +161,9 @@ import { AuthService } from '../../../core/services/auth.service';
                   Remove {{ getDuplicateCount() }} Duplicate{{ getDuplicateCount() !== 1 ? 's' : '' }}
                 </button>
               }
-              <button class="btn-activate-all" (click)="activateAllBulk()">
-                <i class="bx bx-check-double"></i> Activate All
+              <button class="btn-activate-all" (click)="activateAllBulk()" [disabled]="activatingAll()">
+                <i class="bx" [class.bx-check-double]="!activatingAll()" [class.bx-loader-alt]="activatingAll()" [class.bx-spin]="activatingAll()"></i>
+                {{ activatingAll() ? 'Activating...' : 'Activate All' }}
               </button>
             </div>
           </div>
@@ -4296,6 +4298,7 @@ export class EmployeeRosterComponent implements OnInit {
     this.loadRoster();
     this.loadSummary();
     this.loadStaging();
+    this.loadOrganizations();
     this.route.queryParams.subscribe(p => {
       if (p['tab'] === 'import') this.rosterTab.set('import');
     });
@@ -4712,6 +4715,15 @@ export class EmployeeRosterComponent implements OnInit {
     this.editingEmployee.satelliteId = null;
     this.editingEmployee.agencyId = null;
     this.editingEmployee.terminalId = null;
+  }
+
+  onStatusFilterChange() {
+    // Sync the tab to match the status filter selection
+    if (this.statusFilter === 'active') this.rosterTab.set('live');
+    else if (this.statusFilter === 'inactive') this.rosterTab.set('deactivated');
+    else if (this.statusFilter === 'archived') this.rosterTab.set('archived');
+    this.rosterPage.set(1);
+    this.loadRoster();
   }
 
   onOrganizationChange(orgId: number) {
