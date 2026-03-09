@@ -29,7 +29,8 @@ public class CurrentUserService
     }
 
     public string? Email => _httpContextAccessor.HttpContext?.User
-        .FindFirst(ClaimTypes.Email)?.Value;
+        .FindFirst(ClaimTypes.Email)?.Value
+        ?? _httpContextAccessor.HttpContext?.User.FindFirst("email")?.Value;
 
     public string? Name => _httpContextAccessor.HttpContext?.User
         .FindFirst(ClaimTypes.Name)?.Value 
@@ -45,12 +46,25 @@ public class CurrentUserService
     {
         if (_userLoaded) return _cachedUser;
 
+        // Try by numeric ID first (Taylor Access JWT)
         var userId = UserId;
         if (userId.HasValue)
         {
             _cachedUser = await _context.Users
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Id == userId.Value);
+        }
+
+        // Fall back to email lookup (Portal JWT or any other issuer)
+        if (_cachedUser == null)
+        {
+            var email = Email;
+            if (!string.IsNullOrEmpty(email))
+            {
+                _cachedUser = await _context.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+            }
         }
 
         _userLoaded = true;

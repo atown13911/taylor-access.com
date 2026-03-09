@@ -36,27 +36,11 @@ public class DriversController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int limit = 25)
     {
-        var (orgId, user, orgErr) = await _currentUserService.ResolveOrgFilterAsync();
-        if (orgErr != null) return Unauthorized(new { message = orgErr });
-
         var query = _context.Drivers
             .AsNoTracking()
             .Include(d => d.Division)
             .Include(d => d.DriverTerminal)
             .AsQueryable();
-
-        var isSuperAdmin = user!.Role == "superadmin" || user.Role == "product_owner" || user.Role == "admin";
-
-        // Skip entity-level filtering for admin roles
-        if (!isSuperAdmin && user.Role != "fleet_manager")
-        {
-            if (user.SatelliteId.HasValue)
-                query = query.Where(d => d.SatelliteId == user.SatelliteId.Value);
-            else if (user.AgencyId.HasValue)
-                query = query.Where(d => d.AgencyId == user.AgencyId.Value);
-            else if (user.TerminalId.HasValue)
-                query = query.Where(d => d.HomeTerminalId == user.TerminalId.Value);
-        }
 
         if (!string.IsNullOrEmpty(status))
             query = query.Where(d => d.Status == status);
@@ -93,8 +77,6 @@ public class DriversController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<Driver>> GetDriver(int id)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
         var driver = await _context.Drivers
             .Include(d => d.Division)
             .Include(d => d.DriverTerminal)
