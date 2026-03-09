@@ -279,9 +279,9 @@ public class EmployeeRosterManagementController : ControllerBase
         var fallbackOrgId = currentUser?.OrganizationId;
 
         // Load existing emails in one query to avoid per-record DB roundtrips
-        var existingEmails = await _context.Users
+        var existingEmails = (await _context.Users
             .Select(u => u.Email.ToLower())
-            .ToHashSetAsync();
+            .ToListAsync()).ToHashSet();
 
         const int batchSize = 50;
 
@@ -336,9 +336,7 @@ public class EmployeeRosterManagementController : ControllerBase
             await _context.SaveChangesAsync();
         }
 
-        // Fire a single bulk webhook instead of one per employee
-        if (approved > 0)
-            _webhookService.FireEmployeeEvent("employees.bulk_activated", new { count = approved });
+        // Skip per-employee webhooks for bulk activation to avoid flooding
 
         return Ok(new { approved, failed = errors.Count, errors = errors.Take(20) });
     }
