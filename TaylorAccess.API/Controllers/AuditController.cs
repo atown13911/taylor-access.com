@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 
@@ -13,12 +15,14 @@ public class AuditController : ControllerBase
     private readonly IMongoDbService _mongo;
     private readonly IAuditService _auditService;
     private readonly CurrentUserService _currentUserService;
+    private readonly TaylorAccessDbContext _context;
 
-    public AuditController(IMongoDbService mongo, IAuditService auditService, CurrentUserService currentUserService)
+    public AuditController(IMongoDbService mongo, IAuditService auditService, CurrentUserService currentUserService, TaylorAccessDbContext context)
     {
         _mongo = mongo;
         _auditService = auditService;
         _currentUserService = currentUserService;
+        _context = context;
     }
 
     [HttpGet]
@@ -107,6 +111,38 @@ public class AuditController : ControllerBase
                 .ToDictionary(g => g.Key!, g => g.Count()),
             recentActivity = logs.OrderByDescending(l => l.Timestamp).Take(10)
         });
+    }
+
+    /// <summary>
+    /// Get activity logs for a specific user on a specific day (used by Time Clock drawer)
+    /// </summary>
+    [HttpGet("employee-day")]
+    public async Task<ActionResult<object>> GetEmployeeDay([FromQuery] string email, [FromQuery] string date)
+    {
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(date))
+            return BadRequest(new { error = "email and date are required" });
+
+        if (!DateTime.TryParse(date, out var parsedDate))
+            return BadRequest(new { error = "Invalid date format" });
+
+        var dayStart = DateTime.SpecifyKind(parsedDate.Date, DateTimeKind.Utc);
+        var dayEnd = dayStart.AddDays(1).AddTicks(-1);
+
+        var logs = await _context.AuditLogs
+            .Where(l => l.UserEmail != null &&
+                        l.UserEmail.ToLower() == email.ToLower() &&
+                        l.Timestamp >= dayStart &&
+                        l.Timestamp <= dayEnd)
+            .OrderBy(l => l.Timestamp)
+            .Select(l => new
+            {
+                l.Id, l.Action, l.UserEmail, l.UserName,
+                l.EntityType, l.EntityId, l.Description,
+                l.Timestamp, l.IpAddress
+            })
+            .ToListAsync();
+
+        return Ok(new { data = logs });
     }
 
     [HttpGet("logins")]

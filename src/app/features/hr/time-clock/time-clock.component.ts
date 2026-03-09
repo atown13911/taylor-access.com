@@ -377,7 +377,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   private apiUrl = environment.apiUrl;
   private echoApiUrl = environment.echoApiUrl;
   private clockInterval: any;
-  private readonly LOGIN_ACTIONS = ['login', 'sso_login', 'session_start'];
+  private readonly LOGIN_ACTIONS = ['login', 'sso_login', 'session_start', 'user_login', 'app_launch', 'oauth_consent'];
 
   sessions = signal<any[]>([]);
   users = signal<any[]>([]);
@@ -565,13 +565,10 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   loadEmployeeDay(userEmail: string, date: string): void {
     this.drawerLoading.set(true);
     this.employeeAuditLogs.set([]);
-
-    const dayStart = new Date(date + 'T00:00:00').toISOString();
-    const dayEnd = new Date(date + 'T23:59:59').toISOString();
     const token = this.auth.getToken();
 
-    this.http.get<any>(`${this.echoApiUrl}/api/audit-logs`, {
-      params: { search: userEmail, startDate: dayStart, endDate: dayEnd, limit: '200', sortBy: 'timestamp', sortOrder: 'asc' },
+    this.http.get<any>(`${this.apiUrl}/api/v1/audit/employee-day`, {
+      params: { email: userEmail, date },
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     }).subscribe({
       next: (res) => {
