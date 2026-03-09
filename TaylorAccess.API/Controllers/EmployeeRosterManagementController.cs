@@ -220,6 +220,9 @@ public class EmployeeRosterManagementController : ControllerBase
         var exists = await _context.Users.AnyAsync(u => u.Email == staging.Email);
         if (exists) return BadRequest(new { error = $"User with email {staging.Email} already exists" });
 
+        var currentUser = await _currentUserService.GetUserAsync();
+        var resolvedOrgId = staging.OrganizationId ?? currentUser?.OrganizationId;
+
         var user = new User
         {
             Name = staging.Name,
@@ -231,7 +234,7 @@ public class EmployeeRosterManagementController : ControllerBase
             City = staging.City,
             State = staging.State,
             ZipCode = staging.ZipCode,
-            OrganizationId = staging.OrganizationId,
+            OrganizationId = resolvedOrgId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -241,7 +244,7 @@ public class EmployeeRosterManagementController : ControllerBase
         var roster = new EmployeeRoster
         {
             UserId = user.Id,
-            OrganizationId = staging.OrganizationId ?? 1,
+            OrganizationId = resolvedOrgId ?? 1,
             EmployeeNumber = staging.EmployeeNumber,
             EmploymentStatus = "active",
             EmploymentType = staging.EmploymentType ?? "full-time",
@@ -272,6 +275,9 @@ public class EmployeeRosterManagementController : ControllerBase
         var approved = 0;
         var errors = new List<string>();
 
+        var currentUser = await _currentUserService.GetUserAsync();
+        var fallbackOrgId = currentUser?.OrganizationId;
+
         foreach (var staging in pending)
         {
             try
@@ -279,13 +285,15 @@ public class EmployeeRosterManagementController : ControllerBase
                 if (await _context.Users.AnyAsync(u => u.Email == staging.Email))
                 { errors.Add($"{staging.Email}: already exists"); staging.Status = "rejected"; continue; }
 
+                var resolvedOrgId = staging.OrganizationId ?? fallbackOrgId;
+
                 var user = new User
                 {
                     Name = staging.Name, Email = staging.Email, Phone = staging.Phone,
                     Role = staging.Role ?? "user", Status = "active",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("ChangeMe123!"),
                     City = staging.City, State = staging.State, ZipCode = staging.ZipCode,
-                    OrganizationId = staging.OrganizationId,
+                    OrganizationId = resolvedOrgId,
                     CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow
                 };
                 _context.Users.Add(user);
@@ -293,7 +301,7 @@ public class EmployeeRosterManagementController : ControllerBase
 
                 _context.EmployeeRosters.Add(new EmployeeRoster
                 {
-                    UserId = user.Id, OrganizationId = staging.OrganizationId ?? 1,
+                    UserId = user.Id, OrganizationId = resolvedOrgId ?? 1,
                     EmployeeNumber = staging.EmployeeNumber, EmploymentStatus = "active",
                     EmploymentType = staging.EmploymentType ?? "full-time", PayType = staging.PayType,
                     HourlyRate = staging.HourlyRate, AnnualSalary = staging.AnnualSalary,
