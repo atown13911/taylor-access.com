@@ -126,21 +126,23 @@ public class AuditController : ControllerBase
             return BadRequest(new { error = "Invalid date format" });
 
         var dayStart = DateTime.SpecifyKind(parsedDate.Date, DateTimeKind.Utc);
-        var dayEnd = dayStart.AddDays(1).AddTicks(-1);
+        var dayEnd   = dayStart.AddDays(1).AddTicks(-1);
 
-        var logs = await _context.AuditLogs
-            .Where(l => l.UserEmail != null &&
-                        l.UserEmail.ToLower() == email.ToLower() &&
-                        l.Timestamp >= dayStart &&
-                        l.Timestamp <= dayEnd)
+        // Query central MongoDB audit_logs by email + date
+        var mongoLogs = await _mongo.GetAuditLogsAsync(
+            from: dayStart, to: dayEnd, limit: 500);
+
+        var logs = mongoLogs
+            .Where(l => !string.IsNullOrEmpty(l.UserEmail) &&
+                        l.UserEmail.Equals(email, StringComparison.OrdinalIgnoreCase))
             .OrderBy(l => l.Timestamp)
             .Select(l => new
             {
                 l.Id, l.Action, l.UserEmail, l.UserName,
-                l.EntityType, l.EntityId, l.Description,
+                l.EntityType, l.EntityId, Description = l.Description,
                 l.Timestamp, l.IpAddress
             })
-            .ToListAsync();
+            .ToList();
 
         return Ok(new { data = logs });
     }
