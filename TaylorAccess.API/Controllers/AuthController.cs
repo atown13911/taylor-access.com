@@ -236,31 +236,31 @@ public class AuthController : ControllerBase
     [HttpGet("me")]
     public async Task<ActionResult<UserDto>> GetCurrentUser()
     {
-        User? user = null;
+        // Email is authoritative across all JWT issuers
+        var emailClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? User.FindFirst("email")?.Value;
 
-        // Try by numeric ID first (native Taylor Access JWT)
-        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (int.TryParse(userIdClaim, out var userId))
+        User? user = null;
+        if (!string.IsNullOrEmpty(emailClaim))
         {
             user = await _context.Users
                 .Include(u => u.Organization)
                 .Include(u => u.Department)
                 .Include(u => u.Position)
-                .FirstOrDefaultAsync(u => u.Id == userId);
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == emailClaim.ToLower());
         }
 
-        // Fall back to email lookup (Portal JWT or other issuers)
+        // Fall back to numeric ID if no email claim
         if (user == null)
         {
-            var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                ?? User.FindFirst("email")?.Value;
-            if (!string.IsNullOrEmpty(email))
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(userIdClaim, out var userId))
             {
                 user = await _context.Users
                     .Include(u => u.Organization)
                     .Include(u => u.Department)
                     .Include(u => u.Position)
-                    .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+                    .FirstOrDefaultAsync(u => u.Id == userId);
             }
         }
 
@@ -271,24 +271,27 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Resolve the current authenticated user by JWT ID, falling back to email claim.
-    /// Handles both native Taylor Access JWTs and cross-issuer Portal JWTs.
+    /// Resolve the current authenticated user.
+    /// Email is checked first — it's the reliable identifier across Portal and Taylor Access JWTs.
+    /// Falls back to numeric ID only when no email claim is present (native TA JWTs without email).
     /// </summary>
     private async Task<User?> ResolveCurrentUserAsync()
     {
-        User? user = null;
+        // Email is authoritative — same across all issuers
+        var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+            ?? User.FindFirst("email")?.Value;
+        if (!string.IsNullOrEmpty(email))
+        {
+            var byEmail = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+            if (byEmail != null) return byEmail;
+        }
+
+        // Fall back to numeric ID (only reliable for native Taylor Access JWTs)
         var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(idClaim, out var id))
-            user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
 
-        if (user == null)
-        {
-            var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
-                ?? User.FindFirst("email")?.Value;
-            if (!string.IsNullOrEmpty(email))
-                user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
-        }
-        return user;
+        return null;
     }
 
     /// <summary>

@@ -46,24 +46,24 @@ public class CurrentUserService
     {
         if (_userLoaded) return _cachedUser;
 
-        // Try by numeric ID first (Taylor Access JWT)
-        var userId = UserId;
-        if (userId.HasValue)
+        // Email is authoritative — same across Portal and Taylor Access JWTs
+        var email = Email;
+        if (!string.IsNullOrEmpty(email))
         {
             _cachedUser = await _context.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Id == userId.Value);
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
         }
 
-        // Fall back to email lookup (Portal JWT or any other issuer)
+        // Fall back to numeric ID only if no email claim (native TA JWTs without email)
         if (_cachedUser == null)
         {
-            var email = Email;
-            if (!string.IsNullOrEmpty(email))
+            var userId = UserId;
+            if (userId.HasValue)
             {
                 _cachedUser = await _context.Users
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+                    .FirstOrDefaultAsync(u => u.Id == userId.Value);
             }
         }
 
