@@ -19,13 +19,15 @@ public class EmployeeRosterController : ControllerBase
     private readonly CurrentUserService _currentUserService;
     private readonly EncryptionService _encryption;
     private readonly MetricCacheService _cache;
+    private readonly ILogger<EmployeeRosterController> _logger;
 
-    public EmployeeRosterController(TaylorAccessDbContext context, CurrentUserService currentUserService, EncryptionService encryption, MetricCacheService cache)
+    public EmployeeRosterController(TaylorAccessDbContext context, CurrentUserService currentUserService, EncryptionService encryption, MetricCacheService cache, ILogger<EmployeeRosterController> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
         _encryption = encryption;
         _cache = cache;
+        _logger = logger;
     }
 
     /// <summary>
@@ -97,109 +99,87 @@ public class EmployeeRosterController : ControllerBase
                 query = query.Where(u => u.Role == role);
 
             var total = await query.CountAsync();
-            
-            // Join with EmployeeRoster data
-            var employees = await query
-                .GroupJoin(
-                    _context.EmployeeRosters,
-                    u => u.Id,
-                    e => e.UserId,
-                    (u, employeeData) => new { User = u, EmployeeData = employeeData.FirstOrDefault() })
-                .OrderBy(x => x.User.Name)
+
+            // Step 1: load paged users — simple, guaranteed to translate
+            var pagedUsers = await query
+                .OrderBy(u => u.Name)
                 .Skip((page - 1) * limit)
                 .Take(limit)
-                .Select(x => new
-            {
-                x.User.Id,
-                x.User.Name,
-                Alias = x.User.Alias,
-                Gender = x.User.Gender,
-                AvatarUrl = x.User.Avatar,
-                x.User.Email,
-                PersonalEmail = x.User.PersonalEmail,
-                x.User.Phone,
-                WorkPhone = x.User.WorkPhone,
-                WorkPhoneCountry = x.User.WorkPhoneCountry,
-                CellPhone = x.User.CellPhone,
-                CellPhoneCountry = x.User.CellPhoneCountry,
-                Address = x.User.Address,
-                City = x.User.City,
-                State = x.User.State,
-                ZipCode = x.User.ZipCode,
-                x.User.Role,
-                x.User.Status,
-                x.User.JobTitle,
-                DateOfBirth = x.User.DateOfBirth,
-                IdNumber = x.User.IdNumber,
-                Height = x.User.Height,
-                Weight = x.User.Weight,
-                EyeColor = x.User.EyeColor,
-                HairColor = x.User.HairColor,
-                Ethnicity = x.User.Ethnicity,
-                Religion = x.User.Religion,
-                Country = x.User.Country,
-                Language = x.User.Language,
-                Timezone = x.User.Timezone,
-                OrganizationId = x.User.OrganizationId,
-                ZoomEmail = x.User.ZoomEmail,
-                ZoomUserId = x.User.ZoomUserId,
-                Organization = x.User.Organization,
-                SatelliteId = x.User.SatelliteId,
-                AgencyId = x.User.AgencyId,
-                TerminalId = x.User.TerminalId,
-                DivisionId = x.User.DivisionId,
-                DepartmentId = x.User.DepartmentId,
-                PositionId = x.User.PositionId,
-                
-                // Entity assignments
-                EntityType = x.User.SatelliteId.HasValue ? "satellite" :
-                            x.User.AgencyId.HasValue ? "agency" :
-                            x.User.TerminalId.HasValue ? "terminal" : "corporate",
-                
-                Satellite = x.User.Satellite != null ? new { x.User.Satellite.Id, x.User.Satellite.Name, x.User.Satellite.Code } : null,
-                Agency = x.User.Agency != null ? new { x.User.Agency.Id, x.User.Agency.Name, x.User.Agency.Code } : null,
-                Terminal = x.User.Terminal != null ? new { x.User.Terminal.Id, x.User.Terminal.Name, x.User.Terminal.Code } : null,
-                
-                // Department & Position
-                Department = x.User.Department != null ? new { x.User.Department.Id, x.User.Department.Name } : null,
-                Position = x.User.Position != null ? new { x.User.Position.Id, x.User.Position.Title } : null,
-                
-                x.User.CreatedAt,
-                x.User.LastLoginAt,
-                
-                // Document compliance — flag only when position has specific requirements defined
-                DocumentCount = _context.EmployeeDocuments.Count(d => d.EmployeeId == x.User.Id),
-                RequiredDocCount = x.User.PositionId.HasValue
-                    ? _context.Set<PositionDocumentRequirement>().Count(r => r.PositionId == x.User.PositionId.Value)
-                    : 0,
-                
-                // Integration accounts
-                LandstarUsername = x.User.LandstarUsername,
-                LandstarPassword = x.User.LandstarPassword ?? "",
-                PowerdatUsername = x.User.PowerdatUsername,
-                PowerdatPassword = x.User.PowerdatPassword ?? "",
-                
-                // Extended HR data from EmployeeRoster table
-                EmployeeNumber = x.EmployeeData != null ? x.EmployeeData.EmployeeNumber : null,
-                HireDate = x.EmployeeData != null ? x.EmployeeData.HireDate : null,
-                EmploymentType = x.EmployeeData != null ? x.EmployeeData.EmploymentType : null,
-                HourlyRate = x.EmployeeData != null ? x.EmployeeData.HourlyRate : null,
-                AnnualSalary = x.EmployeeData != null ? x.EmployeeData.AnnualSalary : null,
-                ManagerId = x.EmployeeData != null ? x.EmployeeData.ManagerId : null,
-                VacationBalance = x.EmployeeData != null ? x.EmployeeData.VacationBalance : 0,
-                SickBalance = x.EmployeeData != null ? x.EmployeeData.SickBalance : 0,
-                PTOBalance = x.EmployeeData != null ? x.EmployeeData.PTOBalance : 0
-                })
                 .ToListAsync();
 
-            var result = new
+            // Step 2: pull HR roster data for this page in one query
+            var userIds = pagedUsers.Select(u => u.Id).ToList();
+            var rosterMap = await _context.EmployeeRosters
+                .Where(er => userIds.Contains(er.UserId))
+                .ToDictionaryAsync(er => er.UserId);
+
+            // Step 3: merge in memory — no EF translation risk
+            var employees = pagedUsers.Select(u =>
+            {
+                rosterMap.TryGetValue(u.Id, out var er);
+                return new
+                {
+                    u.Id, u.Name,
+                    Alias = u.Alias,
+                    Gender = u.Gender,
+                    AvatarUrl = u.Avatar,
+                    u.Email,
+                    PersonalEmail = u.PersonalEmail,
+                    u.Phone,
+                    WorkPhone = u.WorkPhone,
+                    WorkPhoneCountry = u.WorkPhoneCountry,
+                    CellPhone = u.CellPhone,
+                    CellPhoneCountry = u.CellPhoneCountry,
+                    Address = u.Address,
+                    City = u.City, State = u.State, ZipCode = u.ZipCode,
+                    u.Role, u.Status, u.JobTitle,
+                    DateOfBirth = u.DateOfBirth, IdNumber = u.IdNumber,
+                    Height = u.Height, Weight = u.Weight, EyeColor = u.EyeColor,
+                    HairColor = u.HairColor, Ethnicity = u.Ethnicity, Religion = u.Religion,
+                    Country = u.Country, Language = u.Language, Timezone = u.Timezone,
+                    OrganizationId = u.OrganizationId,
+                    ZoomEmail = u.ZoomEmail, ZoomUserId = u.ZoomUserId,
+                    Organization = u.Organization != null ? new { u.Organization.Id, u.Organization.Name } : null,
+                    SatelliteId = u.SatelliteId, AgencyId = u.AgencyId,
+                    TerminalId = u.TerminalId, DivisionId = u.DivisionId,
+                    DepartmentId = u.DepartmentId, PositionId = u.PositionId,
+                    EntityType = u.SatelliteId.HasValue ? "satellite" :
+                                 u.AgencyId.HasValue ? "agency" :
+                                 u.TerminalId.HasValue ? "terminal" : "corporate",
+                    Satellite = u.Satellite != null ? new { u.Satellite.Id, u.Satellite.Name, u.Satellite.Code } : null,
+                    Agency = u.Agency != null ? new { u.Agency.Id, u.Agency.Name, u.Agency.Code } : null,
+                    Terminal = u.Terminal != null ? new { u.Terminal.Id, u.Terminal.Name, u.Terminal.Code } : null,
+                    Department = u.Department != null ? new { u.Department.Id, u.Department.Name } : null,
+                    Position = u.Position != null ? new { u.Position.Id, u.Position.Title } : null,
+                    u.CreatedAt, u.LastLoginAt,
+                    DocumentCount = 0, RequiredDocCount = 0, // loaded on demand per employee detail
+                    LandstarUsername = u.LandstarUsername,
+                    LandstarPassword = u.LandstarPassword ?? "",
+                    PowerdatUsername = u.PowerdatUsername,
+                    PowerdatPassword = u.PowerdatPassword ?? "",
+                    EmployeeNumber = er?.EmployeeNumber,
+                    HireDate = er?.HireDate,
+                    EmploymentType = er?.EmploymentType,
+                    HourlyRate = er?.HourlyRate,
+                    AnnualSalary = er?.AnnualSalary,
+                    ManagerId = er?.ManagerId,
+                    VacationBalance = er?.VacationBalance ?? 0,
+                    SickBalance = er?.SickBalance ?? 0,
+                    PTOBalance = er?.PTOBalance ?? 0
+                };
+            }).ToList();
+
+            return Ok(new
             {
                 data = employees,
                 meta = new { total, page, limit, pages = (int)Math.Ceiling((double)total / limit) }
-            };
-            return Ok(result);
+            });
         }
-        catch { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetEmployeeRoster failed");
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     /// <summary>
