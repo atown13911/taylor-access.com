@@ -5414,14 +5414,24 @@ export class EmployeeRosterComponent implements OnInit {
     });
   }
 
+  activatingAll = signal(false);
+
   activateAllBulk() {
+    this.activatingAll.set(true);
     this.http.post<any>(`${this.apiUrl}/api/v1/employee-data/staging/approve-all`, {}).subscribe({
       next: (res) => {
-        this.toast.success(`${res.approved} employees activated`, 'All Approved');
+        this.activatingAll.set(false);
+        const msg = res.failed > 0
+          ? `${res.approved} activated, ${res.failed} skipped`
+          : `${res.approved} employees activated`;
+        this.toast.success(msg, 'Bulk Activation Complete');
         this.loadStaging();
         this.loadRoster();
       },
-      error: () => this.toast.error('Failed to approve all', 'Error')
+      error: () => {
+        this.activatingAll.set(false);
+        this.toast.error('Failed to activate employees', 'Error');
+      }
     });
   }
 
