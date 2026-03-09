@@ -128,6 +128,17 @@ import { AuthService } from '../../../core/services/auth.service';
               <input type="date" class="tc-date-input" [ngModel]="selectedDate()" (ngModelChange)="onDateChange($event)">
             </div>
 
+            @if (!drawerLoading() && activeSystems().length > 0) {
+              <div class="tc-drawer-section">
+                <label class="tc-drawer-label">Active Systems</label>
+                <div class="tc-systems-row">
+                  @for (sys of activeSystems(); track sys) {
+                    <span class="tc-system-chip">{{ sys }}</span>
+                  }
+                </div>
+              </div>
+            }
+
             <div class="tc-drawer-section">
               <label class="tc-drawer-label">First Clock In</label>
               <div class="tc-clock-in-card">
@@ -151,15 +162,18 @@ import { AuthService } from '../../../core/services/auth.service';
               } @else {
                 <div class="tc-log-list">
                   @for (log of employeeAuditLogs(); track $index) {
-                    <div class="tc-log-item">
-                      <div class="tc-log-time">{{ formatTime(log.Timestamp || log.timestamp) }}</div>
+                    <div class="tc-log-item" [class.tc-log-login]="isLoginAction(log.action)">
+                      <div class="tc-log-time">{{ formatTime(log.timestamp) }}</div>
                       <div class="tc-log-content">
-                        <div class="tc-log-action">{{ log.Action || log.action }}</div>
-                        <div class="tc-log-desc">{{ log.Description || log.description || '' }}</div>
+                        <div class="tc-log-action">{{ log.action }}</div>
+                        <div class="tc-log-desc">{{ log.description || '' }}</div>
                       </div>
-                      <span class="tc-log-severity" [class]="'sev-' + (log.Severity || log.severity || 'info')">
-                        {{ log.Severity || log.severity || 'info' }}
-                      </span>
+                      <div class="tc-log-meta">
+                        <span class="tc-log-source">{{ log.source || log.module || '' }}</span>
+                        <span class="tc-log-severity" [class]="'sev-' + (log.severity || 'info')">
+                          {{ log.severity || 'info' }}
+                        </span>
+                      </div>
                     </div>
                   }
                 </div>
@@ -313,6 +327,12 @@ import { AuthService } from '../../../core/services/auth.service';
     .tc-clock-in-time { font-size: 1.3rem; font-weight: 700; color: #00ff88; font-family: 'JetBrains Mono', monospace; }
     .tc-clock-in-none { font-size: 0.85rem; color: var(--text-secondary); }
 
+    .tc-systems-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tc-system-chip {
+      font-size: 0.68rem; font-weight: 600; padding: 3px 10px; border-radius: 12px;
+      background: rgba(0,212,255,0.08); color: var(--cyan, #00e5ff); border: 1px solid rgba(0,212,255,0.2);
+    }
+
     .tc-drawer-logs { flex: 1; display: flex; flex-direction: column; }
     .tc-log-loading, .tc-log-empty {
       text-align: center; color: var(--text-secondary); font-size: 0.82rem; padding: 2rem 0;
@@ -323,6 +343,7 @@ import { AuthService } from '../../../core/services/auth.service';
       background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.04);
       transition: background 0.15s;
       &:hover { background: rgba(255,255,255,0.05); }
+      &.tc-log-login { border-left: 3px solid #00ff88; background: rgba(0,255,136,0.03); }
     }
     .tc-log-time {
       font-size: 0.72rem; font-weight: 600; color: var(--cyan); white-space: nowrap;
@@ -331,6 +352,11 @@ import { AuthService } from '../../../core/services/auth.service';
     .tc-log-content { flex: 1; min-width: 0; }
     .tc-log-action { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
     .tc-log-desc { font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tc-log-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+    .tc-log-source {
+      font-size: 0.6rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+      background: rgba(136,0,255,0.1); color: #a855f7; border: 1px solid rgba(136,0,255,0.2);
+    }
     .tc-log-severity {
       font-size: 0.6rem; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
       &.sev-info { background: rgba(0,170,255,0.1); color: #00aaff; }
@@ -349,7 +375,9 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private auth = inject(AuthService);
   private apiUrl = environment.apiUrl;
+  private echoApiUrl = environment.echoApiUrl;
   private clockInterval: any;
+  private readonly LOGIN_ACTIONS = ['login', 'sso_login', 'session_start'];
 
   sessions = signal<any[]>([]);
   users = signal<any[]>([]);
@@ -364,19 +392,29 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   drawerOpen = signal(false);
   selectedEmployee = signal<any>(null);
   selectedDate = signal(new Date().toISOString().split('T')[0]);
-  employeeSessions = signal<any[]>([]);
   employeeAuditLogs = signal<any[]>([]);
   drawerLoading = signal(false);
 
   firstClockIn = computed(() => {
-    const sessions = this.employeeSessions();
-    if (sessions.length === 0) return null;
-    const sorted = [...sessions].sort((a, b) =>
-      new Date(a.loginTime).getTime() - new Date(b.loginTime).getTime()
+    const logs = this.employeeAuditLogs();
+    const loginLogs = logs.filter(l => this.LOGIN_ACTIONS.includes(l.action));
+    if (loginLogs.length === 0) return null;
+    const sorted = [...loginLogs].sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
-    return new Date(sorted[0].loginTime).toLocaleTimeString('en-US', {
+    return new Date(sorted[0].timestamp).toLocaleTimeString('en-US', {
       hour: 'numeric', minute: '2-digit', hour12: true
     });
+  });
+
+  activeSystems = computed(() => {
+    const logs = this.employeeAuditLogs();
+    const sources = new Set<string>();
+    for (const l of logs) {
+      if (l.source) sources.add(l.source);
+      else if (l.module) sources.add(l.module);
+    }
+    return Array.from(sources).sort();
   });
 
   weekOptions = (() => {
@@ -509,42 +547,46 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     this.selectedEmployee.set(emp);
     this.selectedDate.set(new Date().toISOString().split('T')[0]);
     this.drawerOpen.set(true);
-    this.loadEmployeeDay(emp.userId, this.selectedDate());
+    this.loadEmployeeDay(emp.userEmail, this.selectedDate());
   }
 
   closeDrawer(): void {
     this.drawerOpen.set(false);
     this.selectedEmployee.set(null);
-    this.employeeSessions.set([]);
     this.employeeAuditLogs.set([]);
   }
 
   onDateChange(date: string): void {
     this.selectedDate.set(date);
     const emp = this.selectedEmployee();
-    if (emp) this.loadEmployeeDay(emp.userId, date);
+    if (emp) this.loadEmployeeDay(emp.userEmail, date);
   }
 
-  loadEmployeeDay(userId: number, date: string): void {
+  loadEmployeeDay(userEmail: string, date: string): void {
     this.drawerLoading.set(true);
-    this.employeeSessions.set([]);
     this.employeeAuditLogs.set([]);
 
     const dayStart = new Date(date + 'T00:00:00').toISOString();
     const dayEnd = new Date(date + 'T23:59:59').toISOString();
+    const token = this.auth.getToken();
 
-    this.http.get<any>(`${this.apiUrl}/api/v1/sessions?userId=${userId}&from=${dayStart}&to=${dayEnd}&limit=100`).subscribe({
-      next: (res) => this.employeeSessions.set(res?.data || []),
-      error: () => this.employeeSessions.set([])
-    });
-
-    this.http.get<any>(`${this.apiUrl}/api/v1/audit?userId=${userId}&from=${dayStart}&to=${dayEnd}&limit=100`).subscribe({
+    this.http.get<any>(`${this.echoApiUrl}/api/audit-logs`, {
+      params: { search: userEmail, startDate: dayStart, endDate: dayEnd, limit: '200', sortBy: 'timestamp', sortOrder: 'asc' },
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    }).subscribe({
       next: (res) => {
         this.employeeAuditLogs.set(res?.data || []);
         this.drawerLoading.set(false);
       },
-      error: () => { this.employeeAuditLogs.set([]); this.drawerLoading.set(false); }
+      error: () => {
+        this.employeeAuditLogs.set([]);
+        this.drawerLoading.set(false);
+      }
     });
+  }
+
+  isLoginAction(action: string): boolean {
+    return this.LOGIN_ACTIONS.includes(action) || action === 'logout' || action === 'session_end';
   }
 
   updateLiveTimer(): void {
