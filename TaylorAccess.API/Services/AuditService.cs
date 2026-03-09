@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 
 namespace TaylorAccess.API.Services;
@@ -17,18 +16,15 @@ public class AuditService : IAuditService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuditService> _logger;
     private readonly IMongoDbService _mongoDbService;
-    private readonly TaylorAccessDbContext _db;
 
     public AuditService(
         IHttpContextAccessor httpContextAccessor, 
         ILogger<AuditService> logger,
-        IMongoDbService mongoDbService,
-        TaylorAccessDbContext db)
+        IMongoDbService mongoDbService)
     {
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _mongoDbService = mongoDbService;
-        _db = db;
     }
 
     public async Task LogAsync(string action, string entityType, int? entityId, string? description = null, object? oldValues = null, object? newValues = null)
@@ -72,18 +68,7 @@ public class AuditService : IAuditService
 
     public async Task LogAsync(AuditLog log)
     {
-        // Write to Postgres first (always available)
-        try
-        {
-            _db.AuditLogs.Add(log);
-            await _db.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to write audit log to PostgreSQL");
-        }
-
-        // Also attempt MongoDB (optional, may be disabled)
+        // Write to central MongoDB audit_logs collection
         try
         {
             await _mongoDbService.LogAuditAsync(new MongoAuditLog
@@ -112,27 +97,13 @@ public class AuditService : IAuditService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to write audit log to MongoDB");
+            _logger.LogWarning(ex, "Failed to write audit log to MongoDB");
         }
     }
 
     public async Task<List<AuditLog>> GetLogsAsync(string? entityType = null, int? entityId = null, int? userId = null, DateTime? from = null, DateTime? to = null, int limit = 100)
     {
-        // Try Postgres first
-        try
-        {
-            var q = _db.AuditLogs.AsQueryable();
-            if (!string.IsNullOrEmpty(entityType)) q = q.Where(l => l.EntityType == entityType);
-            if (entityId.HasValue) q = q.Where(l => l.EntityId == entityId);
-            if (userId.HasValue) q = q.Where(l => l.UserId == userId);
-            if (from.HasValue) q = q.Where(l => l.Timestamp >= from.Value);
-            if (to.HasValue) q = q.Where(l => l.Timestamp <= to.Value);
-            var pgLogs = await q.OrderByDescending(l => l.Timestamp).Take(limit).ToListAsync();
-            if (pgLogs.Count > 0) return pgLogs;
-        }
-        catch (Exception ex) { _logger.LogError(ex, "Failed to read audit logs from PostgreSQL"); }
-
-        // Fall back to MongoDB
+        // Read from central MongoDB audit_logs
         try
         {
             var mongoLogs = await _mongoDbService.GetAuditLogsAsync(entityType, entityId, userId, null, from, to, limit);
