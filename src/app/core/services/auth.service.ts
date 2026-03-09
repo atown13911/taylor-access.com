@@ -147,15 +147,40 @@ export class AuthService {
   }
 
   getCurrentUser(): Observable<{ data: User }> {
+    // Fetch from API but do NOT overwrite localStorage — Portal JWT is source of truth for identity.
+    // The API response may supplement with HR fields (department, position etc.) but
+    // we preserve the name/email/role from the Portal JWT stored at login.
     return this.http.get<{ data: User }>(`${this.apiUrl}/api/v1/auth/me`).pipe(
-      tap(response => { if (response.data) this.setStoredUser(response.data); })
+      tap(response => {
+        if (response.data) {
+          const stored = this.getStored<User>(this.USER_KEY);
+          // Only update supplemental HR fields, never replace Portal-provided identity
+          const merged: User = {
+            ...response.data,
+            id: stored?.id ?? response.data.id,
+            name: stored?.name || response.data.name,
+            email: stored?.email || response.data.email,
+            role: stored?.role || response.data.role,
+            organizationId: stored?.organizationId ?? response.data.organizationId,
+          };
+          this.setStoredUser(merged);
+        }
+      })
     );
   }
 
   checkAuth(): Observable<boolean> {
-    if (!this.getToken() || this.isTokenExpired()) {
+    const token = this.getToken();
+    if (!token || this.isTokenExpired()) {
       this.isAuthenticated.set(false);
       return of(false);
+    }
+
+    // Validate locally from token — don't risk overwriting correct user data with a mismatched API response
+    const stored = this.getStored<User>(this.USER_KEY);
+    if (stored?.email) {
+      this.isAuthenticated.set(true);
+      return of(true);
     }
 
     return this.getCurrentUser().pipe(

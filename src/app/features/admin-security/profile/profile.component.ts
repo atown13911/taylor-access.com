@@ -119,27 +119,29 @@ export class ProfileComponent implements OnInit {
       this.loading.set(false);
     }
 
-    // Also try to fetch fresh data from API
+    // Fetch supplemental HR data from API (phone, department, position, etc.)
+    // but preserve Portal JWT identity fields (name, email, role)
     this.api.getMe().subscribe({
       next: (res: any) => {
         const userData = res?.data || res;
-        if (userData) {
+        if (userData && currentUser) {
           const userProfile: UserProfile = {
-            id: userData.id || userData.Id,
-            name: userData.name || userData.Name || '',
-            email: userData.email || userData.Email || '',
+            id: currentUser.id,                           // Portal JWT id
+            name: currentUser.name || '',                 // Portal JWT name
+            email: currentUser.email || '',               // Portal JWT email
+            role: currentUser.role || 'user',             // Portal JWT role
+            // Supplement with HR data from API
             phone: userData.phone || userData.Phone || '',
-            role: userData.role || userData.Role || 'user',
             status: userData.status || userData.Status || 'active',
-            avatarUrl: userData.avatarUrl || userData.AvatarUrl,
+            avatarUrl: userData.avatarUrl || userData.AvatarUrl || currentUser.avatarUrl || '',
             timezone: userData.timezone || userData.Timezone || 'America/Chicago',
             language: userData.language || userData.Language || 'en',
             jobTitle: userData.jobTitle || userData.JobTitle || '',
             department: userData.department || userData.Department || '',
-            createdAt: userData.createdAt || userData.CreatedAt,
-            lastLoginAt: userData.lastLoginAt || userData.LastLoginAt
+            createdAt: userData.createdAt || userData.CreatedAt || currentUser.createdAt,
+            lastLoginAt: userData.lastLoginAt || userData.LastLoginAt || currentUser.lastLoginAt
           };
-          
+
           this.profile.set(userProfile);
           this.populateForm(userProfile);
         }
