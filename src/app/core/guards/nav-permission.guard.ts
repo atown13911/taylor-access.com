@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import { ALL_NAV_ITEMS } from '../constants/nav-items';
 
 export const navPermissionGuard: CanActivateFn = (route) => {
   const authService = inject(AuthService);
@@ -9,40 +10,45 @@ export const navPermissionGuard: CanActivateFn = (route) => {
   const user = authService.currentUser();
   const userRole = user?.role?.toLowerCase();
 
-  // Product owner and superadmin can access everything
-  if (userRole === 'product_owner' || userRole === 'superadmin') {
-    return true;
-  }
-
   if (!user) {
     inject(AuthService).logout();
     return false;
   }
 
-  // Check nav permissions
-  const permissions = authService.permissions();
-  const navPerms = permissions.filter(p => p.startsWith('nav:') && p !== 'nav:configured');
-
-  // If no nav permissions configured, allow access (open by default)
-  if (navPerms.length === 0) {
+  // Product owner, superadmin, and admin can access everything
+  if (userRole === 'product_owner' || userRole === 'superadmin') {
     return true;
   }
 
-  // Check if the current route is in the allowed nav routes
-  const currentPath = '/' + (route.routeConfig?.path || '');
-  const allowedRoutes = new Set(navPerms.map(p => p.substring(4)));
+  const permissions = authService.permissions();
 
-  if (allowedRoutes.has(currentPath)) {
+  // admin:full grants everything
+  if (permissions.includes('admin:full')) {
     return true;
   }
 
   // Dashboard, profile, and settings are always accessible
-  const alwaysAllowed = [
-    '/dashboard', '/', '/profile', '/settings', '/settings/2fa',
-    '/hr/my-profile', '/satellites', '/finance/vendor-invoicing',
-    '/structure', '/organizations', '/users'
-  ];
+  const currentPath = '/' + (route.routeConfig?.path || '');
+  const alwaysAllowed = ['/dashboard', '/', '/profile', '/settings/2fa', '/hr/my-profile'];
   if (alwaysAllowed.includes(currentPath)) {
+    return true;
+  }
+
+  // Find the nav item for this route and check its required permission
+  const navItem = ALL_NAV_ITEMS.find(item => item.route === currentPath);
+  if (navItem?.permission) {
+    return permissions.includes(navItem.permission);
+  }
+
+  // Legacy nav: permissions support
+  const navPerms = permissions.filter(p => p.startsWith('nav:') && p !== 'nav:configured');
+  if (navPerms.length > 0) {
+    const allowedRoutes = new Set(navPerms.map(p => p.substring(4)));
+    if (allowedRoutes.has(currentPath)) return true;
+  }
+
+  // No permission defined for this route — allow by default
+  if (!navItem?.permission) {
     return true;
   }
 
