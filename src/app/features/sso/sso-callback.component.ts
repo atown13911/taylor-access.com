@@ -57,17 +57,15 @@ export class SsoCallbackComponent implements OnInit {
 
   private async handleToken(token: string) {
     try {
-      const res = await fetch(`${this.portalUrl}/oauth/userinfo`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error();
-      const userInfo = await res.json();
+      const payload = JSON.parse(atob(token.split('.')[1]));
 
       localStorage.setItem('vantac_token', token);
       localStorage.setItem('vantac_user', JSON.stringify({
-        id: userInfo.sub, name: userInfo.name, email: userInfo.email,
-        role: userInfo.role, avatar: userInfo.avatar,
-        organizationId: userInfo.organizationId, organizationName: userInfo.organizationName,
+        id: payload.userId || payload.sub,
+        name: payload.name,
+        email: payload.email,
+        role: payload.app_role || payload.role,
+        organizationId: payload.organizationId,
       }));
 
       const permissions = this.extractPermissionsFromToken(token);
