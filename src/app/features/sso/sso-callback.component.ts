@@ -2,7 +2,6 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -26,9 +25,7 @@ export class SsoCallbackComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private http = inject(HttpClient);
-  private auth = inject(AuthService);
-  private baseUrl = environment.apiUrl;
-  private portalUrl = 'https://tss-portalcom-production.up.railway.app';
+  private portalUrl = environment.portalApiUrl || 'https://tss-portalcom-production.up.railway.app';
 
   error = '';
 
@@ -55,16 +52,11 @@ export class SsoCallbackComponent implements OnInit {
     this.exchangeCode(code);
   }
 
-  private async handleToken(token: string) {
+  private handleToken(token: string) {
     try {
-      // #region agent log
-      console.log('[DEBUG-SSO] handleToken called, token length:', token.length);
-      // #endregion
       const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      // #region agent log
-      console.log('[DEBUG-SSO] payload decoded:', { userId: payload.userId, name: payload.name, role: payload.role, app_role: payload.app_role, hasPerms: !!payload.app_permissions });
-      // #endregion
 
+      // Store Portal JWT and user info decoded from its claims
       localStorage.setItem('vantac_token', token);
       localStorage.setItem('vantac_user', JSON.stringify({
         id: payload.userId || payload.sub,
@@ -72,40 +64,29 @@ export class SsoCallbackComponent implements OnInit {
         email: payload.email,
         role: payload.app_role || payload.role,
         organizationId: payload.organizationId,
+        avatar: payload.avatar,
       }));
-
-      const permissions = this.extractPermissionsFromToken(token);
-      // #region agent log
-      console.log('[DEBUG-SSO] permissions extracted:', permissions.length, permissions.slice(0, 5));
-      // #endregion
-      localStorage.setItem('vantac_permissions', JSON.stringify(permissions));
+      localStorage.setItem('vantac_permissions', JSON.stringify(
+        this.extractPermissions(payload)
+      ));
 
       sessionStorage.setItem('access_token_validated', 'true');
-      // #region agent log
-      console.log('[DEBUG-SSO] localStorage written, navigating to /dashboard via full reload');
-      // #endregion
       window.location.href = '/dashboard';
-    } catch (err) {
-      // #region agent log
-      console.error('[DEBUG-SSO] handleToken FAILED:', err);
-      // #endregion
+    } catch {
       this.error = 'Session expired. Please log in again.';
     }
   }
 
-  private extractPermissionsFromToken(token: string): string[] {
+  private extractPermissions(payload: any): string[] {
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.app_permissions) {
         const perms = typeof payload.app_permissions === 'string'
           ? JSON.parse(payload.app_permissions)
           : payload.app_permissions;
         return Array.isArray(perms) ? perms : [];
       }
-      return [];
-    } catch {
-      return [];
-    }
+    } catch { /* silent */ }
+    return [];
   }
 
   private exchangeCode(code: string) {
@@ -130,12 +111,15 @@ export class SsoCallbackComponent implements OnInit {
             localStorage.setItem('vantac_user', JSON.stringify({
               id: userInfo.sub, name: userInfo.name, email: userInfo.email,
               role: userInfo.role, avatar: userInfo.avatar,
-              organizationId: userInfo.organizationId, organizationName: userInfo.organizationName,
+              organizationId: userInfo.organizationId,
+              organizationName: userInfo.organizationName,
             }));
             if (refreshToken) localStorage.setItem('sso_refresh_token', refreshToken);
 
-            const permissions = this.extractPermissionsFromToken(accessToken);
-            localStorage.setItem('vantac_permissions', JSON.stringify(permissions));
+            const payload = JSON.parse(atob(accessToken.split('.')[1]));
+            localStorage.setItem('vantac_permissions', JSON.stringify(
+              this.extractPermissions(payload)
+            ));
 
             sessionStorage.setItem('access_token_validated', 'true');
             this.router.navigate(['/dashboard']);
