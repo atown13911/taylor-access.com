@@ -24,7 +24,10 @@ builder.Services.AddResponseCompression(options =>
     options.MimeTypes = new[] { "application/json", "text/plain", "text/html", "application/javascript", "text/css" };
 });
 
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        options.Filters.Add<TaylorAccess.API.Middleware.AuditActionFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
