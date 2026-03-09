@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
@@ -14,7 +14,7 @@ import { environment } from '../../../environments/environment';
       @if (error) {
         <div style="text-align:center;">
           <p style="color:#ef4444;margin-bottom:16px;">{{ error }}</p>
-          <a [href]="portalUrl" style="color:#60a5fa;">Return to Portal</a>
+          <a href="https://tss-portal.com" style="color:#60a5fa;">Return to Portal</a>
         </div>
       } @else {
         <p style="color:#64748b;">Authenticating...</p>
@@ -23,23 +23,30 @@ import { environment } from '../../../environments/environment';
   `
 })
 export class SsoCallbackComponent implements OnInit {
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
   private http = inject(HttpClient);
-  private authService = inject(AuthService);
-  private portalApiUrl = environment.portalApiUrl;
-  portalUrl = environment.portalUrl;
+  private auth = inject(AuthService);
+  private baseUrl = environment.apiUrl;
+  private portalUrl = 'https://tss-portalcom-production.up.railway.app';
 
   error = '';
 
   ngOnInit() {
-    const params = new URLSearchParams(window.location.search);
+    const params = this.route.snapshot.queryParams;
 
-    if (params.get('error')) {
-      this.error = params.get('error_description') || params.get('error') || 'Authentication failed';
+    const token = params['token'];
+    if (token) {
+      this.handleToken(token);
       return;
     }
 
-    const code = params.get('code');
+    const code = params['code'];
+    if (params['error']) {
+      this.error = params['error_description'] || params['error'];
+      return;
+    }
+
     if (!code) {
       this.error = 'No authorization code received';
       return;
@@ -48,63 +55,82 @@ export class SsoCallbackComponent implements OnInit {
     this.exchangeCode(code);
   }
 
+  private async handleToken(token: string) {
+    try {
+      const res = await fetch(`${this.portalUrl}/oauth/userinfo`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error();
+      const userInfo = await res.json();
+
+      localStorage.setItem('vantac_token', token);
+      localStorage.setItem('vantac_user', JSON.stringify({
+        id: userInfo.sub, name: userInfo.name, email: userInfo.email,
+        role: userInfo.role, avatar: userInfo.avatar,
+        organizationId: userInfo.organizationId, organizationName: userInfo.organizationName,
+      }));
+
+      const permissions = this.extractPermissionsFromToken(token);
+      localStorage.setItem('vantac_permissions', JSON.stringify(permissions));
+
+      sessionStorage.setItem('access_token_validated', 'true');
+      this.router.navigate(['/dashboard']);
+    } catch {
+      this.error = 'Session expired. Please log in again.';
+    }
+  }
+
+  private extractPermissionsFromToken(token: string): string[] {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.app_permissions) {
+        const perms = typeof payload.app_permissions === 'string'
+          ? JSON.parse(payload.app_permissions)
+          : payload.app_permissions;
+        return Array.isArray(perms) ? perms : [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
   private exchangeCode(code: string) {
     const redirectUri = window.location.origin + '/callback';
 
-    this.http.post<any>(`${this.portalApiUrl}/oauth/token`, {
+    this.http.post<any>(`${this.portalUrl}/oauth/token`, {
       grantType: 'authorization_code',
       code,
       redirectUri,
-      clientId: environment.oauthClientId,
+      clientId: 'ta_taylor_access',
+      clientSecret: 'taylor-access-sso-secret-2026',
     }).subscribe({
       next: (tokenRes) => {
-        const portalToken = tokenRes.accessToken || tokenRes.access_token;
+        const accessToken = tokenRes.accessToken || tokenRes.access_token;
+        const refreshToken = tokenRes.refreshToken || tokenRes.refresh_token;
 
-        this.http.post<any>(`${environment.apiUrl}/api/v1/auth/sso-exchange`, {
-          portalToken: portalToken,
+        this.http.get<any>(`${this.portalUrl}/oauth/userinfo`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
         }).subscribe({
-          next: (exchangeRes) => {
-            const taToken = exchangeRes.token;
-            const userData = exchangeRes.user;
-            const orgData = exchangeRes.organization;
+          next: (userInfo) => {
+            localStorage.setItem('vantac_token', accessToken);
+            localStorage.setItem('vantac_user', JSON.stringify({
+              id: userInfo.sub, name: userInfo.name, email: userInfo.email,
+              role: userInfo.role, avatar: userInfo.avatar,
+              organizationId: userInfo.organizationId, organizationName: userInfo.organizationName,
+            }));
+            if (refreshToken) localStorage.setItem('sso_refresh_token', refreshToken);
 
-            const user = {
-              id: userData.id?.toString(),
-              name: userData.name,
-              email: userData.email,
-              role: userData.role,
-              avatarUrl: userData.avatarUrl,
-              organizationId: userData.organizationId?.toString(),
-              organizationName: userData.organizationName,
-              jobTitle: userData.jobTitle,
-              timezone: userData.timezone,
-            };
-            const org = orgData ? {
-              id: orgData.id?.toString(),
-              name: orgData.name || '',
-              status: orgData.status || 'active',
-            } : null;
-
-            localStorage.setItem('vantac_token', taToken);
-            localStorage.setItem('vantac_user', JSON.stringify(user));
-            if (org) localStorage.setItem('vantac_org', JSON.stringify(org));
-
-            this.authService.currentUser.set(user as any);
-            if (org) this.authService.currentOrganization.set(org as any);
-            this.authService.isAuthenticated.set(true);
+            const permissions = this.extractPermissionsFromToken(accessToken);
+            localStorage.setItem('vantac_permissions', JSON.stringify(permissions));
 
             sessionStorage.setItem('access_token_validated', 'true');
-
             this.router.navigate(['/dashboard']);
           },
-          error: (err: any) => {
-            this.error = err?.error?.error || 'Failed to authenticate with Taylor Access';
-          }
+          error: () => { this.error = 'Failed to load user profile'; }
         });
       },
-      error: () => {
-        this.error = 'Failed to exchange authorization code';
-      }
+      error: () => { this.error = 'Failed to exchange authorization code'; }
     });
   }
 }
