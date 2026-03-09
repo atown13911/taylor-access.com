@@ -75,7 +75,7 @@ import { AuthService } from '../../../core/services/auth.service';
           <i class="bx bx-archive"></i>
           <div>
             <span class="value">{{ getStatusCount('archived') }}</span>
-            <span class="label">Archived</span>
+            <span class="label">Archive</span>
           </div>
         </div>
         <div class="stat-card bulk" (click)="rosterTab.set('bulk'); rosterPage.set(1)" style="cursor: pointer">
@@ -114,11 +114,11 @@ import { AuthService } from '../../../core/services/auth.service';
           <span class="tab-count">{{ liveEmployees().length }}</span>
         </button>
         <button class="roster-tab" [class.active]="rosterTab() === 'deactivated'" (click)="rosterTab.set('deactivated'); rosterPage.set(1)">
-          <i class="bx bx-user-x"></i> Deactivated
+          <i class="bx bx-user-x"></i> Inactive
           <span class="tab-count">{{ deactivatedEmployees().length }}</span>
         </button>
         <button class="roster-tab" [class.active]="rosterTab() === 'archived'" (click)="rosterTab.set('archived'); rosterPage.set(1)">
-          <i class="bx bx-archive"></i> Archived
+          <i class="bx bx-archive"></i> Archive
           <span class="tab-count">{{ archivedEmployees().length }}</span>
         </button>
         <button class="roster-tab" [class.active]="rosterTab() === 'bulk'" (click)="rosterTab.set('bulk'); rosterPage.set(1)">

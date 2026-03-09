@@ -6,7 +6,7 @@ import { InactivityService } from '../core/services/inactivity.service';
 
 interface NavSection {
   label?: string;
-  items: { label: string; icon: string; route: string; permission?: string }[];
+  items: { label: string; icon: string; route: string }[];
 }
 
 @Component({
@@ -49,58 +49,41 @@ export class ShellComponent implements OnInit, OnDestroy {
     return null;
   });
 
-  private allNavSections: NavSection[] = [
+  navSections: NavSection[] = [
     {
       items: [
-        { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard', permission: 'dashboard:view' },
-        { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster', permission: 'users:view' },
-        { label: 'Drivers', icon: 'bx bx-car', route: '/drivers', permission: 'drivers:view' },
-        { label: 'Carriers', icon: 'bx bxs-truck', route: '/carriers', permission: 'fleet:view' },
-        { label: 'Time Clock', icon: 'bx bx-time-five', route: '/hr/time-clock', permission: 'timeclock:view' },
-        { label: 'Time Off', icon: 'bx bx-calendar-event', route: '/hr/time-off', permission: 'hr:view' },
-        { label: 'Payroll', icon: 'bx bx-dollar-circle', route: '/hr/payroll', permission: 'payroll:view' },
-        { label: 'Benefits', icon: 'bx bx-star', route: '/hr/benefits', permission: 'hr:view' },
-        { label: 'Performance Reviews', icon: 'bx bx-bar-chart-alt-2', route: '/hr/performance-reviews', permission: 'hr:view' },
+        { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
+        { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
+        { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
+        { label: 'Carriers', icon: 'bx bxs-truck', route: '/carriers' },
+        { label: 'Time Clock', icon: 'bx bx-time-five', route: '/hr/time-clock' },
+        { label: 'Time Off', icon: 'bx bx-calendar-event', route: '/hr/time-off' },
+        { label: 'Payroll', icon: 'bx bx-dollar-circle', route: '/hr/payroll' },
+        { label: 'Benefits', icon: 'bx bx-star', route: '/hr/benefits' },
+        { label: 'Performance Reviews', icon: 'bx bx-bar-chart-alt-2', route: '/hr/performance-reviews' },
       ]
     },
     {
       label: 'Compliance',
       items: [
-        { label: 'Driver Compliance', icon: 'bx bx-search-alt', route: '/compliance/driver-database', permission: 'compliance:view' },
-        { label: 'Insurance', icon: 'bx bx-shield-alt-2', route: '/compliance/insurance', permission: 'compliance:view' },
-        { label: 'DOT Compliance', icon: 'bx bx-shield-alt-2', route: '/compliance/dot', permission: 'compliance:view' },
-        { label: 'Tags & Permits', icon: 'bx bx-badge-check', route: '/compliance/tags-permits', permission: 'compliance:view' },
+        { label: 'Driver Compliance', icon: 'bx bx-search-alt', route: '/compliance/driver-database' },
+        { label: 'Insurance', icon: 'bx bx-shield-alt-2', route: '/compliance/insurance' },
+        { label: 'DOT Compliance', icon: 'bx bx-shield-alt-2', route: '/compliance/dot' },
+        { label: 'Tags & Permits', icon: 'bx bx-badge-check', route: '/compliance/tags-permits' },
       ]
     },
     {
       label: 'Admin',
       items: [
-        { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit', permission: 'audit:view' },
-        { label: 'Connected Apps (SSO)', icon: 'bx bx-link', route: '/admin/apps', permission: 'settings:view' },
-        { label: 'Fleet Entities', icon: 'bx bx-collection', route: '/fleet-entities', permission: 'fleet:manage' },
-        { label: 'HR Documents', icon: 'bx bx-file', route: '/hr/documents', permission: 'hr:view' },
-        { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure', permission: 'organizations:view' },
-        { label: 'Database', icon: 'bx bx-data', route: '/database', permission: 'admin:full' },
+        { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit' },
+        { label: 'Connected Apps (SSO)', icon: 'bx bx-link', route: '/admin/apps' },
+        { label: 'Fleet Entities', icon: 'bx bx-collection', route: '/fleet-entities' },
+        { label: 'HR Documents', icon: 'bx bx-file', route: '/hr/documents' },
+        { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
+        { label: 'Database', icon: 'bx bx-data', route: '/database' },
       ]
     }
   ];
-
-  get navSections(): NavSection[] {
-    const userRole = this.authService.currentUser()?.role?.toLowerCase();
-    if (userRole === 'product_owner' || userRole === 'superadmin') {
-      return this.allNavSections;
-    }
-    const perms = this.authService.permissions();
-    if (perms.includes('admin:full')) return this.allNavSections;
-    return this.allNavSections
-      .map(section => ({
-        ...section,
-        items: section.items.filter(item =>
-          !item.permission || perms.includes(item.permission)
-        )
-      }))
-      .filter(section => section.items.length > 0);
-  }
 
   ngOnInit(): void {
     // #region agent log
