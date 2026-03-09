@@ -160,7 +160,12 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<EncryptionService>();
-builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
+// Use GatewayMongoDbService when gateway is configured (production),
+// otherwise fall back to direct MongoDbService (requires MONGODB_URL).
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL")))
+    builder.Services.AddSingleton<IMongoDbService, GatewayMongoDbService>();
+else
+    builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 builder.Services.AddScoped<ITotpService, TotpService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
