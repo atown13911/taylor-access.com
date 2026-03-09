@@ -91,7 +91,7 @@ public class DriverDocumentsController : ControllerBase
         var driver = await _context.Drivers.FindAsync(driverId);
         if (driver == null) return BadRequest(new { error = "Driver not found" });
 
-        var orgId = user.OrganizationId ?? driver.OrganizationId;
+        var orgId = driver.OrganizationId;
 
         var doc = new DriverDocument
         {
