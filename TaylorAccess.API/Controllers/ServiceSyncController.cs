@@ -12,21 +12,52 @@ public class ServiceSyncController : ControllerBase
     private readonly TaylorAccessDbContext _context;
     private readonly string _syncKey;
 
+    private static readonly Dictionary<string, object> FeatureCatalog = new()
+    {
+        ["dashboard"]     = new { label = "Dashboard",         permissions = new[] { "reports:view", "reports:export", "reports:create", "dashboard:view" } },
+        ["users"]         = new { label = "Employee Roster",   permissions = new[] { "users:view", "users:create", "users:edit", "users:delete", "users:manage_roles", "users:invite" } },
+        ["drivers"]       = new { label = "Drivers",           permissions = new[] { "drivers:view", "drivers:create", "drivers:edit", "drivers:delete", "drivers:assign" } },
+        ["vehicles"]      = new { label = "Vehicles",          permissions = new[] { "vehicles:view", "vehicles:create", "vehicles:edit", "vehicles:delete", "vehicles:assign" } },
+        ["fleet"]         = new { label = "Fleet & Equipment", permissions = new[] { "fleet:view", "fleet:manage", "equipment:view", "equipment:manage" } },
+        ["contacts"]      = new { label = "Contacts",          permissions = new[] { "contacts:view", "contacts:create", "contacts:edit", "contacts:delete" } },
+        ["places"]        = new { label = "Places",            permissions = new[] { "places:view", "places:create", "places:edit", "places:delete" } },
+        ["orders"]        = new { label = "Orders",            permissions = new[] { "orders:view", "orders:create", "orders:edit", "orders:delete", "orders:dispatch" } },
+        ["shipments"]     = new { label = "Shipments",         permissions = new[] { "shipments:view", "shipments:create", "shipments:edit", "shipments:delete", "shipments:dispatch", "shipments:track" } },
+        ["loads"]         = new { label = "Loads",             permissions = new[] { "loads:view", "loads:create", "loads:edit", "loads:delete" } },
+        ["invoices"]      = new { label = "Invoices",          permissions = new[] { "invoices:view", "invoices:create", "invoices:edit", "invoices:send", "invoices:void", "invoices:approve" } },
+        ["payables"]      = new { label = "Payables",          permissions = new[] { "payables:view", "payables:create", "payables:approve", "payables:pay" } },
+        ["finance"]       = new { label = "Finance",           permissions = new[] { "finance:view", "finance:manage", "rates:view", "rates:manage" } },
+        ["maintenance"]   = new { label = "Maintenance",       permissions = new[] { "maintenance:view", "maintenance:create", "maintenance:edit", "maintenance:approve" } },
+        ["telematics"]    = new { label = "Telematics",        permissions = new[] { "telematics:view", "telematics:manage", "devices:view", "devices:manage" } },
+        ["timeclock"]     = new { label = "Time Clock",        permissions = new[] { "timeclock:view", "timeclock:manage" } },
+        ["hr"]            = new { label = "HR & People",       permissions = new[] { "hr:view", "hr:manage" } },
+        ["payroll"]       = new { label = "Payroll",           permissions = new[] { "payroll:view", "payroll:manage" } },
+        ["compliance"]    = new { label = "Compliance",        permissions = new[] { "compliance:view", "compliance:manage", "compliance:audit" } },
+        ["audit"]         = new { label = "Audit",             permissions = new[] { "audit:view", "audit:export" } },
+        ["settings"]      = new { label = "Settings & Apps",   permissions = new[] { "settings:view", "settings:edit", "integrations:view", "integrations:manage" } },
+        ["organizations"] = new { label = "Organizations",     permissions = new[] { "organizations:view", "organizations:manage", "organizations:switch" } },
+        ["roles"]         = new { label = "Roles",             permissions = new[] { "roles:view", "roles:create", "roles:edit", "roles:delete", "roles:assign" } },
+        ["apps"]          = new { label = "Apps",              permissions = new[] { "apps:view", "apps:manage", "apps:grant", "apps:revoke" } },
+        ["analytics"]     = new { label = "Analytics",         permissions = new[] { "analytics:view", "analytics:export" } },
+        ["system"]        = new { label = "System",            permissions = new[] { "system:manage", "system:sync", "admin:full" } },
+        ["contracts"]     = new { label = "Contracts",         permissions = new[] { "contracts:view", "contracts:create", "contracts:edit", "contracts:delete", "contracts:approve" } },
+    };
+
     private static readonly Dictionary<string, string[]> AppPermissionMap = new()
     {
-        ["Taylor Access"] = new[] { "users", "drivers", "fleet", "hr", "payroll", "timeclock", "compliance", "organizations", "audit", "reports", "settings" },
-        ["Van-Tac TMS"] = new[] { "orders", "shipments", "loads", "drivers", "vehicles", "fleet", "contacts", "places", "invoices", "payables", "finance", "maintenance", "telematics", "reports", "settings", "organizations" },
-        ["TSS Portal"] = new[] { "users", "roles", "apps", "audit", "analytics", "system" },
-        ["Taylor CRM"] = new[] { "contacts", "orders", "reports", "settings" },
-        ["Taylor Academy"] = new[] { "users", "reports", "settings" },
-        ["TSS Accounting"] = new[] { "invoices", "payables", "finance", "reports", "settings" },
-        ["Taylor Assets"] = new[] { "fleet", "vehicles", "maintenance", "reports", "settings" },
-        ["Landstar"] = new[] { "shipments", "loads", "reports", "settings" },
-        ["TSS Stream"] = new[] { "reports", "settings", "analytics" },
-        ["CommLink"] = new[] { "users", "contacts", "settings" },
+        ["Taylor Access"]  = new[] { "dashboard", "users", "drivers", "fleet", "timeclock", "hr", "payroll", "compliance", "audit", "settings", "organizations" },
+        ["Van-Tac TMS"]    = new[] { "dashboard", "orders", "shipments", "loads", "drivers", "vehicles", "fleet", "contacts", "places", "invoices", "payables", "finance", "maintenance", "telematics", "settings", "organizations" },
+        ["TSS Portal"]     = new[] { "users", "roles", "apps", "audit", "analytics", "system" },
+        ["Taylor CRM"]     = new[] { "contacts", "orders", "dashboard", "settings" },
+        ["Taylor Academy"] = new[] { "users", "dashboard", "settings" },
+        ["TSS Accounting"] = new[] { "invoices", "payables", "finance", "dashboard", "settings" },
+        ["Taylor Assets"]  = new[] { "fleet", "vehicles", "maintenance", "dashboard", "settings" },
+        ["Landstar"]       = new[] { "shipments", "loads", "dashboard", "settings" },
+        ["TSS Stream"]     = new[] { "dashboard", "settings", "analytics" },
+        ["CommLink"]       = new[] { "users", "contacts", "settings" },
         ["TaylorCommLink"] = new[] { "users", "contacts", "settings" },
-        ["Taylor Legal"] = new[] { "contracts", "reports", "settings" },
-        ["Taylor Echo"] = new[] { "audit", "analytics", "reports", "settings" },
+        ["Taylor Legal"]   = new[] { "contracts", "dashboard", "settings" },
+        ["Taylor Echo"]    = new[] { "audit", "analytics", "dashboard", "settings" },
     };
 
     public ServiceSyncController(TaylorAccessDbContext context, IConfiguration config)
@@ -92,27 +123,12 @@ public class ServiceSyncController : ControllerBase
     {
         if (!ValidateKey()) return Unauthorized(new { error = "Invalid sync key" });
 
-        var allPerms = typeof(Permissions)
-            .GetFields()
-            .Where(f => f.FieldType == typeof(string) && f.Name != "Descriptions")
-            .Select(f => f.GetValue(null)?.ToString() ?? "")
-            .Where(v => !string.IsNullOrEmpty(v))
-            .GroupBy(p => p.Split(':')[0])
-            .ToDictionary(
-                g => g.Key,
-                g => new
-                {
-                    label = char.ToUpper(g.Key[0]) + g.Key[1..],
-                    permissions = g.ToList()
-                }
-            );
-
         var apps = await _context.OAuthClients
             .Where(c => c.Status == "active")
             .Select(c => new { c.ClientId, c.Name })
             .ToListAsync();
 
-        var defaultCategories = new[] { "users", "reports", "settings" };
+        var defaultCategories = new[] { "users", "dashboard", "settings" };
 
         var appMap = apps.ToDictionary(
             a => a.ClientId,
@@ -125,7 +141,7 @@ public class ServiceSyncController : ControllerBase
 
         return Ok(new
         {
-            permissionCategories = allPerms,
+            permissionCategories = FeatureCatalog,
             appPermissionMap = appMap
         });
     }
