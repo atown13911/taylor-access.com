@@ -46,8 +46,10 @@ public class EmployeeRosterController : ControllerBase
     {
         try
         {
-            var (orgId, user, orgErr) = await _currentUserService.ResolveOrgFilterAsync();
-            if (orgErr != null) return Unauthorized(new { message = orgErr });
+            // All authenticated users see all employees.
+            // Organizations/satellites/agencies/terminals are labels only — not access gates.
+            var user = await _currentUserService.GetUserAsync();
+            if (user == null) return Unauthorized();
 
             var query = _context.Users
             .Include(u => u.Organization)
@@ -60,45 +62,9 @@ public class EmployeeRosterController : ControllerBase
             .AsNoTracking()
             .AsQueryable();
 
-            // If organizationId parameter provided, filter by it
+            // Optional org filter — UI convenience only, not access control
             if (organizationId.HasValue)
-            {
-                // Product owners/superadmins can view any organization
-                if (!orgId.HasValue)
-                {
-                    query = query.Where(u => u.OrganizationId == organizationId.Value);
-                }
-                // Regular users can only view their own organization (backend enforces)
-                else if (orgId == organizationId.Value)
-                {
-                    query = query.Where(u => u.OrganizationId == organizationId.Value);
-                }
-                else
-                {
-                    // User trying to access an organization they don't belong to
-                    return Forbid();
-                }
-            }
-            // No organizationId parameter - use default org filtering (superadmin sees all)
-            else
-            {
-                query = query.Where(u => !orgId.HasValue || u.OrganizationId == orgId);
-            }
-
-            // MULTI-TENANT: Users only see employees in their entity
-            if (user!.SatelliteId.HasValue)
-            {
-                query = query.Where(u => u.SatelliteId == user!.SatelliteId.Value);
-            }
-            else if (user!.AgencyId.HasValue)
-            {
-                query = query.Where(u => u.AgencyId == user!.AgencyId.Value);
-            }
-            else if (user!.TerminalId.HasValue)
-            {
-                query = query.Where(u => u.TerminalId == user!.TerminalId.Value);
-            }
-            // Corporate users see all employees
+                query = query.Where(u => u.OrganizationId == organizationId.Value);
 
             // Filters
             if (!string.IsNullOrEmpty(search))
@@ -255,27 +221,8 @@ public class EmployeeRosterController : ControllerBase
     {
         try
         {
-            var (orgId, user, orgErr) = await _currentUserService.ResolveOrgFilterAsync();
-            if (orgErr != null) return Unauthorized(new { message = orgErr });
-
+            // All authenticated users see all employees — no org/entity scoping
             var query = _context.Users.AsQueryable();
-
-            // Organization filter (superadmin sees all)
-            query = query.Where(u => !orgId.HasValue || u.OrganizationId == orgId);
-            
-            // Filter by user's entity (for non-superadmin)
-            if (orgId.HasValue && user!.SatelliteId.HasValue)
-            {
-                query = query.Where(u => u.SatelliteId == user!.SatelliteId.Value);
-            }
-            else if (orgId.HasValue && user!.AgencyId.HasValue)
-            {
-                query = query.Where(u => u.AgencyId == user!.AgencyId.Value);
-            }
-            else if (orgId.HasValue && user!.TerminalId.HasValue)
-            {
-                query = query.Where(u => u.TerminalId == user!.TerminalId.Value);
-            }
 
             var employees = await query
                 .Include(u => u.Department)
@@ -314,12 +261,8 @@ public class EmployeeRosterController : ControllerBase
     [HttpGet("org-chart")]
     public async Task<ActionResult<object>> GetOrgChart()
     {
-        var (orgId, user, orgErr) = await _currentUserService.ResolveOrgFilterAsync();
-        if (orgErr != null) return Unauthorized(new { message = orgErr });
-
-        // Get all satellites with their employees
+        // Get all satellites with their employees — no org scoping
         var satellites = await _context.Satellites
-            .Where(s => !orgId.HasValue || s.OrganizationId == orgId)
             .Include(s => s.Users)
             .Include(s => s.Manager)
             .Select(s => new
@@ -334,7 +277,6 @@ public class EmployeeRosterController : ControllerBase
 
         // Get all agencies
         var agencies = await _context.Agencies
-            .Where(a => !orgId.HasValue || a.OrganizationId == orgId)
             .Include(a => a.Users)
             .Include(a => a.Manager)
             .Select(a => new
@@ -349,8 +291,7 @@ public class EmployeeRosterController : ControllerBase
 
         // Get corporate (no entity assignment)
         var corporateCount = await _context.Users
-            .CountAsync(u => (!orgId.HasValue || u.OrganizationId == orgId) &&
-                            !u.SatelliteId.HasValue &&
+            .CountAsync(u => !u.SatelliteId.HasValue &&
                             !u.AgencyId.HasValue &&
                             !u.TerminalId.HasValue &&
                             u.Status == "active");
