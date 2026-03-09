@@ -139,6 +139,7 @@ import { AuthService } from '../../../core/services/auth.service';
               </div>
             }
 
+            <!-- Session summary from TimeclockSessions DB -->
             <div class="tc-drawer-section">
               <label class="tc-drawer-label">First Clock In</label>
               <div class="tc-clock-in-card">
@@ -152,6 +153,44 @@ import { AuthService } from '../../../core/services/auth.service';
                 }
               </div>
             </div>
+
+            @if (!drawerLoading() && sessionSummary()) {
+              <div class="tc-drawer-section">
+                <label class="tc-drawer-label">Time Summary</label>
+                <div class="tc-time-summary">
+                  <div class="tc-time-stat">
+                    <i class="bx bx-run" style="color:#00ff88"></i>
+                    <div>
+                      <div class="tc-time-val">{{ formatDuration(sessionSummary()!.activeSeconds) }}</div>
+                      <div class="tc-time-lbl">Active</div>
+                    </div>
+                  </div>
+                  <div class="tc-time-stat">
+                    <i class="bx bx-time" style="color:#fbbf24"></i>
+                    <div>
+                      <div class="tc-time-val">{{ formatDuration(sessionSummary()!.idleSeconds) }}</div>
+                      <div class="tc-time-lbl">Idle</div>
+                    </div>
+                  </div>
+                  <div class="tc-time-stat">
+                    <i class="bx bx-stopwatch" style="color:#00d4ff"></i>
+                    <div>
+                      <div class="tc-time-val">{{ formatDuration(sessionSummary()!.totalSeconds) }}</div>
+                      <div class="tc-time-lbl">Total</div>
+                    </div>
+                  </div>
+                  @if (sessionSummary()!.logoutTime) {
+                    <div class="tc-time-stat">
+                      <i class="bx bx-log-out-circle" style="color:#ff2a6d"></i>
+                      <div>
+                        <div class="tc-time-val">{{ formatTime(sessionSummary()!.logoutTime) }}</div>
+                        <div class="tc-time-lbl">Clock Out</div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
 
             <div class="tc-drawer-section tc-drawer-logs">
               <label class="tc-drawer-label">Activity Log <span class="tc-log-count">{{ employeeAuditLogs().length }}</span></label>
@@ -369,6 +408,16 @@ import { AuthService } from '../../../core/services/auth.service';
       .tc-drawer { width: 100%; }
       .tc-page.drawer-open .tc-main { margin-right: 0; }
     }
+    .tc-time-summary {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;
+    }
+    .tc-time-stat {
+      display: flex; align-items: center; gap: 0.5rem;
+      background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.6rem 0.75rem;
+      i { font-size: 1.4rem; }
+    }
+    .tc-time-val { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+    .tc-time-lbl { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
   `]
 })
 export class TimeClockComponent implements OnInit, OnDestroy {
@@ -393,9 +442,18 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   selectedEmployee = signal<any>(null);
   selectedDate = signal(new Date().toISOString().split('T')[0]);
   employeeAuditLogs = signal<any[]>([]);
+  sessionSummary = signal<any>(null);
   drawerLoading = signal(false);
 
   firstClockIn = computed(() => {
+    // Prefer precise session loginTime from TimeclockSessions DB
+    const session = this.sessionSummary();
+    if (session?.loginTime) {
+      return new Date(session.loginTime).toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+      });
+    }
+    // Fall back to audit log login events
     const logs = this.employeeAuditLogs();
     const loginLogs = logs.filter(l => this.LOGIN_ACTIONS.includes(l.action));
     if (loginLogs.length === 0) return null;
@@ -554,6 +612,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     this.drawerOpen.set(false);
     this.selectedEmployee.set(null);
     this.employeeAuditLogs.set([]);
+    this.sessionSummary.set(null);
   }
 
   onDateChange(date: string): void {
@@ -565,11 +624,35 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   loadEmployeeDay(userEmail: string, date: string): void {
     this.drawerLoading.set(true);
     this.employeeAuditLogs.set([]);
+    this.sessionSummary.set(null);
     const token = this.auth.getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+    // Load session data (active/idle/total time)
+    this.http.get<any>(`${this.apiUrl}/api/v1/timeclock/sessions`, {
+      params: { email: userEmail, date }, headers
+    }).subscribe({
+      next: (res) => {
+        const sessions: any[] = res?.data || [];
+        if (sessions.length > 0) {
+          const first  = sessions.reduce((a: any, b: any) => new Date(a.loginTime) < new Date(b.loginTime) ? a : b);
+          const logout = sessions.filter((s: any) => s.logoutTime).reduce((a: any, b: any) =>
+            new Date(a.logoutTime) > new Date(b.logoutTime) ? a : b, sessions[0]);
+          this.sessionSummary.set({
+            loginTime:     first.loginTime,
+            logoutTime:    logout?.logoutTime ?? null,
+            activeSeconds: sessions.reduce((s: number, r: any) => s + (r.activeSeconds || 0), 0),
+            idleSeconds:   sessions.reduce((s: number, r: any) => s + (r.idleSeconds || 0), 0),
+            totalSeconds:  sessions.reduce((s: number, r: any) => s + (r.totalSeconds || 0), 0),
+          });
+        }
+      },
+      error: () => {}
+    });
+
+    // Load audit log activity
     this.http.get<any>(`${this.apiUrl}/api/v1/audit/employee-day`, {
-      params: { email: userEmail, date },
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
+      params: { email: userEmail, date }, headers
     }).subscribe({
       next: (res) => {
         this.employeeAuditLogs.set(res?.data || []);
@@ -580,6 +663,14 @@ export class TimeClockComponent implements OnInit, OnDestroy {
         this.drawerLoading.set(false);
       }
     });
+  }
+
+  formatDuration(seconds: number): string {
+    if (!seconds || seconds <= 0) return '0m';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   }
 
   isLoginAction(action: string): boolean {

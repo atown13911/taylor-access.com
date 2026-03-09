@@ -339,6 +339,32 @@ using (var scope = app.Services.CreateScope())
     await context.SaveChangesAsync();
 }
 
+// Auto-create TimeclockSessions table (no migration required)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<TaylorAccessDbContext>();
+    await db.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""TimeclockSessions"" (
+            ""Id""             SERIAL PRIMARY KEY,
+            ""UserId""         INTEGER,
+            ""UserEmail""      VARCHAR(256) NOT NULL,
+            ""UserName""       VARCHAR(200),
+            ""Date""           TIMESTAMP WITH TIME ZONE NOT NULL,
+            ""LoginTime""      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            ""LogoutTime""     TIMESTAMP WITH TIME ZONE,
+            ""LastHeartbeat""  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            ""ActiveSeconds""  INTEGER NOT NULL DEFAULT 0,
+            ""IdleSeconds""    INTEGER NOT NULL DEFAULT 0,
+            ""Status""         VARCHAR(20) NOT NULL DEFAULT 'active',
+            ""IpAddress""      VARCHAR(50)
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_TimeclockSessions_Date""
+            ON ""TimeclockSessions"" (""Date"");
+        CREATE INDEX IF NOT EXISTS ""IX_TimeclockSessions_UserEmail_Date""
+            ON ""TimeclockSessions"" (""UserEmail"", ""Date"");
+    ");
+}
+
 Console.WriteLine("Taylor Access HR API is running!");
 Console.WriteLine($"Swagger: http://localhost:{(app.Environment.IsDevelopment() ? "5000" : "80")}/swagger");
 

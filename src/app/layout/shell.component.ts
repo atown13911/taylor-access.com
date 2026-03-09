@@ -1,8 +1,10 @@
 import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../core/services/auth.service';
 import { InactivityService } from '../core/services/inactivity.service';
+import { environment } from '../../environments/environment';
 
 interface NavSection {
   label?: string;
@@ -20,6 +22,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
   inactivity = inject(InactivityService);
   private router = inject(Router);
+  private http = inject(HttpClient);
+  private apiUrl = environment.apiUrl;
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
@@ -27,6 +31,14 @@ export class ShellComponent implements OnInit, OnDestroy {
   currentUser = this.authService.currentUser;
   currentTime = new Date();
   private clockInterval: any;
+
+  // ── Timeclock tracking ──────────────────────────────────────────────────
+  private sessionId: number | null = null;
+  private heartbeatInterval: any;
+  private isUserActive = true;
+  private lastActivityAt = Date.now();
+  private readonly IDLE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+  private readonly HEARTBEAT_MS = 30_000;              // every 30 s
 
   tickerUpdates = [
     { id: 1, type: 'driver', message: 'Aaron Mathis CDL expires Jul 11, 2026' },
@@ -86,19 +98,76 @@ export class ShellComponent implements OnInit, OnDestroy {
   ];
 
   ngOnInit(): void {
-    // #region agent log
-    console.log('[DEBUG-SHELL] ngOnInit, isAuthenticated:', this.authService.isAuthenticated(), 'user:', this.authService.currentUser()?.name);
-    // #endregion
     if (!this.authService.isAuthenticated()) {
-      // #region agent log
-      console.log('[DEBUG-SHELL] NOT authenticated, calling logout');
-      // #endregion
       this.authService.logout();
       return;
     }
     this.inactivity.start();
     this.clockInterval = setInterval(() => this.currentTime = new Date(), 1000);
     this.restoreSavedStyles();
+    this.startTimeclock();
+  }
+
+  private startTimeclock(): void {
+    const token = this.authService.getToken();
+    if (!token) return;
+
+    // Start session
+    this.http.post<{ sessionId: number }>(
+      `${this.apiUrl}/api/v1/timeclock/session/start`, {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).subscribe({
+      next: (res) => {
+        this.sessionId = res.sessionId;
+        this.startHeartbeat();
+      },
+      error: () => { /* silent — timeclock failure should not block the app */ }
+    });
+
+    // Track user activity
+    const markActive = () => {
+      this.isUserActive = true;
+      this.lastActivityAt = Date.now();
+    };
+    document.addEventListener('mousemove', markActive, { passive: true });
+    document.addEventListener('keydown',   markActive, { passive: true });
+    document.addEventListener('click',     markActive, { passive: true });
+    document.addEventListener('scroll',    markActive, { passive: true });
+  }
+
+  private startHeartbeat(): void {
+    this.heartbeatInterval = setInterval(() => {
+      if (!this.sessionId) return;
+      const token = this.authService.getToken();
+      if (!token) return;
+
+      // Check if user has been active recently
+      const idle = (Date.now() - this.lastActivityAt) > this.IDLE_THRESHOLD_MS;
+      this.isUserActive = !idle;
+
+      this.http.post(
+        `${this.apiUrl}/api/v1/timeclock/session/heartbeat`,
+        { sessionId: this.sessionId, isActive: this.isUserActive },
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).subscribe({ error: () => {} });
+    }, this.HEARTBEAT_MS);
+  }
+
+  private endTimeclock(): void {
+    if (!this.sessionId) return;
+    const token = this.authService.getToken();
+    if (!token) return;
+
+    // Use sendBeacon for reliability on page unload, fall back to HTTP
+    const url  = `${this.apiUrl}/api/v1/timeclock/session/end`;
+    const body = JSON.stringify({ sessionId: this.sessionId });
+    const sent = navigator.sendBeacon?.(url, new Blob([body], { type: 'application/json' }));
+    if (!sent) {
+      this.http.post(url, { sessionId: this.sessionId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).subscribe({ error: () => {} });
+    }
+    this.sessionId = null;
   }
 
   private restoreSavedStyles(): void {
@@ -211,7 +280,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.clockInterval) clearInterval(this.clockInterval);
+    if (this.clockInterval)    clearInterval(this.clockInterval);
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.endTimeclock();
   }
 
   toggleSidebar(): void {
@@ -228,6 +299,7 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   logout(): void {
     this.closeProfileMenu();
+    this.endTimeclock();
     this.authService.logout();
   }
 }
