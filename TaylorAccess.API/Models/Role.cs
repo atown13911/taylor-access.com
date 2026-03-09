@@ -160,6 +160,19 @@ public static class Permissions
     public const string OrganizationsManage = "organizations:manage";
     public const string OrganizationsSwitch = "organizations:switch";
     
+    // HR & People
+    public const string HrView = "hr:view";
+    public const string HrManage = "hr:manage";
+    public const string PayrollView = "payroll:view";
+    public const string PayrollManage = "payroll:manage";
+    public const string TimeclockView = "timeclock:view";
+    public const string TimeclockManage = "timeclock:manage";
+    
+    // Compliance
+    public const string ComplianceView = "compliance:view";
+    public const string ComplianceManage = "compliance:manage";
+    public const string ComplianceAudit = "compliance:audit";
+    
     // Admin
     public const string AdminFull = "admin:full";
     public const string AuditView = "audit:view";
@@ -210,6 +223,15 @@ public static class Permissions
         { UsersDelete, "Delete user accounts" },
         { UsersManageRoles, "Assign and manage user roles" },
         { UsersInvite, "Invite new users" },
+        { HrView, "View HR data (roster, time off, benefits, reviews)" },
+        { HrManage, "Manage HR data and employee records" },
+        { PayrollView, "View payroll and paychecks" },
+        { PayrollManage, "Process payroll and manage compensation" },
+        { TimeclockView, "View time clock and attendance" },
+        { TimeclockManage, "Manage time clock entries and approvals" },
+        { ComplianceView, "View compliance records (DOT, insurance, DQ files)" },
+        { ComplianceManage, "Manage compliance documents and certifications" },
+        { ComplianceAudit, "Audit compliance status and expirations" },
         { AdminFull, "Full administrative access" },
         { AuditView, "View audit logs" },
         { SystemManage, "Manage system configuration" }

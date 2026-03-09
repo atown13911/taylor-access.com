@@ -14,7 +14,7 @@ public class ServiceSyncController : ControllerBase
 
     private static readonly Dictionary<string, string[]> AppPermissionMap = new()
     {
-        ["Taylor Access"] = new[] { "users", "drivers", "fleet", "organizations", "audit", "reports", "settings" },
+        ["Taylor Access"] = new[] { "users", "drivers", "fleet", "hr", "payroll", "timeclock", "compliance", "organizations", "audit", "reports", "settings" },
         ["Van-Tac TMS"] = new[] { "orders", "shipments", "loads", "drivers", "vehicles", "fleet", "contacts", "places", "invoices", "payables", "finance", "maintenance", "telematics", "reports", "settings", "organizations" },
         ["TSS Portal"] = new[] { "users", "roles", "apps", "audit", "analytics", "system" },
         ["Taylor CRM"] = new[] { "contacts", "orders", "reports", "settings" },
