@@ -32,16 +32,10 @@ public class DriverDocumentsController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] int limit = 200)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized(new { error = "Not authenticated" });
-
         var query = _context.DriverDocuments
             .AsNoTracking()
             .Include(d => d.Driver)
             .AsQueryable();
-
-        if (!user.IsProductOwner() && !user.IsSuperAdmin() && user.OrganizationId.HasValue)
-            query = query.Where(d => d.OrganizationId == user.OrganizationId.Value);
 
         if (driverId.HasValue) query = query.Where(d => d.DriverId == driverId.Value);
         if (!string.IsNullOrEmpty(category)) query = query.Where(d => d.Category == category);
@@ -65,12 +59,7 @@ public class DriverDocumentsController : ControllerBase
     [HttpGet("summary")]
     public async Task<ActionResult<object>> GetSummary([FromQuery] int? driverId)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized(new { error = "Not authenticated" });
-
         var query = _context.DriverDocuments.AsNoTracking().AsQueryable();
-        if (!user.IsProductOwner() && !user.IsSuperAdmin() && user.OrganizationId.HasValue)
-            query = query.Where(d => d.OrganizationId == user.OrganizationId.Value);
         if (driverId.HasValue) query = query.Where(d => d.DriverId == driverId.Value);
 
         var all = await query.ToListAsync();
@@ -99,9 +88,6 @@ public class DriverDocumentsController : ControllerBase
         [FromForm] string? notes, [FromForm] bool? remindExpiry,
         IFormFile? file)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized(new { error = "Not authenticated" });
-
         var driver = await _context.Drivers.FindAsync(driverId);
         if (driver == null) return BadRequest(new { error = "Driver not found" });
 
