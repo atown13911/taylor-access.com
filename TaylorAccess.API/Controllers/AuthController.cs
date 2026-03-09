@@ -236,20 +236,59 @@ public class AuthController : ControllerBase
     [HttpGet("me")]
     public async Task<ActionResult<UserDto>> GetCurrentUser()
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
+        User? user = null;
 
-        var user = await _context.Users
-            .Include(u => u.Organization)
-            .Include(u => u.Department)
-            .Include(u => u.Position)
-            .FirstOrDefaultAsync(u => u.Id == int.Parse(userId));
+        // Try by numeric ID first (native Taylor Access JWT)
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(userIdClaim, out var userId))
+        {
+            user = await _context.Users
+                .Include(u => u.Organization)
+                .Include(u => u.Department)
+                .Include(u => u.Position)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+        }
+
+        // Fall back to email lookup (Portal JWT or other issuers)
+        if (user == null)
+        {
+            var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? User.FindFirst("email")?.Value;
+            if (!string.IsNullOrEmpty(email))
+            {
+                user = await _context.Users
+                    .Include(u => u.Organization)
+                    .Include(u => u.Department)
+                    .Include(u => u.Position)
+                    .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+            }
+        }
 
         if (user == null)
             return NotFound();
 
         return Ok(new { data = new UserDto(user) });
+    }
+
+    /// <summary>
+    /// Resolve the current authenticated user by JWT ID, falling back to email claim.
+    /// Handles both native Taylor Access JWTs and cross-issuer Portal JWTs.
+    /// </summary>
+    private async Task<User?> ResolveCurrentUserAsync()
+    {
+        User? user = null;
+        var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out var id))
+            user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+
+        if (user == null)
+        {
+            var email = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? User.FindFirst("email")?.Value;
+            if (!string.IsNullOrEmpty(email))
+                user = await _context.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+        }
+        return user;
     }
 
     /// <summary>
@@ -259,11 +298,7 @@ public class AuthController : ControllerBase
     [HttpPut("profile")]
     public async Task<ActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
@@ -292,11 +327,7 @@ public class AuthController : ControllerBase
     [HttpPost("avatar")]
     public async Task<ActionResult> UploadAvatar([FromForm] IFormFile avatar)
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
@@ -336,11 +367,7 @@ public class AuthController : ControllerBase
     [HttpDelete("avatar")]
     public async Task<ActionResult> DeleteAvatar()
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
@@ -368,11 +395,7 @@ public class AuthController : ControllerBase
     [HttpGet("preferences")]
     public async Task<ActionResult> GetPreferences()
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
@@ -386,11 +409,7 @@ public class AuthController : ControllerBase
     [HttpPut("preferences")]
     public async Task<ActionResult> UpdatePreferences([FromBody] UpdatePreferencesRequest request)
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
@@ -409,11 +428,7 @@ public class AuthController : ControllerBase
     [HttpPost("refresh-api-key")]
     public async Task<ActionResult> RefreshApiKey()
     {
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
@@ -442,11 +457,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "New passwords do not match" });
         }
         
-        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
-            return Unauthorized();
-
-        var user = await _context.Users.FindAsync(int.Parse(userId));
+        var user = await ResolveCurrentUserAsync();
         if (user == null)
             return NotFound();
 
