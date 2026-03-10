@@ -151,7 +151,8 @@ public class TimeclockController : ControllerBase
         return Ok(new { data = sessions });
     }
 
-    /// <summary>Daily summary — one row per user showing totals for the day.</summary>
+    /// <summary>Daily summary — one row per user showing totals for the day.
+    /// Falls back to Users.LastLoginAt when no session records exist yet.</summary>
     [HttpGet("daily-summary")]
     public async Task<ActionResult> GetDailySummary([FromQuery] string? date)
     {
@@ -159,10 +160,14 @@ public class TimeclockController : ControllerBase
             ? DateTime.SpecifyKind(d.Date, DateTimeKind.Utc)
             : DateTime.UtcNow.Date;
 
+        var dayStart = targetDate;
+        var dayEnd   = targetDate.AddDays(1);
+
         var sessions = await _context.TimeclockSessions
-            .Where(s => s.Date == targetDate)
+            .Where(s => s.Date >= dayStart && s.Date < dayEnd)
             .ToListAsync();
 
+        // Build map from real session data
         var byUser = sessions
             .GroupBy(s => s.UserEmail)
             .Select(g =>
@@ -176,8 +181,9 @@ public class TimeclockController : ControllerBase
                 var active   = all.Sum(s => s.ActiveSeconds);
                 var idle     = all.Sum(s => s.IdleSeconds);
                 var total    = all.Sum(s => (int)((s.LogoutTime ?? s.LastHeartbeat) - s.LoginTime).TotalSeconds);
-                var status   = all.Any(s => s.Status == "active") ? "active"
-                             : all.Any(s => s.Status == "idle")   ? "idle"
+                var isToday  = targetDate.Date == DateTime.UtcNow.Date;
+                var status   = isToday && all.Any(s => s.Status == "active") ? "active"
+                             : isToday && all.Any(s => s.Status == "idle")   ? "idle"
                              : "offline";
 
                 return new
@@ -185,25 +191,59 @@ public class TimeclockController : ControllerBase
                     userEmail     = g.Key,
                     userName      = all.First().UserName,
                     userId        = all.First().UserId,
-                    firstLogin    = firstIn,
+                    firstLogin    = (DateTime?)firstIn,
                     lastLogout    = lastOut,
-                    lastHeartbeat = lastBeat,
+                    lastHeartbeat = (DateTime?)lastBeat,
                     activeSeconds = active,
                     idleSeconds   = idle,
                     totalSeconds  = total,
                     status,
-                    sessions      = all.Count
+                    sessions      = all.Count,
+                    source        = "tracked"
                 };
             })
+            .ToDictionary(u => (u.userEmail ?? "").ToLower());
+
+        // Fallback: include users whose LastLoginAt falls on this day
+        // but who have no session records yet (data before new tracking deployed)
+        var usersLoggedIn = await _context.Users
+            .Where(u => u.LastLoginAt >= dayStart && u.LastLoginAt < dayEnd)
+            .Select(u => new { u.Id, u.Name, u.Email, u.LastLoginAt })
+            .ToListAsync();
+
+        foreach (var u in usersLoggedIn)
+        {
+            var key = (u.Email ?? "").ToLower();
+            if (!byUser.ContainsKey(key) && u.LastLoginAt.HasValue)
+            {
+                byUser[key] = new
+                {
+                    userEmail     = u.Email,
+                    userName      = u.Name,
+                    userId        = (int?)u.Id,
+                    firstLogin    = u.LastLoginAt,
+                    lastLogout    = (DateTime?)null,
+                    lastHeartbeat = u.LastLoginAt,
+                    activeSeconds = 0,
+                    idleSeconds   = 0,
+                    totalSeconds  = 0,
+                    status        = "offline",
+                    sessions      = 1,
+                    source        = "lastlogin"
+                };
+            }
+        }
+
+        var result = byUser.Values
             .OrderBy(u => u.firstLogin)
             .ToList();
 
         return Ok(new
         {
             date         = targetDate.ToString("yyyy-MM-dd"),
-            activeNow    = byUser.Count(u => u.status == "active"),
-            totalUsers   = byUser.Count,
-            data         = byUser
+            activeNow    = result.Count(u => u.status == "active"),
+            totalUsers   = result.Count,
+            data         = result
         });
     }
 
