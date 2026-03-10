@@ -135,8 +135,11 @@ export class DriverDatabaseComponent implements OnInit {
   docsReady = signal(false);
 
   ngOnInit() {
-    this.loadAllDocs();
-    this.loadDrivers().then(() => {
+    // Load both in parallel, then attach and refresh
+    Promise.all([
+      this.loadDrivers(),
+      this.loadAllDocsAsync()
+    ]).then(() => {
       this.attachDocsToDrivers();
       // Check for driverId query param to auto-open profile
       this.route.queryParams.subscribe(params => {
@@ -146,12 +149,8 @@ export class DriverDatabaseComponent implements OnInit {
           if (driver) {
             this.viewDriverDetails(driver);
           } else {
-            // Driver not in list, fetch directly
             this.http.get(`${environment.apiUrl}/api/v1/drivers/${driverId}`).subscribe({
-              next: (res: any) => {
-                const d = res?.data || res;
-                if (d) this.viewDriverDetails(d);
-              }
+              next: (res: any) => { const d = res?.data || res; if (d) this.viewDriverDetails(d); }
             });
           }
         }
@@ -431,10 +430,17 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   loadAllDocs(): void {
-    this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?limit=5000`).subscribe({
+    this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?limit=10000`).subscribe({
       next: (res: any) => this.allDocs.set(res?.data || []),
       error: () => this.allDocs.set([])
     });
+  }
+
+  loadAllDocsAsync(): Promise<void> {
+    return this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?limit=10000`)
+      .toPromise()
+      .then((res: any) => { this.allDocs.set(res?.data || []); })
+      .catch(() => { this.allDocs.set([]); });
   }
 
   loadDriverDocs(driverId: any): void {
@@ -479,54 +485,54 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getComplianceClass(driver: any, item: string): string {
-    const ready = this.docsReady();
     const status = this.getItemStatus(driver, item);
     if (status === 'compliant') return 'dot dot-green';
-    if (status === 'expiring') return 'dot dot-yellow';
-    if (status === 'expired') return 'dot dot-red';
-
-    const driverDocs: any[] = driver._docs || [];
-    const doc = this.findDocInList(driverDocs, item);
-    if (doc) {
-      if (doc.expiryDate) {
-        const days = this.getDaysUntilExpiration(doc.expiryDate);
-        if (days < 0) return 'dot dot-red';
-        if (days < 30) return 'dot dot-yellow';
-      }
-      if (doc.status === 'expired') return 'dot dot-red';
-      if (doc.status === 'expiring') return 'dot dot-yellow';
-      return 'dot dot-green';
-    }
-
+    if (status === 'expiring')  return 'dot dot-yellow';
+    if (status === 'expired')   return 'dot dot-red';
     return 'dot dot-gray';
   }
 
   async attachDocsToDrivers(): Promise<void> {
     const drivers = this.drivers();
-
-    // First, assign docs from the bulk allDocs load
     const allDocs = this.allDocs();
+
+    // Build a map of all docs by driverId for O(1) lookup
+    const docsByDriver = new Map<string, any[]>();
+    for (const doc of allDocs) {
+      const key = doc.driverId?.toString();
+      if (!key) continue;
+      if (!docsByDriver.has(key)) docsByDriver.set(key, []);
+      docsByDriver.get(key)!.push(doc);
+    }
+
+    // Assign bulk docs first — covers all drivers that have docs in allDocs
     for (const driver of drivers) {
-      const id = driver.id?.toString();
-      driver._docs = allDocs.filter((d: any) => d.driverId?.toString() === id);
+      driver._docs = docsByDriver.get(driver.id?.toString()) || [];
     }
     this.drivers.set([...drivers]);
+    this.docsReady.set(true); // show initial dots from bulk load immediately
 
-    // Then, fetch per-driver docs in batches of 5 to fill gaps
+    // For drivers with 0 docs from bulk, fetch individually in batches
+    const missing = drivers.filter(d => (d._docs || []).length === 0);
     const batchSize = 5;
-    for (let i = 0; i < drivers.length; i += batchSize) {
-      const batch = drivers.slice(i, i + batchSize);
-      const promises = batch.map(driver =>
+    for (let i = 0; i < missing.length; i += batchSize) {
+      const batch = missing.slice(i, i + batchSize);
+      await Promise.all(batch.map(driver =>
         this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?driverId=${driver.id}&limit=500`)
           .toPromise()
-          .then((res: any) => { driver._docs = res?.data || []; })
+          .then((res: any) => {
+            const fetched = res?.data || [];
+            if (fetched.length > 0) {
+              // Merge with existing — deduplicate by ID
+              const map = new Map((driver._docs || []).map((d: any) => [d.id, d]));
+              fetched.forEach((d: any) => map.set(d.id, d));
+              driver._docs = Array.from(map.values());
+            }
+          })
           .catch(() => {})
-      );
-      await Promise.all(promises);
+      ));
       this.drivers.set([...drivers]);
     }
-
-    this.docsReady.set(true);
   }
 
   private findDocInList(docs: any[], key: string): any {
@@ -535,14 +541,31 @@ export class DriverDatabaseComponent implements OnInit {
     const sub = this.subMap[key];
     const cat = this.catMap[key];
 
-    let doc = docs.find((d: any) => d.subCategory === sub);
-    if (doc) return doc;
-    if (cat) { doc = docs.find((d: any) => d.category === cat); if (doc) return doc; }
+    // 1. Primary subCategory match
+    if (sub) {
+      const doc = docs.find((d: any) => d.subCategory === sub);
+      if (doc) return doc;
+    }
 
+    // 2. Any doc in the right category — return the most recent one
+    if (cat) {
+      const catDocs = docs.filter((d: any) => d.category === cat);
+      if (catDocs.length > 0) {
+        // Prefer active/non-expired, then most recently created
+        return catDocs.sort((a: any, b: any) => {
+          const aExp = a.status === 'expired' ? 1 : 0;
+          const bExp = b.status === 'expired' ? 1 : 0;
+          if (aExp !== bExp) return aExp - bExp;
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        })[0];
+      }
+    }
+
+    // 3. Fuzzy keyword search across document name / subCategory / category
     const terms = this.docSearchTerms[key] || [key];
     return docs.find((d: any) => {
-      const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
-      return terms.some((t: string) => name.includes(t));
+      const haystack = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
+      return terms.some((t: string) => haystack.includes(t));
     }) || null;
   }
 
@@ -580,35 +603,44 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
+    // 1. Check driver record fields (fast path for CDL/Medical/etc.)
     switch (item) {
       case 'cdl': {
         const exp = driver.licenseExpiry || driver.licenseExpiration;
         if (exp) return this.getExpirationStatus(exp);
         if (driver.licenseNumber) return 'compliant';
-        return 'none';
+        break;
       }
       case 'medical': {
         const exp = driver.medicalCardExpiry || driver.medicalCardExpiration;
         if (exp) return this.getExpirationStatus(exp);
-        return 'none';
+        break;
       }
       case 'employment':
         if (driver.hireDate || driver.employmentVerified) return 'compliant';
-        return 'none';
+        break;
       case 'permits': {
         const twicExp = driver.twiccExpiry;
         if (twicExp) return this.getExpirationStatus(twicExp);
         if (driver.twiccCardNumber) return 'compliant';
-        return 'none';
+        break;
       }
       case 'insurance': {
         const exp = driver.insuranceExpiry || driver.insuranceExpiration;
         if (exp) return this.getExpirationStatus(exp);
-        return 'none';
+        break;
       }
-      default:
-        return 'none';
     }
+
+    // 2. Fall back to checking uploaded documents
+    const docs: any[] = driver._docs || [];
+    const doc = this.findDocInList(docs, item);
+    if (!doc) return 'none';
+
+    if (doc.status === 'expired') return 'expired';
+    if (doc.status === 'expiring') return 'expiring';
+    if (doc.expiryDate) return this.getExpirationStatus(doc.expiryDate);
+    return 'compliant';
   }
 
   getOverallStatus(driver: any): string {
