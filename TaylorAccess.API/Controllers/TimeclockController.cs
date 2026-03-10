@@ -37,6 +37,25 @@ public class TimeclockController : ControllerBase
         var now  = DateTime.UtcNow;
         var date = now.Date;
 
+        // Auto-close any stale open sessions from PREVIOUS dates
+        // (happens when user closes browser without logging out, or midnight rollover)
+        var staleSessions = await _context.TimeclockSessions
+            .Where(s => s.UserEmail == email &&
+                        s.Date < date &&
+                        s.LogoutTime == null)
+            .ToListAsync();
+
+        foreach (var stale in staleSessions)
+        {
+            // Cap logout at end of the session's day (11:59:59 PM UTC)
+            var endOfDay = stale.Date.AddDays(1).AddSeconds(-1);
+            stale.LogoutTime     = endOfDay < stale.LastHeartbeat ? endOfDay : stale.LastHeartbeat;
+            stale.Status         = "offline";
+        }
+
+        if (staleSessions.Count > 0)
+            await _context.SaveChangesAsync();
+
         // Check for an already-open session today (e.g. page refresh)
         var existing = await _context.TimeclockSessions
             .Where(s => s.UserEmail == email &&
@@ -160,8 +179,11 @@ public class TimeclockController : ControllerBase
             ? DateTime.SpecifyKind(d.Date, DateTimeKind.Utc)
             : DateTime.UtcNow.Date;
 
-        var dayStart = targetDate;
-        var dayEnd   = targetDate.AddDays(1);
+        var dayStart  = targetDate;
+        var dayEnd    = targetDate.AddDays(1);
+        var isToday   = targetDate.Date == DateTime.UtcNow.Date;
+        // For past days, cap session end at midnight; for today, cap at now
+        var maxEndTime = isToday ? DateTime.UtcNow : dayEnd;
 
         var sessions = await _context.TimeclockSessions
             .Where(s => s.Date >= dayStart && s.Date < dayEnd)
@@ -180,10 +202,24 @@ public class TimeclockController : ControllerBase
                 var lastBeat = all.Max(s => s.LastHeartbeat);
                 var active   = all.Sum(s => s.ActiveSeconds);
                 var idle     = all.Sum(s => s.IdleSeconds);
-                var total    = all.Sum(s => (int)((s.LogoutTime ?? s.LastHeartbeat) - s.LoginTime).TotalSeconds);
-                var isToday  = targetDate.Date == DateTime.UtcNow.Date;
-                var status   = isToday && all.Any(s => s.Status == "active") ? "active"
-                             : isToday && all.Any(s => s.Status == "idle")   ? "idle"
+
+                // Cap each session's end time: use LogoutTime, else LastHeartbeat, else maxEndTime.
+                // Also cap at maxEndTime to prevent overnight bleed.
+                var total = all.Sum(s =>
+                {
+                    var endTime = s.LogoutTime
+                        ?? (s.LastHeartbeat < maxEndTime ? s.LastHeartbeat : maxEndTime);
+                    // Stale session heuristic: if no heartbeat for >2h and no logout → treat lastHeartbeat as end
+                    if (!s.LogoutTime.HasValue && (DateTime.UtcNow - s.LastHeartbeat).TotalHours > 2)
+                        endTime = s.LastHeartbeat;
+                    var secs = (int)(endTime - s.LoginTime).TotalSeconds;
+                    return Math.Max(0, secs);
+                });
+
+                // A session is only "active/idle" if it received a heartbeat in the last 5 minutes
+                var recentBeat = (DateTime.UtcNow - lastBeat).TotalMinutes < 5;
+                var status   = isToday && recentBeat && all.Any(s => s.Status == "active") ? "active"
+                             : isToday && recentBeat && all.Any(s => s.Status == "idle")   ? "idle"
                              : "offline";
 
                 return new
@@ -244,6 +280,47 @@ public class TimeclockController : ControllerBase
             activeNow    = result.Count(u => u.status == "active"),
             totalUsers   = result.Count,
             data         = result
+        });
+    }
+
+    /// <summary>
+    /// Admin endpoint: close all stale open sessions older than the given threshold (default 2h).
+    /// Also closes any sessions whose Date is in the past but still have no LogoutTime.
+    /// </summary>
+    [HttpPost("cleanup-stale")]
+    public async Task<ActionResult> CleanupStaleSessions([FromQuery] int thresholdHours = 2)
+    {
+        var now       = DateTime.UtcNow;
+        var cutoff    = now.AddHours(-thresholdHours);
+        var today     = now.Date;
+
+        // Sessions with no logout that either:
+        // (a) are from a past date, OR
+        // (b) haven't had a heartbeat for > thresholdHours
+        var stale = await _context.TimeclockSessions
+            .Where(s => s.LogoutTime == null &&
+                        (s.Date < today || s.LastHeartbeat < cutoff))
+            .ToListAsync();
+
+        foreach (var s in stale)
+        {
+            var endOfDay = s.Date.AddDays(1).AddSeconds(-1);
+            // Use the earlier of: end-of-day OR lastHeartbeat
+            s.LogoutTime = s.LastHeartbeat < endOfDay ? s.LastHeartbeat : endOfDay;
+            s.Status     = "offline";
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            cleaned = stale.Count,
+            sessions = stale.Select(s => new
+            {
+                s.Id, s.UserEmail, s.Date,
+                s.LoginTime, closedAt = s.LogoutTime,
+                totalSeconds = (int)(s.LogoutTime!.Value - s.LoginTime).TotalSeconds
+            })
         });
     }
 
