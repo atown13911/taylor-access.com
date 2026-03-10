@@ -18,12 +18,12 @@ import { AuthService } from '../../../core/services/auth.service';
             <p class="tc-sub">Employee hours overview</p>
           </div>
           <div class="tc-header-actions">
-            <select class="tc-filter" [ngModel]="selectedWeek()" (ngModelChange)="selectedWeek.set($event)">
-              @for (w of weekOptions; track w.value) {
-                <option [value]="w.value">{{ w.label }}</option>
-              }
-            </select>
-            <button class="tc-btn" (click)="loadSessions(); loadSummary()"><i class="bx bx-refresh"></i> Refresh</button>
+            <input type="date" class="tc-filter tc-date-input"
+              [ngModel]="listDate()"
+              (ngModelChange)="listDate.set($event); loadSessions()">
+            <button class="tc-btn" (click)="loadSessions(); loadSummary()">
+              <i class="bx bx-refresh"></i> Refresh
+            </button>
           </div>
         </div>
 
@@ -70,11 +70,12 @@ import { AuthService } from '../../../core/services/auth.service';
             <thead>
               <tr>
                 <th>Employee</th>
-                <th>Role</th>
                 <th>Status</th>
-                <th class="tc-hours-col">Total Hours</th>
-                <th>Sessions</th>
-                <th>Last Active</th>
+                <th>Clock In</th>
+                <th>Clock Out</th>
+                <th class="tc-hours-col">Active</th>
+                <th class="tc-hours-col">Idle</th>
+                <th class="tc-hours-col">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -87,17 +88,20 @@ import { AuthService } from '../../../core/services/auth.service';
                       <span>{{ emp.userEmail }}</span>
                     </div>
                   </td>
-                  <td><span class="tc-role">{{ emp.role || '—' }}</span></td>
                   <td>
-                    @if (emp.isActive) {
-                      <span class="tc-active-badge">Active</span>
+                    @if (emp.status === 'active') {
+                      <span class="tc-active-badge">● Active</span>
+                    } @else if (emp.status === 'idle') {
+                      <span class="tc-idle-badge">◌ Idle</span>
                     } @else {
-                      <span class="tc-inactive-badge">Offline</span>
+                      <span class="tc-inactive-badge">○ Offline</span>
                     }
                   </td>
-                  <td class="tc-hours-col"><span class="tc-hours">{{ emp.totalHours }}h</span></td>
-                  <td><span class="tc-sessions-count">{{ emp.sessionCount }}</span></td>
-                  <td class="tc-last-active">{{ emp.lastActive ? formatDateTime(emp.lastActive) : '—' }}</td>
+                  <td class="tc-time-cell">{{ emp.firstLogin ? formatTime(emp.firstLogin) : '—' }}</td>
+                  <td class="tc-time-cell">{{ emp.lastLogout ? formatTime(emp.lastLogout) : (emp.status !== 'offline' ? 'Active' : '—') }}</td>
+                  <td class="tc-hours-col"><span class="tc-hours-active">{{ formatDurationH(emp.activeSeconds) }}</span></td>
+                  <td class="tc-hours-col"><span class="tc-hours-idle">{{ formatDurationH(emp.idleSeconds) }}</span></td>
+                  <td class="tc-hours-col"><span class="tc-hours">{{ formatDurationH(emp.totalSeconds) }}</span></td>
                 </tr>
               } @empty {
                 <tr><td colspan="6" class="tc-empty">No employees found</td></tr>
@@ -408,6 +412,13 @@ import { AuthService } from '../../../core/services/auth.service';
       .tc-drawer { width: 100%; }
       .tc-page.drawer-open .tc-main { margin-right: 0; }
     }
+    .tc-idle-badge {
+      background: rgba(251,191,36,0.12); color: #fbbf24;
+      padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+    }
+    .tc-time-cell { font-size: 0.82rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .tc-hours-active { color: #00ff88; font-weight: 600; font-size: 0.85rem; }
+    .tc-hours-idle   { color: #fbbf24; font-weight: 600; font-size: 0.85rem; }
     .tc-time-summary {
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;
     }
@@ -428,9 +439,10 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   private clockInterval: any;
   private readonly LOGIN_ACTIONS = ['login', 'sso_login', 'session_start', 'user_login', 'app_launch', 'oauth_consent'];
 
-  sessions = signal<any[]>([]);
+  sessions = signal<any[]>([]);       // raw daily summary from /api/v1/timeclock/daily-summary
   users = signal<any[]>([]);
   selectedUserId = signal('');
+  listDate = signal(new Date().toISOString().split('T')[0]); // date shown in the main list
   summary = signal<any>({ hoursToday: 0, hoursWeek: 0, hoursMonth: 0, sessionsToday: 0 });
   liveTimer = signal('0:00:00');
   private sessionStart = new Date();
@@ -504,10 +516,8 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   }
 
   employeeRoster = computed(() => {
-    const allSessions = this.sessions();
+    const allSessions = this.sessions(); // from /api/v1/timeclock/daily-summary
     const allUsers = this.users();
-    const _ = this.selectedWeek();
-    const { start, end } = this.getWeekRange();
     const userMap = new Map<string, any>();
 
     for (const u of allUsers) {
@@ -520,32 +530,35 @@ export class TimeClockComponent implements OnInit, OnDestroy {
       });
     }
 
+    // Merge daily-summary data (new timeclock) into the user map
     for (const s of allSessions) {
-      const key = s.userId?.toString() || s.userEmail || s.userName;
+      const key = s.userEmail?.toLowerCase() || s.userId?.toString();
       if (!key) continue;
       const loginTime = new Date(s.loginTime);
 
-      if (!userMap.has(key)) {
-        userMap.set(key, {
-          userId: s.userId, userName: s.userName || 'Unknown',
-          userEmail: s.userEmail || '', role: '',
-          totalHours: 0, sessionCount: 0, isActive: false, lastActive: null
-        });
-      }
-
-      const emp = userMap.get(key)!;
-      if (!s.logoutTime) emp.isActive = true;
-      if (!emp.lastActive || loginTime > new Date(emp.lastActive)) emp.lastActive = s.loginTime;
-
-      if (loginTime >= start && loginTime < end) {
-        emp.totalHours += (s.durationMinutes || 0) / 60;
-        emp.sessionCount++;
-      }
+      // Upsert into map using data from daily-summary endpoint
+      userMap.set(key, {
+        userId:        s.userId,
+        userName:      s.userName || 'Unknown',
+        userEmail:     s.userEmail || '',
+        role:          userMap.get(key)?.role || '',
+        status:        s.status || 'offline',
+        firstLogin:    s.firstLogin,
+        lastLogout:    s.lastLogout,
+        lastHeartbeat: s.lastHeartbeat,
+        activeSeconds: s.activeSeconds || 0,
+        idleSeconds:   s.idleSeconds   || 0,
+        totalSeconds:  s.totalSeconds  || 0,
+        sessions:      s.sessions      || 1,
+      });
     }
 
     return Array.from(userMap.values())
-      .map(e => ({ ...e, totalHours: Math.round(e.totalHours * 10) / 10 }))
-      .sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0) || b.totalHours - a.totalHours);
+      .sort((a, b) => {
+        const order: Record<string, number> = { active: 0, idle: 1, offline: 2 };
+        return (order[a.status] ?? 2) - (order[b.status] ?? 2) ||
+               (b.totalSeconds || 0) - (a.totalSeconds || 0);
+      });
   });
 
   filteredRoster = computed(() => {
@@ -557,15 +570,18 @@ export class TimeClockComponent implements OnInit, OnDestroy {
         e.userName.toLowerCase().includes(search) || e.userEmail.toLowerCase().includes(search)
       );
     }
-    if (status === 'active') roster = roster.filter(e => e.isActive);
-    else if (status === 'offline') roster = roster.filter(e => !e.isActive);
-    else if (status === 'has-hours') roster = roster.filter(e => e.totalHours > 0);
-    else if (status === 'no-hours') roster = roster.filter(e => e.totalHours === 0);
+    if (status === 'active')    roster = roster.filter(e => e.status === 'active' || e.status === 'idle');
+    else if (status === 'offline')   roster = roster.filter(e => e.status === 'offline');
+    else if (status === 'has-hours') roster = roster.filter(e => (e.totalSeconds || 0) > 0);
+    else if (status === 'no-hours')  roster = roster.filter(e => (e.totalSeconds || 0) === 0);
     return roster;
   });
 
-  activeCount = computed(() => this.employeeRoster().filter(e => e.isActive).length);
-  totalHoursFiltered = computed(() => Math.round(this.employeeRoster().reduce((sum, e) => sum + e.totalHours, 0) * 10) / 10);
+  activeCount = computed(() => this.employeeRoster().filter(e => e.status === 'active' || e.status === 'idle').length);
+  totalHoursFiltered = computed(() => {
+    const secs = this.employeeRoster().reduce((sum, e) => sum + (e.totalSeconds || 0), 0);
+    return Math.round((secs / 3600) * 10) / 10;
+  });
 
   ngOnInit(): void {
     this.loadSessions();
@@ -579,7 +595,11 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void { clearInterval(this.clockInterval); }
 
   loadSessions(): void {
-    this.http.get<any>(`${this.apiUrl}/api/v1/sessions?limit=2000`).subscribe({
+    const token = this.auth.getToken();
+    const date  = this.listDate();
+    this.http.get<any>(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    }).subscribe({
       next: (res) => this.sessions.set(res?.data || []),
       error: () => this.sessions.set([])
     });
@@ -671,6 +691,17 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     const m = Math.floor((seconds % 3600) / 60);
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
+  }
+
+  /** Compact format for table columns: "1h 23m" or "45m" */
+  formatDurationH(seconds: number): string {
+    if (!seconds || seconds <= 0) return '—';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    if (m > 0) return `${m}m`;
+    return `<1m`;
   }
 
   isLoginAction(action: string): boolean {
