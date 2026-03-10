@@ -54,9 +54,9 @@ import { AuthService } from '../../../core/services/auth.service';
         <div class="tc-filters-row">
           <div class="tc-search-bar">
             <i class="bx bx-search"></i>
-            <input type="text" placeholder="Search employees..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+            <input type="text" placeholder="Search employees..." [ngModel]="searchTerm()" (ngModelChange)="onSearchChange($event)" autocomplete="off">
           </div>
-          <select class="tc-filter" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+          <select class="tc-filter" [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
             <option value="all">All Employees</option>
             <option value="active">Active (Online)</option>
             <option value="offline">Offline</option>
@@ -79,7 +79,7 @@ import { AuthService } from '../../../core/services/auth.service';
               </tr>
             </thead>
             <tbody>
-              @for (emp of filteredRoster(); track emp.userId) {
+              @for (emp of paginatedRoster(); track emp.userId) {
                 <tr (click)="openDrawer(emp)" [class.selected]="selectedEmployee()?.userId === emp.userId">
                   <td class="tc-user-cell">
                     <div class="tc-avatar">{{ (emp.userName || 'U').charAt(0) }}</div>
@@ -104,10 +104,45 @@ import { AuthService } from '../../../core/services/auth.service';
                   <td class="tc-hours-col"><span class="tc-hours">{{ formatDurationH(emp.totalSeconds) }}</span></td>
                 </tr>
               } @empty {
-                <tr><td colspan="6" class="tc-empty">No employees found</td></tr>
+                <tr><td colspan="7" class="tc-empty">No employees found</td></tr>
               }
             </tbody>
           </table>
+
+          <!-- Pagination Footer -->
+          <div class="tc-pagination">
+            <div class="tc-page-info">
+              Showing {{ (currentPage() - 1) * pageSize() + 1 }}–{{ minOf(currentPage() * pageSize(), filteredRoster().length) }}
+              of {{ filteredRoster().length }} employees
+            </div>
+            <div class="tc-page-controls">
+              <button class="tc-pg-btn" [disabled]="currentPage() === 1" (click)="goToPage(1)">
+                <i class="bx bx-chevrons-left"></i>
+              </button>
+              <button class="tc-pg-btn" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)">
+                <i class="bx bx-chevron-left"></i>
+              </button>
+              @for (p of pageNumbers(); track $index) {
+                @if (p === '...') {
+                  <span class="tc-pg-ellipsis">…</span>
+                } @else {
+                  <button class="tc-pg-btn" [class.active]="p === currentPage()" (click)="goToPage(p)">{{ p }}</button>
+                }
+              }
+              <button class="tc-pg-btn" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)">
+                <i class="bx bx-chevron-right"></i>
+              </button>
+              <button class="tc-pg-btn" [disabled]="currentPage() === totalPages()" (click)="goToPage(totalPages())">
+                <i class="bx bx-chevrons-right"></i>
+              </button>
+            </div>
+            <select class="tc-page-size" [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)">
+              <option [value]="10">10 / page</option>
+              <option [value]="25">25 / page</option>
+              <option [value]="50">50 / page</option>
+              <option [value]="100">100 / page</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -407,10 +442,39 @@ import { AuthService } from '../../../core/services/auth.service';
       &.sev-error { background: rgba(255,68,68,0.1); color: #ff4444; }
     }
 
+    /* ========== Pagination ========== */
+    .tc-pagination {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+      padding: 0.65rem 1rem; border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.01);
+    }
+    .tc-page-info { font-size: 0.72rem; color: var(--text-secondary); }
+    .tc-page-controls { display: flex; align-items: center; gap: 3px; }
+    .tc-pg-btn {
+      min-width: 30px; height: 30px; padding: 0 6px;
+      border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03); color: var(--text-secondary);
+      font-size: 0.78rem; cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      &:hover:not([disabled]) { border-color: var(--cyan, #00e5ff); color: var(--cyan, #00e5ff); background: rgba(0,212,255,0.08); }
+      &.active { border-color: var(--cyan, #00e5ff); color: var(--cyan, #00e5ff); background: rgba(0,212,255,0.12); font-weight: 700; }
+      &[disabled] { opacity: 0.3; cursor: not-allowed; }
+      i { font-size: 0.95rem; }
+    }
+    .tc-pg-ellipsis { color: var(--text-secondary); font-size: 0.78rem; padding: 0 4px; }
+    .tc-page-size {
+      padding: 0.3rem 0.5rem; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+      color: var(--text-primary); font-size: 0.72rem; cursor: pointer;
+      &:focus { outline: none; border-color: var(--cyan); }
+      option { background: #0a0a14; }
+    }
+
     @media (max-width: 900px) {
       .tc-stats { grid-template-columns: repeat(2, 1fr); }
       .tc-drawer { width: 100%; }
       .tc-page.drawer-open .tc-main { margin-right: 0; }
+      .tc-pagination { flex-direction: column; align-items: flex-start; }
     }
     .tc-idle-badge {
       background: rgba(251,191,36,0.12); color: #fbbf24;
@@ -449,6 +513,10 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   searchTerm = signal('');
   statusFilter = signal('all');
   selectedWeek = signal('current');
+
+  // Pagination
+  currentPage = signal(1);
+  pageSize = signal(25);
 
   drawerOpen = signal(false);
   selectedEmployee = signal<any>(null);
@@ -570,12 +638,46 @@ export class TimeClockComponent implements OnInit, OnDestroy {
         e.userName.toLowerCase().includes(search) || e.userEmail.toLowerCase().includes(search)
       );
     }
-    if (status === 'active')    roster = roster.filter(e => e.status === 'active' || e.status === 'idle');
+    if (status === 'active')         roster = roster.filter(e => e.status === 'active' || e.status === 'idle');
     else if (status === 'offline')   roster = roster.filter(e => e.status === 'offline');
     else if (status === 'has-hours') roster = roster.filter(e => (e.totalSeconds || 0) > 0);
     else if (status === 'no-hours')  roster = roster.filter(e => (e.totalSeconds || 0) === 0);
     return roster;
   });
+
+  totalPages = computed(() => Math.max(1, Math.ceil(this.filteredRoster().length / this.pageSize())));
+
+  paginatedRoster = computed(() => {
+    const page = this.currentPage();
+    const size = this.pageSize();
+    const start = (page - 1) * size;
+    return this.filteredRoster().slice(start, start + size);
+  });
+
+  pageNumbers = computed(() => {
+    const total = this.totalPages();
+    const current = this.currentPage();
+    const pages: (number | '...')[] = [];
+    if (total <= 7) {
+      for (let i = 1; i <= total; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (current > 3) pages.push('...');
+      for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) pages.push(i);
+      if (current < total - 2) pages.push('...');
+      pages.push(total);
+    }
+    return pages;
+  });
+
+  goToPage(page: number | '...') {
+    if (typeof page !== 'number') return;
+    this.currentPage.set(Math.max(1, Math.min(page, this.totalPages())));
+  }
+
+  onSearchChange(val: string) { this.searchTerm.set(val); this.currentPage.set(1); }
+  onStatusChange(val: string) { this.statusFilter.set(val); this.currentPage.set(1); }
+  onPageSizeChange(val: number) { this.pageSize.set(+val); this.currentPage.set(1); }
 
   activeCount = computed(() => this.employeeRoster().filter(e => e.status === 'active' || e.status === 'idle').length);
   totalHoursFiltered = computed(() => {
@@ -615,7 +717,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   }
 
   loadUsers(): void {
-    this.http.get<any>(`${this.apiUrl}/api/v1/users?limit=500&status=active`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/v1/users?limit=2000&status=active`).subscribe({
       next: (res) => this.users.set(res?.data || []),
       error: () => {}
     });
@@ -725,4 +827,6 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     if (!d) return '—';
     return new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   }
+
+  minOf(a: number, b: number): number { return Math.min(a, b); }
 }
