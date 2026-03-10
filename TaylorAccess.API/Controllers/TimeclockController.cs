@@ -163,7 +163,8 @@ public class TimeclockController : ControllerBase
                 s.Id, s.UserId, s.UserEmail, s.UserName,
                 s.Date, s.LoginTime, s.LogoutTime, s.LastHeartbeat,
                 s.ActiveSeconds, s.IdleSeconds, s.Status, s.IpAddress,
-                totalSeconds = (int)((s.LogoutTime ?? s.LastHeartbeat) - s.LoginTime).TotalSeconds
+                // Use tracked bucket totals — not wall-clock (prevents overnight bleed)
+                totalSeconds = s.ActiveSeconds + s.IdleSeconds
             })
             .ToListAsync();
 
@@ -203,18 +204,10 @@ public class TimeclockController : ControllerBase
                 var active   = all.Sum(s => s.ActiveSeconds);
                 var idle     = all.Sum(s => s.IdleSeconds);
 
-                // Cap each session's end time: use LogoutTime, else LastHeartbeat, else maxEndTime.
-                // Also cap at maxEndTime to prevent overnight bleed.
-                var total = all.Sum(s =>
-                {
-                    var endTime = s.LogoutTime
-                        ?? (s.LastHeartbeat < maxEndTime ? s.LastHeartbeat : maxEndTime);
-                    // Stale session heuristic: if no heartbeat for >2h and no logout → treat lastHeartbeat as end
-                    if (!s.LogoutTime.HasValue && (DateTime.UtcNow - s.LastHeartbeat).TotalHours > 2)
-                        endTime = s.LastHeartbeat;
-                    var secs = (int)(endTime - s.LoginTime).TotalSeconds;
-                    return Math.Max(0, secs);
-                });
+                // Total = sum of tracked heartbeat buckets (active + idle).
+                // This is accurate regardless of how long the tab has been open,
+                // and avoids the overnight bleed issue where wall-clock time >> actual work time.
+                var total = all.Sum(s => s.ActiveSeconds + s.IdleSeconds);
 
                 // A session is only "active/idle" if it received a heartbeat in the last 5 minutes
                 var recentBeat = (DateTime.UtcNow - lastBeat).TotalMinutes < 5;
@@ -349,8 +342,7 @@ public class TimeclockController : ControllerBase
                     date          = day.ToString("yyyy-MM-dd"),
                     activeSeconds = daySessions.Sum(s => s.ActiveSeconds),
                     idleSeconds   = daySessions.Sum(s => s.IdleSeconds),
-                    totalSeconds  = daySessions.Sum(s =>
-                        (int)((s.LogoutTime ?? s.LastHeartbeat) - s.LoginTime).TotalSeconds),
+                    totalSeconds  = daySessions.Sum(s => s.ActiveSeconds + s.IdleSeconds),
                     sessions      = daySessions.Count
                 };
             })
