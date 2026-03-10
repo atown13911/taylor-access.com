@@ -686,6 +686,34 @@ export class DriverDatabaseComponent implements OnInit {
     this.compUploadOpen.set(true);
   }
 
+  getEditingDocId(): number | null {
+    return (this as any)._editingDocId ?? null;
+  }
+
+  deleteCompDoc(): void {
+    const id = (this as any)._editingDocId;
+    if (!id) return;
+    if (!confirm('Delete this document? This cannot be undone.')) return;
+    this.compSaving.set(true);
+    this.api.deleteDriverDocument(id).subscribe({
+      next: () => {
+        this.toast.success('Document deleted', 'Deleted');
+        this.compSaving.set(false);
+        this.compUploadOpen.set(false);
+        (this as any)._editingDocId = null;
+        const driver = this.selectedDriver();
+        if (driver) {
+          this.loadAllDocs();
+          this.loadDriverDocs(driver.id);
+        }
+      },
+      error: () => {
+        this.toast.error('Failed to delete document', 'Error');
+        this.compSaving.set(false);
+      }
+    });
+  }
+
   submitCompUpload(): void {
     const driver = this.selectedDriver();
     const item = this.compUploadItem();

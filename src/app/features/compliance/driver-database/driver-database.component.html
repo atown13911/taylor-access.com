@@ -258,9 +258,16 @@
         </div>
         <div class="comp-modal-footer">
           <button class="comp-btn-cancel" (click)="compUploadOpen.set(false)">Cancel</button>
+          @if (getEditingDocId()) {
+            <button class="comp-btn-delete" (click)="deleteCompDoc()" [disabled]="compSaving()">
+              <i class='bx bx-trash'></i> Delete
+            </button>
+          }
           <button class="comp-btn-submit" (click)="submitCompUpload()" [disabled]="compSaving()">
             @if (compSaving()) {
-              <i class='bx bx-loader-alt bx-spin'></i> Uploading...
+              <i class='bx bx-loader-alt bx-spin'></i> Saving...
+            } @else if (getEditingDocId()) {
+              <i class='bx bx-check'></i> Update
             } @else {
               <i class='bx bx-upload'></i> Upload
             }

@@ -607,7 +607,7 @@ tr { cursor: pointer; }
   h3 { color: var(--text-primary); font-size: 1rem; margin: 0; }
 }
 .comp-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-.comp-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.06); }
+.comp-modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.06); }
 .comp-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .comp-form-group {
   display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;
@@ -625,6 +625,15 @@ tr { cursor: pointer; }
   padding: 8px 16px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);
   background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem;
   &:hover { border-color: var(--cyan); color: var(--text-primary); }
+}
+.comp-btn-delete {
+  margin-right: auto; /* push to left side */
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 6px; border: 1px solid rgba(255,68,68,0.3);
+  background: rgba(255,68,68,0.08); color: #ff4444; cursor: pointer; font-size: 0.85rem;
+  font-weight: 600; transition: all 0.2s;
+  &:hover:not(:disabled) { background: rgba(255,68,68,0.2); border-color: rgba(255,68,68,0.5); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .comp-btn-submit {
   padding: 8px 20px; border-radius: 6px; border: 1px solid rgba(0,212,255,0.3);
