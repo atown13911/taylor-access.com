@@ -30,7 +30,7 @@ export class DriverDatabaseComponent implements OnInit {
     cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drug: 'drug_tests',
     dqf: 'dqf', employment: 'employment', training: 'training',
     insurance: 'insurance', vehicle: 'vehicle', permits: 'permits',
-    ifta: 'ifta', safety: 'safety', violations: 'violations',
+    ifta: 'ifta', irp: 'ifta', safety: 'safety', violations: 'violations',
     i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction',
     contract: 'contracts'
   };
@@ -38,7 +38,7 @@ export class DriverDatabaseComponent implements OnInit {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drug: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
     insurance: 'certificate_of_insurance', vehicle: 'registration', permits: 'oversize',
-    ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation',
+    ifta: 'ifta_license', irp: 'irp_cab_card', safety: 'safe_driver', violations: 'moving_violation',
     i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form',
     contract: 'driver_contract'
   };
@@ -415,7 +415,8 @@ export class DriverDatabaseComponent implements OnInit {
     { key: 'dqf', label: 'Driver Qualification File' }, { key: 'employment', label: 'Employment Verification' },
     { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
     { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
-    { key: 'ifta', label: 'IFTA' }, { key: 'safety', label: 'Safety Awards' },
+    { key: 'ifta', label: 'IFTA' }, { key: 'irp', label: 'IRP' },
+    { key: 'safety', label: 'Safety Awards' },
     { key: 'violations', label: 'Violations' }, { key: 'contract', label: 'Contract' },
     { key: 'i9', label: 'I-9' }, { key: 'w9', label: 'W-9' },
     { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' }
@@ -585,6 +586,7 @@ export class DriverDatabaseComponent implements OnInit {
     ifta: ['ifta', 'irp', 'fuel tax'],
     safety: ['safety', 'award', 'safe_driver'],
     violations: ['violation', 'accident', 'incident', 'moving_violation'],
+    irp: ['irp', 'cab card', 'irp_cab_card', 'cab_card', 'registration plate', 'apportioned'],
     i9: ['i-9', 'i9', 'i9_form', 'eligibility'],
     w9: ['w-9', 'w9', 'w9_form', 'tax'],
     directDeposit: ['direct deposit', 'direct_deposit', 'direct_deposit_form', 'bank'],
@@ -598,7 +600,7 @@ export class DriverDatabaseComponent implements OnInit {
       drug: 'Drug & Alcohol Test', dqf: 'Driver Qualification File', employment: 'Employment Verification',
       training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
       permits: 'Permits', ifta: 'IFTA', safety: 'Safety Awards', violations: 'Violations',
-      contract: 'Contract',
+      contract: 'Contract', irp: 'IRP / Cab Card',
       i9: 'I-9', w9: 'W-9', directDeposit: 'Direct Deposit', deduction: 'Deduction'
     };
     const status = this.getItemStatus(driver, item);

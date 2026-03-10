@@ -176,6 +176,7 @@ export class DocumentManagementComponent implements OnInit {
       { value: 'registration', label: 'Vehicle Docs' },
       { value: 'oversize', label: 'Permits' },
       { value: 'ifta_license', label: 'IFTA' },
+      { value: 'irp_cab_card', label: 'IRP / Cab Card' },
       { value: 'safe_driver', label: 'Safety Awards' },
       { value: 'moving_violation', label: 'Violations' },
       { value: 'driver_contract', label: 'Contract' },
