@@ -40,7 +40,8 @@ public class CompanyPermitsController : ControllerBase
                 p.Id, p.OrganizationId, p.PermitNumber, p.PermitType, p.State,
                 p.IssueDate, p.ExpiryDate, p.Cost, p.Status,
                 p.AssignedDriverId, AssignedDriverName = p.AssignedDriver != null ? p.AssignedDriver.Name : null,
-                p.AssignedTruckNumber, p.Notes, p.CreatedAt, p.UpdatedAt
+                p.AssignedTruckNumber, p.Notes, p.CreatedAt, p.UpdatedAt,
+                p.FileName, HasFile = p.FileContent != null
             })
             .ToListAsync();
 
@@ -95,5 +96,65 @@ public class CompanyPermitsController : ControllerBase
         await _auditService.LogAsync("delete", "CompanyPermit", id, $"Deleted permit #{permit.PermitNumber}");
 
         return Ok(new { message = "Permit deleted" });
+    }
+
+    // ── Document upload ────────────────────────────────────────────────────
+
+    [HttpPost("{id}/upload")]
+    public async Task<ActionResult> UploadDocument(int id, IFormFile file)
+    {
+        var permit = await _context.CompanyPermits.FindAsync(id);
+        if (permit == null) return NotFound();
+
+        if (file == null || file.Length == 0)
+            return BadRequest(new { error = "No file provided" });
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+        permit.FileContent = Convert.ToBase64String(ms.ToArray());
+        permit.FileName    = file.FileName;
+        permit.ContentType = file.ContentType;
+        permit.UpdatedAt   = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        await _auditService.LogAsync("upload", "CompanyPermit", id, $"Uploaded document for permit #{permit.PermitNumber}");
+
+        return Ok(new { message = "Document uploaded", fileName = file.FileName });
+    }
+
+    [HttpGet("{id}/document")]
+    public async Task<ActionResult> ViewDocument(int id)
+    {
+        var permit = await _context.CompanyPermits.FindAsync(id);
+        if (permit?.FileContent == null) return NotFound(new { error = "No document attached" });
+
+        var bytes = Convert.FromBase64String(permit.FileContent);
+        Response.Headers.Append("Content-Disposition", $"inline; filename=\"{permit.FileName}\"");
+        return File(bytes, permit.ContentType ?? "application/pdf");
+    }
+
+    [HttpGet("{id}/download")]
+    public async Task<ActionResult> DownloadDocument(int id)
+    {
+        var permit = await _context.CompanyPermits.FindAsync(id);
+        if (permit?.FileContent == null) return NotFound(new { error = "No document attached" });
+
+        var bytes = Convert.FromBase64String(permit.FileContent);
+        return File(bytes, permit.ContentType ?? "application/pdf", permit.FileName ?? "permit-document");
+    }
+
+    [HttpDelete("{id}/document")]
+    public async Task<ActionResult> DeleteDocument(int id)
+    {
+        var permit = await _context.CompanyPermits.FindAsync(id);
+        if (permit == null) return NotFound();
+
+        permit.FileContent = null;
+        permit.FileName    = null;
+        permit.ContentType = null;
+        permit.UpdatedAt   = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Document removed" });
     }
 }

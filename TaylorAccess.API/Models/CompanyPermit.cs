@@ -44,6 +44,11 @@ public class CompanyPermit
 
     public string? Notes { get; set; }
 
+    // Document attachment
+    public string? FileName    { get; set; }
+    public string? FileContent { get; set; }  // base64
+    public string? ContentType { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

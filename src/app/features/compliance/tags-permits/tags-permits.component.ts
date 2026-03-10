@@ -28,6 +28,11 @@ export class TagsPermitsComponent implements OnInit {
   showAddModal = signal(false);
   editingPermit = signal<any>(null);
 
+  // Document upload
+  uploadingDoc = signal(false);
+  uploadTarget = signal<any>(null);   // permit being uploaded to
+  permitDocFile: File | null = null;
+
   permitForm: any = { permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
 
   filteredPermits = computed(() => {
@@ -179,5 +184,77 @@ export class TagsPermitsComponent implements OnInit {
     if (days < 0) return 'expired';
     if (days <= 30) return 'expiring';
     return 'valid';
+  }
+
+  // ── Document handling ──────────────────────────────────────────────────
+
+  openUploadDoc(p: any): void {
+    this.uploadTarget.set(p);
+    this.permitDocFile = null;
+    // Trigger a hidden file input
+    const input = document.getElementById('permit-doc-input') as HTMLInputElement;
+    if (input) { input.value = ''; input.click(); }
+  }
+
+  onPermitDocSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this.permitDocFile = file;
+    this.uploadPermitDoc();
+  }
+
+  uploadPermitDoc(): void {
+    const p = this.uploadTarget();
+    const file = this.permitDocFile;
+    if (!p || !file) return;
+
+    this.uploadingDoc.set(true);
+    const fd = new FormData();
+    fd.append('file', file);
+
+    this.http.post(`${this.apiUrl}/api/v1/company-permits/${p.id}/upload`, fd).subscribe({
+      next: () => {
+        this.toast.success(`Document uploaded for permit #${p.permitNumber}`, 'Uploaded');
+        this.uploadingDoc.set(false);
+        this.uploadTarget.set(null);
+        this.permitDocFile = null;
+        this.loadData(); // refresh so hasFile updates
+      },
+      error: () => {
+        this.toast.error('Failed to upload document', 'Error');
+        this.uploadingDoc.set(false);
+      }
+    });
+  }
+
+  viewPermitDoc(p: any): void {
+    this.http.get(`${this.apiUrl}/api/v1/company-permits/${p.id}/document`,
+      { responseType: 'blob' }
+    ).subscribe({
+      next: (blob) => window.open(URL.createObjectURL(blob), '_blank'),
+      error: () => this.toast.error('Failed to load document', 'Error')
+    });
+  }
+
+  downloadPermitDoc(p: any): void {
+    this.http.get(`${this.apiUrl}/api/v1/company-permits/${p.id}/download`,
+      { responseType: 'blob' }
+    ).subscribe({
+      next: (blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = p.fileName || `permit-${p.permitNumber}`;
+        a.click();
+      },
+      error: () => this.toast.error('Failed to download', 'Error')
+    });
+  }
+
+  deletePermitDoc(p: any): void {
+    if (!confirm(`Remove document from permit #${p.permitNumber}?`)) return;
+    this.http.delete(`${this.apiUrl}/api/v1/company-permits/${p.id}/document`).subscribe({
+      next: () => { this.toast.success('Document removed', 'Removed'); this.loadData(); },
+      error: () => this.toast.error('Failed to remove document', 'Error')
+    });
   }
 }

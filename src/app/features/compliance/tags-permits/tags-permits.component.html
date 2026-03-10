@@ -80,6 +80,11 @@
     <div class="tp-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading...</div>
   }
 
+  <!-- Hidden file input for document upload -->
+  <input type="file" id="permit-doc-input" style="display:none"
+    accept=".pdf,.jpg,.jpeg,.png,.webp"
+    (change)="onPermitDocSelected($event)">
+
   <!-- Permits Tab -->
   @if (activeTab() === 'permits' && !loading()) {
     <div class="tp-table-wrap">
@@ -94,6 +99,7 @@
             <th>Issued</th>
             <th>Expires</th>
             <th>Cost</th>
+            <th>Document</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -121,6 +127,22 @@
                 }
               </td>
               <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
+              <td class="tp-doc-cell">
+                @if (p.hasFile || p.fileName) {
+                  <button class="tp-icon-btn" title="View document" (click)="viewPermitDoc(p)"><i class="bx bx-show"></i></button>
+                  <button class="tp-icon-btn" title="Download" (click)="downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
+                  <button class="tp-icon-btn danger" title="Remove document" (click)="deletePermitDoc(p)"><i class="bx bx-x"></i></button>
+                } @else {
+                  <button class="tp-icon-btn upload" title="Upload document" (click)="openUploadDoc(p)"
+                    [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id">
+                    @if (uploadingDoc() && uploadTarget()?.id === p.id) {
+                      <i class="bx bx-loader-alt bx-spin"></i>
+                    } @else {
+                      <i class="bx bx-upload"></i>
+                    }
+                  </button>
+                }
+              </td>
               <td><span class="tp-status" [class]="getPermitStatus(p)">{{ getPermitStatus(p) }}</span></td>
               <td class="tp-actions">
                 <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
@@ -128,7 +150,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="10" class="tp-empty">No permits found. Click "Add Permit" to create one.</td></tr>
+            <tr><td colspan="11" class="tp-empty">No permits found. Click "Add Permit" to create one.</td></tr>
           }
         </tbody>
       </table>
@@ -149,6 +171,7 @@
             <th>Issued</th>
             <th>Expires</th>
             <th>Cost</th>
+            <th>Document</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -176,6 +199,22 @@
                 }
               </td>
               <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
+              <td class="tp-doc-cell">
+                @if (p.hasFile || p.fileName) {
+                  <button class="tp-icon-btn" title="View document" (click)="viewPermitDoc(p)"><i class="bx bx-show"></i></button>
+                  <button class="tp-icon-btn" title="Download" (click)="downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
+                  <button class="tp-icon-btn danger" title="Remove document" (click)="deletePermitDoc(p)"><i class="bx bx-x"></i></button>
+                } @else {
+                  <button class="tp-icon-btn upload" title="Upload document" (click)="openUploadDoc(p)"
+                    [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id">
+                    @if (uploadingDoc() && uploadTarget()?.id === p.id) {
+                      <i class="bx bx-loader-alt bx-spin"></i>
+                    } @else {
+                      <i class="bx bx-upload"></i>
+                    }
+                  </button>
+                }
+              </td>
               <td><span class="tp-status" [class]="getPermitStatus(p)">{{ getPermitStatus(p) }}</span></td>
               <td class="tp-actions">
                 <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
@@ -183,7 +222,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="10" class="tp-empty">No IRP tags found. Click "Add Permit" to create one.</td></tr>
+            <tr><td colspan="11" class="tp-empty">No IRP tags found. Click "Add Permit" to create one.</td></tr>
           }
         </tbody>
       </table>
