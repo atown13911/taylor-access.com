@@ -86,7 +86,16 @@ export class DocumentManagementComponent implements OnInit {
   saving = signal(false);
   docFile: File | null = null;
 
-  summary = signal<any>({ totalDocuments: 0, expiring: 0, expired: 0, data: [] });
+  // Computed directly from loaded documents — no extra API call needed
+  summary = computed(() => {
+    const docs = this.documents();
+    return {
+      totalDocuments: docs.length,
+      expiring: docs.filter(d => d.status === 'expiring' || (d.expiryDate && this.isExpiringSoon(d.expiryDate) && d.status !== 'expired')).length,
+      expired:  docs.filter(d => d.status === 'expired'  || (d.expiryDate && this.isExpired(d.expiryDate))).length,
+      data: []
+    };
+  });
 
   historicalDocs = computed(() => {
     let docs = this.documents();
@@ -489,12 +498,7 @@ export class DocumentManagementComponent implements OnInit {
     });
   }
 
-  loadSummary(): void {
-    this.api.getDriverDocumentSummary().subscribe({
-      next: (res: any) => this.summary.set(res || { totalDocuments: 0, expiring: 0, expired: 0, data: [] }),
-      error: () => {}
-    });
-  }
+  loadSummary(): void { /* summary is now computed from documents() — no API call needed */ }
 
   onDriverFilterChange(): void { /* filteredDocs is computed, auto-updates */ }
 
