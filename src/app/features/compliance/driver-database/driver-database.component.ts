@@ -31,14 +31,16 @@ export class DriverDatabaseComponent implements OnInit {
     dqf: 'dqf', employment: 'employment', training: 'training',
     insurance: 'insurance', vehicle: 'vehicle', permits: 'permits',
     ifta: 'ifta', safety: 'safety', violations: 'violations',
-    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction'
+    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction',
+    contract: 'contracts'
   };
   private readonly subMap: Record<string, string> = {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drug: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
     insurance: 'certificate_of_insurance', vehicle: 'registration', permits: 'oversize',
     ifta: 'ifta_license', safety: 'safe_driver', violations: 'moving_violation',
-    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form'
+    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form',
+    contract: 'driver_contract'
   };
 
   loading = signal(false);
@@ -414,7 +416,7 @@ export class DriverDatabaseComponent implements OnInit {
     { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
     { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
     { key: 'ifta', label: 'IFTA' }, { key: 'safety', label: 'Safety Awards' },
-    { key: 'violations', label: 'Violations' },
+    { key: 'violations', label: 'Violations' }, { key: 'contract', label: 'Contract' },
     { key: 'i9', label: 'I-9' }, { key: 'w9', label: 'W-9' },
     { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' }
   ];
@@ -586,7 +588,8 @@ export class DriverDatabaseComponent implements OnInit {
     i9: ['i-9', 'i9', 'i9_form', 'eligibility'],
     w9: ['w-9', 'w9', 'w9_form', 'tax'],
     directDeposit: ['direct deposit', 'direct_deposit', 'direct_deposit_form', 'bank'],
-    deduction: ['deduction', 'deduction_form', 'payroll deduction']
+    deduction: ['deduction', 'deduction_form', 'payroll deduction'],
+    contract: ['contract', 'driver_contract', 'contracts', 'agreement', 'lease agreement', 'owner operator']
   };
 
   getComplianceTooltip(driver: any, item: string): string {
@@ -595,6 +598,7 @@ export class DriverDatabaseComponent implements OnInit {
       drug: 'Drug & Alcohol Test', dqf: 'Driver Qualification File', employment: 'Employment Verification',
       training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
       permits: 'Permits', ifta: 'IFTA', safety: 'Safety Awards', violations: 'Violations',
+      contract: 'Contract',
       i9: 'I-9', w9: 'W-9', directDeposit: 'Direct Deposit', deduction: 'Deduction'
     };
     const status = this.getItemStatus(driver, item);

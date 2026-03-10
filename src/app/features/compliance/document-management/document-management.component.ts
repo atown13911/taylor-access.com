@@ -178,6 +178,7 @@ export class DocumentManagementComponent implements OnInit {
       { value: 'ifta_license', label: 'IFTA' },
       { value: 'safe_driver', label: 'Safety Awards' },
       { value: 'moving_violation', label: 'Violations' },
+      { value: 'driver_contract', label: 'Contract' },
     ]},
     { key: 'cdl_endorsements', label: 'CDL & Endorsements', icon: 'bx-id-card', subcategories: [
       { value: 'cdl_license', label: 'CDL License' },
@@ -267,6 +268,16 @@ export class DocumentManagementComponent implements OnInit {
       { value: 'dot_warning', label: 'DOT Warning' },
       { value: 'csa_alert', label: 'CSA Alert' },
       { value: 'accident_report', label: 'Accident Report' }
+    ]},
+    { key: 'contracts', label: 'Contracts', icon: 'bx-file-blank', subcategories: [
+      { value: 'driver_contract', label: 'Driver Contract' },
+      { value: 'owner_operator_agreement', label: 'Owner-Operator Agreement' },
+      { value: 'lease_agreement', label: 'Lease Agreement' },
+      { value: 'independent_contractor', label: 'Independent Contractor Agreement' },
+      { value: 'non_compete', label: 'Non-Compete Agreement' },
+      { value: 'amendment', label: 'Contract Amendment' },
+      { value: 'termination_agreement', label: 'Termination Agreement' },
+      { value: 'other_contract', label: 'Other Contract' }
     ]},
     { key: 'pm', label: 'PM', icon: 'bx-wrench', subcategories: [
       { value: 'oil_change', label: 'Oil Change' },
