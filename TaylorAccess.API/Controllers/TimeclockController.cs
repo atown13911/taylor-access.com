@@ -102,7 +102,7 @@ public class TimeclockController : ControllerBase
 
     /// <summary>Called when user explicitly logs out.</summary>
     [HttpPost("session/end")]
-    public async Task<ActionResult> EndSession([FromBody] EndSessionRequest req)
+    public async Task<ActionResult> EndSession([FromBody] TimeclockEndRequest req)
     {
         var session = await _context.TimeclockSessions.FindAsync(req.SessionId);
         if (session == null) return NotFound();
@@ -244,4 +244,4 @@ public class TimeclockController : ControllerBase
 }
 
 public record HeartbeatRequest(int SessionId, bool IsActive);
-public record EndSessionRequest(int SessionId);
+public record TimeclockEndRequest(int SessionId);
