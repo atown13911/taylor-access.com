@@ -1,7 +1,7 @@
 import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -597,12 +597,12 @@ export class TimeClockComponent implements OnInit, OnDestroy {
   loadSessions(): void {
     const token = this.auth.getToken();
     const date  = this.listDate();
-    this.http.get<any>(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    }).subscribe({
-      next: (res) => this.sessions.set(res?.data || []),
-      error: () => this.sessions.set([])
-    });
+    const headers = new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
+    this.http.get<{ data: any[] }>(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`, { headers })
+      .subscribe({
+        next: (res) => this.sessions.set(res?.data || []),
+        error: () => this.sessions.set([])
+      });
   }
 
   loadSummary(): void {
@@ -646,10 +646,10 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     this.employeeAuditLogs.set([]);
     this.sessionSummary.set(null);
     const token = this.auth.getToken();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers = new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
 
     // Load session data (active/idle/total time)
-    this.http.get<any>(`${this.apiUrl}/api/v1/timeclock/sessions`, {
+    this.http.get<{ data: any[] }>(`${this.apiUrl}/api/v1/timeclock/sessions`, {
       params: { email: userEmail, date }, headers
     }).subscribe({
       next: (res) => {
@@ -671,7 +671,7 @@ export class TimeClockComponent implements OnInit, OnDestroy {
     });
 
     // Load audit log activity
-    this.http.get<any>(`${this.apiUrl}/api/v1/audit/employee-day`, {
+    this.http.get<{ data: any[] }>(`${this.apiUrl}/api/v1/audit/employee-day`, {
       params: { email: userEmail, date }, headers
     }).subscribe({
       next: (res) => {
