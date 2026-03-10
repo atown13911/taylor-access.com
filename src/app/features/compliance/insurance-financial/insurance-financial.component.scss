@@ -351,6 +351,58 @@
   font-size: 0.8rem; font-weight: 700; color: var(--cyan, #00e5ff); flex-shrink: 0;
 }
 
+// ── Collapsible policy type rows ───────────────────────────────────────────
+
+.expand-cell { width: 48px; padding: 0 0.5rem !important; }
+
+.expand-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer; padding: 4px 6px;
+  border-radius: 6px; color: var(--text-secondary); transition: all 0.15s;
+  &:hover { background: rgba(0,229,255,0.08); color: var(--cyan, #00e5ff); }
+  i { font-size: 0.85rem; }
+}
+
+.history-count {
+  font-size: 0.62rem; font-weight: 700;
+  background: rgba(255,255,255,0.08); color: var(--text-secondary);
+  padding: 1px 5px; border-radius: 8px; min-width: 16px; text-align: center;
+}
+
+.policy-current-row {
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+
+  &.row-active   { border-left-color: rgba(0,255,136,0.5); }
+  &.row-expiring { border-left-color: rgba(255,170,0,0.5); }
+  &.row-expired  { border-left-color: rgba(255,68,68,0.2); }
+
+  &.has-history td:nth-child(2) strong {
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+}
+
+.policy-history-row {
+  background: rgba(255,255,255,0.015);
+  border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+
+  td { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+}
+
+.history-type-cell { padding-left: 1.5rem !important; }
+
+.history-label {
+  display: flex; align-items: center; gap: 0.3rem;
+  font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);
+  font-style: italic;
+  i { font-size: 0.8rem; color: var(--text-secondary); opacity: 0.6; }
+}
+
+.history-muted {
+  color: var(--text-secondary) !important;
+  font-size: 0.78rem !important;
+}
+
 // Report
 .report-actions-header { display: flex; align-items: center; gap: 0.5rem; }
 .report-body { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1.5rem; }

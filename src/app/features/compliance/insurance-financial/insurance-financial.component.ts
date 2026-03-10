@@ -94,6 +94,46 @@ export class InsuranceFinancialComponent implements OnInit {
   showReport = signal(false);
   reportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+  // Collapsed-by-type view
+  expandedTypes = signal<Set<string>>(new Set());
+
+  toggleTypeExpand(type: string): void {
+    this.expandedTypes.update(s => {
+      const n = new Set(s);
+      n.has(type) ? n.delete(type) : n.add(type);
+      return n;
+    });
+  }
+
+  /** Groups policies by type, picks the most current as the primary row. */
+  groupedByType = computed(() => {
+    const map = new Map<string, InsuranceRow[]>();
+    for (const p of this.policies()) {
+      const arr = map.get(p.policyType) ?? [];
+      arr.push(p);
+      map.set(p.policyType, arr);
+    }
+
+    const statusOrder: Record<string, number> = { active: 0, expiring: 1, expired: 2 };
+
+    return Array.from(map.entries()).map(([type, rows]) => {
+      // Sort: active first, then by effectiveDate desc
+      const sorted = [...rows].sort((a, b) => {
+        const sA = statusOrder[a.status] ?? 3;
+        const sB = statusOrder[b.status] ?? 3;
+        if (sA !== sB) return sA - sB;
+        return new Date(b.effectiveDate || 0).getTime() - new Date(a.effectiveDate || 0).getTime();
+      });
+      return { type, current: sorted[0], history: sorted.slice(1) };
+    }).sort((a, b) => {
+      // Sort groups: active types first
+      const aStatus = statusOrder[a.current.status] ?? 3;
+      const bStatus = statusOrder[b.current.status] ?? 3;
+      if (aStatus !== bStatus) return aStatus - bStatus;
+      return (a.current.policyType || '').localeCompare(b.current.policyType || '');
+    });
+  });
+
   // Year grouping
   selectedYear = signal<number | null>(null);
 

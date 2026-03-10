@@ -33,72 +33,99 @@
     } @else if (policies().length === 0) {
       <div class="empty-state"><i class='bx bx-shield-alt-2'></i><h3>No insurance policies</h3><p>Add your first insurance policy to start tracking coverage.</p></div>
     } @else {
-      <!-- Year Filter -->
-      <div class="year-filter">
-        <button class="year-btn" [class.active]="selectedYear() === null" (click)="selectedYear.set(null)">All Years</button>
-        @for (year of availableYears(); track year) {
-          <button class="year-btn" [class.active]="selectedYear() === year" (click)="selectedYear.set(year)">{{ year }}</button>
-        }
-      </div>
-
-      <!-- Grouped by Year -->
-      @for (group of policiesByYearGrouped(); track group[0]) {
-        @if (selectedYear() === null || selectedYear() === group[0]) {
-          <div class="year-group">
-            <div class="year-header">
-              <i class='bx bx-calendar'></i>
-              <span>{{ group[0] }}</span>
-              <span class="year-count">{{ group[1].length }} policies</span>
-            </div>
-            <div class="data-table-container">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Provider</th>
-                    <th>Policy #</th>
-                    <th>Coverage</th>
-                    <th>Effective</th>
-                    <th>Expiry</th>
-                    <th>Document</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (policy of group[1]; track policy.id) {
-                    <tr>
-                      <td><strong>{{ getPolicyTypeLabel(policy.policyType) }}</strong></td>
-                      <td>{{ policy.providerName }}</td>
-                      <td class="mono">{{ policy.policyNumber || '—' }}</td>
-                      <td>{{ formatCurrency(policy.coverageAmount) }}</td>
-                      <td>{{ formatDate(policy.effectiveDate) }}</td>
-                      <td>{{ formatDate(policy.expiryDate) }}</td>
-                      <td>
-                        @if (policy.hasFile) {
-                          <div class="doc-btns">
-                            <button class="icon-btn" title="View" (click)="viewPolicyDoc(policy)"><i class='bx bx-show'></i></button>
-                            <button class="icon-btn" title="Download" (click)="downloadPolicyDoc(policy)"><i class='bx bx-download'></i></button>
-                          </div>
-                        } @else {
-                          <span class="no-doc">No file</span>
-                        }
-                      </td>
-                      <td><span class="status-badge" [class]="policy.status">{{ policy.status }}</span></td>
-                      <td class="actions-cell">
-                        <button class="icon-btn" title="Billing & Cost Setup" (click)="openBillingSetup(policy)"><i class='bx bx-money'></i></button>
-                        <button class="icon-btn" title="Driver Enrollment" (click)="openPolicyProfile(policy)"><i class='bx bx-user-circle'></i></button>
-                        <button class="icon-btn" title="Edit" (click)="editPolicy(policy)"><i class='bx bx-edit'></i></button>
-                        <button class="icon-btn danger" title="Delete" (click)="deletePolicy(policy)"><i class='bx bx-trash'></i></button>
-                      </td>
-                    </tr>
+      <!-- Grouped by Policy Type — current policy shown, history collapsible -->
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Type</th>
+              <th>Provider</th>
+              <th>Policy #</th>
+              <th>Coverage</th>
+              <th>Effective</th>
+              <th>Expiry</th>
+              <th>Document</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of groupedByType(); track group.type) {
+              <!-- Current / primary row -->
+              <tr class="policy-current-row" [class.has-history]="group.history.length > 0"
+                  [class.row-active]="group.current.status === 'active'"
+                  [class.row-expiring]="group.current.status === 'expiring'"
+                  [class.row-expired]="group.current.status === 'expired'">
+                <td class="expand-cell">
+                  @if (group.history.length > 0) {
+                    <button class="expand-btn" (click)="toggleTypeExpand(group.type)"
+                            [title]="expandedTypes().has(group.type) ? 'Hide history' : group.history.length + ' older version(s)'">
+                      <i class="bx" [class.bx-chevron-down]="expandedTypes().has(group.type)" [class.bx-chevron-right]="!expandedTypes().has(group.type)"></i>
+                      <span class="history-count">{{ group.history.length }}</span>
+                    </button>
                   }
-                </tbody>
-              </table>
-            </div>
-          </div>
-        }
-      }
+                </td>
+                <td><strong>{{ getPolicyTypeLabel(group.current.policyType) }}</strong></td>
+                <td>{{ group.current.providerName }}</td>
+                <td class="mono">{{ group.current.policyNumber || '—' }}</td>
+                <td>{{ formatCurrency(group.current.coverageAmount) }}</td>
+                <td>{{ formatDate(group.current.effectiveDate) }}</td>
+                <td>{{ formatDate(group.current.expiryDate) }}</td>
+                <td>
+                  @if (group.current.hasFile) {
+                    <div class="doc-btns">
+                      <button class="icon-btn" title="View" (click)="viewPolicyDoc(group.current)"><i class='bx bx-show'></i></button>
+                      <button class="icon-btn" title="Download" (click)="downloadPolicyDoc(group.current)"><i class='bx bx-download'></i></button>
+                    </div>
+                  } @else {
+                    <span class="no-doc">No file</span>
+                  }
+                </td>
+                <td><span class="status-badge" [class]="group.current.status">{{ group.current.status }}</span></td>
+                <td class="actions-cell">
+                  <button class="icon-btn" title="Billing & Cost Setup" (click)="openBillingSetup(group.current)"><i class='bx bx-money'></i></button>
+                  <button class="icon-btn" title="Driver Enrollment" (click)="openPolicyProfile(group.current)"><i class='bx bx-user-circle'></i></button>
+                  <button class="icon-btn" title="Edit" (click)="editPolicy(group.current)"><i class='bx bx-edit'></i></button>
+                  <button class="icon-btn danger" title="Delete" (click)="deletePolicy(group.current)"><i class='bx bx-trash'></i></button>
+                </td>
+              </tr>
+
+              <!-- History rows — only visible when expanded -->
+              @if (expandedTypes().has(group.type)) {
+                @for (policy of group.history; track policy.id) {
+                  <tr class="policy-history-row">
+                    <td></td>
+                    <td class="history-type-cell">
+                      <span class="history-label"><i class='bx bx-time-five'></i> Previous</span>
+                    </td>
+                    <td class="history-muted">{{ policy.providerName }}</td>
+                    <td class="mono history-muted">{{ policy.policyNumber || '—' }}</td>
+                    <td class="history-muted">{{ formatCurrency(policy.coverageAmount) }}</td>
+                    <td class="history-muted">{{ formatDate(policy.effectiveDate) }}</td>
+                    <td class="history-muted">{{ formatDate(policy.expiryDate) }}</td>
+                    <td>
+                      @if (policy.hasFile) {
+                        <div class="doc-btns">
+                          <button class="icon-btn" title="View" (click)="viewPolicyDoc(policy)"><i class='bx bx-show'></i></button>
+                          <button class="icon-btn" title="Download" (click)="downloadPolicyDoc(policy)"><i class='bx bx-download'></i></button>
+                        </div>
+                      } @else {
+                        <span class="no-doc">No file</span>
+                      }
+                    </td>
+                    <td><span class="status-badge" [class]="policy.status">{{ policy.status }}</span></td>
+                    <td class="actions-cell">
+                      <button class="icon-btn" title="Edit" (click)="editPolicy(policy)"><i class='bx bx-edit'></i></button>
+                      <button class="icon-btn danger" title="Delete" (click)="deletePolicy(policy)"><i class='bx bx-trash'></i></button>
+                    </td>
+                  </tr>
+                }
+              }
+            }
+          </tbody>
+        </table>
+      </div>
     }
   }
 
