@@ -312,15 +312,34 @@ public class DriversController : ControllerBase
         var sourceApiUrl = _config["DrayTac:ApiUrl"]
             ?? Environment.GetEnvironmentVariable("DRAYTAC_API_URL")
             ?? "https://taylor-tms.net";
+        var sourceApiUrlsRaw = _config["DrayTac:ApiUrls"]
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_API_URLS");
+        var sourceApiUrls = new List<string> { sourceApiUrl };
+        if (!string.IsNullOrWhiteSpace(sourceApiUrlsRaw))
+        {
+            sourceApiUrls.AddRange(
+                sourceApiUrlsRaw
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(u => !string.IsNullOrWhiteSpace(u)));
+        }
+        sourceApiUrls.AddRange(new[]
+        {
+            "https://taylor-tms.net",
+            "https://van-tac-v2-production.up.railway.app",
+            "https://vantac-production.up.railway.app"
+        });
 
         var sourceBearer = _config["DrayTac:BearerToken"]
             ?? Environment.GetEnvironmentVariable("DRAYTAC_BEARER_TOKEN");
         var sourceServiceKey = _config["DrayTac:ServiceKey"]
-            ?? Environment.GetEnvironmentVariable("DRAYTAC_SERVICE_KEY");
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
         var sourceWebhookSecret = _config["DrayTac:WebhookSecret"]
-            ?? Environment.GetEnvironmentVariable("DRAYTAC_WEBHOOK_SECRET");
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_WEBHOOK_SECRET")
+            ?? Environment.GetEnvironmentVariable("WEBHOOK_SECRET");
 
-        var limit = Math.Clamp(request?.Limit ?? 5000, 100, 20000);
+        var limit = Math.Clamp(request?.Limit ?? 50000, 500, 300000);
         var forceArchive = request?.ForceArchive ?? true;
 
         var http = _httpClientFactory.CreateClient();
@@ -332,7 +351,7 @@ public class DriversController : ControllerBase
         if (!string.IsNullOrWhiteSpace(sourceWebhookSecret))
             http.DefaultRequestHeaders.TryAddWithoutValidation("X-Webhook-Secret", sourceWebhookSecret);
 
-        var drivers = await FetchSourceDrivers(http, sourceApiUrl, limit);
+        var drivers = await FetchAllSourceDrivers(http, sourceApiUrls.Distinct(StringComparer.OrdinalIgnoreCase), limit);
         if (drivers.Count == 0)
         {
             drivers = await TryFetchSourceDriversViaGatewayMongo(limit);
@@ -503,42 +522,65 @@ public class DriversController : ControllerBase
         });
     }
 
-    private async Task<List<JsonElement>> FetchSourceDrivers(HttpClient http, string baseUrl, int limit)
+    private async Task<List<JsonElement>> FetchAllSourceDrivers(HttpClient http, IEnumerable<string> baseUrls, int maxRecords)
     {
-        var endpoints = new[]
+        var pagedEndpointPatterns = new[]
         {
-            $"{baseUrl.TrimEnd('/')}/api/v1/drivers?limit={limit}&page=1",
-            $"{baseUrl.TrimEnd('/')}/api/v1/webhooks/drivers",
-            $"{baseUrl.TrimEnd('/')}/internal/drivers?limit={limit}&page=1"
+            "/api/v1/drivers?limit={0}&page={1}",
+            "/internal/drivers?limit={0}&page={1}",
+            "/api/drivers?limit={0}&page={1}",
+            "/drivers?limit={0}&page={1}"
+        };
+        var singleEndpointPatterns = new[]
+        {
+            "/api/v1/webhooks/drivers",
+            "/api/v1/drivers",
+            "/internal/drivers"
         };
 
-        foreach (var url in endpoints)
+        var pageSize = Math.Min(2000, maxRecords);
+        var all = new List<JsonElement>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var baseUrl in baseUrls)
         {
-            try
+            var normalized = baseUrl.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(normalized)) continue;
+
+            foreach (var pattern in pagedEndpointPatterns)
             {
-                using var res = await http.GetAsync(url);
-                if (!res.IsSuccessStatusCode) continue;
-                var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
-                var root = doc.RootElement;
-                if (root.ValueKind == JsonValueKind.Array)
-                    return root.EnumerateArray().ToList();
-                if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
-                    return data.EnumerateArray().ToList();
+                var page = 1;
+                while (all.Count < maxRecords)
+                {
+                    var url = $"{normalized}{string.Format(pattern, pageSize, page)}";
+                    var rows = await FetchDriverArrayFromUrl(http, url);
+                    if (rows.Count == 0) break;
+                    AddUniqueDrivers(all, rows, seen, maxRecords);
+                    if (rows.Count < pageSize) break;
+                    page++;
+                }
             }
-            catch (Exception ex)
+
+            foreach (var pattern in singleEndpointPatterns)
             {
-                _logger.LogWarning(ex, "Failed fetching DrayTac drivers from {Url}", url);
+                if (all.Count >= maxRecords) break;
+                var url = $"{normalized}{pattern}";
+                var rows = await FetchDriverArrayFromUrl(http, url);
+                if (rows.Count == 0) continue;
+                AddUniqueDrivers(all, rows, seen, maxRecords);
             }
+
+            if (all.Count >= maxRecords) break;
         }
-        return new List<JsonElement>();
+
+        return all;
     }
 
-    private async Task<List<JsonElement>> TryFetchSourceDriversViaGatewayMongo(int limit)
+    private async Task<List<JsonElement>> TryFetchSourceDriversViaGatewayMongo(int maxRecords)
     {
         var gatewayUrl = _config["GatewayInternalUrl"]
-            ?? Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
-        if (string.IsNullOrWhiteSpace(gatewayUrl))
-            return new List<JsonElement>();
+            ?? Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL")
+            ?? "http://inspiring-victory.railway.internal:8080";
 
         var internalKey = _config["INTERNAL_API_KEY"]
             ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY")
@@ -548,19 +590,19 @@ public class DriversController : ControllerBase
 
         var dbCandidates = new List<string>();
         if (!string.IsNullOrWhiteSpace(dbOverride)) dbCandidates.Add(dbOverride);
-        dbCandidates.AddRange(new[] { "draytac", "vantac", "van_tac", "dray_tac" });
-
-        var collectionCandidates = new[] { "drivers", "Drivers" };
-        var payload = JsonSerializer.Serialize(new
+        dbCandidates.AddRange(new[]
         {
-            filter = new { },
-            sort = new { _id = -1 },
-            limit,
-            skip = 0
+            "draytac", "dray_tac", "drayTac",
+            "vantac", "van_tac", "vanTac",
+            "vantac_v2", "van_tac_v2", "vantac-prod", "van_tac_prod",
+            "draytac_production", "vantac_production"
         });
 
+        var collectionCandidates = new[] { "drivers", "Drivers", "driver", "Driver" };
+        var pageSize = Math.Min(2000, maxRecords);
+
         using var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(45);
+        client.Timeout = TimeSpan.FromSeconds(90);
         client.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", internalKey);
 
         foreach (var dbName in dbCandidates.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -570,38 +612,44 @@ public class DriversController : ControllerBase
                 var url = $"{gatewayUrl.TrimEnd('/')}/internal/mongo/{dbName}/{collection}/query";
                 try
                 {
-                    using var res = await client.PostAsync(url, new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
-                    if (!res.IsSuccessStatusCode) continue;
-
-                    var body = await res.Content.ReadAsStringAsync();
-                    using var parsed = JsonDocument.Parse(body);
-                    if (!parsed.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-                        continue;
-
-                    var list = new List<JsonElement>();
-                    foreach (var item in data.EnumerateArray())
+                    var all = new List<JsonElement>();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var skip = 0;
+                    while (all.Count < maxRecords)
                     {
-                        if (item.ValueKind != JsonValueKind.String) continue;
-                        var bsonString = item.GetString();
-                        if (string.IsNullOrWhiteSpace(bsonString)) continue;
+                        var payload = JsonSerializer.Serialize(new
+                        {
+                            filter = new { },
+                            sort = new { _id = -1 },
+                            limit = pageSize,
+                            skip
+                        });
+                        using var res = await client.PostAsync(url, new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+                        if (!res.IsSuccessStatusCode) break;
 
-                        try
+                        var body = await res.Content.ReadAsStringAsync();
+                        using var parsed = JsonDocument.Parse(body);
+                        if (!parsed.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+                            break;
+
+                        var pageRows = new List<JsonElement>();
+                        foreach (var item in data.EnumerateArray())
                         {
-                            var bson = BsonDocument.Parse(bsonString);
-                            var json = bson.ToJson();
-                            var doc = JsonDocument.Parse(json);
-                            list.Add(doc.RootElement.Clone());
+                            var parsedRow = TryParseGatewayDriverRow(item);
+                            if (parsedRow.HasValue)
+                                pageRows.Add(parsedRow.Value);
                         }
-                        catch
-                        {
-                            // skip malformed BSON rows and keep going
-                        }
+
+                        if (pageRows.Count == 0) break;
+                        AddUniqueDrivers(all, pageRows, seen, maxRecords);
+                        if (pageRows.Count < pageSize) break;
+                        skip += pageSize;
                     }
 
-                    if (list.Count > 0)
+                    if (all.Count > 0)
                     {
-                        _logger.LogInformation("Fetched {Count} DrayTac drivers from gateway Mongo db={Db} collection={Collection}", list.Count, dbName, collection);
-                        return list;
+                        _logger.LogInformation("Fetched {Count} DrayTac drivers from gateway Mongo db={Db} collection={Collection}", all.Count, dbName, collection);
+                        return all;
                     }
                 }
                 catch (Exception ex)
@@ -612,6 +660,71 @@ public class DriversController : ControllerBase
         }
 
         return new List<JsonElement>();
+    }
+
+    private async Task<List<JsonElement>> FetchDriverArrayFromUrl(HttpClient http, string url)
+    {
+        try
+        {
+            using var res = await http.GetAsync(url);
+            if (!res.IsSuccessStatusCode) return new List<JsonElement>();
+            var text = await res.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(text);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+                return root.EnumerateArray().Select(x => x.Clone()).ToList();
+            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+                return data.EnumerateArray().Select(x => x.Clone()).ToList();
+            return new List<JsonElement>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed fetching source drivers from {Url}", url);
+            return new List<JsonElement>();
+        }
+    }
+
+    private JsonElement? TryParseGatewayDriverRow(JsonElement item)
+    {
+        if (item.ValueKind == JsonValueKind.Object)
+            return item.Clone();
+
+        if (item.ValueKind != JsonValueKind.String) return null;
+        var bsonString = item.GetString();
+        if (string.IsNullOrWhiteSpace(bsonString)) return null;
+        try
+        {
+            var bson = BsonDocument.Parse(bsonString);
+            var json = bson.ToJson();
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void AddUniqueDrivers(List<JsonElement> target, IEnumerable<JsonElement> incoming, HashSet<string> seen, int maxRecords)
+    {
+        foreach (var row in incoming)
+        {
+            if (target.Count >= maxRecords) break;
+            var key = ExtractSourceDriverKey(row);
+            if (seen.Add(key))
+                target.Add(row);
+        }
+    }
+
+    private string ExtractSourceDriverKey(JsonElement src)
+    {
+        var id = PickString(src, "id", "_id", "driverId", "employeeId");
+        if (!string.IsNullOrWhiteSpace(id)) return $"id:{id}";
+        var email = PickString(src, "email", "workEmail", "personalEmail");
+        if (!string.IsNullOrWhiteSpace(email)) return $"email:{email.Trim().ToLowerInvariant()}";
+        var name = PickString(src, "name", "fullName", "driverName") ?? "";
+        var phone = PickString(src, "phone", "mobile", "cellPhone", "phoneNumber") ?? "";
+        return $"namephone:{name.Trim().ToLowerInvariant()}|{phone.Trim()}";
     }
 
     private static string? PickString(JsonElement src, params string[] keys)
