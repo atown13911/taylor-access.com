@@ -179,6 +179,13 @@ export class VanTacApiService {
     return this.http.put(`${this.baseUrl}/api/v1/drivers/${id}`, data);
   }
 
+  importDrayTacArchivedDrivers(limit = 5000, forceArchive = true): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/drivers/import-draytac-archived`, {
+      limit,
+      forceArchive
+    });
+  }
+
   updateDriverLocation(id: any, lat: any, lng?: any): Observable<any> {
     const data = lng !== undefined ? { latitude: lat, longitude: lng } : lat;
     return this.http.put(`${this.baseUrl}/api/v1/drivers/${id}/location`, data);

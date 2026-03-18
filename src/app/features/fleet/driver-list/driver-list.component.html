@@ -15,6 +15,14 @@
       <button class="btn btn-secondary" (click)="loadDrivers()" title="Refresh">
         <i class='bx bx-refresh'></i>
       </button>
+      <button class="btn btn-secondary" [disabled]="syncingArchived()" (click)="syncArchivedFromDrayTac()">
+        @if (syncingArchived()) {
+          <i class='bx bx-loader-alt bx-spin'></i>
+        } @else {
+          <i class='bx bx-archive-in'></i>
+        }
+        Sync Archived
+      </button>
       <button class="btn btn-primary" (click)="openAddModal()">
         <i class='bx bx-plus'></i> Add Driver
       </button>
@@ -55,13 +63,13 @@
 
   <!-- Tabs -->
   <div class="driver-tabs">
-    <button class="driver-tab" [class.active]="activeTab() === 'active'" (click)="activeTab.set('active')">
+    <button class="driver-tab" [class.active]="activeTab() === 'active'" (click)="setActiveTab('active')">
       <i class='bx bx-check-circle'></i> Active <span class="driver-tab-count">{{ tabCounts().active }}</span>
     </button>
-    <button class="driver-tab" [class.active]="activeTab() === 'inactive'" (click)="activeTab.set('inactive')">
+    <button class="driver-tab" [class.active]="activeTab() === 'inactive'" (click)="setActiveTab('inactive')">
       <i class='bx bx-pause-circle'></i> Inactive <span class="driver-tab-count">{{ tabCounts().inactive }}</span>
     </button>
-    <button class="driver-tab" [class.active]="activeTab() === 'archived'" (click)="activeTab.set('archived')">
+    <button class="driver-tab" [class.active]="activeTab() === 'archived'" (click)="setActiveTab('archived')">
       <i class='bx bx-archive'></i> Archived <span class="driver-tab-count">{{ tabCounts().archived }}</span>
     </button>
   </div>

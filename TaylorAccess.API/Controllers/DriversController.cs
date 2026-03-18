@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using MongoDB.Bson;
 using System.Globalization;
 using System.Text.Json;
 using TaylorAccess.API.Data;
@@ -333,6 +334,10 @@ public class DriversController : ControllerBase
 
         var drivers = await FetchSourceDrivers(http, sourceApiUrl, limit);
         if (drivers.Count == 0)
+        {
+            drivers = await TryFetchSourceDriversViaGatewayMongo(limit);
+        }
+        if (drivers.Count == 0)
             return Ok(new { created = 0, updated = 0, skipped = 0, fetched = 0, message = "No source drivers returned from DrayTac." });
 
         var defaultOrgId = await _context.Organizations.Select(o => o.Id).FirstOrDefaultAsync();
@@ -525,6 +530,87 @@ public class DriversController : ControllerBase
                 _logger.LogWarning(ex, "Failed fetching DrayTac drivers from {Url}", url);
             }
         }
+        return new List<JsonElement>();
+    }
+
+    private async Task<List<JsonElement>> TryFetchSourceDriversViaGatewayMongo(int limit)
+    {
+        var gatewayUrl = _config["GatewayInternalUrl"]
+            ?? Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
+        if (string.IsNullOrWhiteSpace(gatewayUrl))
+            return new List<JsonElement>();
+
+        var internalKey = _config["INTERNAL_API_KEY"]
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY")
+            ?? "ta-internal-2026";
+        var dbOverride = _config["DrayTac:MongoDbName"]
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_MONGO_DB_NAME");
+
+        var dbCandidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(dbOverride)) dbCandidates.Add(dbOverride);
+        dbCandidates.AddRange(new[] { "draytac", "vantac", "van_tac", "dray_tac" });
+
+        var collectionCandidates = new[] { "drivers", "Drivers" };
+        var payload = JsonSerializer.Serialize(new
+        {
+            filter = new { },
+            sort = new { _id = -1 },
+            limit,
+            skip = 0
+        });
+
+        using var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(45);
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", internalKey);
+
+        foreach (var dbName in dbCandidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var collection in collectionCandidates)
+            {
+                var url = $"{gatewayUrl.TrimEnd('/')}/internal/mongo/{dbName}/{collection}/query";
+                try
+                {
+                    using var res = await client.PostAsync(url, new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+                    if (!res.IsSuccessStatusCode) continue;
+
+                    var body = await res.Content.ReadAsStringAsync();
+                    using var parsed = JsonDocument.Parse(body);
+                    if (!parsed.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+                        continue;
+
+                    var list = new List<JsonElement>();
+                    foreach (var item in data.EnumerateArray())
+                    {
+                        if (item.ValueKind != JsonValueKind.String) continue;
+                        var bsonString = item.GetString();
+                        if (string.IsNullOrWhiteSpace(bsonString)) continue;
+
+                        try
+                        {
+                            var bson = BsonDocument.Parse(bsonString);
+                            var json = bson.ToJson();
+                            var doc = JsonDocument.Parse(json);
+                            list.Add(doc.RootElement.Clone());
+                        }
+                        catch
+                        {
+                            // skip malformed BSON rows and keep going
+                        }
+                    }
+
+                    if (list.Count > 0)
+                    {
+                        _logger.LogInformation("Fetched {Count} DrayTac drivers from gateway Mongo db={Db} collection={Collection}", list.Count, dbName, collection);
+                        return list;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Gateway Mongo fetch failed for db={Db} collection={Collection}", dbName, collection);
+                }
+            }
+        }
+
         return new List<JsonElement>();
     }
 

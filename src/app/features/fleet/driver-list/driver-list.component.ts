@@ -35,6 +35,7 @@ export class DriverListComponent implements OnInit {
   private tracking = inject(EventTrackingService);
 
   isLoading = signal(false);
+  syncingArchived = signal(false);
   drivers = signal<DriverRow[]>([]);
   searchQuery = signal('');
   fleetName = signal<string>('');
@@ -154,6 +155,13 @@ export class DriverListComponent implements OnInit {
     this.loadOrganizations();
   }
 
+  setActiveTab(tab: 'active' | 'inactive' | 'archived'): void {
+    this.activeTab.set(tab);
+    if (tab === 'archived' && this.tabCounts().archived === 0) {
+      this.syncArchivedFromDrayTac(false);
+    }
+  }
+
   loadOrganizations(): void {
     this.api.getOrganizations().subscribe({
       next: (res: any) => this.availableOrganizations.set(res?.data || res || []),
@@ -172,7 +180,7 @@ export class DriverListComponent implements OnInit {
     this.isLoading.set(true);
 
     // Load drivers -- the backend already filters by the user's org/entity access
-    this.api.getDrivers({ limit: 200 }).subscribe({
+    this.api.getDrivers({ limit: 2000 }).subscribe({
       next: (res) => {
         const data = res?.data || res || [];
         const mapped: DriverRow[] = data.map((d: any) => ({
@@ -198,6 +206,29 @@ export class DriverListComponent implements OnInit {
       error: () => {
         this.toast.error('Failed to load drivers', 'Error');
         this.isLoading.set(false);
+      }
+    });
+  }
+
+  syncArchivedFromDrayTac(showToast = true): void {
+    if (this.syncingArchived()) return;
+    this.syncingArchived.set(true);
+    this.api.importDrayTacArchivedDrivers(10000, true).subscribe({
+      next: (res: any) => {
+        const fetched = res?.fetched ?? 0;
+        const created = res?.created ?? 0;
+        const updated = res?.updated ?? 0;
+        if (showToast) {
+          this.toast.success(`DrayTac sync complete: ${fetched} scanned, ${created} created, ${updated} updated.`, 'Archived Sync');
+        }
+        this.loadDrivers();
+        this.syncingArchived.set(false);
+      },
+      error: (err: any) => {
+        if (showToast) {
+          this.toast.error(err?.error?.error || 'Failed syncing archived drivers from DrayTac', 'Sync Failed');
+        }
+        this.syncingArchived.set(false);
       }
     });
   }
