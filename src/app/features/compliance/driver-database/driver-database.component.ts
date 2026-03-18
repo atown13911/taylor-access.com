@@ -2,7 +2,7 @@ import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -10,7 +10,7 @@ import { ToastService } from '../../../core/services/toast.service';
 @Component({
   selector: 'app-driver-database',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './driver-database.component.html',
   styleUrls: ['./driver-database.component.scss']
 })
@@ -44,6 +44,7 @@ export class DriverDatabaseComponent implements OnInit {
   };
 
   loading = signal(false);
+  importingArchived = signal(false);
   drivers = signal<any[]>([]);
   selectedDriver = signal<any | null>(null);
   driverDocs = signal<any[]>([]);
@@ -171,6 +172,30 @@ export class DriverDatabaseComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  importDrayTacArchived(): void {
+    if (this.importingArchived()) return;
+    this.importingArchived.set(true);
+    this.http.post<any>(`${environment.apiUrl}/api/v1/drivers/import-draytac-archived`, {
+      limit: 5000,
+      forceArchive: true
+    }).subscribe({
+      next: (res: any) => {
+        const created = res?.created ?? 0;
+        const updated = res?.updated ?? 0;
+        const fetched = res?.fetched ?? 0;
+        this.toast.success(`Imported ${fetched} DrayTac drivers to archived (${created} new, ${updated} updated).`, 'Import Complete');
+        this.activeStatusTab.set('archived');
+        this.loadDrivers();
+        this.importingArchived.set(false);
+      },
+      error: (err: any) => {
+        const msg = err?.error?.error || err?.error?.message || 'Failed to import archived drivers from DrayTac.';
+        this.toast.error(msg, 'Import Failed');
+        this.importingArchived.set(false);
+      }
+    });
   }
   
   getComplianceStatus(driver: any): 'compliant' | 'warning' | 'non-compliant' {

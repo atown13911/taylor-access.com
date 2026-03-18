@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text.Json;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
@@ -16,13 +18,23 @@ public class DriversController : ControllerBase
     private readonly ILogger<DriversController> _logger;
     private readonly CurrentUserService _currentUserService;
     private readonly IAuditService _auditService;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _config;
 
-    public DriversController(TaylorAccessDbContext context, ILogger<DriversController> logger, CurrentUserService currentUserService, IAuditService auditService)
+    public DriversController(
+        TaylorAccessDbContext context,
+        ILogger<DriversController> logger,
+        CurrentUserService currentUserService,
+        IAuditService auditService,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration config)
     {
         _context = context;
         _logger = logger;
         _currentUserService = currentUserService;
         _auditService = auditService;
+        _httpClientFactory = httpClientFactory;
+        _config = config;
     }
 
     /// <summary>
@@ -289,6 +301,292 @@ public class DriversController : ControllerBase
     }
 
     /// <summary>
+    /// Import drivers from DrayTac and force them into archived status.
+    /// This is intended for one-time or periodic historical backfill into the Archived tab.
+    /// </summary>
+    [HttpPost("import-draytac-archived")]
+    [Authorize(Roles = "product_owner,superadmin")]
+    public async Task<ActionResult> ImportDrayTacArchived([FromBody] ImportDrayTacDriversRequest? request)
+    {
+        var sourceApiUrl = _config["DrayTac:ApiUrl"]
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_API_URL")
+            ?? "https://taylor-tms.net";
+
+        var sourceBearer = _config["DrayTac:BearerToken"]
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_BEARER_TOKEN");
+        var sourceServiceKey = _config["DrayTac:ServiceKey"]
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_SERVICE_KEY");
+        var sourceWebhookSecret = _config["DrayTac:WebhookSecret"]
+            ?? Environment.GetEnvironmentVariable("DRAYTAC_WEBHOOK_SECRET");
+
+        var limit = Math.Clamp(request?.Limit ?? 5000, 100, 20000);
+        var forceArchive = request?.ForceArchive ?? true;
+
+        var http = _httpClientFactory.CreateClient();
+        http.Timeout = TimeSpan.FromSeconds(90);
+        if (!string.IsNullOrWhiteSpace(sourceBearer))
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", sourceBearer);
+        if (!string.IsNullOrWhiteSpace(sourceServiceKey))
+            http.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", sourceServiceKey);
+        if (!string.IsNullOrWhiteSpace(sourceWebhookSecret))
+            http.DefaultRequestHeaders.TryAddWithoutValidation("X-Webhook-Secret", sourceWebhookSecret);
+
+        var drivers = await FetchSourceDrivers(http, sourceApiUrl, limit);
+        if (drivers.Count == 0)
+            return Ok(new { created = 0, updated = 0, skipped = 0, fetched = 0, message = "No source drivers returned from DrayTac." });
+
+        var defaultOrgId = await _context.Organizations.Select(o => o.Id).FirstOrDefaultAsync();
+        if (defaultOrgId == 0)
+            return BadRequest(new { error = "No organizations exist in Taylor Access. Create an organization first." });
+
+        var validOrgIds = (await _context.Organizations.AsNoTracking().Select(o => o.Id).ToListAsync()).ToHashSet();
+        var validDivisionIds = (await _context.Divisions.AsNoTracking().Select(d => d.Id).ToListAsync()).ToHashSet();
+        var validTerminalIds = (await _context.DriverTerminals.AsNoTracking().Select(t => t.Id).ToListAsync()).ToHashSet();
+        var validSatelliteIds = (await _context.Satellites.AsNoTracking().Select(s => s.Id).ToListAsync()).ToHashSet();
+        var validAgencyIds = (await _context.Agencies.AsNoTracking().Select(a => a.Id).ToListAsync()).ToHashSet();
+
+        var existing = await _context.Drivers.ToListAsync();
+        var byEmail = existing
+            .Where(d => !string.IsNullOrWhiteSpace(d.Email))
+            .GroupBy(d => d.Email!.Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.First());
+        var byNamePhone = existing
+            .GroupBy(d => $"{(d.Name ?? "").Trim().ToLowerInvariant()}|{(d.Phone ?? "").Trim()}")
+            .ToDictionary(g => g.Key, g => g.First());
+
+        int created = 0, updated = 0, skipped = 0;
+
+        foreach (var src in drivers)
+        {
+            var name = PickString(src, "name", "fullName", "driverName");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                skipped++;
+                continue;
+            }
+
+            var email = PickString(src, "email", "workEmail", "personalEmail");
+            var phone = PickString(src, "phone", "mobile", "cellPhone", "phoneNumber");
+            var emailKey = (email ?? "").Trim().ToLowerInvariant();
+            var namePhoneKey = $"{name.Trim().ToLowerInvariant()}|{(phone ?? "").Trim()}";
+
+            Driver? target = null;
+            if (!string.IsNullOrWhiteSpace(emailKey) && byEmail.TryGetValue(emailKey, out var byE))
+                target = byE;
+            else if (byNamePhone.TryGetValue(namePhoneKey, out var byNP))
+                target = byNP;
+
+            var srcOrgId = PickInt(src, "organizationId", "orgId");
+            var srcDivisionId = PickInt(src, "divisionId");
+            var srcTerminalId = PickInt(src, "driverTerminalId", "homeTerminalId", "terminalId");
+            var srcSatelliteId = PickInt(src, "satelliteId");
+            var srcAgencyId = PickInt(src, "agencyId");
+
+            var mappedOrgId = srcOrgId.HasValue && validOrgIds.Contains(srcOrgId.Value) ? srcOrgId.Value : defaultOrgId;
+            var mappedDivisionId = srcDivisionId.HasValue && validDivisionIds.Contains(srcDivisionId.Value) ? srcDivisionId : null;
+            var mappedTerminalId = srcTerminalId.HasValue && validTerminalIds.Contains(srcTerminalId.Value) ? srcTerminalId : null;
+            var mappedSatelliteId = srcSatelliteId.HasValue && validSatelliteIds.Contains(srcSatelliteId.Value) ? srcSatelliteId : null;
+            var mappedAgencyId = srcAgencyId.HasValue && validAgencyIds.Contains(srcAgencyId.Value) ? srcAgencyId : null;
+
+            var mappedStatus = forceArchive ? "archived" : (PickString(src, "status") ?? "archived");
+            var mappedLicenseExpiry = ParseDateOnly(PickString(src, "licenseExpiry", "licenseExpiration"));
+            var mappedMedicalExpiry = ParseDateOnly(PickString(src, "medicalCardExpiry", "medicalCardExpiration"));
+            var mappedDob = ParseDateOnly(PickString(src, "dateOfBirth", "dob"));
+            var mappedHireDate = ParseDateOnly(PickString(src, "hireDate"));
+            var mappedTermination = ParseDateOnly(PickString(src, "terminationDate"));
+
+            if (target == null)
+            {
+                target = new Driver
+                {
+                    OrganizationId = mappedOrgId,
+                    SatelliteId = mappedSatelliteId,
+                    AgencyId = mappedAgencyId,
+                    HomeTerminalId = mappedTerminalId,
+                    DivisionId = mappedDivisionId,
+                    DriverTerminalId = mappedTerminalId,
+                    Name = name.Trim(),
+                    Email = email,
+                    PersonalEmail = PickString(src, "personalEmail"),
+                    Phone = phone,
+                    LicenseNumber = PickString(src, "licenseNumber", "driverLicense"),
+                    LicenseClass = PickString(src, "licenseClass"),
+                    LicenseState = PickString(src, "licenseState"),
+                    LicenseExpiry = mappedLicenseExpiry,
+                    MedicalCardExpiry = mappedMedicalExpiry,
+                    DateOfBirth = mappedDob,
+                    Status = mappedStatus,
+                    IsOnline = false,
+                    FleetId = PickInt(src, "fleetId"),
+                    DriverType = PickString(src, "driverType", "type"),
+                    Ssn = PickString(src, "ssn"),
+                    TruckNumber = PickString(src, "truckNumber", "unit", "unitNumber"),
+                    TruckMake = PickString(src, "truckMake", "vehicleMake"),
+                    TruckModel = PickString(src, "truckModel", "vehicleModel"),
+                    TruckYear = PickInt(src, "truckYear", "vehicleYear"),
+                    TruckVin = PickString(src, "truckVin", "vin"),
+                    TruckTag = PickString(src, "truckTag", "licensePlate"),
+                    TwiccCardNumber = PickString(src, "twiccCardNumber", "twicCardNumber"),
+                    TwiccExpiry = ParseDateOnly(PickString(src, "twiccExpiry", "twicExpiry")),
+                    EmergencyContactName = PickString(src, "emergencyContactName", "emergencyContact"),
+                    EmergencyContactPhone = PickString(src, "emergencyContactPhone", "emergencyPhone"),
+                    HireDate = mappedHireDate,
+                    TerminationDate = mappedTermination,
+                    PayRate = PickDecimal(src, "payRate"),
+                    PayType = PickString(src, "payType"),
+                    Notes = MergeNotes("Imported from DrayTac as archived record", PickString(src, "notes")),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                    IsDeleted = false
+                };
+                _context.Drivers.Add(target);
+                created++;
+            }
+            else
+            {
+                target.OrganizationId = mappedOrgId;
+                target.SatelliteId = mappedSatelliteId;
+                target.AgencyId = mappedAgencyId;
+                target.HomeTerminalId = mappedTerminalId;
+                target.DivisionId = mappedDivisionId;
+                target.DriverTerminalId = mappedTerminalId;
+                target.Name = name.Trim();
+                target.Email = email ?? target.Email;
+                target.PersonalEmail = PickString(src, "personalEmail") ?? target.PersonalEmail;
+                target.Phone = phone ?? target.Phone;
+                target.LicenseNumber = PickString(src, "licenseNumber", "driverLicense") ?? target.LicenseNumber;
+                target.LicenseClass = PickString(src, "licenseClass") ?? target.LicenseClass;
+                target.LicenseState = PickString(src, "licenseState") ?? target.LicenseState;
+                target.LicenseExpiry = mappedLicenseExpiry ?? target.LicenseExpiry;
+                target.MedicalCardExpiry = mappedMedicalExpiry ?? target.MedicalCardExpiry;
+                target.DateOfBirth = mappedDob ?? target.DateOfBirth;
+                target.Status = mappedStatus;
+                target.IsOnline = false;
+                target.FleetId = PickInt(src, "fleetId") ?? target.FleetId;
+                target.DriverType = PickString(src, "driverType", "type") ?? target.DriverType;
+                target.Ssn = PickString(src, "ssn") ?? target.Ssn;
+                target.TruckNumber = PickString(src, "truckNumber", "unit", "unitNumber") ?? target.TruckNumber;
+                target.TruckMake = PickString(src, "truckMake", "vehicleMake") ?? target.TruckMake;
+                target.TruckModel = PickString(src, "truckModel", "vehicleModel") ?? target.TruckModel;
+                target.TruckYear = PickInt(src, "truckYear", "vehicleYear") ?? target.TruckYear;
+                target.TruckVin = PickString(src, "truckVin", "vin") ?? target.TruckVin;
+                target.TruckTag = PickString(src, "truckTag", "licensePlate") ?? target.TruckTag;
+                target.TwiccCardNumber = PickString(src, "twiccCardNumber", "twicCardNumber") ?? target.TwiccCardNumber;
+                target.TwiccExpiry = ParseDateOnly(PickString(src, "twiccExpiry", "twicExpiry")) ?? target.TwiccExpiry;
+                target.EmergencyContactName = PickString(src, "emergencyContactName", "emergencyContact") ?? target.EmergencyContactName;
+                target.EmergencyContactPhone = PickString(src, "emergencyContactPhone", "emergencyPhone") ?? target.EmergencyContactPhone;
+                target.HireDate = mappedHireDate ?? target.HireDate;
+                target.TerminationDate = mappedTermination ?? target.TerminationDate;
+                target.PayRate = PickDecimal(src, "payRate") ?? target.PayRate;
+                target.PayType = PickString(src, "payType") ?? target.PayType;
+                target.Notes = MergeNotes(target.Notes, "Imported from DrayTac archive sync");
+                target.UpdatedAt = DateTime.UtcNow;
+                updated++;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+        await _auditService.LogAsync(AuditActions.Update, "Driver", 0, $"DrayTac archived import: created={created}, updated={updated}, fetched={drivers.Count}");
+
+        return Ok(new
+        {
+            created,
+            updated,
+            skipped,
+            fetched = drivers.Count,
+            archivedCount = await _context.Drivers.CountAsync(d => d.Status == "archived")
+        });
+    }
+
+    private async Task<List<JsonElement>> FetchSourceDrivers(HttpClient http, string baseUrl, int limit)
+    {
+        var endpoints = new[]
+        {
+            $"{baseUrl.TrimEnd('/')}/api/v1/drivers?limit={limit}&page=1",
+            $"{baseUrl.TrimEnd('/')}/api/v1/webhooks/drivers",
+            $"{baseUrl.TrimEnd('/')}/internal/drivers?limit={limit}&page=1"
+        };
+
+        foreach (var url in endpoints)
+        {
+            try
+            {
+                using var res = await http.GetAsync(url);
+                if (!res.IsSuccessStatusCode) continue;
+                var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Array)
+                    return root.EnumerateArray().ToList();
+                if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+                    return data.EnumerateArray().ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed fetching DrayTac drivers from {Url}", url);
+            }
+        }
+        return new List<JsonElement>();
+    }
+
+    private static string? PickString(JsonElement src, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!src.TryGetProperty(key, out var val)) continue;
+            if (val.ValueKind == JsonValueKind.String)
+            {
+                var s = val.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s.Trim();
+            }
+            else if (val.ValueKind == JsonValueKind.Number || val.ValueKind == JsonValueKind.True || val.ValueKind == JsonValueKind.False)
+            {
+                return val.ToString();
+            }
+        }
+        return null;
+    }
+
+    private static int? PickInt(JsonElement src, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!src.TryGetProperty(key, out var val)) continue;
+            if (val.ValueKind == JsonValueKind.Number && val.TryGetInt32(out var i)) return i;
+            if (val.ValueKind == JsonValueKind.String && int.TryParse(val.GetString(), out var parsed)) return parsed;
+        }
+        return null;
+    }
+
+    private static decimal? PickDecimal(JsonElement src, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!src.TryGetProperty(key, out var val)) continue;
+            if (val.ValueKind == JsonValueKind.Number && val.TryGetDecimal(out var d)) return d;
+            if (val.ValueKind == JsonValueKind.String && decimal.TryParse(val.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+        }
+        return null;
+    }
+
+    private static DateOnly? ParseDateOnly(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        if (DateOnly.TryParse(input, out var d)) return d;
+        if (DateTime.TryParse(input, out var dt)) return DateOnly.FromDateTime(dt);
+        return null;
+    }
+
+    private static string MergeNotes(string? current, string? extra)
+    {
+        var c = (current ?? "").Trim();
+        var e = (extra ?? "").Trim();
+        if (string.IsNullOrEmpty(c)) return e;
+        if (string.IsNullOrEmpty(e)) return c;
+        if (c.Contains(e, StringComparison.OrdinalIgnoreCase)) return c;
+        return $"{c} | {e}";
+    }
+
+    /// <summary>
     /// Delete a driver
     /// </summary>
     [HttpDelete("{id}")]
@@ -451,6 +749,8 @@ public record UpdateDriverRequest(
 public record UpdateLocationRequest(decimal Latitude, decimal Longitude);
 
 public record SimulateRequest(decimal? StartLatitude, decimal? StartLongitude);
+
+public record ImportDrayTacDriversRequest(int? Limit = 5000, bool? ForceArchive = true);
 
 
 

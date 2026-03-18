@@ -6,6 +6,13 @@
     </div>
     <div class="header-actions">
       <button class="btn-refresh" (click)="loadDrivers()"><i class='bx bx-refresh'></i> Refresh</button>
+      <button class="btn-refresh" [disabled]="importingArchived()" (click)="importDrayTacArchived()">
+        @if (importingArchived()) {
+          <i class='bx bx-loader-alt bx-spin'></i> Importing...
+        } @else {
+          <i class='bx bx-archive-in'></i> Import DrayTac to Archived
+        }
+      </button>
     </div>
   </div>
 
