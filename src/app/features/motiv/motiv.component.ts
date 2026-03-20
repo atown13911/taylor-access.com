@@ -4,6 +4,15 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 
 type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
+type MotivDriverTableRow = {
+  name: string;
+  email: string;
+  phone: string;
+  status: string;
+  location: string;
+  vehicle: string;
+  lastUpdate: string;
+};
 
 @Component({
   selector: 'app-motiv',
@@ -107,11 +116,44 @@ type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
         <h2>Drivers</h2>
         <p>MOTIV drivers pulled through the secure backend proxy.</p>
         <div class="api-status">
-          <button class="refresh-btn" (click)="loadDrivers()" [disabled]="loadingDrivers()">
-            {{ loadingDrivers() ? 'Loading...' : 'Refresh Drivers' }}
-          </button>
+          <div class="driver-actions">
+            <button class="refresh-btn" (click)="loadDrivers()" [disabled]="loadingDrivers()">
+              {{ loadingDrivers() ? 'Loading...' : 'Refresh Drivers' }}
+            </button>
+            <button class="refresh-btn" (click)="saveDriversToDb()" [disabled]="savingDrivers() || loadingDrivers()">
+              {{ savingDrivers() ? 'Saving...' : 'Save to Access DB' }}
+            </button>
+          </div>
           <p class="error" *ngIf="driversError()">{{ driversError() }}</p>
+          <p class="ok-note" *ngIf="saveDriversMessage()">{{ saveDriversMessage() }}</p>
+          <p class="error" *ngIf="saveDriversError()">{{ saveDriversError() }}</p>
           <p class="count">Rows: {{ motivDrivers().length }}</p>
+          <div class="available-api-table-wrap" *ngIf="driverTableRows().length > 0">
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                  <th>Vehicle</th>
+                  <th>Last Update</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of driverTableRows()">
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.email }}</td>
+                  <td>{{ row.phone }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.location }}</td>
+                  <td>{{ row.vehicle }}</td>
+                  <td>{{ row.lastUpdate }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <pre class="json-preview" *ngIf="driversRaw()">{{ driversRaw() | json }}</pre>
         </div>
       </section>
@@ -218,6 +260,7 @@ type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
       margin-bottom: 10px;
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; }
     .status-grid { display: grid; gap: 8px; max-width: 360px; }
     .status-item {
       display: flex;
@@ -232,6 +275,7 @@ type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
     .ok { color: #22c55e; }
     .bad { color: #ef4444; }
     .error { margin-top: 0; margin-bottom: 10px; color: #ef4444; }
+    .ok-note { margin-top: 0; margin-bottom: 10px; color: #22c55e; }
     .count { margin: 0 0 10px; color: #93c5fd; }
     .json-preview {
       margin: 0;
@@ -302,9 +346,12 @@ export class MotivComponent implements OnInit {
   loadingDrivers = signal(false);
   loadingVehicles = signal(false);
   loadingUsers = signal(false);
+  savingDrivers = signal(false);
   driversError = signal('');
   vehiclesError = signal('');
   usersError = signal('');
+  saveDriversMessage = signal('');
+  saveDriversError = signal('');
   motivDrivers = signal<any[]>([]);
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
@@ -334,6 +381,10 @@ export class MotivComponent implements OnInit {
     if (cfg?.hasApiKey && cfg?.hasBaseUrl) return 'ok';
     return 'warn';
   });
+
+  driverTableRows = computed<MotivDriverTableRow[]>(() =>
+    this.motivDrivers().map((raw) => this.mapDriverRow(raw))
+  );
 
   ngOnInit(): void {
     this.loadApiConfig();
@@ -404,6 +455,8 @@ export class MotivComponent implements OnInit {
   loadDrivers(): void {
     this.loadingDrivers.set(true);
     this.driversError.set('');
+    this.saveDriversMessage.set('');
+    this.saveDriversError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -414,6 +467,24 @@ export class MotivComponent implements OnInit {
       error: (err) => {
         this.driversError.set(err?.error?.error || 'Unable to load MOTIV drivers.');
         this.loadingDrivers.set(false);
+      }
+    });
+  }
+
+  saveDriversToDb(): void {
+    this.savingDrivers.set(true);
+    this.saveDriversMessage.set('');
+    this.saveDriversError.set('');
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/drivers/sync`, {}).subscribe({
+      next: (res) => {
+        this.savingDrivers.set(false);
+        this.saveDriversMessage.set(
+          `Saved to Access DB - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
+        );
+      },
+      error: (err) => {
+        this.savingDrivers.set(false);
+        this.saveDriversError.set(err?.error?.error || 'Unable to save MOTIV drivers to Access DB.');
       }
     });
   }
@@ -455,10 +526,45 @@ export class MotivComponent implements OnInit {
   private extractRows(payload: any): any[] {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.users)) return payload.users;
     if (Array.isArray(payload?.data)) return payload.data;
     if (Array.isArray(payload?.items)) return payload.items;
     if (Array.isArray(payload?.results)) return payload.results;
     return [];
+  }
+
+  private mapDriverRow(raw: any): MotivDriverTableRow {
+    const user = raw?.user ?? raw ?? {};
+    const location = raw?.current_location ?? raw?.location ?? {};
+    const vehicle = raw?.current_vehicle ?? raw?.vehicle ?? {};
+    const firstName = user?.first_name ?? user?.firstName ?? '';
+    const lastName = user?.last_name ?? user?.lastName ?? '';
+    const fallbackName = user?.name ?? user?.full_name ?? user?.username ?? 'N/A';
+    const name = `${firstName} ${lastName}`.trim() || fallbackName;
+    const email = user?.email ?? 'N/A';
+    const phone = user?.phone ?? user?.phone_number ?? 'N/A';
+    const status = user?.status ?? 'N/A';
+    const lat = location?.lat ?? location?.latitude;
+    const lon = location?.lon ?? location?.longitude;
+    const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? 'N/A');
+    const vehicleTextParts = [
+      vehicle?.number,
+      vehicle?.year,
+      vehicle?.make,
+      vehicle?.model
+    ].filter((v: any) => !!v);
+    const vehicleText = vehicleTextParts.length ? vehicleTextParts.join(' ') : (vehicle?.vin ?? 'N/A');
+    const lastUpdate = location?.located_at ?? location?.locatedAt ?? 'N/A';
+
+    return {
+      name,
+      email,
+      phone,
+      status,
+      location: locationText,
+      vehicle: vehicleText,
+      lastUpdate
+    };
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
