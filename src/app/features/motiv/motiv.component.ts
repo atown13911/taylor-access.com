@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 
-type MotivTab = 'api' | 'drivers' | 'vehicles';
+type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
 
 @Component({
   selector: 'app-motiv',
@@ -13,7 +13,7 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
     <div class="motiv-page">
       <div class="page-header">
         <h1><i class="bx bxs-truck"></i> MOTIV</h1>
-        <p>Integration workspace for API, drivers, and vehicles.</p>
+        <p>Integration workspace for API, drivers, vehicles, and users.</p>
       </div>
 
       <div class="tabs">
@@ -34,6 +34,12 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
           [class.active]="activeTab() === 'vehicles'"
           (click)="setTab('vehicles')">
           3. Vehicles
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'users'"
+          (click)="setTab('users')">
+          4. Users
         </button>
       </div>
 
@@ -120,6 +126,19 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
           <p class="error" *ngIf="vehiclesError()">{{ vehiclesError() }}</p>
           <p class="count">Rows: {{ motivVehicles().length }}</p>
           <pre class="json-preview" *ngIf="vehiclesRaw()">{{ vehiclesRaw() | json }}</pre>
+        </div>
+      </section>
+
+      <section class="tab-panel" *ngIf="activeTab() === 'users'">
+        <h2>Users</h2>
+        <p>MOTIV users pulled through the secure backend proxy.</p>
+        <div class="api-status">
+          <button class="refresh-btn" (click)="loadUsers()" [disabled]="loadingUsers()">
+            {{ loadingUsers() ? 'Loading...' : 'Refresh Users' }}
+          </button>
+          <p class="error" *ngIf="usersError()">{{ usersError() }}</p>
+          <p class="count">Rows: {{ motivUsers().length }}</p>
+          <pre class="json-preview" *ngIf="usersRaw()">{{ usersRaw() | json }}</pre>
         </div>
       </section>
     </div>
@@ -282,16 +301,21 @@ export class MotivComponent implements OnInit {
   error = signal('');
   loadingDrivers = signal(false);
   loadingVehicles = signal(false);
+  loadingUsers = signal(false);
   driversError = signal('');
   vehiclesError = signal('');
+  usersError = signal('');
   motivDrivers = signal<any[]>([]);
   motivVehicles = signal<any[]>([]);
+  motivUsers = signal<any[]>([]);
   driversRaw = signal<any>(null);
   vehiclesRaw = signal<any>(null);
+  usersRaw = signal<any>(null);
   availableApis = signal<Array<{ name: string; route: string; status: 'checking' | 'connected' | 'not-connected' }>>([
     { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
     { name: 'MOTIV Drivers', route: '/api/v1/motiv/drivers', status: 'checking' },
-    { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' }
+    { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' },
+    { name: 'MOTIV Users', route: '/api/v1/motiv/users', status: 'checking' }
   ]);
 
   apiStatusLabel = computed(() => {
@@ -324,6 +348,9 @@ export class MotivComponent implements OnInit {
     if (tab === 'vehicles' && this.motivVehicles().length === 0 && !this.loadingVehicles()) {
       this.loadVehicles();
     }
+    if (tab === 'users' && this.motivUsers().length === 0 && !this.loadingUsers()) {
+      this.loadUsers();
+    }
   }
 
   loadApiConfig(): void {
@@ -354,7 +381,8 @@ export class MotivComponent implements OnInit {
     this.availableApis.set([
       { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
       { name: 'MOTIV Drivers', route: '/api/v1/motiv/drivers', status: 'checking' },
-      { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' }
+      { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' },
+      { name: 'MOTIV Users', route: '/api/v1/motiv/users', status: 'checking' }
     ]);
 
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
@@ -365,6 +393,11 @@ export class MotivComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
       next: () => this.setApiStatus('/api/v1/motiv/vehicles', 'connected'),
       error: () => this.setApiStatus('/api/v1/motiv/vehicles', 'not-connected')
+    });
+
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/users`).subscribe({
+      next: () => this.setApiStatus('/api/v1/motiv/users', 'connected'),
+      error: () => this.setApiStatus('/api/v1/motiv/users', 'not-connected')
     });
   }
 
@@ -398,6 +431,23 @@ export class MotivComponent implements OnInit {
       error: (err) => {
         this.vehiclesError.set(err?.error?.error || 'Unable to load MOTIV vehicles.');
         this.loadingVehicles.set(false);
+      }
+    });
+  }
+
+  loadUsers(): void {
+    this.loadingUsers.set(true);
+    this.usersError.set('');
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/users`).subscribe({
+      next: (res) => {
+        const payload = res?.data ?? res;
+        this.usersRaw.set(payload);
+        this.motivUsers.set(this.extractRows(payload));
+        this.loadingUsers.set(false);
+      },
+      error: (err) => {
+        this.usersError.set(err?.error?.error || 'Unable to load MOTIV users.');
+        this.loadingUsers.set(false);
       }
     });
   }

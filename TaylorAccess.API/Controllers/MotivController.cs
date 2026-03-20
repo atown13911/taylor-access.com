@@ -52,7 +52,16 @@ public class MotivController : ControllerBase
         return await ProxyMotivGet(path, "vehicles");
     }
 
-    private async Task<IActionResult> ProxyMotivGet(string path, string endpointName)
+    [HttpGet("users")]
+    public async Task<IActionResult> GetUsers()
+    {
+        var path = _config["MOTIV_USERS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_USERS_PATH")
+            ?? "/v1/users?per_page=100&page_no=1";
+        return await ProxyMotivGet(path, "users", includeIncomingQuery: false);
+    }
+
+    private async Task<IActionResult> ProxyMotivGet(string path, string endpointName, bool includeIncomingQuery = true)
     {
         var apiKey = _config["MOTIV_API_KEY"] ?? Environment.GetEnvironmentVariable("MOTIV_API_KEY");
         var baseUrl = _config["MOTIV_API_BASE_URL"] ?? Environment.GetEnvironmentVariable("MOTIV_API_BASE_URL");
@@ -62,7 +71,8 @@ public class MotivController : ControllerBase
         if (string.IsNullOrWhiteSpace(apiKey))
             return BadRequest(new { error = "MOTIV_API_KEY is not configured." });
 
-        var requestUri = BuildUri(baseUrl, path, Request.QueryString.Value);
+        var queryString = includeIncomingQuery ? Request.QueryString.Value : null;
+        var requestUri = BuildUri(baseUrl, path, queryString);
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(30);
 
