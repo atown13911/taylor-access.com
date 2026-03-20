@@ -144,6 +144,10 @@ export const routes: Routes = [
       {
         path: 'notifications',
         loadComponent: () => import('./features/system/notifications/notifications.component').then(m => m.NotificationsComponent)
+      },
+      {
+        path: 'motiv',
+        loadComponent: () => import('./features/motiv/motiv.component').then(m => m.MotivComponent)
       }
     ]
   },

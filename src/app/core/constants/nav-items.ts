@@ -133,6 +133,7 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   // Gmail
   { label: 'Gmail', icon: 'bx-envelope', route: '/gmail', section: 'Gmail' },
   // API
+  { label: 'MOTIV', icon: 'bxs-truck', route: '/motiv', section: 'API' },
   { label: 'Landstar API', icon: 'bx-globe', route: '/landstar-api', section: 'API' },
   { label: 'Gmail API', icon: 'bx-envelope', route: '/communications/gmail' },
   { label: 'Zoom API', icon: 'bx-video', route: '/communications/zoom' },
