@@ -763,6 +763,7 @@ export class MotivComponent implements OnInit {
   private extractRows(payload: any): any[] {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.driver_locations)) return payload.driver_locations;
     if (Array.isArray(payload?.users)) return payload.users;
     if (Array.isArray(payload?.fuel_purchases)) return payload.fuel_purchases;
     if (Array.isArray(payload?.transactions)) return payload.transactions;
@@ -783,17 +784,26 @@ export class MotivComponent implements OnInit {
     const email = user?.email ?? 'N/A';
     const phone = user?.phone ?? user?.phone_number ?? 'N/A';
     const status = user?.status ?? 'N/A';
-    const lat = location?.lat ?? location?.latitude;
-    const lon = location?.lon ?? location?.longitude;
+    const lat = location?.lat ?? location?.latitude ?? raw?.lat ?? raw?.latitude;
+    const lon = location?.lon ?? location?.longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude;
     const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? 'N/A');
     const vehicleTextParts = [
-      vehicle?.number,
-      vehicle?.year,
-      vehicle?.make,
-      vehicle?.model
+      vehicle?.number ?? raw?.number ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
+      vehicle?.year ?? raw?.year ?? raw?.vehicle_year ?? raw?.vehicleYear,
+      vehicle?.make ?? raw?.make ?? raw?.vehicle_make ?? raw?.vehicleMake,
+      vehicle?.model ?? raw?.model ?? raw?.vehicle_model ?? raw?.vehicleModel
     ].filter((v: any) => !!v);
-    const vehicleText = vehicleTextParts.length ? vehicleTextParts.join(' ') : (vehicle?.vin ?? 'N/A');
-    const lastUpdate = location?.located_at ?? location?.locatedAt ?? 'N/A';
+    const vehicleText = vehicleTextParts.length
+      ? vehicleTextParts.join(' ')
+      : (vehicle?.vin ?? raw?.vin ?? raw?.vehicle_vin ?? raw?.vehicleVin ?? 'N/A');
+    const lastUpdate =
+      location?.located_at ??
+      location?.locatedAt ??
+      raw?.located_at ??
+      raw?.locatedAt ??
+      raw?.updated_at ??
+      raw?.updatedAt ??
+      'N/A';
 
     return {
       name,
