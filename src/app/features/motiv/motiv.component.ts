@@ -33,6 +33,14 @@ type ApiHealthRow = {
   route: string;
   status: ApiHealthStatus;
 };
+type Phase2Row = {
+  category: 'write' | 'parameterized' | 'webhooks';
+  name: string;
+  method: 'GET' | 'OPTIONS';
+  path: string;
+  status: ApiHealthStatus;
+  notes: string;
+};
 
 @Component({
   selector: 'app-motiv',
@@ -131,6 +139,39 @@ type ApiHealthRow = {
                       {{ row.status === 'connected' ? 'Connected' : (row.status === 'not-connected' ? 'Not Connected' : 'Checking...') }}
                     </span>
                   </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="available-api-table-wrap">
+            <h3>Phase 2 Capability Checks</h3>
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>API</th>
+                  <th>Method</th>
+                  <th>Path</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of phase2Apis()">
+                  <td>{{ row.category }}</td>
+                  <td>{{ row.name }}</td>
+                  <td><code>{{ row.method }}</code></td>
+                  <td><code>{{ row.path }}</code></td>
+                  <td>
+                    <span class="status-chip"
+                          [class.connected]="row.status === 'connected'"
+                          [class.not-connected]="row.status === 'not-connected'"
+                          [class.checking]="row.status === 'checking'">
+                      {{ row.status === 'connected' ? 'Connected' : (row.status === 'not-connected' ? 'Not Connected' : 'Checking...') }}
+                    </span>
+                  </td>
+                  <td>{{ row.notes }}</td>
                 </tr>
               </tbody>
             </table>
@@ -450,6 +491,7 @@ export class MotivComponent implements OnInit {
   fuelMerchantFilter = signal('');
   fuelStatusFilter = signal('');
   availableApis = signal<ApiHealthRow[]>(this.createApiRows());
+  phase2Apis = signal<Phase2Row[]>(this.createPhase2Rows());
 
   apiStatusLabel = computed(() => {
     if (this.loading()) return 'Checking API status...';
@@ -535,6 +577,7 @@ export class MotivComponent implements OnInit {
   checkAvailableApis(): void {
     const rows = this.createApiRows();
     this.availableApis.set(rows);
+    this.checkPhase2Apis();
 
     rows
       .filter(row => row.route !== '/api/v1/motiv/config')
@@ -551,6 +594,28 @@ export class MotivComponent implements OnInit {
           error: () => this.setApiStatus(row.route, 'not-connected')
         });
       });
+  }
+
+  private checkPhase2Apis(): void {
+    const rows = this.createPhase2Rows();
+    this.phase2Apis.set(rows);
+
+    rows.forEach(row => {
+      if (row.method === 'GET') {
+        this.http.get<any>(`${this.apiUrl}/api/v1/motiv/probe?path=${encodeURIComponent(row.path)}`).pipe(timeout(15000)).subscribe({
+          next: (res) => this.setPhase2Status(row.path, row.method, !!res?.connected ? 'connected' : 'not-connected'),
+          error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
+        });
+      } else {
+        this.http.post<any>(`${this.apiUrl}/api/v1/motiv/probe-method`, {
+          path: row.path,
+          method: row.method
+        }).pipe(timeout(15000)).subscribe({
+          next: (res) => this.setPhase2Status(row.path, row.method, !!res?.connected ? 'connected' : 'not-connected'),
+          error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
+        });
+      }
+    });
   }
 
   loadDrivers(): void {
@@ -736,6 +801,12 @@ export class MotivComponent implements OnInit {
     );
   }
 
+  private setPhase2Status(path: string, method: 'GET' | 'OPTIONS', status: 'connected' | 'not-connected'): void {
+    this.phase2Apis.update(rows =>
+      rows.map(row => row.path === path && row.method === method ? { ...row, status } : row)
+    );
+  }
+
   private createApiRows(): ApiHealthRow[] {
     return [
       { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
@@ -769,6 +840,83 @@ export class MotivComponent implements OnInit {
       { name: 'MOTIV Freight Visibility', route: '/api/v1/motiv/probe?path=/v1/freight_visibility/vehicle_locations', status: 'checking' },
       { name: 'MOTIV Companies', route: '/api/v1/motiv/probe?path=/v1/companies', status: 'checking' },
       { name: 'MOTIV Freight Visibility Companies', route: '/api/v1/motiv/probe?path=/v1/freight_visibility/companies', status: 'checking' }
+    ];
+  }
+
+  private createPhase2Rows(): Phase2Row[] {
+    return [
+      {
+        category: 'write',
+        name: 'Create User',
+        method: 'OPTIONS',
+        path: '/v1/users',
+        status: 'checking',
+        notes: 'Non-destructive OPTIONS probe for write capability.'
+      },
+      {
+        category: 'write',
+        name: 'Update User',
+        method: 'OPTIONS',
+        path: '/v1/users/1',
+        status: 'checking',
+        notes: 'Requires valid user id for real operation.'
+      },
+      {
+        category: 'write',
+        name: 'Locate Asset',
+        method: 'OPTIONS',
+        path: '/assets/1/locate',
+        status: 'checking',
+        notes: 'Write endpoint; id-specific path used for capability probe.'
+      },
+      {
+        category: 'write',
+        name: 'Update Timecard Entries',
+        method: 'OPTIONS',
+        path: '/v1/time_tracking/timecard_entries',
+        status: 'checking',
+        notes: 'Time tracking write support check.'
+      },
+      {
+        category: 'parameterized',
+        name: 'Vehicle Location by ID and Date',
+        method: 'GET',
+        path: '/v1/vehicle_locations/1?date=2026-03-01',
+        status: 'checking',
+        notes: 'Parameterized endpoint; sample id/date used.'
+      },
+      {
+        category: 'parameterized',
+        name: 'Users Lookup by External ID',
+        method: 'GET',
+        path: '/v1/users/lookup_by_external_id?external_id=test',
+        status: 'checking',
+        notes: 'Expected 400/404 if sample external id not found.'
+      },
+      {
+        category: 'parameterized',
+        name: 'Vehicles Lookup by External ID',
+        method: 'GET',
+        path: '/v1/vehicles/lookup_by_external_id?external_id=test',
+        status: 'checking',
+        notes: 'Expected 400/404 if sample external id not found.'
+      },
+      {
+        category: 'webhooks',
+        name: 'List Webhooks',
+        method: 'GET',
+        path: '/v1/webhooks',
+        status: 'checking',
+        notes: 'Webhook listing availability check.'
+      },
+      {
+        category: 'webhooks',
+        name: 'Webhook Events',
+        method: 'GET',
+        path: '/v1/webhook_events',
+        status: 'checking',
+        notes: 'Event feed endpoint availability check.'
+      }
     ];
   }
 }

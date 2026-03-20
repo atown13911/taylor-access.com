@@ -96,12 +96,45 @@ public class MotivController : ControllerBase
             return BadRequest(new { error = "Absolute URLs are not allowed. Use relative paths only." });
 
         var result = await FetchMotivPayload(normalizedPath, $"probe:{normalizedPath}", includeIncomingQuery: false);
-        var reachable = result.Success || result.StatusCode == 400 || result.StatusCode == 401 || result.StatusCode == 403;
+        var reachable = IsReachable(result.Success, result.StatusCode);
         return Ok(new
         {
             source = "motiv",
             path = normalizedPath,
             connected = reachable,
+            status = result.StatusCode,
+            details = result.Success ? null : result.Error
+        });
+    }
+
+    [HttpPost("probe-method")]
+    public async Task<IActionResult> ProbeMethod([FromBody] MotivProbeMethodRequest request)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Path))
+            return BadRequest(new { error = "Path is required." });
+
+        var normalizedPath = request.Path.Trim();
+        if (!normalizedPath.StartsWith("/", StringComparison.Ordinal))
+            return BadRequest(new { error = "Path must be a relative endpoint that starts with '/'." });
+        if (normalizedPath.Contains("://", StringComparison.Ordinal))
+            return BadRequest(new { error = "Absolute URLs are not allowed. Use relative paths only." });
+
+        var method = (request.Method ?? "GET").Trim().ToUpperInvariant();
+        if (method != "GET" && method != "OPTIONS")
+            return BadRequest(new { error = "Only GET and OPTIONS are allowed for probe-method." });
+
+        var result = await FetchMotivResponse(
+            normalizedPath,
+            $"probe-method:{method}:{normalizedPath}",
+            new HttpMethod(method),
+            includeIncomingQuery: false);
+
+        return Ok(new
+        {
+            source = "motiv",
+            path = normalizedPath,
+            method,
+            connected = IsReachable(result.Success, result.StatusCode),
             status = result.StatusCode,
             details = result.Success ? null : result.Error
         });
@@ -389,6 +422,15 @@ public class MotivController : ControllerBase
 
     private async Task<(bool Success, int StatusCode, string? Error, JsonElement Payload)> FetchMotivPayload(string path, string endpointName, bool includeIncomingQuery)
     {
+        return await FetchMotivResponse(path, endpointName, HttpMethod.Get, includeIncomingQuery);
+    }
+
+    private async Task<(bool Success, int StatusCode, string? Error, JsonElement Payload)> FetchMotivResponse(
+        string path,
+        string endpointName,
+        HttpMethod method,
+        bool includeIncomingQuery)
+    {
         var apiKey = _config["MOTIV_API_KEY"] ?? Environment.GetEnvironmentVariable("MOTIV_API_KEY");
         var baseUrl = _config["MOTIV_API_BASE_URL"] ?? Environment.GetEnvironmentVariable("MOTIV_API_BASE_URL");
 
@@ -402,7 +444,7 @@ public class MotivController : ControllerBase
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(30);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        using var request = new HttpRequestMessage(method, requestUri);
         request.Headers.TryAddWithoutValidation("x-api-key", apiKey);
         request.Headers.TryAddWithoutValidation("Accept", "application/json");
 
@@ -586,5 +628,16 @@ public class MotivController : ControllerBase
         if (string.IsNullOrEmpty(value) || value.Length <= maxLength) return value;
         return value.Substring(0, maxLength);
     }
+
+    private static bool IsReachable(bool success, int statusCode)
+    {
+        return success || statusCode == 400 || statusCode == 401 || statusCode == 403 || statusCode == 405;
+    }
+}
+
+public class MotivProbeMethodRequest
+{
+    public string? Path { get; set; }
+    public string? Method { get; set; }
 }
 
