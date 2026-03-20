@@ -90,6 +90,15 @@ type Phase2Row = {
         <h2>API</h2>
         <p>Server-side MOTIV configuration and connectivity setup.</p>
         <div class="api-status">
+          <div class="strict-mode-row">
+            <label class="strict-mode-label">
+              <input
+                type="checkbox"
+                [checked]="strictMode405()"
+                (change)="setStrictMode405($any($event.target).checked)" />
+              Strict mode (treat HTTP 405 as Not Connected)
+            </label>
+          </div>
           <div class="status-pill" [class]="apiStatusClass()">
             <span class="dot"></span>
             <span>{{ apiStatusLabel() }}</span>
@@ -392,6 +401,15 @@ type Phase2Row = {
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .strict-mode-row { margin-bottom: 10px; }
+    .strict-mode-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #cbd5e1;
+      user-select: none;
+    }
     .filter-input {
       border: 1px solid #334155;
       background: #0f172a;
@@ -465,6 +483,7 @@ type Phase2Row = {
 export class MotivComponent implements OnInit {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
+  private strictModeStorageKey = 'motiv.strictMode405';
 
   activeTab = signal<MotivTab>('api');
   loading = signal(false);
@@ -490,6 +509,7 @@ export class MotivComponent implements OnInit {
   motivFuelPurchases = signal<any[]>([]);
   fuelMerchantFilter = signal('');
   fuelStatusFilter = signal('');
+  strictMode405 = signal(false);
   availableApis = signal<ApiHealthRow[]>(this.createApiRows());
   phase2Apis = signal<Phase2Row[]>(this.createPhase2Rows());
 
@@ -530,6 +550,7 @@ export class MotivComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.loadStrictMode();
     this.loadApiConfig();
     this.checkAvailableApis();
   }
@@ -574,6 +595,16 @@ export class MotivComponent implements OnInit {
     this.checkAvailableApis();
   }
 
+  setStrictMode405(enabled: boolean): void {
+    this.strictMode405.set(!!enabled);
+    try {
+      localStorage.setItem(this.strictModeStorageKey, enabled ? '1' : '0');
+    } catch {
+      // Ignore storage issues; state still applies for this session.
+    }
+    this.checkAvailableApis();
+  }
+
   checkAvailableApis(): void {
     const rows = this.createApiRows();
     this.availableApis.set(rows);
@@ -585,8 +616,7 @@ export class MotivComponent implements OnInit {
         this.http.get<any>(`${this.apiUrl}${row.route}`).pipe(timeout(15000)).subscribe({
           next: (res) => {
             if (row.route.startsWith('/api/v1/motiv/probe')) {
-              const connected = !!res?.connected;
-              this.setApiStatus(row.route, connected ? 'connected' : 'not-connected');
+              this.setApiStatus(row.route, this.mapProbeResultToStatus(res));
               return;
             }
             this.setApiStatus(row.route, 'connected');
@@ -603,7 +633,7 @@ export class MotivComponent implements OnInit {
     rows.forEach(row => {
       if (row.method === 'GET') {
         this.http.get<any>(`${this.apiUrl}/api/v1/motiv/probe?path=${encodeURIComponent(row.path)}`).pipe(timeout(15000)).subscribe({
-          next: (res) => this.setPhase2Status(row.path, row.method, !!res?.connected ? 'connected' : 'not-connected'),
+          next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res)),
           error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
         });
       } else {
@@ -611,7 +641,7 @@ export class MotivComponent implements OnInit {
           path: row.path,
           method: row.method
         }).pipe(timeout(15000)).subscribe({
-          next: (res) => this.setPhase2Status(row.path, row.method, !!res?.connected ? 'connected' : 'not-connected'),
+          next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res)),
           error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
         });
       }
@@ -805,6 +835,23 @@ export class MotivComponent implements OnInit {
     this.phase2Apis.update(rows =>
       rows.map(row => row.path === path && row.method === method ? { ...row, status } : row)
     );
+  }
+
+  private loadStrictMode(): void {
+    try {
+      const raw = localStorage.getItem(this.strictModeStorageKey);
+      this.strictMode405.set(raw === '1');
+    } catch {
+      this.strictMode405.set(false);
+    }
+  }
+
+  private mapProbeResultToStatus(res: any): 'connected' | 'not-connected' {
+    const status = Number(res?.status ?? 0);
+    if (this.strictMode405() && status === 405) {
+      return 'not-connected';
+    }
+    return !!res?.connected ? 'connected' : 'not-connected';
   }
 
   private createApiRows(): ApiHealthRow[] {
