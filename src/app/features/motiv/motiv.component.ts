@@ -528,6 +528,10 @@ type Phase2Row = {
       flex: 0 0 180px;
       min-width: 180px;
     }
+    .filter-select option {
+      color: #0f172a;
+      background: #f8fafc;
+    }
     .table-pagination {
       display: flex;
       justify-content: space-between;
