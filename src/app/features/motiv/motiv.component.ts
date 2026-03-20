@@ -570,6 +570,8 @@ export class MotivComponent implements OnInit {
       { name: 'MOTIV HOS Available Time', route: '/api/v1/motiv/probe?path=/v1/available_time', status: 'checking' },
       { name: 'MOTIV HOS Violations', route: '/api/v1/motiv/probe?path=/v1/hos_violations', status: 'checking' },
       { name: 'MOTIV Hours of Service', route: '/api/v1/motiv/probe?path=/v1/hours_of_service', status: 'checking' },
+      { name: 'MOTIV Card Transactions (v2)', route: '/api/v1/motiv/probe?path=/motive_card/v2/transactions', status: 'checking' },
+      { name: 'MOTIV Fuel Purchases', route: '/api/v1/motiv/probe?path=/v1/fuel_purchases', status: 'checking' },
       { name: 'MOTIV Inspection Reports (v1)', route: '/api/v1/motiv/probe?path=/v1/inspection_reports', status: 'checking' },
       { name: 'MOTIV Inspection Reports (v2)', route: '/api/v1/motiv/probe?path=/v2/inspection_reports', status: 'checking' },
       { name: 'MOTIV IFTA Summary', route: '/api/v1/motiv/probe?path=/v1/ifta/summary', status: 'checking' },
