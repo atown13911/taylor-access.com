@@ -1,8 +1,8 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://access-api-production.up.railway.app',
+  apiUrl: 'https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-access',
   portalUrl: 'https://tss-portal.com',
-  portalApiUrl: 'https://tss-portalcom-production.up.railway.app',
+  portalApiUrl: 'https://ttac-gateway-production.up.railway.app/api/v1/open/tss-portal',
   oauthClientId: 'ta_taylor_access',
   echoApiUrl: 'https://taylor-echo-production.up.railway.app',
   appName: 'Taylor Access HR',

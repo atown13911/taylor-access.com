@@ -25,7 +25,7 @@ export class SsoCallbackComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private http = inject(HttpClient);
-  private portalUrl = environment.portalApiUrl || 'https://tss-portalcom-production.up.railway.app';
+  private portalUrl = environment.portalApiUrl || 'https://ttac-gateway-production.up.railway.app/api/v1/open/tss-portal';
 
   error = '';
 
