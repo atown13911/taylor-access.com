@@ -2,6 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { timeout } from 'rxjs/operators';
 
 type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
 type MotivDriverTableRow = {
@@ -354,10 +355,6 @@ export class MotivComponent implements OnInit {
     const cfg = this.apiConfig();
     if (!cfg) return 'API status: Unknown';
     if (!(cfg.hasApiKey && cfg.hasBaseUrl)) return 'API status: Needs configuration';
-    const driversV1 = this.availableApis().find(x => x.route === '/api/v1/motiv/probe?path=/v1/drivers');
-    if (driversV1 && driversV1.status === 'not-connected') {
-      return 'API status: Connected (v1/drivers unavailable)';
-    }
     if (this.availableApis().some(x => x.status === 'connected')) {
       return 'API status: Connected';
     }
@@ -425,7 +422,7 @@ export class MotivComponent implements OnInit {
     rows
       .filter(row => row.route !== '/api/v1/motiv/config')
       .forEach(row => {
-        this.http.get<any>(`${this.apiUrl}${row.route}`).subscribe({
+        this.http.get<any>(`${this.apiUrl}${row.route}`).pipe(timeout(15000)).subscribe({
           next: (res) => {
             if (row.route.startsWith('/api/v1/motiv/probe')) {
               const connected = !!res?.connected;
@@ -563,15 +560,17 @@ export class MotivComponent implements OnInit {
       { name: 'MOTIV Driver Locations', route: '/api/v1/motiv/drivers', status: 'checking' },
       { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' },
       { name: 'MOTIV Users', route: '/api/v1/motiv/users', status: 'checking' },
-      { name: 'MOTIV Drivers (v1/drivers)', route: '/api/v1/motiv/probe?path=/v1/drivers', status: 'checking' },
       { name: 'MOTIV Vehicle Locations', route: '/api/v1/motiv/probe?path=/v1/vehicle_locations', status: 'checking' },
-      { name: 'MOTIV Assets', route: '/api/v1/motiv/probe?path=/assets', status: 'checking' },
-      { name: 'MOTIV Messages', route: '/api/v1/motiv/probe?path=/messages', status: 'checking' },
-      { name: 'MOTIV Dispatches', route: '/api/v1/motiv/probe?path=/dispatches', status: 'checking' },
-      { name: 'MOTIV Camera Events', route: '/api/v1/motiv/probe?path=/camera_connection_events', status: 'checking' },
-      { name: 'MOTIV Card Transactions (v2)', route: '/api/v1/motiv/probe?path=/v2/card_transactions', status: 'checking' },
-      { name: 'MOTIV Vehicle Inspection Reports (v2)', route: '/api/v1/motiv/probe?path=/v2/vehicle_inspection_reports', status: 'checking' },
-      { name: 'MOTIV Trailers', route: '/api/v1/motiv/probe?path=/v1/trailers', status: 'checking' }
+      { name: 'MOTIV Vehicle Locations (v2)', route: '/api/v1/motiv/probe?path=/v2/vehicle_locations', status: 'checking' },
+      { name: 'MOTIV Vehicle Locations (v3)', route: '/api/v1/motiv/probe?path=/v3/vehicle_locations', status: 'checking' },
+      { name: 'MOTIV Assets', route: '/api/v1/motiv/probe?path=/v1/assets', status: 'checking' },
+      { name: 'MOTIV Messages', route: '/api/v1/motiv/probe?path=/v1/messages', status: 'checking' },
+      { name: 'MOTIV Dispatches', route: '/api/v1/motiv/probe?path=/v1/dispatches', status: 'checking' },
+      { name: 'MOTIV Camera Connections', route: '/api/v1/motiv/probe?path=/v1/camera_connections', status: 'checking' },
+      { name: 'MOTIV Inspection Reports (v1)', route: '/api/v1/motiv/probe?path=/v1/inspection_reports', status: 'checking' },
+      { name: 'MOTIV Inspection Reports (v2)', route: '/api/v1/motiv/probe?path=/v2/inspection_reports', status: 'checking' },
+      { name: 'MOTIV Freight Visibility', route: '/api/v1/motiv/probe?path=/v1/freight_visibility/vehicle_locations', status: 'checking' },
+      { name: 'MOTIV Companies', route: '/api/v1/motiv/probe?path=/companies', status: 'checking' }
     ];
   }
 }
