@@ -74,6 +74,29 @@ public class MotivController : ControllerBase
         return await ProxyMotivGet(path, "users", includeIncomingQuery: false);
     }
 
+    [HttpGet("probe")]
+    public async Task<IActionResult> Probe([FromQuery] string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return BadRequest(new { error = "Query parameter 'path' is required." });
+
+        var normalizedPath = path.Trim();
+        if (!normalizedPath.StartsWith("/", StringComparison.Ordinal))
+            return BadRequest(new { error = "Path must be a relative endpoint that starts with '/'." });
+        if (normalizedPath.Contains("://", StringComparison.Ordinal))
+            return BadRequest(new { error = "Absolute URLs are not allowed. Use relative paths only." });
+
+        var result = await FetchMotivPayload(normalizedPath, $"probe:{normalizedPath}", includeIncomingQuery: false);
+        return Ok(new
+        {
+            source = "motiv",
+            path = normalizedPath,
+            connected = result.Success,
+            status = result.StatusCode,
+            details = result.Success ? null : result.Error
+        });
+    }
+
     [HttpPost("drivers/sync")]
     public async Task<IActionResult> SyncDriversToAccessDb()
     {

@@ -13,6 +13,12 @@ type MotivDriverTableRow = {
   vehicle: string;
   lastUpdate: string;
 };
+type ApiHealthStatus = 'checking' | 'connected' | 'not-connected';
+type ApiHealthRow = {
+  name: string;
+  route: string;
+  status: ApiHealthStatus;
+};
 
 @Component({
   selector: 'app-motiv',
@@ -154,7 +160,6 @@ type MotivDriverTableRow = {
               </tbody>
             </table>
           </div>
-          <pre class="json-preview" *ngIf="driversRaw()">{{ driversRaw() | json }}</pre>
         </div>
       </section>
 
@@ -167,7 +172,6 @@ type MotivDriverTableRow = {
           </button>
           <p class="error" *ngIf="vehiclesError()">{{ vehiclesError() }}</p>
           <p class="count">Rows: {{ motivVehicles().length }}</p>
-          <pre class="json-preview" *ngIf="vehiclesRaw()">{{ vehiclesRaw() | json }}</pre>
         </div>
       </section>
 
@@ -180,7 +184,6 @@ type MotivDriverTableRow = {
           </button>
           <p class="error" *ngIf="usersError()">{{ usersError() }}</p>
           <p class="count">Rows: {{ motivUsers().length }}</p>
-          <pre class="json-preview" *ngIf="usersRaw()">{{ usersRaw() | json }}</pre>
         </div>
       </section>
     </div>
@@ -277,18 +280,6 @@ type MotivDriverTableRow = {
     .error { margin-top: 0; margin-bottom: 10px; color: #ef4444; }
     .ok-note { margin-top: 0; margin-bottom: 10px; color: #22c55e; }
     .count { margin: 0 0 10px; color: #93c5fd; }
-    .json-preview {
-      margin: 0;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      background: #020617;
-      padding: 10px;
-      max-height: 360px;
-      overflow: auto;
-      color: #cbd5e1;
-      font-size: 12px;
-      line-height: 1.4;
-    }
     .available-api-table-wrap { margin-top: 14px; }
     .available-api-table-wrap h3 { margin: 0 0 8px; font-size: 14px; color: #cbd5e1; }
     .available-api-table {
@@ -355,22 +346,21 @@ export class MotivComponent implements OnInit {
   motivDrivers = signal<any[]>([]);
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
-  driversRaw = signal<any>(null);
-  vehiclesRaw = signal<any>(null);
-  usersRaw = signal<any>(null);
-  availableApis = signal<Array<{ name: string; route: string; status: 'checking' | 'connected' | 'not-connected' }>>([
-    { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
-    { name: 'MOTIV Drivers', route: '/api/v1/motiv/drivers', status: 'checking' },
-    { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' },
-    { name: 'MOTIV Users', route: '/api/v1/motiv/users', status: 'checking' }
-  ]);
+  availableApis = signal<ApiHealthRow[]>(this.createApiRows());
 
   apiStatusLabel = computed(() => {
     if (this.loading()) return 'Checking API status...';
     if (this.error()) return 'API status: Error';
     const cfg = this.apiConfig();
     if (!cfg) return 'API status: Unknown';
-    if (cfg.hasApiKey && cfg.hasBaseUrl) return 'API status: Connected';
+    if (!(cfg.hasApiKey && cfg.hasBaseUrl)) return 'API status: Needs configuration';
+    const driversV1 = this.availableApis().find(x => x.route === '/api/v1/motiv/probe?path=/v1/drivers');
+    if (driversV1 && driversV1.status === 'not-connected') {
+      return 'API status: Connected (v1/drivers unavailable)';
+    }
+    if (this.availableApis().some(x => x.status === 'connected')) {
+      return 'API status: Connected';
+    }
     return 'API status: Needs configuration';
   });
 
@@ -429,27 +419,24 @@ export class MotivComponent implements OnInit {
   }
 
   checkAvailableApis(): void {
-    this.availableApis.set([
-      { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
-      { name: 'MOTIV Drivers', route: '/api/v1/motiv/drivers', status: 'checking' },
-      { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' },
-      { name: 'MOTIV Users', route: '/api/v1/motiv/users', status: 'checking' }
-    ]);
+    const rows = this.createApiRows();
+    this.availableApis.set(rows);
 
-    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
-      next: () => this.setApiStatus('/api/v1/motiv/drivers', 'connected'),
-      error: () => this.setApiStatus('/api/v1/motiv/drivers', 'not-connected')
-    });
-
-    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
-      next: () => this.setApiStatus('/api/v1/motiv/vehicles', 'connected'),
-      error: () => this.setApiStatus('/api/v1/motiv/vehicles', 'not-connected')
-    });
-
-    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/users`).subscribe({
-      next: () => this.setApiStatus('/api/v1/motiv/users', 'connected'),
-      error: () => this.setApiStatus('/api/v1/motiv/users', 'not-connected')
-    });
+    rows
+      .filter(row => row.route !== '/api/v1/motiv/config')
+      .forEach(row => {
+        this.http.get<any>(`${this.apiUrl}${row.route}`).subscribe({
+          next: (res) => {
+            if (row.route.startsWith('/api/v1/motiv/probe')) {
+              const connected = !!res?.connected;
+              this.setApiStatus(row.route, connected ? 'connected' : 'not-connected');
+              return;
+            }
+            this.setApiStatus(row.route, 'connected');
+          },
+          error: () => this.setApiStatus(row.route, 'not-connected')
+        });
+      });
   }
 
   loadDrivers(): void {
@@ -460,7 +447,6 @@ export class MotivComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
-        this.driversRaw.set(payload);
         this.motivDrivers.set(this.extractRows(payload));
         this.loadingDrivers.set(false);
       },
@@ -495,7 +481,6 @@ export class MotivComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
-        this.vehiclesRaw.set(payload);
         this.motivVehicles.set(this.extractRows(payload));
         this.loadingVehicles.set(false);
       },
@@ -512,7 +497,6 @@ export class MotivComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/users`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
-        this.usersRaw.set(payload);
         this.motivUsers.set(this.extractRows(payload));
         this.loadingUsers.set(false);
       },
@@ -571,5 +555,23 @@ export class MotivComponent implements OnInit {
     this.availableApis.update(rows =>
       rows.map(row => row.route === route ? { ...row, status } : row)
     );
+  }
+
+  private createApiRows(): ApiHealthRow[] {
+    return [
+      { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
+      { name: 'MOTIV Driver Locations', route: '/api/v1/motiv/drivers', status: 'checking' },
+      { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' },
+      { name: 'MOTIV Users', route: '/api/v1/motiv/users', status: 'checking' },
+      { name: 'MOTIV Drivers (v1/drivers)', route: '/api/v1/motiv/probe?path=/v1/drivers', status: 'checking' },
+      { name: 'MOTIV Vehicle Locations', route: '/api/v1/motiv/probe?path=/v1/vehicle_locations', status: 'checking' },
+      { name: 'MOTIV Assets', route: '/api/v1/motiv/probe?path=/assets', status: 'checking' },
+      { name: 'MOTIV Messages', route: '/api/v1/motiv/probe?path=/messages', status: 'checking' },
+      { name: 'MOTIV Dispatches', route: '/api/v1/motiv/probe?path=/dispatches', status: 'checking' },
+      { name: 'MOTIV Camera Events', route: '/api/v1/motiv/probe?path=/camera_connection_events', status: 'checking' },
+      { name: 'MOTIV Card Transactions (v2)', route: '/api/v1/motiv/probe?path=/v2/card_transactions', status: 'checking' },
+      { name: 'MOTIV Vehicle Inspection Reports (v2)', route: '/api/v1/motiv/probe?path=/v2/vehicle_inspection_reports', status: 'checking' },
+      { name: 'MOTIV Trailers', route: '/api/v1/motiv/probe?path=/v1/trailers', status: 'checking' }
+    ];
   }
 }
