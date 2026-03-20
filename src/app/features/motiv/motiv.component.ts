@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
@@ -41,7 +41,11 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
         <h2>API</h2>
         <p>Server-side MOTIV configuration and connectivity setup.</p>
         <div class="api-status">
-          <button class="refresh-btn" (click)="loadApiConfig()" [disabled]="loading()">
+          <div class="status-pill" [class]="apiStatusClass()">
+            <span class="dot"></span>
+            <span>{{ apiStatusLabel() }}</span>
+          </div>
+          <button class="refresh-btn" (click)="refreshApiStatus()" [disabled]="loading()">
             {{ loading() ? 'Checking...' : 'Refresh Status' }}
           </button>
           <p class="error" *ngIf="error()">{{ error() }}</p>
@@ -62,6 +66,33 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
                 {{ cfg.hasBaseUrl ? 'Configured' : 'Missing' }}
               </span>
             </div>
+          </div>
+
+          <div class="available-api-table-wrap">
+            <h3>Available APIs</h3>
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>API</th>
+                  <th>Route</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of availableApis()">
+                  <td>{{ row.name }}</td>
+                  <td><code>{{ row.route }}</code></td>
+                  <td>
+                    <span class="status-chip"
+                          [class.connected]="row.status === 'connected'"
+                          [class.not-connected]="row.status === 'not-connected'"
+                          [class.checking]="row.status === 'checking'">
+                      {{ row.status === 'connected' ? 'Connected' : (row.status === 'not-connected' ? 'Not Connected' : 'Checking...') }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -121,6 +152,43 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
     .tab-panel h2 { margin: 0 0 8px; }
     .tab-panel p { margin: 0; color: #94a3b8; }
     .api-status { margin-top: 12px; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid #334155;
+      border-radius: 999px;
+      padding: 6px 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      background: #0f172a;
+    }
+    .status-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+    .status-pill.ok {
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.45);
+      background: rgba(34, 197, 94, 0.08);
+    }
+    .status-pill.ok .dot { background: #22c55e; }
+    .status-pill.warn {
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.45);
+      background: rgba(245, 158, 11, 0.08);
+    }
+    .status-pill.warn .dot { background: #f59e0b; }
+    .status-pill.bad {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.45);
+      background: rgba(239, 68, 68, 0.08);
+    }
+    .status-pill.bad .dot { background: #ef4444; }
     .refresh-btn {
       border: 1px solid #334155;
       background: #0f172a;
@@ -158,6 +226,50 @@ type MotivTab = 'api' | 'drivers' | 'vehicles';
       font-size: 12px;
       line-height: 1.4;
     }
+    .available-api-table-wrap { margin-top: 14px; }
+    .available-api-table-wrap h3 { margin: 0 0 8px; font-size: 14px; color: #cbd5e1; }
+    .available-api-table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f172a;
+    }
+    .available-api-table th,
+    .available-api-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #1e293b;
+      text-align: left;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .available-api-table tr:last-child td { border-bottom: none; }
+    .available-api-table th { color: #94a3b8; background: #111827; }
+    .status-chip {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+    }
+    .status-chip.connected {
+      color: #22c55e;
+      border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(34, 197, 94, 0.12);
+    }
+    .status-chip.not-connected {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.5);
+      background: rgba(239, 68, 68, 0.12);
+    }
+    .status-chip.checking {
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.5);
+      background: rgba(245, 158, 11, 0.12);
+    }
   `]
 })
 export class MotivComponent implements OnInit {
@@ -176,9 +288,32 @@ export class MotivComponent implements OnInit {
   motivVehicles = signal<any[]>([]);
   driversRaw = signal<any>(null);
   vehiclesRaw = signal<any>(null);
+  availableApis = signal<Array<{ name: string; route: string; status: 'checking' | 'connected' | 'not-connected' }>>([
+    { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
+    { name: 'MOTIV Drivers', route: '/api/v1/motiv/drivers', status: 'checking' },
+    { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' }
+  ]);
+
+  apiStatusLabel = computed(() => {
+    if (this.loading()) return 'Checking API status...';
+    if (this.error()) return 'API status: Error';
+    const cfg = this.apiConfig();
+    if (!cfg) return 'API status: Unknown';
+    if (cfg.hasApiKey && cfg.hasBaseUrl) return 'API status: Connected';
+    return 'API status: Needs configuration';
+  });
+
+  apiStatusClass = computed(() => {
+    if (this.loading()) return 'warn';
+    if (this.error()) return 'bad';
+    const cfg = this.apiConfig();
+    if (cfg?.hasApiKey && cfg?.hasBaseUrl) return 'ok';
+    return 'warn';
+  });
 
   ngOnInit(): void {
     this.loadApiConfig();
+    this.checkAvailableApis();
   }
 
   setTab(tab: MotivTab): void {
@@ -200,11 +335,36 @@ export class MotivComponent implements OnInit {
       next: (config) => {
         this.apiConfig.set(config);
         this.loading.set(false);
+        this.setApiStatus('/api/v1/motiv/config', config.hasApiKey && config.hasBaseUrl ? 'connected' : 'not-connected');
       },
       error: () => {
         this.error.set('Unable to load MOTIV API configuration status.');
         this.loading.set(false);
+        this.setApiStatus('/api/v1/motiv/config', 'not-connected');
       }
+    });
+  }
+
+  refreshApiStatus(): void {
+    this.loadApiConfig();
+    this.checkAvailableApis();
+  }
+
+  checkAvailableApis(): void {
+    this.availableApis.set([
+      { name: 'MOTIV Config', route: '/api/v1/motiv/config', status: 'checking' },
+      { name: 'MOTIV Drivers', route: '/api/v1/motiv/drivers', status: 'checking' },
+      { name: 'MOTIV Vehicles', route: '/api/v1/motiv/vehicles', status: 'checking' }
+    ]);
+
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
+      next: () => this.setApiStatus('/api/v1/motiv/drivers', 'connected'),
+      error: () => this.setApiStatus('/api/v1/motiv/drivers', 'not-connected')
+    });
+
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
+      next: () => this.setApiStatus('/api/v1/motiv/vehicles', 'connected'),
+      error: () => this.setApiStatus('/api/v1/motiv/vehicles', 'not-connected')
     });
   }
 
@@ -249,5 +409,11 @@ export class MotivComponent implements OnInit {
     if (Array.isArray(payload?.items)) return payload.items;
     if (Array.isArray(payload?.results)) return payload.results;
     return [];
+  }
+
+  private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
+    this.availableApis.update(rows =>
+      rows.map(row => row.route === route ? { ...row, status } : row)
+    );
   }
 }
