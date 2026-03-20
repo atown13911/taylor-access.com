@@ -268,6 +268,33 @@ using (var scope = app.Services.CreateScope())
         );
     ");
 
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""MotivFuelPurchases"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NULL,
+            ""ExternalId"" VARCHAR(100) NOT NULL,
+            ""TransactionTime"" TIMESTAMP NULL,
+            ""PostedAt"" TIMESTAMP NULL,
+            ""DriverId"" INTEGER NULL,
+            ""VehicleId"" INTEGER NULL,
+            ""CardId"" VARCHAR(100) NULL,
+            ""MerchantName"" VARCHAR(200) NULL,
+            ""MerchantCity"" VARCHAR(100) NULL,
+            ""MerchantState"" VARCHAR(50) NULL,
+            ""Status"" VARCHAR(50) NULL,
+            ""Currency"" VARCHAR(20) NULL,
+            ""Category"" VARCHAR(100) NULL,
+            ""ProductType"" VARCHAR(100) NULL,
+            ""Quantity"" numeric(12,3) NULL,
+            ""Amount"" numeric(12,2) NULL,
+            ""RawJson"" text NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_MotivFuelPurchases_ExternalId""
+            ON ""MotivFuelPurchases"" (""ExternalId"");
+    ");
+
     await roleService.SeedDefaultRolesAsync();
 
     if (!context.Users.Any())

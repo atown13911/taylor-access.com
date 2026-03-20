@@ -113,6 +113,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<TimeOffBalance> TimeOffBalances => Set<TimeOffBalance>();
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Timesheet> Timesheets => Set<Timesheet>();
+    public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

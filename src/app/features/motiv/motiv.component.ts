@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { timeout } from 'rxjs/operators';
 
-type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users';
+type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users' | 'fuel';
 type MotivDriverTableRow = {
   name: string;
   email: string;
@@ -13,6 +13,19 @@ type MotivDriverTableRow = {
   location: string;
   vehicle: string;
   lastUpdate: string;
+};
+type MotivFuelRow = {
+  transactionId: string;
+  date: string;
+  status: string;
+  amount: string;
+  currency: string;
+  merchant: string;
+  city: string;
+  state: string;
+  driverId: string;
+  vehicleId: string;
+  category: string;
 };
 type ApiHealthStatus = 'checking' | 'connected' | 'not-connected';
 type ApiHealthRow = {
@@ -29,7 +42,7 @@ type ApiHealthRow = {
     <div class="motiv-page">
       <div class="page-header">
         <h1><i class="bx bxs-truck"></i> MOTIV</h1>
-        <p>Integration workspace for API, drivers, vehicles, and users.</p>
+        <p>Integration workspace for API, drivers, vehicles, users, and fuel purchases.</p>
       </div>
 
       <div class="tabs">
@@ -56,6 +69,12 @@ type ApiHealthRow = {
           [class.active]="activeTab() === 'users'"
           (click)="setTab('users')">
           4. Users
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'fuel'"
+          (click)="setTab('fuel')">
+          5. Fuel
         </button>
       </div>
 
@@ -187,6 +206,73 @@ type ApiHealthRow = {
           <p class="count">Rows: {{ motivUsers().length }}</p>
         </div>
       </section>
+
+      <section class="tab-panel" *ngIf="activeTab() === 'fuel'">
+        <h2>Fuel Purchases</h2>
+        <p>MOTIV fuel card purchases pulled through the secure backend proxy.</p>
+        <div class="api-status">
+          <div class="driver-actions">
+            <button class="refresh-btn" (click)="loadFuelPurchases()" [disabled]="loadingFuel()">
+              {{ loadingFuel() ? 'Loading...' : 'Refresh Fuel Purchases' }}
+            </button>
+            <button class="refresh-btn" (click)="saveFuelPurchasesToDb()" [disabled]="savingFuel() || loadingFuel()">
+              {{ savingFuel() ? 'Saving...' : 'Save to Access DB' }}
+            </button>
+          </div>
+          <p class="error" *ngIf="fuelError()">{{ fuelError() }}</p>
+          <p class="ok-note" *ngIf="saveFuelMessage()">{{ saveFuelMessage() }}</p>
+          <p class="error" *ngIf="saveFuelError()">{{ saveFuelError() }}</p>
+
+          <div class="driver-actions">
+            <input
+              class="filter-input"
+              type="text"
+              placeholder="Filter merchant"
+              [value]="fuelMerchantFilter()"
+              (input)="setFuelMerchantFilter($any($event.target).value)" />
+            <input
+              class="filter-input"
+              type="text"
+              placeholder="Filter status"
+              [value]="fuelStatusFilter()"
+              (input)="setFuelStatusFilter($any($event.target).value)" />
+          </div>
+
+          <p class="count">Rows: {{ filteredFuelRows().length }} / {{ fuelRows().length }}</p>
+          <div class="available-api-table-wrap" *ngIf="filteredFuelRows().length > 0">
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>Transaction</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Amount</th>
+                  <th>Merchant</th>
+                  <th>City</th>
+                  <th>State</th>
+                  <th>Driver</th>
+                  <th>Vehicle</th>
+                  <th>Category</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of filteredFuelRows()">
+                  <td>{{ row.transactionId }}</td>
+                  <td>{{ row.date }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.amount }} {{ row.currency }}</td>
+                  <td>{{ row.merchant }}</td>
+                  <td>{{ row.city }}</td>
+                  <td>{{ row.state }}</td>
+                  <td>{{ row.driverId }}</td>
+                  <td>{{ row.vehicleId }}</td>
+                  <td>{{ row.category }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
   `,
   styles: [`
@@ -265,6 +351,14 @@ type ApiHealthRow = {
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .filter-input {
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #cbd5e1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      min-width: 220px;
+    }
     .status-grid { display: grid; gap: 8px; max-width: 360px; }
     .status-item {
       display: flex;
@@ -339,14 +433,22 @@ export class MotivComponent implements OnInit {
   loadingVehicles = signal(false);
   loadingUsers = signal(false);
   savingDrivers = signal(false);
+  loadingFuel = signal(false);
+  savingFuel = signal(false);
   driversError = signal('');
   vehiclesError = signal('');
   usersError = signal('');
+  fuelError = signal('');
   saveDriversMessage = signal('');
   saveDriversError = signal('');
+  saveFuelMessage = signal('');
+  saveFuelError = signal('');
   motivDrivers = signal<any[]>([]);
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
+  motivFuelPurchases = signal<any[]>([]);
+  fuelMerchantFilter = signal('');
+  fuelStatusFilter = signal('');
   availableApis = signal<ApiHealthRow[]>(this.createApiRows());
 
   apiStatusLabel = computed(() => {
@@ -372,6 +474,18 @@ export class MotivComponent implements OnInit {
   driverTableRows = computed<MotivDriverTableRow[]>(() =>
     this.motivDrivers().map((raw) => this.mapDriverRow(raw))
   );
+  fuelRows = computed<MotivFuelRow[]>(() =>
+    this.motivFuelPurchases().map((raw) => this.mapFuelRow(raw))
+  );
+  filteredFuelRows = computed<MotivFuelRow[]>(() => {
+    const merchant = this.fuelMerchantFilter().trim().toLowerCase();
+    const status = this.fuelStatusFilter().trim().toLowerCase();
+    return this.fuelRows().filter(row => {
+      const merchantOk = !merchant || row.merchant.toLowerCase().includes(merchant);
+      const statusOk = !status || row.status.toLowerCase().includes(status);
+      return merchantOk && statusOk;
+    });
+  });
 
   ngOnInit(): void {
     this.loadApiConfig();
@@ -388,6 +502,9 @@ export class MotivComponent implements OnInit {
     }
     if (tab === 'users' && this.motivUsers().length === 0 && !this.loadingUsers()) {
       this.loadUsers();
+    }
+    if (tab === 'fuel' && this.motivFuelPurchases().length === 0 && !this.loadingFuel()) {
+      this.loadFuelPurchases();
     }
   }
 
@@ -504,10 +621,56 @@ export class MotivComponent implements OnInit {
     });
   }
 
+  setFuelMerchantFilter(value: string): void {
+    this.fuelMerchantFilter.set(value ?? '');
+  }
+
+  setFuelStatusFilter(value: string): void {
+    this.fuelStatusFilter.set(value ?? '');
+  }
+
+  loadFuelPurchases(): void {
+    this.loadingFuel.set(true);
+    this.fuelError.set('');
+    this.saveFuelMessage.set('');
+    this.saveFuelError.set('');
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/fuel-purchases`).subscribe({
+      next: (res) => {
+        const payload = res?.data ?? res;
+        this.motivFuelPurchases.set(this.extractRows(payload));
+        this.loadingFuel.set(false);
+      },
+      error: (err) => {
+        this.fuelError.set(err?.error?.error || 'Unable to load MOTIV fuel purchases.');
+        this.loadingFuel.set(false);
+      }
+    });
+  }
+
+  saveFuelPurchasesToDb(): void {
+    this.savingFuel.set(true);
+    this.saveFuelMessage.set('');
+    this.saveFuelError.set('');
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/fuel-purchases/sync`, {}).subscribe({
+      next: (res) => {
+        this.savingFuel.set(false);
+        this.saveFuelMessage.set(
+          `Saved fuel purchases - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
+        );
+      },
+      error: (err) => {
+        this.savingFuel.set(false);
+        this.saveFuelError.set(err?.error?.error || 'Unable to save MOTIV fuel purchases.');
+      }
+    });
+  }
+
   private extractRows(payload: any): any[] {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.users)) return payload.users;
+    if (Array.isArray(payload?.fuel_purchases)) return payload.fuel_purchases;
+    if (Array.isArray(payload?.transactions)) return payload.transactions;
     if (Array.isArray(payload?.data)) return payload.data;
     if (Array.isArray(payload?.items)) return payload.items;
     if (Array.isArray(payload?.results)) return payload.results;
@@ -545,6 +708,25 @@ export class MotivComponent implements OnInit {
       location: locationText,
       vehicle: vehicleText,
       lastUpdate
+    };
+  }
+
+  private mapFuelRow(raw: any): MotivFuelRow {
+    const merchant = raw?.merchant_info ?? {};
+    const amount = raw?.total_amount ?? raw?.authorized_amount ?? 0;
+    const date = raw?.transaction_time ?? raw?.posted_at ?? raw?.created_at ?? 'N/A';
+    return {
+      transactionId: String(raw?.id ?? raw?.transaction_id ?? 'N/A'),
+      date,
+      status: String(raw?.transaction_status ?? raw?.status ?? 'N/A'),
+      amount: Number.isFinite(Number(amount)) ? Number(amount).toFixed(2) : '0.00',
+      currency: String(raw?.currency ?? 'USD'),
+      merchant: String(merchant?.name ?? raw?.merchant_name ?? 'N/A'),
+      city: String(merchant?.city ?? raw?.city ?? 'N/A'),
+      state: String(merchant?.state ?? raw?.state ?? 'N/A'),
+      driverId: String(raw?.driver_id ?? 'N/A'),
+      vehicleId: String(raw?.vehicle_id ?? 'N/A'),
+      category: String(raw?.transaction_type ?? raw?.type ?? 'N/A')
     };
   }
 

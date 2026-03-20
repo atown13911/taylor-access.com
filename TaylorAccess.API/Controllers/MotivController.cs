@@ -74,6 +74,15 @@ public class MotivController : ControllerBase
         return await ProxyMotivGet(path, "users", includeIncomingQuery: false);
     }
 
+    [HttpGet("fuel-purchases")]
+    public async Task<IActionResult> GetFuelPurchases()
+    {
+        var path = _config["MOTIV_FUEL_PURCHASES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH")
+            ?? "/v1/fuel_purchases";
+        return await ProxyMotivGet(path, "fuel-purchases");
+    }
+
     [HttpGet("probe")]
     public async Task<IActionResult> Probe([FromQuery] string? path)
     {
@@ -242,6 +251,121 @@ public class MotivController : ControllerBase
         });
     }
 
+    [HttpPost("fuel-purchases/sync")]
+    public async Task<IActionResult> SyncFuelPurchasesToAccessDb()
+    {
+        var path = _config["MOTIV_FUEL_PURCHASES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH")
+            ?? "/v1/fuel_purchases";
+
+        var fetch = await FetchMotivPayload(path, "fuel-purchases", includeIncomingQuery: false);
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "Unable to sync MOTIV fuel purchases because source fetch failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        var rows = ExtractRows(fetch.Payload);
+        if (rows.Count == 0)
+        {
+            return Ok(new { fetched = 0, created = 0, updated = 0, skipped = 0, message = "No fuel purchase rows returned by MOTIV." });
+        }
+
+        var orgId = await ResolveOrganizationId();
+        var existing = await _db.MotivFuelPurchases.ToListAsync();
+        var byExternalId = existing
+            .Where(x => !string.IsNullOrWhiteSpace(x.ExternalId))
+            .GroupBy(x => x.ExternalId.Trim())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var row in rows)
+        {
+            var externalId = PickString(row, "id", "transaction_id", "uuid");
+            if (string.IsNullOrWhiteSpace(externalId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var merchant = PickNestedObject(row, "merchant_info");
+            var firstOrderItem = PickFirstArrayObject(row, "order_items");
+
+            var txTime = ParseDateTime(PickString(row, "transaction_time", "created_at", "updated_at"));
+            var postedAt = ParseDateTime(PickString(row, "posted_at"));
+            var amount = PickDecimal(row, "total_amount", "authorized_amount", "total_amount_before_rebate");
+            var quantity = PickDecimal(firstOrderItem ?? row, "quantity");
+
+            if (!byExternalId.TryGetValue(externalId, out var target))
+            {
+                target = new MotivFuelPurchase
+                {
+                    OrganizationId = orgId == 0 ? null : orgId,
+                    ExternalId = externalId.Trim(),
+                    TransactionTime = txTime,
+                    PostedAt = postedAt,
+                    DriverId = PickInt(row, "driver_id"),
+                    VehicleId = PickInt(row, "vehicle_id"),
+                    CardId = PickString(row, "card_id", "last_four_digits"),
+                    MerchantName = PickString(merchant ?? row, "name"),
+                    MerchantCity = PickString(merchant ?? row, "city"),
+                    MerchantState = PickString(merchant ?? row, "state"),
+                    Status = PickString(row, "transaction_status", "status"),
+                    Currency = PickString(row, "currency"),
+                    Category = PickString(row, "transaction_type", "type"),
+                    ProductType = PickString(firstOrderItem ?? row, "product_type"),
+                    Quantity = quantity,
+                    Amount = amount,
+                    RawJson = row.ToString(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.MotivFuelPurchases.Add(target);
+                byExternalId[externalId] = target;
+                created++;
+            }
+            else
+            {
+                target.OrganizationId = orgId == 0 ? target.OrganizationId : orgId;
+                target.TransactionTime = txTime ?? target.TransactionTime;
+                target.PostedAt = postedAt ?? target.PostedAt;
+                target.DriverId = PickInt(row, "driver_id") ?? target.DriverId;
+                target.VehicleId = PickInt(row, "vehicle_id") ?? target.VehicleId;
+                target.CardId = PickString(row, "card_id", "last_four_digits") ?? target.CardId;
+                target.MerchantName = PickString(merchant ?? row, "name") ?? target.MerchantName;
+                target.MerchantCity = PickString(merchant ?? row, "city") ?? target.MerchantCity;
+                target.MerchantState = PickString(merchant ?? row, "state") ?? target.MerchantState;
+                target.Status = PickString(row, "transaction_status", "status") ?? target.Status;
+                target.Currency = PickString(row, "currency") ?? target.Currency;
+                target.Category = PickString(row, "transaction_type", "type") ?? target.Category;
+                target.ProductType = PickString(firstOrderItem ?? row, "product_type") ?? target.ProductType;
+                target.Quantity = quantity ?? target.Quantity;
+                target.Amount = amount ?? target.Amount;
+                target.RawJson = row.ToString();
+                target.UpdatedAt = DateTime.UtcNow;
+                updated++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            fetched = rows.Count,
+            created,
+            updated,
+            skipped,
+            totalFuelPurchases = await _db.MotivFuelPurchases.CountAsync()
+        });
+    }
+
     private async Task<IActionResult> ProxyMotivGet(string path, string endpointName, bool includeIncomingQuery = true)
     {
         var result = await FetchMotivPayload(path, endpointName, includeIncomingQuery);
@@ -343,7 +467,7 @@ public class MotivController : ControllerBase
         if (payload.ValueKind != JsonValueKind.Object)
             return new List<JsonElement>();
 
-        foreach (var key in new[] { "users", "data", "items", "results" })
+        foreach (var key in new[] { "users", "data", "items", "results", "fuel_purchases", "transactions" })
         {
             if (payload.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray().Select(x => x.Clone()).ToList();
@@ -358,6 +482,18 @@ public class MotivController : ControllerBase
             return null;
         if (source.TryGetProperty(propertyName, out var obj) && obj.ValueKind == JsonValueKind.Object)
             return obj;
+        return null;
+    }
+
+    private static JsonElement? PickFirstArrayObject(JsonElement source, string propertyName)
+    {
+        if (source.ValueKind != JsonValueKind.Object) return null;
+        if (!source.TryGetProperty(propertyName, out var arr)) return null;
+        if (arr.ValueKind != JsonValueKind.Array) return null;
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.Object) return item;
+        }
         return null;
     }
 
