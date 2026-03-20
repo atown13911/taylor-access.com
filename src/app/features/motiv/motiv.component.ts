@@ -757,7 +757,7 @@ export class MotivComponent implements OnInit {
       const normalizedStatus = row.status.toLowerCase();
       const matchesStatus =
         statusFilter === 'all' ||
-        (statusFilter === 'active' && normalizedStatus === 'active') ||
+        (statusFilter === 'active' && this.isActiveLikeStatus(normalizedStatus)) ||
         (statusFilter === 'deactivated' && normalizedStatus === 'deactivated');
 
       const hasEmail = !!row.email && row.email.toLowerCase() !== 'n/a';
@@ -776,7 +776,7 @@ export class MotivComponent implements OnInit {
     });
   });
   activeDriversCount = computed<number>(() =>
-    this.driverTableRows().filter(x => x.status.toLowerCase() === 'active').length
+    this.driverTableRows().filter(x => this.isActiveLikeStatus(x.status)).length
   );
   deactivatedDriversCount = computed<number>(() =>
     this.driverTableRows().filter(x => x.status.toLowerCase() === 'deactivated').length
@@ -837,6 +837,7 @@ export class MotivComponent implements OnInit {
     this.loadStrictMode();
     this.loadApiConfig();
     this.checkAvailableApis();
+    this.preloadMotivTabsInBackground();
   }
 
   setTab(tab: MotivTab): void {
@@ -877,6 +878,15 @@ export class MotivComponent implements OnInit {
   refreshApiStatus(): void {
     this.loadApiConfig();
     this.checkAvailableApis();
+  }
+
+  private preloadMotivTabsInBackground(): void {
+    // Warm non-active tabs early so switching tabs is fast.
+    setTimeout(() => {
+      if (!this.loadingVehicles() && this.motivVehicles().length === 0) this.loadVehicles(true);
+      if (!this.loadingUsers() && this.motivUsers().length === 0) this.loadUsers(true);
+      if (!this.loadingFuel() && this.motivFuelPurchases().length === 0) this.loadFuelPurchases(true);
+    }, 300);
   }
 
   setStrictMode405(enabled: boolean): void {
@@ -1031,9 +1041,9 @@ export class MotivComponent implements OnInit {
     });
   }
 
-  loadVehicles(): void {
+  loadVehicles(background = false): void {
     this.loadingVehicles.set(true);
-    this.vehiclesError.set('');
+    if (!background) this.vehiclesError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -1041,15 +1051,17 @@ export class MotivComponent implements OnInit {
         this.loadingVehicles.set(false);
       },
       error: (err) => {
-        this.vehiclesError.set(err?.error?.error || 'Unable to load MOTIV vehicles.');
+        if (!background) {
+          this.vehiclesError.set(err?.error?.error || 'Unable to load MOTIV vehicles.');
+        }
         this.loadingVehicles.set(false);
       }
     });
   }
 
-  loadUsers(): void {
+  loadUsers(background = false): void {
     this.loadingUsers.set(true);
-    this.usersError.set('');
+    if (!background) this.usersError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/users`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -1057,7 +1069,9 @@ export class MotivComponent implements OnInit {
         this.loadingUsers.set(false);
       },
       error: (err) => {
-        this.usersError.set(err?.error?.error || 'Unable to load MOTIV users.');
+        if (!background) {
+          this.usersError.set(err?.error?.error || 'Unable to load MOTIV users.');
+        }
         this.loadingUsers.set(false);
       }
     });
@@ -1100,11 +1114,13 @@ export class MotivComponent implements OnInit {
     this.fuelStatusFilter.set(value ?? '');
   }
 
-  loadFuelPurchases(): void {
+  loadFuelPurchases(background = false): void {
     this.loadingFuel.set(true);
-    this.fuelError.set('');
-    this.saveFuelMessage.set('');
-    this.saveFuelError.set('');
+    if (!background) {
+      this.fuelError.set('');
+      this.saveFuelMessage.set('');
+      this.saveFuelError.set('');
+    }
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/fuel-purchases`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -1112,7 +1128,9 @@ export class MotivComponent implements OnInit {
         this.loadingFuel.set(false);
       },
       error: (err) => {
-        this.fuelError.set(err?.error?.error || 'Unable to load MOTIV fuel purchases.');
+        if (!background) {
+          this.fuelError.set(err?.error?.error || 'Unable to load MOTIV fuel purchases.');
+        }
         this.loadingFuel.set(false);
       }
     });
@@ -1287,9 +1305,14 @@ export class MotivComponent implements OnInit {
 
   private getDriverStatusRank(status: string): number {
     const normalized = (status ?? '').trim().toLowerCase();
-    if (normalized === 'active') return 0;
+    if (this.isActiveLikeStatus(normalized)) return 0;
     if (normalized === 'deactivated') return 1;
     return 2;
+  }
+
+  private isActiveLikeStatus(status: string): boolean {
+    const normalized = (status ?? '').trim().toLowerCase();
+    return normalized === 'active' || normalized === 'available' || normalized === 'online';
   }
 
   private createApiRows(): ApiHealthRow[] {
