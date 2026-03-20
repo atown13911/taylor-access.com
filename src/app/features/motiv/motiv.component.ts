@@ -882,8 +882,9 @@ export class MotivComponent implements OnInit {
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
-        this.motivDrivers.set(rows);
-        this.loadedDriverRows.set(Number(res?.rows ?? rows.length));
+        const driverRows = rows.filter((row: any) => this.isDriverUser(row));
+        this.motivDrivers.set(driverRows);
+        this.loadedDriverRows.set(driverRows.length);
         this.loadingDrivers.set(false);
       },
       error: (err) => {
@@ -1070,6 +1071,27 @@ export class MotivComponent implements OnInit {
       vehicle: vehicleText,
       lastUpdate
     };
+  }
+
+  private isDriverUser(raw: any): boolean {
+    const user = raw?.user ?? raw ?? {};
+    const typeValue = String(
+      user?.user_type ??
+      user?.userType ??
+      user?.type ??
+      user?.role ??
+      ''
+    ).trim().toLowerCase();
+    if (typeValue) return typeValue.includes('driver');
+
+    if (typeof user?.is_driver === 'boolean') return user.is_driver;
+    if (typeof user?.isDriver === 'boolean') return user.isDriver;
+
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    const roleText = roles
+      .map((r: any) => String(r?.name ?? r ?? '').toLowerCase())
+      .join(' ');
+    return roleText.includes('driver');
   }
 
   private mapFuelRow(raw: any): MotivFuelRow {

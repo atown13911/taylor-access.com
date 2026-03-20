@@ -50,42 +50,27 @@ public class MotivController : ControllerBase
     [HttpGet("drivers")]
     public async Task<IActionResult> GetDrivers()
     {
-        var path = _config["MOTIV_DRIVERS_PATH"]
-            ?? Environment.GetEnvironmentVariable("MOTIV_DRIVERS_PATH")
-            ?? "/v1/driver_locations";
-        var primary = await FetchAllMotivRows(path, "drivers");
-        if (!primary.Success)
+        var enriched = await FetchEnrichedDriverRows("drivers");
+        if (!enriched.Success)
         {
-            return StatusCode(primary.StatusCode, new
+            return StatusCode(enriched.StatusCode, new
             {
                 error = "MOTIV drivers request failed.",
-                status = primary.StatusCode,
-                details = primary.Error
+                status = enriched.StatusCode,
+                details = enriched.Error
             });
-        }
-
-        var selectedRows = primary.Rows;
-        var selectedPath = path;
-
-        // If configured path returns user-only data, force fallback to driver_locations for richer fields.
-        if (!LooksLikeDriverLocations(selectedRows) &&
-            !string.Equals(path, "/v1/driver_locations", StringComparison.OrdinalIgnoreCase))
-        {
-            var fallback = await FetchAllMotivRows("/v1/driver_locations", "drivers-fallback");
-            if (fallback.Success && LooksLikeDriverLocations(fallback.Rows))
-            {
-                selectedRows = fallback.Rows;
-                selectedPath = "/v1/driver_locations";
-            }
         }
 
         return Ok(new
         {
             source = "motiv",
             endpoint = "drivers",
-            path = selectedPath,
-            rows = selectedRows.Count,
-            data = JsonSerializer.SerializeToElement(selectedRows)
+            path = enriched.SourcePath,
+            rows = enriched.Rows.Count,
+            userRows = enriched.UserRows,
+            locationRows = enriched.LocationRows,
+            vehicleRows = enriched.VehicleRows,
+            data = JsonSerializer.SerializeToElement(enriched.Rows)
         });
     }
 
@@ -227,22 +212,18 @@ public class MotivController : ControllerBase
     [HttpPost("drivers/sync")]
     public async Task<IActionResult> SyncDriversToAccessDb()
     {
-        var path = _config["MOTIV_DRIVERS_PATH"]
-            ?? Environment.GetEnvironmentVariable("MOTIV_DRIVERS_PATH")
-            ?? "/v1/driver_locations";
-
-        var fetch = await FetchAllMotivRows(path, "drivers-sync");
-        if (!fetch.Success)
+        var enriched = await FetchEnrichedDriverRows("drivers-sync");
+        if (!enriched.Success)
         {
-            return StatusCode(fetch.StatusCode, new
+            return StatusCode(enriched.StatusCode, new
             {
                 error = "Unable to sync MOTIV drivers because source fetch failed.",
-                status = fetch.StatusCode,
-                details = fetch.Error
+                status = enriched.StatusCode,
+                details = enriched.Error
             });
         }
 
-        var rows = fetch.Rows;
+        var rows = enriched.Rows;
         if (rows.Count == 0)
         {
             return Ok(new { fetched = 0, created = 0, updated = 0, skipped = 0, message = "No driver rows returned by MOTIV." });
@@ -364,7 +345,11 @@ public class MotivController : ControllerBase
             created,
             updated,
             skipped,
-            totalDrivers = await _db.Drivers.CountAsync()
+            totalDrivers = await _db.Drivers.CountAsync(),
+            sourcePath = enriched.SourcePath,
+            userRows = enriched.UserRows,
+            locationRows = enriched.LocationRows,
+            vehicleRows = enriched.VehicleRows
         });
     }
 
@@ -733,6 +718,176 @@ public class MotivController : ControllerBase
         }
 
         return false;
+    }
+
+    private async Task<(bool Success, int StatusCode, string? Error, List<JsonElement> Rows, string SourcePath, int UserRows, int LocationRows, int VehicleRows)> FetchEnrichedDriverRows(string endpointPrefix)
+    {
+        var driversPath = _config["MOTIV_DRIVERS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_DRIVERS_PATH")
+            ?? "/v1/driver_locations";
+        var usersPath = _config["MOTIV_USERS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_USERS_PATH")
+            ?? "/v1/users?per_page=100&page_no=1";
+        var vehiclesPath = _config["MOTIV_VEHICLES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_VEHICLES_PATH")
+            ?? "/v1/vehicles";
+
+        var primary = await FetchAllMotivRows(driversPath, $"{endpointPrefix}:primary");
+        if (!primary.Success)
+            return (false, primary.StatusCode, primary.Error, new List<JsonElement>(), driversPath, 0, 0, 0);
+
+        var locationRows = primary.Rows;
+        var selectedPath = driversPath;
+
+        // If configured path returns user-only rows, force driver_locations for location/vehicle fields.
+        if (!LooksLikeDriverLocations(locationRows) &&
+            !string.Equals(driversPath, "/v1/driver_locations", StringComparison.OrdinalIgnoreCase))
+        {
+            var fallback = await FetchAllMotivRows("/v1/driver_locations", $"{endpointPrefix}:driver-locations-fallback");
+            if (fallback.Success && LooksLikeDriverLocations(fallback.Rows))
+            {
+                locationRows = fallback.Rows;
+                selectedPath = "/v1/driver_locations";
+            }
+        }
+
+        var usersFetch = await FetchAllMotivRows(usersPath, $"{endpointPrefix}:users");
+        var usersRows = usersFetch.Success ? usersFetch.Rows : new List<JsonElement>();
+
+        var vehiclesFetch = await FetchAllMotivRows(vehiclesPath, $"{endpointPrefix}:vehicles");
+        var vehiclesRows = vehiclesFetch.Success ? vehiclesFetch.Rows : new List<JsonElement>();
+
+        var mergedRows = MergeDriverRows(usersRows, locationRows, vehiclesRows);
+        if (mergedRows.Count == 0)
+            mergedRows = locationRows;
+
+        return (true, 200, null, mergedRows, selectedPath, usersRows.Count, locationRows.Count, vehiclesRows.Count);
+    }
+
+    private static List<JsonElement> MergeDriverRows(List<JsonElement> usersRows, List<JsonElement> locationRows, List<JsonElement> vehicleRows)
+    {
+        var output = new List<JsonElement>();
+        var usedLocationIndexes = new HashSet<int>();
+
+        var usersById = usersRows
+            .Select(u => (id: PickString(u, "id"), row: u))
+            .Where(x => !string.IsNullOrWhiteSpace(x.id))
+            .GroupBy(x => x.id!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().row, StringComparer.OrdinalIgnoreCase);
+
+        var usersByEmail = usersRows
+            .Select(u => (email: PickString(u, "email"), row: u))
+            .Where(x => !string.IsNullOrWhiteSpace(x.email))
+            .GroupBy(x => x.email!.Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.First().row);
+
+        var vehiclesById = vehicleRows
+            .Select(v => (id: PickString(v, "id"), row: v))
+            .Where(x => !string.IsNullOrWhiteSpace(x.id))
+            .GroupBy(x => x.id!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().row, StringComparer.OrdinalIgnoreCase);
+
+        var locationByUserId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var locationByEmail = new Dictionary<string, int>();
+        for (var i = 0; i < locationRows.Count; i++)
+        {
+            var row = locationRows[i];
+            var nestedUser = PickNestedObject(row, "user");
+            var userId = PickString(nestedUser ?? row, "id", "user_id");
+            var email = PickString(nestedUser ?? row, "email");
+
+            if (!string.IsNullOrWhiteSpace(userId) && !locationByUserId.ContainsKey(userId))
+                locationByUserId[userId] = i;
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                var key = email.Trim().ToLowerInvariant();
+                if (!locationByEmail.ContainsKey(key))
+                    locationByEmail[key] = i;
+            }
+        }
+
+        var baseRows = usersRows.Count > 0 ? usersRows : locationRows;
+        for (var i = 0; i < baseRows.Count; i++)
+        {
+            var baseRow = baseRows[i];
+            var baseUser = PickNestedObject(baseRow, "user") ?? baseRow;
+            var userId = PickString(baseUser, "id", "user_id");
+            var email = PickString(baseUser, "email");
+            var emailKey = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
+
+            var matchedLocation = default(JsonElement?);
+            if (!string.IsNullOrWhiteSpace(userId) && locationByUserId.TryGetValue(userId, out var locationIdxById))
+            {
+                matchedLocation = locationRows[locationIdxById];
+                usedLocationIndexes.Add(locationIdxById);
+            }
+            else if (emailKey != null && locationByEmail.TryGetValue(emailKey, out var locationIdxByEmail))
+            {
+                matchedLocation = locationRows[locationIdxByEmail];
+                usedLocationIndexes.Add(locationIdxByEmail);
+            }
+            else if (usersRows.Count == 0 && i < locationRows.Count)
+            {
+                matchedLocation = locationRows[i];
+                usedLocationIndexes.Add(i);
+            }
+
+            var locationObject = matchedLocation.HasValue
+                ? (PickNestedObject(matchedLocation.Value, "current_location") ?? (LooksLikeLocationRow(matchedLocation.Value) ? matchedLocation.Value : (JsonElement?)null))
+                : (LooksLikeLocationRow(baseRow) ? baseRow : (JsonElement?)null);
+
+            var vehicleObject =
+                (matchedLocation.HasValue ? PickNestedObject(matchedLocation.Value, "current_vehicle") : null)
+                ?? PickNestedObject(baseRow, "current_vehicle")
+                ?? PickNestedObject(baseRow, "vehicle");
+
+            var vehicleId = PickString(vehicleObject ?? matchedLocation ?? baseRow, "id", "vehicle_id");
+            if (vehicleObject == null && !string.IsNullOrWhiteSpace(vehicleId) && vehiclesById.TryGetValue(vehicleId, out var matchedVehicle))
+                vehicleObject = matchedVehicle;
+
+            var userObject = baseUser;
+            if (userObject.ValueKind != JsonValueKind.Object && !string.IsNullOrWhiteSpace(userId) && usersById.TryGetValue(userId, out var matchedUserById))
+                userObject = matchedUserById;
+            if (userObject.ValueKind != JsonValueKind.Object && emailKey != null && usersByEmail.TryGetValue(emailKey, out var matchedUserByEmail))
+                userObject = matchedUserByEmail;
+
+            var merged = JsonSerializer.SerializeToElement(new
+            {
+                user = userObject,
+                current_location = locationObject,
+                current_vehicle = vehicleObject
+            });
+            output.Add(merged);
+        }
+
+        // Add unmatched location rows so we don't drop drivers that only exist in location feed.
+        for (var i = 0; i < locationRows.Count; i++)
+        {
+            if (usedLocationIndexes.Contains(i)) continue;
+            var row = locationRows[i];
+            var nestedUser = PickNestedObject(row, "user") ?? row;
+            var merged = JsonSerializer.SerializeToElement(new
+            {
+                user = nestedUser,
+                current_location = PickNestedObject(row, "current_location") ?? (LooksLikeLocationRow(row) ? row : (JsonElement?)null),
+                current_vehicle = PickNestedObject(row, "current_vehicle")
+            });
+            output.Add(merged);
+        }
+
+        return output;
+    }
+
+    private static bool LooksLikeLocationRow(JsonElement row)
+    {
+        if (row.ValueKind != JsonValueKind.Object) return false;
+        return row.TryGetProperty("lat", out _)
+            || row.TryGetProperty("latitude", out _)
+            || row.TryGetProperty("lon", out _)
+            || row.TryGetProperty("lng", out _)
+            || row.TryGetProperty("longitude", out _)
+            || row.TryGetProperty("located_at", out _)
+            || row.TryGetProperty("locatedAt", out _);
     }
 
     private async Task<(bool Success, int StatusCode, string? Error, List<JsonElement> Rows)> FetchAllMotivRows(
