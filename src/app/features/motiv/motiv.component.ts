@@ -209,6 +209,7 @@ type DriverSyncSummary = {
             </button>
           </div>
           <div class="sync-status-panel">
+            <span class="sync-spinner" *ngIf="syncingDrivers() || savingDrivers()" aria-hidden="true"></span>
             <span class="status-chip"
                   [class.connected]="driverSyncStatusTone() === 'connected'"
                   [class.not-connected]="driverSyncStatusTone() === 'not-connected'"
@@ -494,9 +495,21 @@ type DriverSyncSummary = {
       margin-bottom: 8px;
       flex-wrap: wrap;
     }
+    .sync-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(148, 163, 184, 0.35);
+      border-top-color: #06b6d4;
+      border-radius: 50%;
+      animation: sync-spin 0.8s linear infinite;
+    }
     .sync-status-text {
       color: #94a3b8;
       font-size: 12px;
+    }
+    @keyframes sync-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
     .driver-glass-panel {
       margin-bottom: 10px;
@@ -942,10 +955,11 @@ export class MotivComponent implements OnInit {
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
-        this.motivDrivers.set(rows);
-        this.loadedDriverRows.set(Number(res?.total ?? rows.length));
+        const driverRows = rows.filter((row: any) => this.isMotivDriverRow(row));
+        this.motivDrivers.set(driverRows);
+        this.loadedDriverRows.set(driverRows.length);
         this.loadingDrivers.set(false);
-        this.syncStatusMessage.set(`Loaded ${Number(res?.total ?? rows.length)} rows from Access DB.`);
+        this.syncStatusMessage.set(`Loaded ${driverRows.length} MOTIV driver rows from Access DB.`);
         if (runBackgroundSync) {
           this.autoSyncDriversToDb();
         }
@@ -1126,6 +1140,7 @@ export class MotivComponent implements OnInit {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.driver_locations)) return payload.driver_locations;
+    if (Array.isArray(payload?.vehicles)) return payload.vehicles;
     if (Array.isArray(payload?.users)) return payload.users;
     if (Array.isArray(payload?.fuel_purchases)) return payload.fuel_purchases;
     if (Array.isArray(payload?.transactions)) return payload.transactions;
@@ -1150,17 +1165,18 @@ export class MotivComponent implements OnInit {
     const lon = location?.lon ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
     const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? 'N/A');
     const vehicleTextParts = [
-      vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
-      vehicle?.year ?? vehicle?.Year ?? raw?.year ?? raw?.TruckYear ?? raw?.vehicle_year ?? raw?.vehicleYear,
-      vehicle?.make ?? vehicle?.Make ?? raw?.make ?? raw?.TruckMake ?? raw?.vehicle_make ?? raw?.vehicleMake,
-      vehicle?.model ?? vehicle?.Model ?? raw?.model ?? raw?.TruckModel ?? raw?.vehicle_model ?? raw?.vehicleModel
+      vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.truckNumber ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
+      vehicle?.year ?? vehicle?.Year ?? raw?.year ?? raw?.truckYear ?? raw?.TruckYear ?? raw?.vehicle_year ?? raw?.vehicleYear,
+      vehicle?.make ?? vehicle?.Make ?? raw?.make ?? raw?.truckMake ?? raw?.TruckMake ?? raw?.vehicle_make ?? raw?.vehicleMake,
+      vehicle?.model ?? vehicle?.Model ?? raw?.model ?? raw?.truckModel ?? raw?.TruckModel ?? raw?.vehicle_model ?? raw?.vehicleModel
     ].filter((v: any) => !!v);
     const vehicleText = vehicleTextParts.length
       ? vehicleTextParts.join(' ')
-      : (vehicle?.vin ?? vehicle?.Vin ?? raw?.vin ?? raw?.TruckVin ?? raw?.vehicle_vin ?? raw?.vehicleVin ?? 'N/A');
+      : (vehicle?.vin ?? vehicle?.Vin ?? raw?.vin ?? raw?.truckVin ?? raw?.TruckVin ?? raw?.vehicle_vin ?? raw?.vehicleVin ?? 'N/A');
     const lastUpdate =
       location?.located_at ??
       location?.locatedAt ??
+      raw?.lastLocationUpdate ??
       raw?.LastLocationUpdate ??
       raw?.located_at ??
       raw?.locatedAt ??
@@ -1202,6 +1218,21 @@ export class MotivComponent implements OnInit {
 
     // Drivers loaded from Access DB are already driver records.
     if (raw?.Id && (raw?.Name || raw?.Email || raw?.Phone)) return true;
+
+    return false;
+  }
+
+  private isMotivDriverRow(raw: any): boolean {
+    // Keep explicit driver rows from MOTIV payloads.
+    if (this.isDriverUser(raw)) return true;
+
+    // Keep Access DB rows that came from MOTIV sync.
+    const notes = String(raw?.notes ?? raw?.Notes ?? '').toLowerCase();
+    if (notes.includes('synced from motiv')) return true;
+
+    // Keep rows typed as driver in DB.
+    const driverType = String(raw?.driverType ?? raw?.DriverType ?? '').toLowerCase();
+    if (driverType.includes('driver')) return true;
 
     return false;
   }

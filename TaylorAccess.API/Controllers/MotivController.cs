@@ -578,7 +578,7 @@ public class MotivController : ControllerBase
         if (payload.ValueKind != JsonValueKind.Object)
             return new List<JsonElement>();
 
-        foreach (var key in new[] { "driver_locations", "users", "data", "items", "results", "fuel_purchases", "transactions" })
+        foreach (var key in new[] { "driver_locations", "vehicle_locations", "vehicles", "users", "data", "items", "results", "fuel_purchases", "transactions" })
         {
             if (payload.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray().Select(x => x.Clone()).ToList();
