@@ -53,7 +53,40 @@ public class MotivController : ControllerBase
         var path = _config["MOTIV_DRIVERS_PATH"]
             ?? Environment.GetEnvironmentVariable("MOTIV_DRIVERS_PATH")
             ?? "/v1/driver_locations";
-        return await ProxyMotivGet(path, "drivers");
+        var primary = await FetchAllMotivRows(path, "drivers");
+        if (!primary.Success)
+        {
+            return StatusCode(primary.StatusCode, new
+            {
+                error = "MOTIV drivers request failed.",
+                status = primary.StatusCode,
+                details = primary.Error
+            });
+        }
+
+        var selectedRows = primary.Rows;
+        var selectedPath = path;
+
+        // If configured path returns user-only data, force fallback to driver_locations for richer fields.
+        if (!LooksLikeDriverLocations(selectedRows) &&
+            !string.Equals(path, "/v1/driver_locations", StringComparison.OrdinalIgnoreCase))
+        {
+            var fallback = await FetchAllMotivRows("/v1/driver_locations", "drivers-fallback");
+            if (fallback.Success && LooksLikeDriverLocations(fallback.Rows))
+            {
+                selectedRows = fallback.Rows;
+                selectedPath = "/v1/driver_locations";
+            }
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "drivers",
+            path = selectedPath,
+            rows = selectedRows.Count,
+            data = JsonSerializer.SerializeToElement(selectedRows)
+        });
     }
 
     [HttpGet("vehicles")]
@@ -62,7 +95,24 @@ public class MotivController : ControllerBase
         var path = _config["MOTIV_VEHICLES_PATH"]
             ?? Environment.GetEnvironmentVariable("MOTIV_VEHICLES_PATH")
             ?? "/v1/vehicles";
-        return await ProxyMotivGet(path, "vehicles");
+        var fetch = await FetchAllMotivRows(path, "vehicles");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV vehicles request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "vehicles",
+            rows = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(fetch.Rows)
+        });
     }
 
     [HttpGet("users")]
@@ -71,7 +121,24 @@ public class MotivController : ControllerBase
         var path = _config["MOTIV_USERS_PATH"]
             ?? Environment.GetEnvironmentVariable("MOTIV_USERS_PATH")
             ?? "/v1/users?per_page=100&page_no=1";
-        return await ProxyMotivGet(path, "users", includeIncomingQuery: false);
+        var fetch = await FetchAllMotivRows(path, "users");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV users request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "users",
+            rows = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(fetch.Rows)
+        });
     }
 
     [HttpGet("fuel-purchases")]
@@ -80,7 +147,24 @@ public class MotivController : ControllerBase
         var path = _config["MOTIV_FUEL_PURCHASES_PATH"]
             ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH")
             ?? "/v1/fuel_purchases";
-        return await ProxyMotivGet(path, "fuel-purchases");
+        var fetch = await FetchAllMotivRows(path, "fuel-purchases");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV fuel-purchases request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "fuel-purchases",
+            rows = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(fetch.Rows)
+        });
     }
 
     [HttpGet("probe")]
@@ -147,7 +231,7 @@ public class MotivController : ControllerBase
             ?? Environment.GetEnvironmentVariable("MOTIV_DRIVERS_PATH")
             ?? "/v1/driver_locations";
 
-        var fetch = await FetchMotivPayload(path, "drivers", includeIncomingQuery: false);
+        var fetch = await FetchAllMotivRows(path, "drivers-sync");
         if (!fetch.Success)
         {
             return StatusCode(fetch.StatusCode, new
@@ -158,7 +242,7 @@ public class MotivController : ControllerBase
             });
         }
 
-        var rows = ExtractRows(fetch.Payload);
+        var rows = fetch.Rows;
         if (rows.Count == 0)
         {
             return Ok(new { fetched = 0, created = 0, updated = 0, skipped = 0, message = "No driver rows returned by MOTIV." });
@@ -291,7 +375,7 @@ public class MotivController : ControllerBase
             ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH")
             ?? "/v1/fuel_purchases";
 
-        var fetch = await FetchMotivPayload(path, "fuel-purchases", includeIncomingQuery: false);
+        var fetch = await FetchAllMotivRows(path, "fuel-purchases-sync");
         if (!fetch.Success)
         {
             return StatusCode(fetch.StatusCode, new
@@ -302,7 +386,7 @@ public class MotivController : ControllerBase
             });
         }
 
-        var rows = ExtractRows(fetch.Payload);
+        var rows = fetch.Rows;
         if (rows.Count == 0)
         {
             return Ok(new { fetched = 0, created = 0, updated = 0, skipped = 0, message = "No fuel purchase rows returned by MOTIV." });
@@ -509,7 +593,7 @@ public class MotivController : ControllerBase
         if (payload.ValueKind != JsonValueKind.Object)
             return new List<JsonElement>();
 
-        foreach (var key in new[] { "users", "data", "items", "results", "fuel_purchases", "transactions" })
+        foreach (var key in new[] { "driver_locations", "users", "data", "items", "results", "fuel_purchases", "transactions" })
         {
             if (payload.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray().Select(x => x.Clone()).ToList();
@@ -632,6 +716,172 @@ public class MotivController : ControllerBase
     private static bool IsReachable(bool success, int statusCode)
     {
         return success || statusCode == 400 || statusCode == 401 || statusCode == 403 || statusCode == 405;
+    }
+
+    private static bool LooksLikeDriverLocations(List<JsonElement> rows)
+    {
+        if (rows.Count == 0) return false;
+
+        foreach (var row in rows)
+        {
+            if (row.ValueKind != JsonValueKind.Object) continue;
+            if (row.TryGetProperty("current_location", out _)) return true;
+            if (row.TryGetProperty("current_vehicle", out _)) return true;
+            if (row.TryGetProperty("lat", out _)) return true;
+            if (row.TryGetProperty("latitude", out _)) return true;
+            if (row.TryGetProperty("located_at", out _)) return true;
+        }
+
+        return false;
+    }
+
+    private async Task<(bool Success, int StatusCode, string? Error, List<JsonElement> Rows)> FetchAllMotivRows(
+        string basePath,
+        string endpointName,
+        int perPage = 100,
+        int maxPages = 100)
+    {
+        var allRows = new List<JsonElement>();
+
+        for (var pageNo = 1; pageNo <= maxPages; pageNo++)
+        {
+            var path = BuildPagedPath(basePath, pageNo, perPage);
+            var result = await FetchMotivPayload(path, $"{endpointName}:page:{pageNo}", includeIncomingQuery: false);
+            if (!result.Success)
+            {
+                if (pageNo == 1)
+                    return (false, result.StatusCode, result.Error, new List<JsonElement>());
+                break;
+            }
+
+            var rows = ExtractRows(result.Payload);
+            if (rows.Count == 0)
+                break;
+
+            allRows.AddRange(rows);
+
+            if (!HasNextPage(result.Payload, pageNo, rows.Count, perPage))
+                break;
+        }
+
+        return (true, 200, null, allRows);
+    }
+
+    private static bool HasNextPage(JsonElement payload, int pageNo, int currentCount, int perPage)
+    {
+        if (TryGetNestedInt(payload, new[] { "pagination", "total_pages" }, out var totalPages))
+            return pageNo < totalPages;
+
+        if (TryGetNestedInt(payload, new[] { "meta", "total_pages" }, out totalPages))
+            return pageNo < totalPages;
+
+        if (TryGetNestedInt(payload, new[] { "pagination", "next_page" }, out var nextPage))
+            return nextPage > pageNo;
+
+        if (TryGetNestedInt(payload, new[] { "meta", "next_page" }, out nextPage))
+            return nextPage > pageNo;
+
+        if (TryGetNestedBool(payload, new[] { "pagination", "has_next_page" }, out var hasNext))
+            return hasNext;
+
+        if (TryGetNestedBool(payload, new[] { "meta", "has_next_page" }, out hasNext))
+            return hasNext;
+
+        return currentCount >= perPage;
+    }
+
+    private static string BuildPagedPath(string basePath, int pageNo, int perPage)
+    {
+        var withPerPage = UpsertQueryParam(basePath, "per_page", perPage.ToString());
+        return UpsertQueryParam(withPerPage, "page_no", pageNo.ToString());
+    }
+
+    private static string UpsertQueryParam(string path, string key, string value)
+    {
+        var keyEscaped = Uri.EscapeDataString(key);
+        var valueEscaped = Uri.EscapeDataString(value);
+        var marker = $"{keyEscaped}={valueEscaped}";
+
+        var questionIndex = path.IndexOf('?');
+        if (questionIndex < 0)
+            return $"{path}?{marker}";
+
+        var basePath = path.Substring(0, questionIndex);
+        var query = path.Substring(questionIndex + 1);
+        var segments = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
+        var rewritten = new List<string>();
+        var replaced = false;
+
+        foreach (var segment in segments)
+        {
+            var eq = segment.IndexOf('=');
+            var segmentKey = eq >= 0 ? segment.Substring(0, eq) : segment;
+            if (string.Equals(Uri.UnescapeDataString(segmentKey), key, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!replaced)
+                {
+                    rewritten.Add(marker);
+                    replaced = true;
+                }
+                continue;
+            }
+
+            rewritten.Add(segment);
+        }
+
+        if (!replaced)
+            rewritten.Add(marker);
+
+        return $"{basePath}?{string.Join("&", rewritten)}";
+    }
+
+    private static bool TryGetNestedInt(JsonElement payload, string[] keys, out int value)
+    {
+        value = 0;
+        if (TryGetNested(payload, keys, out var element))
+        {
+            if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var n))
+            {
+                value = n;
+                return true;
+            }
+            if (element.ValueKind == JsonValueKind.String && int.TryParse(element.GetString(), out n))
+            {
+                value = n;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool TryGetNestedBool(JsonElement payload, string[] keys, out bool value)
+    {
+        value = false;
+        if (TryGetNested(payload, keys, out var element))
+        {
+            if (element.ValueKind == JsonValueKind.True || element.ValueKind == JsonValueKind.False)
+            {
+                value = element.GetBoolean();
+                return true;
+            }
+            if (element.ValueKind == JsonValueKind.String && bool.TryParse(element.GetString(), out var b))
+            {
+                value = b;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool TryGetNested(JsonElement payload, string[] keys, out JsonElement value)
+    {
+        value = payload;
+        foreach (var key in keys)
+        {
+            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(key, out value))
+                return false;
+        }
+        return true;
     }
 }
 
