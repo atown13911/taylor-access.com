@@ -203,49 +203,51 @@ type Phase2Row = {
           <p class="error" *ngIf="driversError()">{{ driversError() }}</p>
           <p class="ok-note" *ngIf="saveDriversMessage()">{{ saveDriversMessage() }}</p>
           <p class="error" *ngIf="saveDriversError()">{{ saveDriversError() }}</p>
-          <div class="driver-dashboard-cards" *ngIf="driverTableRows().length > 0">
-            <div class="driver-card total">
-              <span class="label">Total Drivers</span>
-              <span class="value">{{ driverTableRows().length }}</span>
+          <div class="driver-glass-panel" *ngIf="driverTableRows().length > 0">
+            <div class="driver-dashboard-cards">
+              <div class="driver-card total">
+                <span class="label">Total Drivers</span>
+                <span class="value">{{ driverTableRows().length }}</span>
+              </div>
+              <div class="driver-card active">
+                <span class="label">Active</span>
+                <span class="value">{{ activeDriversCount() }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Deactivated</span>
+                <span class="value">{{ deactivatedDriversCount() }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">With Email</span>
+                <span class="value">{{ driversWithEmailCount() }}</span>
+              </div>
             </div>
-            <div class="driver-card active">
-              <span class="label">Active</span>
-              <span class="value">{{ activeDriversCount() }}</span>
+            <div class="driver-actions">
+              <input
+                class="filter-input"
+                type="text"
+                placeholder="Search drivers (name, email, phone, status, vehicle)"
+                [value]="driverSearchTerm()"
+                (input)="setDriverSearchTerm($any($event.target).value)" />
+              <select
+                class="filter-input filter-select"
+                [value]="driverStatusFilter()"
+                (change)="setDriverStatusFilter($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="deactivated">Deactivated</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="driverEmailFilter()"
+                (change)="setDriverEmailFilter($any($event.target).value)">
+                <option value="all">All Email</option>
+                <option value="with-email">With Email</option>
+                <option value="without-email">Without Email</option>
+              </select>
             </div>
-            <div class="driver-card inactive">
-              <span class="label">Deactivated</span>
-              <span class="value">{{ deactivatedDriversCount() }}</span>
-            </div>
-            <div class="driver-card info">
-              <span class="label">With Email</span>
-              <span class="value">{{ driversWithEmailCount() }}</span>
-            </div>
+            <p class="count">Rows: {{ filteredDriverRows().length }} / {{ driverTableRows().length }} | Loaded from API: {{ loadedDriverRows() }}</p>
           </div>
-          <div class="driver-actions">
-            <input
-              class="filter-input"
-              type="text"
-              placeholder="Search drivers (name, email, phone, status, vehicle)"
-              [value]="driverSearchTerm()"
-              (input)="setDriverSearchTerm($any($event.target).value)" />
-            <select
-              class="filter-input filter-select"
-              [value]="driverStatusFilter()"
-              (change)="setDriverStatusFilter($any($event.target).value)">
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="deactivated">Deactivated</option>
-            </select>
-            <select
-              class="filter-input filter-select"
-              [value]="driverEmailFilter()"
-              (change)="setDriverEmailFilter($any($event.target).value)">
-              <option value="all">All Email</option>
-              <option value="with-email">With Email</option>
-              <option value="without-email">Without Email</option>
-            </select>
-          </div>
-          <p class="count">Rows: {{ filteredDriverRows().length }} / {{ driverTableRows().length }}</p>
           <div class="available-api-table-wrap" *ngIf="filteredDriverRows().length > 0">
             <table class="available-api-table">
               <thead>
@@ -260,7 +262,7 @@ type Phase2Row = {
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let row of filteredDriverRows()">
+                <tr *ngFor="let row of pagedDriverRows()">
                   <td>{{ row.name }}</td>
                   <td>{{ row.email }}</td>
                   <td>{{ row.phone }}</td>
@@ -271,6 +273,25 @@ type Phase2Row = {
                 </tr>
               </tbody>
             </table>
+            <div class="table-pagination">
+              <div class="page-meta">
+                Showing {{ driverPageStartIndex() }}-{{ driverPageEndIndex() }} of {{ filteredDriverRows().length }}
+              </div>
+              <div class="page-controls">
+                <select
+                  class="filter-input filter-select page-size-select"
+                  [value]="driverPageSize()"
+                  (change)="setDriverPageSize(+$any($event.target).value)">
+                  <option [value]="10">10 / page</option>
+                  <option [value]="25">25 / page</option>
+                  <option [value]="50">50 / page</option>
+                  <option [value]="100">100 / page</option>
+                </select>
+                <button class="refresh-btn" (click)="goToPreviousDriverPage()" [disabled]="driverPage() <= 1">Prev</button>
+                <span class="page-counter">Page {{ safeDriverPage() }} / {{ driverTotalPages() }}</span>
+                <button class="refresh-btn" (click)="goToNextDriverPage()" [disabled]="safeDriverPage() >= driverTotalPages()">Next</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -443,6 +464,15 @@ type Phase2Row = {
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .driver-glass-panel {
+      margin-bottom: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 10px;
+    }
     .driver-dashboard-cards {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -450,9 +480,9 @@ type Phase2Row = {
       margin-bottom: 10px;
     }
     .driver-card {
-      border: 1px solid #1e293b;
+      border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: 8px;
-      background: #0f172a;
+      background: rgba(15, 23, 42, 0.35);
       padding: 10px;
       display: flex;
       flex-direction: column;
@@ -497,6 +527,38 @@ type Phase2Row = {
     .driver-actions .filter-select {
       flex: 0 0 180px;
       min-width: 180px;
+    }
+    .table-pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .page-meta {
+      color: #94a3b8;
+      font-size: 12px;
+    }
+    .page-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .page-size-select {
+      flex: 0 0 120px !important;
+      min-width: 120px !important;
+    }
+    .page-counter {
+      color: #cbd5e1;
+      font-size: 12px;
+      min-width: 90px;
+      text-align: center;
+    }
+    .table-pagination .refresh-btn {
+      margin-bottom: 0;
+      padding: 6px 10px;
     }
     .status-grid { display: grid; gap: 8px; max-width: 360px; }
     .status-item {
@@ -587,9 +649,12 @@ export class MotivComponent implements OnInit {
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
   motivFuelPurchases = signal<any[]>([]);
+  loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('all');
   driverEmailFilter = signal<'all' | 'with-email' | 'without-email'>('all');
+  driverPage = signal(1);
+  driverPageSize = signal(25);
   fuelMerchantFilter = signal('');
   fuelStatusFilter = signal('');
   strictMode405 = signal(false);
@@ -624,7 +689,7 @@ export class MotivComponent implements OnInit {
     const statusFilter = this.driverStatusFilter();
     const emailFilter = this.driverEmailFilter();
 
-    return this.driverTableRows().filter(row => {
+    const filtered = this.driverTableRows().filter(row => {
       const matchesSearch =
         !term ||
         row.name.toLowerCase().includes(term) ||
@@ -649,6 +714,12 @@ export class MotivComponent implements OnInit {
 
       return matchesSearch && matchesStatus && matchesEmail;
     });
+
+    return filtered.sort((a, b) => {
+      const statusDelta = this.getDriverStatusRank(a.status) - this.getDriverStatusRank(b.status);
+      if (statusDelta !== 0) return statusDelta;
+      return a.name.localeCompare(b.name);
+    });
   });
   activeDriversCount = computed<number>(() =>
     this.driverTableRows().filter(x => x.status.toLowerCase() === 'active').length
@@ -659,6 +730,28 @@ export class MotivComponent implements OnInit {
   driversWithEmailCount = computed<number>(() =>
     this.driverTableRows().filter(x => x.email && x.email.toLowerCase() !== 'n/a').length
   );
+  driverTotalPages = computed<number>(() =>
+    Math.max(1, Math.ceil(this.filteredDriverRows().length / this.driverPageSize()))
+  );
+  safeDriverPage = computed<number>(() =>
+    Math.max(1, Math.min(this.driverPage(), this.driverTotalPages()))
+  );
+  pagedDriverRows = computed<MotivDriverTableRow[]>(() => {
+    const page = this.safeDriverPage();
+    const pageSize = this.driverPageSize();
+    const start = (page - 1) * pageSize;
+    return this.filteredDriverRows().slice(start, start + pageSize);
+  });
+  driverPageStartIndex = computed<number>(() => {
+    const total = this.filteredDriverRows().length;
+    if (!total) return 0;
+    return (this.safeDriverPage() - 1) * this.driverPageSize() + 1;
+  });
+  driverPageEndIndex = computed<number>(() => {
+    const total = this.filteredDriverRows().length;
+    if (!total) return 0;
+    return Math.min(this.safeDriverPage() * this.driverPageSize(), total);
+  });
   fuelRows = computed<MotivFuelRow[]>(() =>
     this.motivFuelPurchases().map((raw) => this.mapFuelRow(raw))
   );
@@ -774,15 +867,19 @@ export class MotivComponent implements OnInit {
   loadDrivers(): void {
     this.loadingDrivers.set(true);
     this.driversError.set('');
+    this.loadedDriverRows.set(0);
     this.driverSearchTerm.set('');
     this.driverStatusFilter.set('all');
     this.driverEmailFilter.set('all');
+    this.driverPage.set(1);
     this.saveDriversMessage.set('');
     this.saveDriversError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
-        this.motivDrivers.set(this.extractRows(payload));
+        const rows = this.extractRows(payload);
+        this.motivDrivers.set(rows);
+        this.loadedDriverRows.set(Number(res?.rows ?? rows.length));
         this.loadingDrivers.set(false);
       },
       error: (err) => {
@@ -844,14 +941,31 @@ export class MotivComponent implements OnInit {
 
   setDriverSearchTerm(value: string): void {
     this.driverSearchTerm.set(value ?? '');
+    this.driverPage.set(1);
   }
 
   setDriverStatusFilter(value: 'all' | 'active' | 'deactivated'): void {
     this.driverStatusFilter.set(value ?? 'all');
+    this.driverPage.set(1);
   }
 
   setDriverEmailFilter(value: 'all' | 'with-email' | 'without-email'): void {
     this.driverEmailFilter.set(value ?? 'all');
+    this.driverPage.set(1);
+  }
+
+  setDriverPageSize(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.driverPageSize.set(value);
+    this.driverPage.set(1);
+  }
+
+  goToPreviousDriverPage(): void {
+    this.driverPage.set(Math.max(1, this.safeDriverPage() - 1));
+  }
+
+  goToNextDriverPage(): void {
+    this.driverPage.set(Math.min(this.driverTotalPages(), this.safeDriverPage() + 1));
   }
 
   setFuelMerchantFilter(value: string): void {
@@ -1000,6 +1114,13 @@ export class MotivComponent implements OnInit {
       return 'not-connected';
     }
     return !!res?.connected ? 'connected' : 'not-connected';
+  }
+
+  private getDriverStatusRank(status: string): number {
+    const normalized = (status ?? '').trim().toLowerCase();
+    if (normalized === 'active') return 0;
+    if (normalized === 'deactivated') return 1;
+    return 2;
   }
 
   private createApiRows(): ApiHealthRow[] {
