@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using TaylorAccess.API.Data;
@@ -179,6 +180,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddSingleton<MetricCacheService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<WebhookService>();
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 
@@ -197,6 +199,7 @@ app.UseSwaggerUI();
 
 app.UseCors();
 app.UseAuthentication();
+app.UseMiddleware<TaylorAccess.API.Middleware.GatewayRequestVerificationMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
