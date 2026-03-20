@@ -203,8 +203,34 @@ type Phase2Row = {
           <p class="error" *ngIf="driversError()">{{ driversError() }}</p>
           <p class="ok-note" *ngIf="saveDriversMessage()">{{ saveDriversMessage() }}</p>
           <p class="error" *ngIf="saveDriversError()">{{ saveDriversError() }}</p>
-          <p class="count">Rows: {{ motivDrivers().length }}</p>
-          <div class="available-api-table-wrap" *ngIf="driverTableRows().length > 0">
+          <div class="driver-dashboard-cards" *ngIf="driverTableRows().length > 0">
+            <div class="driver-card total">
+              <span class="label">Total Drivers</span>
+              <span class="value">{{ driverTableRows().length }}</span>
+            </div>
+            <div class="driver-card active">
+              <span class="label">Active</span>
+              <span class="value">{{ activeDriversCount() }}</span>
+            </div>
+            <div class="driver-card inactive">
+              <span class="label">Deactivated</span>
+              <span class="value">{{ deactivatedDriversCount() }}</span>
+            </div>
+            <div class="driver-card info">
+              <span class="label">With Email</span>
+              <span class="value">{{ driversWithEmailCount() }}</span>
+            </div>
+          </div>
+          <div class="driver-actions">
+            <input
+              class="filter-input"
+              type="text"
+              placeholder="Search drivers (name, email, phone, status, vehicle)"
+              [value]="driverSearchTerm()"
+              (input)="setDriverSearchTerm($any($event.target).value)" />
+          </div>
+          <p class="count">Rows: {{ filteredDriverRows().length }} / {{ driverTableRows().length }}</p>
+          <div class="available-api-table-wrap" *ngIf="filteredDriverRows().length > 0">
             <table class="available-api-table">
               <thead>
                 <tr>
@@ -218,7 +244,7 @@ type Phase2Row = {
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let row of driverTableRows()">
+                <tr *ngFor="let row of filteredDriverRows()">
                   <td>{{ row.name }}</td>
                   <td>{{ row.email }}</td>
                   <td>{{ row.phone }}</td>
@@ -401,6 +427,36 @@ type Phase2Row = {
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .driver-dashboard-cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .driver-card {
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      background: #0f172a;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .driver-card .label {
+      color: #94a3b8;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .driver-card .value {
+      color: #e2e8f0;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .driver-card.active .value { color: #22c55e; }
+    .driver-card.inactive .value { color: #ef4444; }
+    .driver-card.info .value { color: #60a5fa; }
     .strict-mode-row { margin-bottom: 10px; }
     .strict-mode-label {
       display: inline-flex;
@@ -507,6 +563,7 @@ export class MotivComponent implements OnInit {
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
   motivFuelPurchases = signal<any[]>([]);
+  driverSearchTerm = signal('');
   fuelMerchantFilter = signal('');
   fuelStatusFilter = signal('');
   strictMode405 = signal(false);
@@ -535,6 +592,28 @@ export class MotivComponent implements OnInit {
 
   driverTableRows = computed<MotivDriverTableRow[]>(() =>
     this.motivDrivers().map((raw) => this.mapDriverRow(raw))
+  );
+  filteredDriverRows = computed<MotivDriverTableRow[]>(() => {
+    const term = this.driverSearchTerm().trim().toLowerCase();
+    if (!term) return this.driverTableRows();
+    return this.driverTableRows().filter(row =>
+      row.name.toLowerCase().includes(term) ||
+      row.email.toLowerCase().includes(term) ||
+      row.phone.toLowerCase().includes(term) ||
+      row.status.toLowerCase().includes(term) ||
+      row.location.toLowerCase().includes(term) ||
+      row.vehicle.toLowerCase().includes(term) ||
+      row.lastUpdate.toLowerCase().includes(term)
+    );
+  });
+  activeDriversCount = computed<number>(() =>
+    this.driverTableRows().filter(x => x.status.toLowerCase() === 'active').length
+  );
+  deactivatedDriversCount = computed<number>(() =>
+    this.driverTableRows().filter(x => x.status.toLowerCase() === 'deactivated').length
+  );
+  driversWithEmailCount = computed<number>(() =>
+    this.driverTableRows().filter(x => x.email && x.email.toLowerCase() !== 'n/a').length
   );
   fuelRows = computed<MotivFuelRow[]>(() =>
     this.motivFuelPurchases().map((raw) => this.mapFuelRow(raw))
@@ -651,6 +730,7 @@ export class MotivComponent implements OnInit {
   loadDrivers(): void {
     this.loadingDrivers.set(true);
     this.driversError.set('');
+    this.driverSearchTerm.set('');
     this.saveDriversMessage.set('');
     this.saveDriversError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
@@ -714,6 +794,10 @@ export class MotivComponent implements OnInit {
         this.loadingUsers.set(false);
       }
     });
+  }
+
+  setDriverSearchTerm(value: string): void {
+    this.driverSearchTerm.set(value ?? '');
   }
 
   setFuelMerchantFilter(value: string): void {
