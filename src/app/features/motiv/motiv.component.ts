@@ -193,16 +193,17 @@ type Phase2Row = {
         <p>MOTIV drivers pulled through the secure backend proxy.</p>
         <div class="api-status">
           <div class="driver-actions">
-            <button class="refresh-btn" (click)="loadDrivers()" [disabled]="loadingDrivers()">
-              {{ loadingDrivers() ? 'Loading...' : 'Refresh Drivers' }}
+            <button class="refresh-btn" (click)="loadDrivers()" [disabled]="loadingDrivers() || syncingDrivers()">
+              {{ loadingDrivers() ? 'Loading...' : (syncingDrivers() ? 'Syncing...' : 'Refresh Drivers') }}
             </button>
-            <button class="refresh-btn" (click)="saveDriversToDb()" [disabled]="savingDrivers() || loadingDrivers()">
+            <button class="refresh-btn" (click)="saveDriversToDb()" [disabled]="savingDrivers() || loadingDrivers() || syncingDrivers()">
               {{ savingDrivers() ? 'Saving...' : 'Save to Access DB' }}
             </button>
           </div>
           <p class="error" *ngIf="driversError()">{{ driversError() }}</p>
           <p class="ok-note" *ngIf="saveDriversMessage()">{{ saveDriversMessage() }}</p>
           <p class="error" *ngIf="saveDriversError()">{{ saveDriversError() }}</p>
+          <p class="count" *ngIf="syncingDrivers()">Auto-syncing MOTIV -> Access DB...</p>
           <div class="driver-glass-panel" *ngIf="driverTableRows().length > 0">
             <div class="driver-dashboard-cards">
               <div class="driver-card total">
@@ -252,6 +253,7 @@ type Phase2Row = {
             <table class="available-api-table">
               <thead>
                 <tr>
+                  <th>#</th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Phone</th>
@@ -262,7 +264,8 @@ type Phase2Row = {
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let row of pagedDriverRows()">
+                <tr *ngFor="let row of pagedDriverRows(); let i = index">
+                  <td>{{ driverPageStartIndex() + i }}</td>
                   <td>{{ row.name }}</td>
                   <td>{{ row.email }}</td>
                   <td>{{ row.phone }}</td>
@@ -639,6 +642,7 @@ export class MotivComponent implements OnInit {
   loadingVehicles = signal(false);
   loadingUsers = signal(false);
   savingDrivers = signal(false);
+  syncingDrivers = signal(false);
   loadingFuel = signal(false);
   savingFuel = signal(false);
   driversError = signal('');
@@ -869,27 +873,56 @@ export class MotivComponent implements OnInit {
   }
 
   loadDrivers(): void {
+    this.loadDriversFromDb(true);
+  }
+
+  private loadDriversFromDb(runBackgroundSync: boolean): void {
     this.loadingDrivers.set(true);
     this.driversError.set('');
     this.loadedDriverRows.set(0);
-    this.driverSearchTerm.set('');
-    this.driverStatusFilter.set('all');
-    this.driverEmailFilter.set('all');
-    this.driverPage.set(1);
-    this.saveDriversMessage.set('');
+    if (runBackgroundSync) {
+      this.driverSearchTerm.set('');
+      this.driverStatusFilter.set('all');
+      this.driverEmailFilter.set('all');
+      this.driverPage.set(1);
+    }
+    if (!runBackgroundSync) {
+      this.saveDriversMessage.set('');
+    }
     this.saveDriversError.set('');
-    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
         const driverRows = rows.filter((row: any) => this.isDriverUser(row));
         this.motivDrivers.set(driverRows);
-        this.loadedDriverRows.set(driverRows.length);
+        this.loadedDriverRows.set(Number(res?.total ?? driverRows.length));
         this.loadingDrivers.set(false);
+        if (runBackgroundSync) {
+          this.autoSyncDriversToDb();
+        }
       },
       error: (err) => {
         this.driversError.set(err?.error?.error || 'Unable to load MOTIV drivers.');
         this.loadingDrivers.set(false);
+      }
+    });
+  }
+
+  private autoSyncDriversToDb(): void {
+    if (this.syncingDrivers()) return;
+    this.syncingDrivers.set(true);
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/drivers/sync`, {}).subscribe({
+      next: (res) => {
+        this.syncingDrivers.set(false);
+        this.saveDriversMessage.set(
+          `Auto-sync complete - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
+        );
+        this.loadDriversFromDb(false);
+      },
+      error: (err) => {
+        this.syncingDrivers.set(false);
+        this.saveDriversError.set(err?.error?.error || 'Auto-sync failed.');
       }
     });
   }
@@ -904,6 +937,7 @@ export class MotivComponent implements OnInit {
         this.saveDriversMessage.set(
           `Saved to Access DB - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
         );
+        this.loadDriversFromDb(false);
       },
       error: (err) => {
         this.savingDrivers.set(false);
@@ -1034,31 +1068,33 @@ export class MotivComponent implements OnInit {
     const user = raw?.user ?? raw ?? {};
     const location = raw?.current_location ?? raw?.location ?? {};
     const vehicle = raw?.current_vehicle ?? raw?.vehicle ?? {};
-    const firstName = user?.first_name ?? user?.firstName ?? '';
-    const lastName = user?.last_name ?? user?.lastName ?? '';
-    const fallbackName = user?.name ?? user?.full_name ?? user?.username ?? 'N/A';
+    const firstName = user?.first_name ?? user?.firstName ?? user?.FirstName ?? '';
+    const lastName = user?.last_name ?? user?.lastName ?? user?.LastName ?? '';
+    const fallbackName = user?.name ?? user?.Name ?? user?.full_name ?? user?.FullName ?? user?.username ?? user?.Username ?? 'N/A';
     const name = `${firstName} ${lastName}`.trim() || fallbackName;
-    const email = user?.email ?? 'N/A';
-    const phone = user?.phone ?? user?.phone_number ?? 'N/A';
-    const status = user?.status ?? 'N/A';
-    const lat = location?.lat ?? location?.latitude ?? raw?.lat ?? raw?.latitude;
-    const lon = location?.lon ?? location?.longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude;
+    const email = user?.email ?? user?.Email ?? 'N/A';
+    const phone = user?.phone ?? user?.Phone ?? user?.phone_number ?? user?.PhoneNumber ?? 'N/A';
+    const status = user?.status ?? user?.Status ?? 'N/A';
+    const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
+    const lon = location?.lon ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
     const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? 'N/A');
     const vehicleTextParts = [
-      vehicle?.number ?? raw?.number ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
-      vehicle?.year ?? raw?.year ?? raw?.vehicle_year ?? raw?.vehicleYear,
-      vehicle?.make ?? raw?.make ?? raw?.vehicle_make ?? raw?.vehicleMake,
-      vehicle?.model ?? raw?.model ?? raw?.vehicle_model ?? raw?.vehicleModel
+      vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
+      vehicle?.year ?? vehicle?.Year ?? raw?.year ?? raw?.TruckYear ?? raw?.vehicle_year ?? raw?.vehicleYear,
+      vehicle?.make ?? vehicle?.Make ?? raw?.make ?? raw?.TruckMake ?? raw?.vehicle_make ?? raw?.vehicleMake,
+      vehicle?.model ?? vehicle?.Model ?? raw?.model ?? raw?.TruckModel ?? raw?.vehicle_model ?? raw?.vehicleModel
     ].filter((v: any) => !!v);
     const vehicleText = vehicleTextParts.length
       ? vehicleTextParts.join(' ')
-      : (vehicle?.vin ?? raw?.vin ?? raw?.vehicle_vin ?? raw?.vehicleVin ?? 'N/A');
+      : (vehicle?.vin ?? vehicle?.Vin ?? raw?.vin ?? raw?.TruckVin ?? raw?.vehicle_vin ?? raw?.vehicleVin ?? 'N/A');
     const lastUpdate =
       location?.located_at ??
       location?.locatedAt ??
+      raw?.LastLocationUpdate ??
       raw?.located_at ??
       raw?.locatedAt ??
       raw?.updated_at ??
+      raw?.UpdatedAt ??
       raw?.updatedAt ??
       'N/A';
 
@@ -1091,7 +1127,12 @@ export class MotivComponent implements OnInit {
     const roleText = roles
       .map((r: any) => String(r?.name ?? r ?? '').toLowerCase())
       .join(' ');
-    return roleText.includes('driver');
+    if (roleText.includes('driver')) return true;
+
+    // Drivers loaded from Access DB are already driver records.
+    if (raw?.Id && (raw?.Name || raw?.Email || raw?.Phone)) return true;
+
+    return false;
   }
 
   private mapFuelRow(raw: any): MotivFuelRow {
