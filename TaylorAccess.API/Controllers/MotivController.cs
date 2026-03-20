@@ -96,7 +96,7 @@ public class MotivController : ControllerBase
             return BadRequest(new { error = "Absolute URLs are not allowed. Use relative paths only." });
 
         var result = await FetchMotivPayload(normalizedPath, $"probe:{normalizedPath}", includeIncomingQuery: false);
-        var reachable = result.Success || result.StatusCode == 401 || result.StatusCode == 403;
+        var reachable = result.Success || result.StatusCode == 400 || result.StatusCode == 401 || result.StatusCode == 403;
         return Ok(new
         {
             source = "motiv",
