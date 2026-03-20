@@ -41,6 +41,14 @@ type Phase2Row = {
   status: ApiHealthStatus;
   notes: string;
 };
+type DriverSyncSummary = {
+  mode: 'auto' | 'manual';
+  fetched: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  finishedAt: string;
+};
 
 @Component({
   selector: 'app-motiv',
@@ -200,6 +208,18 @@ type Phase2Row = {
               {{ savingDrivers() ? 'Saving...' : 'Save to Access DB' }}
             </button>
           </div>
+          <div class="sync-status-panel">
+            <span class="status-chip"
+                  [class.connected]="driverSyncStatusTone() === 'connected'"
+                  [class.not-connected]="driverSyncStatusTone() === 'not-connected'"
+                  [class.checking]="driverSyncStatusTone() === 'checking'">
+              {{ driverSyncStatusLabel() }}
+            </span>
+            <span class="sync-status-text">{{ driverSyncStatusText() }}</span>
+          </div>
+          <p class="count" *ngIf="lastDriverSyncSummary() as sync">
+            Last sync ({{ sync.mode }}) at {{ sync.finishedAt }} - fetched: {{ sync.fetched }}, created: {{ sync.created }}, updated: {{ sync.updated }}, skipped: {{ sync.skipped }}
+          </p>
           <p class="error" *ngIf="driversError()">{{ driversError() }}</p>
           <p class="ok-note" *ngIf="saveDriversMessage()">{{ saveDriversMessage() }}</p>
           <p class="error" *ngIf="saveDriversError()">{{ saveDriversError() }}</p>
@@ -467,6 +487,17 @@ type Phase2Row = {
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .sync-status-panel {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .sync-status-text {
+      color: #94a3b8;
+      font-size: 12px;
+    }
     .driver-glass-panel {
       margin-bottom: 10px;
       border: 1px solid rgba(148, 163, 184, 0.22);
@@ -651,6 +682,8 @@ export class MotivComponent implements OnInit {
   fuelError = signal('');
   saveDriversMessage = signal('');
   saveDriversError = signal('');
+  syncStatusMessage = signal('Ready.');
+  lastDriverSyncSummary = signal<DriverSyncSummary | null>(null);
   saveFuelMessage = signal('');
   saveFuelError = signal('');
   motivDrivers = signal<any[]>([]);
@@ -760,6 +793,20 @@ export class MotivComponent implements OnInit {
     if (!total) return 0;
     return Math.min(this.safeDriverPage() * this.driverPageSize(), total);
   });
+  driverSyncStatusTone = computed<'connected' | 'not-connected' | 'checking'>(() => {
+    if (this.syncingDrivers() || this.savingDrivers()) return 'checking';
+    if (this.saveDriversError()) return 'not-connected';
+    if (this.lastDriverSyncSummary()) return 'connected';
+    return 'checking';
+  });
+  driverSyncStatusLabel = computed(() => {
+    if (this.syncingDrivers()) return 'Auto Syncing';
+    if (this.savingDrivers()) return 'Manual Syncing';
+    if (this.saveDriversError()) return 'Sync Error';
+    if (this.lastDriverSyncSummary()) return 'Synced';
+    return 'Idle';
+  });
+  driverSyncStatusText = computed(() => this.syncStatusMessage());
   fuelRows = computed<MotivFuelRow[]>(() =>
     this.motivFuelPurchases().map((raw) => this.mapFuelRow(raw))
   );
@@ -890,6 +937,7 @@ export class MotivComponent implements OnInit {
       this.saveDriversMessage.set('');
     }
     this.saveDriversError.set('');
+    this.syncStatusMessage.set('Loading drivers from Access DB...');
     this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -897,6 +945,7 @@ export class MotivComponent implements OnInit {
         this.motivDrivers.set(rows);
         this.loadedDriverRows.set(Number(res?.total ?? rows.length));
         this.loadingDrivers.set(false);
+        this.syncStatusMessage.set(`Loaded ${Number(res?.total ?? rows.length)} rows from Access DB.`);
         if (runBackgroundSync) {
           this.autoSyncDriversToDb();
         }
@@ -904,6 +953,7 @@ export class MotivComponent implements OnInit {
       error: (err) => {
         this.driversError.set(err?.error?.error || 'Unable to load MOTIV drivers.');
         this.loadingDrivers.set(false);
+        this.syncStatusMessage.set('Unable to load drivers from Access DB.');
       }
     });
   }
@@ -911,17 +961,28 @@ export class MotivComponent implements OnInit {
   private autoSyncDriversToDb(): void {
     if (this.syncingDrivers()) return;
     this.syncingDrivers.set(true);
+    this.syncStatusMessage.set('Auto-sync in progress: checking MOTIV for new and updated drivers...');
     this.http.post<any>(`${this.apiUrl}/api/v1/motiv/drivers/sync`, {}).pipe(timeout(180000)).subscribe({
       next: (res) => {
         this.syncingDrivers.set(false);
+        this.lastDriverSyncSummary.set({
+          mode: 'auto',
+          fetched: Number(res?.fetched ?? 0),
+          created: Number(res?.created ?? 0),
+          updated: Number(res?.updated ?? 0),
+          skipped: Number(res?.skipped ?? 0),
+          finishedAt: new Date().toLocaleTimeString()
+        });
         this.saveDriversMessage.set(
           `Auto-sync complete - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
         );
+        this.syncStatusMessage.set(`Auto-sync complete: ${res?.created ?? 0} created, ${res?.updated ?? 0} updated.`);
         this.loadDriversFromDb(false);
       },
       error: (err) => {
         this.syncingDrivers.set(false);
         this.saveDriversError.set(err?.error?.error || 'Auto-sync failed.');
+        this.syncStatusMessage.set('Auto-sync failed.');
       }
     });
   }
@@ -930,17 +991,28 @@ export class MotivComponent implements OnInit {
     this.savingDrivers.set(true);
     this.saveDriversMessage.set('');
     this.saveDriversError.set('');
+    this.syncStatusMessage.set('Manual sync in progress...');
     this.http.post<any>(`${this.apiUrl}/api/v1/motiv/drivers/sync`, {}).subscribe({
       next: (res) => {
         this.savingDrivers.set(false);
+        this.lastDriverSyncSummary.set({
+          mode: 'manual',
+          fetched: Number(res?.fetched ?? 0),
+          created: Number(res?.created ?? 0),
+          updated: Number(res?.updated ?? 0),
+          skipped: Number(res?.skipped ?? 0),
+          finishedAt: new Date().toLocaleTimeString()
+        });
         this.saveDriversMessage.set(
           `Saved to Access DB - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
         );
+        this.syncStatusMessage.set(`Manual sync complete: ${res?.created ?? 0} created, ${res?.updated ?? 0} updated.`);
         this.loadDriversFromDb(false);
       },
       error: (err) => {
         this.savingDrivers.set(false);
         this.saveDriversError.set(err?.error?.error || 'Unable to save MOTIV drivers to Access DB.');
+        this.syncStatusMessage.set('Manual sync failed.');
       }
     });
   }
