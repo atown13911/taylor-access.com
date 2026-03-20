@@ -567,8 +567,13 @@ export class MotivComponent implements OnInit {
       { name: 'MOTIV Messages', route: '/api/v1/motiv/probe?path=/v1/messages', status: 'checking' },
       { name: 'MOTIV Dispatches', route: '/api/v1/motiv/probe?path=/v1/dispatches', status: 'checking' },
       { name: 'MOTIV Camera Connections', route: '/api/v1/motiv/probe?path=/v1/camera_connections', status: 'checking' },
+      { name: 'MOTIV HOS Available Time', route: '/api/v1/motiv/probe?path=/v1/available_time', status: 'checking' },
+      { name: 'MOTIV HOS Violations', route: '/api/v1/motiv/probe?path=/v1/hos_violations', status: 'checking' },
+      { name: 'MOTIV Hours of Service', route: '/api/v1/motiv/probe?path=/v1/hours_of_service', status: 'checking' },
       { name: 'MOTIV Inspection Reports (v1)', route: '/api/v1/motiv/probe?path=/v1/inspection_reports', status: 'checking' },
       { name: 'MOTIV Inspection Reports (v2)', route: '/api/v1/motiv/probe?path=/v2/inspection_reports', status: 'checking' },
+      { name: 'MOTIV IFTA Summary', route: '/api/v1/motiv/probe?path=/v1/ifta/summary', status: 'checking' },
+      { name: 'MOTIV IFTA Trips', route: '/api/v1/motiv/probe?path=/v1/ifta/trips', status: 'checking' },
       { name: 'MOTIV Freight Visibility', route: '/api/v1/motiv/probe?path=/v1/freight_visibility/vehicle_locations', status: 'checking' },
       { name: 'MOTIV Companies', route: '/api/v1/motiv/probe?path=/v1/companies', status: 'checking' },
       { name: 'MOTIV Freight Visibility Companies', route: '/api/v1/motiv/probe?path=/v1/freight_visibility/companies', status: 'checking' }
