@@ -894,9 +894,8 @@ export class MotivComponent implements OnInit {
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
-        const driverRows = rows.filter((row: any) => this.isDriverUser(row));
-        this.motivDrivers.set(driverRows);
-        this.loadedDriverRows.set(Number(res?.total ?? driverRows.length));
+        this.motivDrivers.set(rows);
+        this.loadedDriverRows.set(Number(res?.total ?? rows.length));
         this.loadingDrivers.set(false);
         if (runBackgroundSync) {
           this.autoSyncDriversToDb();
@@ -912,7 +911,7 @@ export class MotivComponent implements OnInit {
   private autoSyncDriversToDb(): void {
     if (this.syncingDrivers()) return;
     this.syncingDrivers.set(true);
-    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/drivers/sync`, {}).subscribe({
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/drivers/sync`, {}).pipe(timeout(180000)).subscribe({
       next: (res) => {
         this.syncingDrivers.set(false);
         this.saveDriversMessage.set(
