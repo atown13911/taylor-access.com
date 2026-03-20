@@ -114,6 +114,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Timesheet> Timesheets => Set<Timesheet>();
     public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
+    public DbSet<MotivDriverProfile> MotivDriverProfiles => Set<MotivDriverProfile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -198,5 +199,12 @@ public class TaylorAccessDbContext : DbContext
         modelBuilder.Entity<AppRole>()
             .HasIndex(ar => new { ar.AppClientId, ar.Name })
             .IsUnique();
+
+        modelBuilder.Entity<MotivDriverProfile>()
+            .HasIndex(m => m.DriverId)
+            .IsUnique();
+
+        modelBuilder.Entity<MotivDriverProfile>()
+            .HasIndex(m => m.MotivUserId);
     }
 }

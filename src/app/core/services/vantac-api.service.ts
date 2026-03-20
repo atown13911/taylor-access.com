@@ -287,7 +287,7 @@ export class VanTacApiService {
     return this.http.put(`${this.baseUrl}/api/v1/insurance-policies/${id}/billing`, data);
   }
   viewInsurancePolicyDoc(id: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/insurance-policies/${id}/document`, { responseType: 'blob' as any });
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-policies/${id}/view`, { responseType: 'blob' as any });
   }
   downloadInsurancePolicyDoc(id: any): Observable<any> {
     return this.http.get(`${this.baseUrl}/api/v1/insurance-policies/${id}/download`, { responseType: 'blob' as any });

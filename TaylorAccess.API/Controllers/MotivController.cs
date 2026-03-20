@@ -5,6 +5,7 @@ using System.Text.Json;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
+using System.Text.RegularExpressions;
 
 namespace TaylorAccess.API.Controllers;
 
@@ -233,7 +234,10 @@ public class MotivController : ControllerBase
         if (orgId == 0)
             return BadRequest(new { error = "Cannot sync drivers: no organization is assigned and no default organization exists." });
 
-        var existingDrivers = await _db.Drivers.ToListAsync();
+        var existingDrivers = await _db.Drivers
+            .Where(d => !d.IsDeleted)
+            .ToListAsync();
+
         var byEmail = existingDrivers
             .Where(d => !string.IsNullOrWhiteSpace(d.Email))
             .GroupBy(d => d.Email!.Trim().ToLowerInvariant())
@@ -242,13 +246,24 @@ public class MotivController : ControllerBase
             .GroupBy(d => $"{(d.Name ?? "").Trim().ToLowerInvariant()}|{(d.Phone ?? "").Trim()}")
             .ToDictionary(g => g.Key, g => g.First());
 
-        var created = 0;
-        var updated = 0;
+        var existingProfiles = await _db.MotivDriverProfiles.ToListAsync();
+        var profileByDriverId = existingProfiles
+            .GroupBy(p => p.DriverId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var enrichedDrivers = 0;
+        var profileCreated = 0;
+        var profileUpdated = 0;
         var skipped = 0;
 
         foreach (var row in rows)
         {
             var user = PickNestedObject(row, "user") ?? row;
+            if (!IsDriverLikeUser(user))
+            {
+                skipped++;
+                continue;
+            }
             var location = PickNestedObject(row, "current_location");
             var vehicle = PickNestedObject(row, "current_vehicle");
 
@@ -273,6 +288,12 @@ public class MotivController : ControllerBase
             else if (byNamePhone.TryGetValue(namePhoneKey, out var byNP))
                 target = byNP;
 
+            if (target == null)
+            {
+                skipped++;
+                continue;
+            }
+
             var mappedStatus = MapMotiveStatus(PickString(user, "status"));
             var lat = PickDecimal(location ?? row, "lat", "latitude");
             var lon = PickDecimal(location ?? row, "lon", "longitude", "lng");
@@ -284,56 +305,68 @@ public class MotivController : ControllerBase
             var vehicleModel = PickString(vehicle ?? row, "model", "vehicle_model", "vehicleModel");
             var vehicleVin = PickString(vehicle ?? row, "vin", "vehicle_vin", "vehicleVin");
             var motiveUserId = PickString(user, "id");
+            var motiveVehicleId = PickString(vehicle ?? row, "id", "vehicle_id");
 
-            if (target == null)
+            // Keep Drivers table authoritative (never insert from MOTIV); only enrich existing drivers.
+            target.OrganizationId = orgId;
+            target.Name = displayName.Trim();
+            target.Email = email ?? target.Email;
+            target.Phone = phone ?? target.Phone;
+            target.Status = mappedStatus;
+            target.IsOnline = location.HasValue;
+            target.Latitude = lat ?? target.Latitude;
+            target.Longitude = lon ?? target.Longitude;
+            target.LastLocationUpdate = locatedAt ?? target.LastLocationUpdate;
+            target.TruckNumber = vehicleNumber ?? target.TruckNumber;
+            target.TruckYear = vehicleYear ?? target.TruckYear;
+            target.TruckMake = vehicleMake ?? target.TruckMake;
+            target.TruckModel = vehicleModel ?? target.TruckModel;
+            target.TruckVin = vehicleVin ?? target.TruckVin;
+            target.DriverType = "driver";
+            target.Notes = BuildMotivSyncNote(target.Notes, motiveUserId);
+            target.UpdatedAt = DateTime.UtcNow;
+            enrichedDrivers++;
+
+            if (!profileByDriverId.TryGetValue(target.Id, out var profile))
             {
-                target = new Driver
+                profile = new MotivDriverProfile
                 {
-                    OrganizationId = orgId,
-                    Name = displayName.Trim(),
-                    Email = email,
-                    Phone = phone,
-                    Status = mappedStatus,
-                    IsOnline = location.HasValue,
+                    DriverId = target.Id,
+                    MotivUserId = motiveUserId,
+                    MotivVehicleId = motiveVehicleId,
+                    MotivStatus = PickString(user, "status"),
                     Latitude = lat,
                     Longitude = lon,
                     LastLocationUpdate = locatedAt,
-                    TruckNumber = vehicleNumber,
-                    TruckYear = vehicleYear,
-                    TruckMake = vehicleMake,
-                    TruckModel = vehicleModel,
-                    TruckVin = vehicleVin,
-                    Notes = BuildMotivSyncNote(null, motiveUserId),
+                    VehicleNumber = vehicleNumber,
+                    VehicleYear = vehicleYear,
+                    VehicleMake = vehicleMake,
+                    VehicleModel = vehicleModel,
+                    VehicleVin = vehicleVin,
+                    RawJson = row.ToString(),
                     CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow,
-                    IsDeleted = false
+                    UpdatedAt = DateTime.UtcNow
                 };
-                _db.Drivers.Add(target);
-                created++;
-
-                if (!string.IsNullOrWhiteSpace(emailKey))
-                    byEmail[emailKey] = target;
-                byNamePhone[namePhoneKey] = target;
+                _db.MotivDriverProfiles.Add(profile);
+                profileByDriverId[target.Id] = profile;
+                profileCreated++;
             }
             else
             {
-                target.OrganizationId = orgId;
-                target.Name = displayName.Trim();
-                target.Email = email ?? target.Email;
-                target.Phone = phone ?? target.Phone;
-                target.Status = mappedStatus;
-                target.IsOnline = location.HasValue;
-                target.Latitude = lat ?? target.Latitude;
-                target.Longitude = lon ?? target.Longitude;
-                target.LastLocationUpdate = locatedAt ?? target.LastLocationUpdate;
-                target.TruckNumber = vehicleNumber ?? target.TruckNumber;
-                target.TruckYear = vehicleYear ?? target.TruckYear;
-                target.TruckMake = vehicleMake ?? target.TruckMake;
-                target.TruckModel = vehicleModel ?? target.TruckModel;
-                target.TruckVin = vehicleVin ?? target.TruckVin;
-                target.Notes = BuildMotivSyncNote(target.Notes, motiveUserId);
-                target.UpdatedAt = DateTime.UtcNow;
-                updated++;
+                profile.MotivUserId = motiveUserId ?? profile.MotivUserId;
+                profile.MotivVehicleId = motiveVehicleId ?? profile.MotivVehicleId;
+                profile.MotivStatus = PickString(user, "status") ?? profile.MotivStatus;
+                profile.Latitude = lat ?? profile.Latitude;
+                profile.Longitude = lon ?? profile.Longitude;
+                profile.LastLocationUpdate = locatedAt ?? profile.LastLocationUpdate;
+                profile.VehicleNumber = vehicleNumber ?? profile.VehicleNumber;
+                profile.VehicleYear = vehicleYear ?? profile.VehicleYear;
+                profile.VehicleMake = vehicleMake ?? profile.VehicleMake;
+                profile.VehicleModel = vehicleModel ?? profile.VehicleModel;
+                profile.VehicleVin = vehicleVin ?? profile.VehicleVin;
+                profile.RawJson = row.ToString();
+                profile.UpdatedAt = DateTime.UtcNow;
+                profileUpdated++;
             }
         }
 
@@ -342,14 +375,83 @@ public class MotivController : ControllerBase
         return Ok(new
         {
             fetched = rows.Count,
-            created,
-            updated,
+            enrichedDrivers,
+            profileCreated,
+            profileUpdated,
             skipped,
             totalDrivers = await _db.Drivers.CountAsync(),
+            totalMotivDriverProfiles = await _db.MotivDriverProfiles.CountAsync(),
+            createMode = "update-only",
             sourcePath = enriched.SourcePath,
             userRows = enriched.UserRows,
             locationRows = enriched.LocationRows,
             vehicleRows = enriched.VehicleRows
+        });
+    }
+
+    [HttpDelete("drivers/non-driver-cleanup")]
+    public async Task<IActionResult> DeleteNonDriverRowsPreviouslySyncedFromMotiv()
+    {
+        var path = _config["MOTIV_USERS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_USERS_PATH")
+            ?? "/v1/users?per_page=100&page_no=1";
+
+        var usersFetch = await FetchAllMotivRows(path, "drivers-cleanup:users");
+        if (!usersFetch.Success)
+        {
+            return StatusCode(usersFetch.StatusCode, new
+            {
+                error = "Unable to cleanup non-driver rows because MOTIV users fetch failed.",
+                status = usersFetch.StatusCode,
+                details = usersFetch.Error
+            });
+        }
+
+        var nonDriverUserIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nonDriverEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in usersFetch.Rows)
+        {
+            var user = PickNestedObject(row, "user") ?? row;
+            if (IsDriverLikeUser(user))
+                continue;
+
+            var id = PickString(user, "id");
+            var email = PickString(user, "email");
+            if (!string.IsNullOrWhiteSpace(id))
+                nonDriverUserIds.Add(id);
+            if (!string.IsNullOrWhiteSpace(email))
+                nonDriverEmails.Add(email.Trim().ToLowerInvariant());
+        }
+
+        var syncedDrivers = await _db.Drivers
+            .Where(d => !d.IsDeleted && d.Notes != null && d.Notes.Contains("Synced from MOTIV"))
+            .ToListAsync();
+
+        var toDelete = new List<Driver>();
+        foreach (var driver in syncedDrivers)
+        {
+            var noteUserId = ExtractMotivUserIdFromNotes(driver.Notes);
+            var emailKey = (driver.Email ?? "").Trim().ToLowerInvariant();
+            var isDriverType = string.Equals((driver.DriverType ?? "").Trim(), "driver", StringComparison.OrdinalIgnoreCase);
+
+            var matchedNonDriverById = !string.IsNullOrWhiteSpace(noteUserId) && nonDriverUserIds.Contains(noteUserId);
+            var matchedNonDriverByEmail = !string.IsNullOrWhiteSpace(emailKey) && nonDriverEmails.Contains(emailKey);
+
+            if (matchedNonDriverById || (matchedNonDriverByEmail && !isDriverType))
+                toDelete.Add(driver);
+        }
+
+        if (toDelete.Count == 0)
+            return Ok(new { deleted = 0, checkedCount = syncedDrivers.Count, message = "No non-driver synced rows found to delete." });
+
+        _db.Drivers.RemoveRange(toDelete);
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            deleted = toDelete.Count,
+            checkedCount = syncedDrivers.Count,
+            remainingDrivers = await _db.Drivers.CountAsync()
         });
     }
 
@@ -628,6 +730,39 @@ public class MotivController : ControllerBase
         };
     }
 
+    private static bool IsDriverLikeUser(JsonElement user)
+    {
+        var typeValue = (PickString(user, "user_type", "userType", "type", "role") ?? "").Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(typeValue))
+            return typeValue == "driver" || typeValue == "drivers";
+
+        if (user.ValueKind == JsonValueKind.Object)
+        {
+            if (user.TryGetProperty("is_driver", out var isDriverProp) &&
+                (isDriverProp.ValueKind == JsonValueKind.True || isDriverProp.ValueKind == JsonValueKind.False))
+                return isDriverProp.GetBoolean();
+
+            if (user.TryGetProperty("isDriver", out var isDriverCamel) &&
+                (isDriverCamel.ValueKind == JsonValueKind.True || isDriverCamel.ValueKind == JsonValueKind.False))
+                return isDriverCamel.GetBoolean();
+
+            if (user.TryGetProperty("roles", out var roles) && roles.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var role in roles.EnumerateArray())
+                {
+                    var roleName = role.ValueKind == JsonValueKind.Object
+                        ? (PickString(role, "name", "role") ?? "")
+                        : role.ToString();
+                    var normalizedRole = roleName.Trim().ToLowerInvariant();
+                    if (normalizedRole == "driver" || normalizedRole == "drivers")
+                        return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static string? PickString(JsonElement src, params string[] keys)
     {
         if (src.ValueKind != JsonValueKind.Object) return null;
@@ -690,6 +825,19 @@ public class MotivController : ControllerBase
         if (current.Contains("Synced from MOTIV", StringComparison.OrdinalIgnoreCase))
             return current;
         return $"{current} | {marker}";
+    }
+
+    private static string? ExtractMotivUserIdFromNotes(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+            return null;
+
+        var match = Regex.Match(notes, @"userId:\s*(?<id>[A-Za-z0-9\-_]+)", RegexOptions.IgnoreCase);
+        if (!match.Success)
+            return null;
+
+        var id = match.Groups["id"].Value?.Trim();
+        return string.IsNullOrWhiteSpace(id) ? null : id;
     }
 
     private static string Truncate(string value, int maxLength)

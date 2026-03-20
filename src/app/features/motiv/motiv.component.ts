@@ -14,11 +14,31 @@ type MotivDriverTableRow = {
   vehicle: string;
   lastUpdate: string;
 };
+type MotivVehicleTableRow = {
+  id: string;
+  number: string;
+  make: string;
+  model: string;
+  year: string;
+  vin: string;
+  status: string;
+  location: string;
+  lastUpdate: string;
+};
+type MotivUserTableRow = {
+  name: string;
+  email: string;
+  phone: string;
+  userType: string;
+  status: string;
+  role: string;
+};
 type MotivFuelRow = {
   transactionId: string;
   date: string;
   status: string;
   amount: string;
+  amountValue: number;
   currency: string;
   merchant: string;
   city: string;
@@ -26,6 +46,13 @@ type MotivFuelRow = {
   driverId: string;
   vehicleId: string;
   category: string;
+  source: string;
+};
+type FuelWeekOption = {
+  key: string;
+  label: string;
+  year: number;
+  week: number;
 };
 type ApiHealthStatus = 'checking' | 'connected' | 'not-connected';
 type ApiHealthRow = {
@@ -328,7 +355,103 @@ type DriverSyncSummary = {
             {{ loadingVehicles() ? 'Loading...' : 'Refresh Vehicles' }}
           </button>
           <p class="error" *ngIf="vehiclesError()">{{ vehiclesError() }}</p>
-          <p class="count">Rows: {{ motivVehicles().length }}</p>
+          <div class="driver-glass-panel" *ngIf="vehicleTableRows().length > 0">
+            <div class="driver-dashboard-cards">
+              <div class="driver-card total">
+                <span class="label">Total Vehicles</span>
+                <span class="value">{{ vehicleTableRows().length }}</span>
+              </div>
+              <div class="driver-card active">
+                <span class="label">Active</span>
+                <span class="value">{{ activeVehiclesCount() }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Deactivated</span>
+                <span class="value">{{ deactivatedVehiclesCount() }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">With VIN</span>
+                <span class="value">{{ vehiclesWithVinCount() }}</span>
+              </div>
+            </div>
+            <div class="driver-actions">
+              <input
+                class="filter-input"
+                type="text"
+                placeholder="Search vehicles (unit, make, model, year, VIN, status)"
+                [value]="vehicleSearchTerm()"
+                (input)="setVehicleSearchTerm($any($event.target).value)" />
+              <select
+                class="filter-input filter-select"
+                [value]="vehicleStatusFilter()"
+                (change)="setVehicleStatusFilter($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="deactivated">Deactivated</option>
+                <option value="other">Other</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="vehicleVinFilter()"
+                (change)="setVehicleVinFilter($any($event.target).value)">
+                <option value="all">All VIN</option>
+                <option value="with-vin">With VIN</option>
+                <option value="without-vin">Without VIN</option>
+              </select>
+            </div>
+            <p class="count">Rows: {{ filteredVehicleRows().length }} / {{ vehicleTableRows().length }}</p>
+          </div>
+          <div class="available-api-table-wrap" *ngIf="filteredVehicleRows().length > 0">
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>ID</th>
+                  <th>Unit</th>
+                  <th>Make</th>
+                  <th>Model</th>
+                  <th>Year</th>
+                  <th>VIN</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                  <th>Last Update</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of pagedVehicleRows(); let i = index">
+                  <td>{{ vehiclePageStartIndex() + i }}</td>
+                  <td>{{ row.id }}</td>
+                  <td>{{ row.number }}</td>
+                  <td>{{ row.make }}</td>
+                  <td>{{ row.model }}</td>
+                  <td>{{ row.year }}</td>
+                  <td>{{ row.vin }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.location }}</td>
+                  <td>{{ row.lastUpdate }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-pagination">
+              <div class="page-meta">
+                Showing {{ vehiclePageStartIndex() }}-{{ vehiclePageEndIndex() }} of {{ filteredVehicleRows().length }}
+              </div>
+              <div class="page-controls">
+                <select
+                  class="filter-input filter-select page-size-select"
+                  [value]="vehiclePageSize()"
+                  (change)="setVehiclePageSize(+$any($event.target).value)">
+                  <option [value]="10">10 / page</option>
+                  <option [value]="25">25 / page</option>
+                  <option [value]="50">50 / page</option>
+                  <option [value]="100">100 / page</option>
+                </select>
+                <button class="refresh-btn" (click)="goToPreviousVehiclePage()" [disabled]="vehiclePage() <= 1">Prev</button>
+                <span class="page-counter">Page {{ safeVehiclePage() }} / {{ vehicleTotalPages() }}</span>
+                <button class="refresh-btn" (click)="goToNextVehiclePage()" [disabled]="safeVehiclePage() >= vehicleTotalPages()">Next</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -340,7 +463,97 @@ type DriverSyncSummary = {
             {{ loadingUsers() ? 'Loading...' : 'Refresh Users' }}
           </button>
           <p class="error" *ngIf="usersError()">{{ usersError() }}</p>
-          <p class="count">Rows: {{ motivUsers().length }}</p>
+          <div class="driver-glass-panel" *ngIf="userTableRows().length > 0">
+            <div class="driver-dashboard-cards">
+              <div class="driver-card total">
+                <span class="label">Total Users</span>
+                <span class="value">{{ userTableRows().length }}</span>
+              </div>
+              <div class="driver-card active">
+                <span class="label">Active</span>
+                <span class="value">{{ activeUsersCount() }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Deactivated</span>
+                <span class="value">{{ deactivatedUsersCount() }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">With Email</span>
+                <span class="value">{{ usersWithEmailCount() }}</span>
+              </div>
+            </div>
+            <div class="driver-actions">
+              <input
+                class="filter-input"
+                type="text"
+                placeholder="Search users (name, email, phone, type, status, role)"
+                [value]="userSearchTerm()"
+                (input)="setUserSearchTerm($any($event.target).value)" />
+              <select
+                class="filter-input filter-select"
+                [value]="userStatusFilter()"
+                (change)="setUserStatusFilter($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="deactivated">Deactivated</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="userTypeFilter()"
+                (change)="setUserTypeFilter($any($event.target).value)">
+                <option value="all">All Types</option>
+                <option value="driver">Driver</option>
+                <option value="admin">Admin</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <p class="count">Rows: {{ filteredUserRows().length }} / {{ userTableRows().length }}</p>
+          </div>
+          <div class="available-api-table-wrap" *ngIf="filteredUserRows().length > 0">
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of pagedUserRows(); let i = index">
+                  <td>{{ userPageStartIndex() + i }}</td>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.email }}</td>
+                  <td>{{ row.phone }}</td>
+                  <td>{{ row.userType }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.role }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-pagination">
+              <div class="page-meta">
+                Showing {{ userPageStartIndex() }}-{{ userPageEndIndex() }} of {{ filteredUserRows().length }}
+              </div>
+              <div class="page-controls">
+                <select
+                  class="filter-input filter-select page-size-select"
+                  [value]="userPageSize()"
+                  (change)="setUserPageSize(+$any($event.target).value)">
+                  <option [value]="10">10 / page</option>
+                  <option [value]="25">25 / page</option>
+                  <option [value]="50">50 / page</option>
+                  <option [value]="100">100 / page</option>
+                </select>
+                <button class="refresh-btn" (click)="goToPreviousUserPage()" [disabled]="userPage() <= 1">Prev</button>
+                <span class="page-counter">Page {{ safeUserPage() }} / {{ userTotalPages() }}</span>
+                <button class="refresh-btn" (click)="goToNextUserPage()" [disabled]="safeUserPage() >= userTotalPages()">Next</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -359,27 +572,71 @@ type DriverSyncSummary = {
           <p class="error" *ngIf="fuelError()">{{ fuelError() }}</p>
           <p class="ok-note" *ngIf="saveFuelMessage()">{{ saveFuelMessage() }}</p>
           <p class="error" *ngIf="saveFuelError()">{{ saveFuelError() }}</p>
-
-          <div class="driver-actions">
-            <input
-              class="filter-input"
-              type="text"
-              placeholder="Filter merchant"
-              [value]="fuelMerchantFilter()"
-              (input)="setFuelMerchantFilter($any($event.target).value)" />
-            <input
-              class="filter-input"
-              type="text"
-              placeholder="Filter status"
-              [value]="fuelStatusFilter()"
-              (input)="setFuelStatusFilter($any($event.target).value)" />
+          <div class="driver-glass-panel" *ngIf="fuelRows().length > 0">
+            <div class="driver-dashboard-cards">
+              <div class="driver-card total">
+                <span class="label">Total Purchases</span>
+                <span class="value">{{ fuelRows().length }}</span>
+              </div>
+              <div class="driver-card active">
+                <span class="label">Total Amount</span>
+                <span class="value">{{ fuelTotalAmount() | number:'1.0-2' }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">Unique Drivers</span>
+                <span class="value">{{ fuelUniqueDriversCount() }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Unique Vehicles</span>
+                <span class="value">{{ fuelUniqueVehiclesCount() }}</span>
+              </div>
+            </div>
+            <div class="driver-actions">
+              <input
+                class="filter-input"
+                type="text"
+                placeholder="Search fuel (merchant, city, state, driver, vehicle, category, source)"
+                [value]="fuelSearchTerm()"
+                (input)="setFuelSearchTerm($any($event.target).value)" />
+              <select
+                class="filter-input filter-select"
+                [value]="fuelStatusFilter()"
+                (change)="setFuelStatusFilter($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="completed">Completed</option>
+                <option value="pending">Pending</option>
+                <option value="other">Other</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="fuelSourceFilter()"
+                (change)="setFuelSourceFilter($any($event.target).value)">
+                <option value="all">All Sources</option>
+                <option value="motive-card">Motive Card</option>
+                <option value="other">Other</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="fuelYearFilter()"
+                (change)="setFuelYearFilter($any($event.target).value)">
+                <option value="all">All Years</option>
+                <option *ngFor="let y of fuelAvailableYears()" [value]="y">{{ y }}</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="fuelWeekFilter()"
+                (change)="setFuelWeekFilter($any($event.target).value)">
+                <option value="all">All Weeks</option>
+                <option *ngFor="let w of fuelAvailableWeeks()" [value]="w.key">{{ w.label }}</option>
+              </select>
+            </div>
+            <p class="count">Rows: {{ filteredFuelRows().length }} / {{ fuelRows().length }}</p>
           </div>
-
-          <p class="count">Rows: {{ filteredFuelRows().length }} / {{ fuelRows().length }}</p>
           <div class="available-api-table-wrap" *ngIf="filteredFuelRows().length > 0">
             <table class="available-api-table">
               <thead>
                 <tr>
+                  <th>#</th>
                   <th>Transaction</th>
                   <th>Date</th>
                   <th>Status</th>
@@ -390,10 +647,12 @@ type DriverSyncSummary = {
                   <th>Driver</th>
                   <th>Vehicle</th>
                   <th>Category</th>
+                  <th>Source</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let row of filteredFuelRows()">
+                <tr *ngFor="let row of pagedFuelRows(); let i = index">
+                  <td>{{ fuelPageStartIndex() + i }}</td>
                   <td>{{ row.transactionId }}</td>
                   <td>{{ row.date }}</td>
                   <td>{{ row.status }}</td>
@@ -404,9 +663,29 @@ type DriverSyncSummary = {
                   <td>{{ row.driverId }}</td>
                   <td>{{ row.vehicleId }}</td>
                   <td>{{ row.category }}</td>
+                  <td>{{ row.source }}</td>
                 </tr>
               </tbody>
             </table>
+            <div class="table-pagination">
+              <div class="page-meta">
+                Showing {{ fuelPageStartIndex() }}-{{ fuelPageEndIndex() }} of {{ filteredFuelRows().length }}
+              </div>
+              <div class="page-controls">
+                <select
+                  class="filter-input filter-select page-size-select"
+                  [value]="fuelPageSize()"
+                  (change)="setFuelPageSize(+$any($event.target).value)">
+                  <option [value]="10">10 / page</option>
+                  <option [value]="25">25 / page</option>
+                  <option [value]="50">50 / page</option>
+                  <option [value]="100">100 / page</option>
+                </select>
+                <button class="refresh-btn" (click)="goToPreviousFuelPage()" [disabled]="fuelPage() <= 1">Prev</button>
+                <span class="page-counter">Page {{ safeFuelPage() }} / {{ fuelTotalPages() }}</span>
+                <button class="refresh-btn" (click)="goToNextFuelPage()" [disabled]="safeFuelPage() >= fuelTotalPages()">Next</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -709,8 +988,23 @@ export class MotivComponent implements OnInit {
   driverEmailFilter = signal<'all' | 'with-email' | 'without-email'>('all');
   driverPage = signal(1);
   driverPageSize = signal(25);
-  fuelMerchantFilter = signal('');
-  fuelStatusFilter = signal('');
+  vehiclePage = signal(1);
+  vehiclePageSize = signal(25);
+  vehicleSearchTerm = signal('');
+  vehicleStatusFilter = signal<'all' | 'active' | 'deactivated' | 'other'>('all');
+  vehicleVinFilter = signal<'all' | 'with-vin' | 'without-vin'>('all');
+  fuelSearchTerm = signal('');
+  fuelStatusFilter = signal<'all' | 'completed' | 'pending' | 'other'>('all');
+  fuelSourceFilter = signal<'all' | 'motive-card' | 'other'>('all');
+  fuelYearFilter = signal<string>('all');
+  fuelWeekFilter = signal<string>('all');
+  fuelPage = signal(1);
+  fuelPageSize = signal(25);
+  userSearchTerm = signal('');
+  userStatusFilter = signal<'all' | 'active' | 'deactivated'>('all');
+  userTypeFilter = signal<'all' | 'driver' | 'admin' | 'other'>('all');
+  userPage = signal(1);
+  userPageSize = signal(25);
   strictMode405 = signal(false);
   availableApis = signal<ApiHealthRow[]>(this.createApiRows());
   phase2Apis = signal<Phase2Row[]>(this.createPhase2Rows());
@@ -738,6 +1032,158 @@ export class MotivComponent implements OnInit {
   driverTableRows = computed<MotivDriverTableRow[]>(() =>
     this.motivDrivers().map((raw) => this.mapDriverRow(raw))
   );
+  vehicleTableRows = computed<MotivVehicleTableRow[]>(() =>
+    this.motivVehicles().map((raw) => this.mapVehicleRow(raw))
+  );
+  filteredVehicleRows = computed<MotivVehicleTableRow[]>(() => {
+    const term = this.vehicleSearchTerm().trim().toLowerCase();
+    const statusFilter = this.vehicleStatusFilter();
+    const vinFilter = this.vehicleVinFilter();
+
+    const filtered = this.vehicleTableRows().filter(row => {
+      const matchesSearch =
+        !term ||
+        row.id.toLowerCase().includes(term) ||
+        row.number.toLowerCase().includes(term) ||
+        row.make.toLowerCase().includes(term) ||
+        row.model.toLowerCase().includes(term) ||
+        row.year.toLowerCase().includes(term) ||
+        row.vin.toLowerCase().includes(term) ||
+        row.status.toLowerCase().includes(term) ||
+        row.location.toLowerCase().includes(term) ||
+        row.lastUpdate.toLowerCase().includes(term);
+
+      const normalizedStatus = row.status.trim().toLowerCase();
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && (normalizedStatus === 'active' || normalizedStatus === 'in_service')) ||
+        (statusFilter === 'deactivated' && normalizedStatus === 'deactivated') ||
+        (statusFilter === 'other' && normalizedStatus !== 'active' && normalizedStatus !== 'in_service' && normalizedStatus !== 'deactivated');
+
+      const hasVin = !!row.vin && row.vin.toLowerCase() !== 'n/a';
+      const matchesVin =
+        vinFilter === 'all' ||
+        (vinFilter === 'with-vin' && hasVin) ||
+        (vinFilter === 'without-vin' && !hasVin);
+
+      return matchesSearch && matchesStatus && matchesVin;
+    });
+
+    return filtered.sort((a, b) => {
+      const statusA = a.status.trim().toLowerCase();
+      const statusB = b.status.trim().toLowerCase();
+      const rankA = statusA === 'active' || statusA === 'in_service' ? 0 : statusA === 'deactivated' ? 1 : 2;
+      const rankB = statusB === 'active' || statusB === 'in_service' ? 0 : statusB === 'deactivated' ? 1 : 2;
+      if (rankA !== rankB) return rankA - rankB;
+      return a.number.localeCompare(b.number);
+    });
+  });
+  activeVehiclesCount = computed<number>(() =>
+    this.vehicleTableRows().filter(x => {
+      const status = x.status.trim().toLowerCase();
+      return status === 'active' || status === 'in_service';
+    }).length
+  );
+  deactivatedVehiclesCount = computed<number>(() =>
+    this.vehicleTableRows().filter(x => x.status.trim().toLowerCase() === 'deactivated').length
+  );
+  vehiclesWithVinCount = computed<number>(() =>
+    this.vehicleTableRows().filter(x => x.vin && x.vin.toLowerCase() !== 'n/a').length
+  );
+  userTableRows = computed<MotivUserTableRow[]>(() =>
+    this.motivUsers().map((raw) => this.mapUserRow(raw))
+  );
+  filteredUserRows = computed<MotivUserTableRow[]>(() => {
+    const term = this.userSearchTerm().trim().toLowerCase();
+    const statusFilter = this.userStatusFilter();
+    const typeFilter = this.userTypeFilter();
+
+    const filtered = this.userTableRows().filter(row => {
+      const matchesSearch =
+        !term ||
+        row.name.toLowerCase().includes(term) ||
+        row.email.toLowerCase().includes(term) ||
+        row.phone.toLowerCase().includes(term) ||
+        row.userType.toLowerCase().includes(term) ||
+        row.status.toLowerCase().includes(term) ||
+        row.role.toLowerCase().includes(term);
+
+      const normalizedStatus = row.status.toLowerCase();
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && normalizedStatus === 'active') ||
+        (statusFilter === 'deactivated' && normalizedStatus === 'deactivated');
+
+      const normalizedType = row.userType.toLowerCase();
+      const matchesType =
+        typeFilter === 'all' ||
+        (typeFilter === 'driver' && normalizedType.includes('driver')) ||
+        (typeFilter === 'admin' && (normalizedType.includes('admin') || row.role.toLowerCase().includes('admin'))) ||
+        (typeFilter === 'other' && !normalizedType.includes('driver') && !normalizedType.includes('admin'));
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+
+    return filtered.sort((a, b) => {
+      const aActive = a.status.toLowerCase() === 'active' ? 0 : 1;
+      const bActive = b.status.toLowerCase() === 'active' ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return a.name.localeCompare(b.name);
+    });
+  });
+  activeUsersCount = computed<number>(() =>
+    this.userTableRows().filter(x => x.status.toLowerCase() === 'active').length
+  );
+  deactivatedUsersCount = computed<number>(() =>
+    this.userTableRows().filter(x => x.status.toLowerCase() === 'deactivated').length
+  );
+  usersWithEmailCount = computed<number>(() =>
+    this.userTableRows().filter(x => x.email && x.email.toLowerCase() !== 'n/a').length
+  );
+  userTotalPages = computed<number>(() =>
+    Math.max(1, Math.ceil(this.filteredUserRows().length / this.userPageSize()))
+  );
+  safeUserPage = computed<number>(() =>
+    Math.max(1, Math.min(this.userPage(), this.userTotalPages()))
+  );
+  pagedUserRows = computed<MotivUserTableRow[]>(() => {
+    const page = this.safeUserPage();
+    const pageSize = this.userPageSize();
+    const start = (page - 1) * pageSize;
+    return this.filteredUserRows().slice(start, start + pageSize);
+  });
+  userPageStartIndex = computed<number>(() => {
+    const total = this.filteredUserRows().length;
+    if (!total) return 0;
+    return (this.safeUserPage() - 1) * this.userPageSize() + 1;
+  });
+  userPageEndIndex = computed<number>(() => {
+    const total = this.filteredUserRows().length;
+    if (!total) return 0;
+    return Math.min(this.safeUserPage() * this.userPageSize(), total);
+  });
+  vehicleTotalPages = computed<number>(() =>
+    Math.max(1, Math.ceil(this.filteredVehicleRows().length / this.vehiclePageSize()))
+  );
+  safeVehiclePage = computed<number>(() =>
+    Math.max(1, Math.min(this.vehiclePage(), this.vehicleTotalPages()))
+  );
+  pagedVehicleRows = computed<MotivVehicleTableRow[]>(() => {
+    const page = this.safeVehiclePage();
+    const pageSize = this.vehiclePageSize();
+    const start = (page - 1) * pageSize;
+    return this.filteredVehicleRows().slice(start, start + pageSize);
+  });
+  vehiclePageStartIndex = computed<number>(() => {
+    const total = this.filteredVehicleRows().length;
+    if (!total) return 0;
+    return (this.safeVehiclePage() - 1) * this.vehiclePageSize() + 1;
+  });
+  vehiclePageEndIndex = computed<number>(() => {
+    const total = this.filteredVehicleRows().length;
+    if (!total) return 0;
+    return Math.min(this.safeVehiclePage() * this.vehiclePageSize(), total);
+  });
   filteredDriverRows = computed<MotivDriverTableRow[]>(() => {
     const term = this.driverSearchTerm().trim().toLowerCase();
     const statusFilter = this.driverStatusFilter();
@@ -823,14 +1269,110 @@ export class MotivComponent implements OnInit {
   fuelRows = computed<MotivFuelRow[]>(() =>
     this.motivFuelPurchases().map((raw) => this.mapFuelRow(raw))
   );
+  fuelTotalAmount = computed<number>(() =>
+    this.fuelRows().reduce((sum, row) => sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0), 0)
+  );
+  fuelUniqueDriversCount = computed<number>(() =>
+    new Set(
+      this.fuelRows()
+        .map(x => x.driverId)
+        .filter(x => !!x && x.toLowerCase() !== 'n/a')
+    ).size
+  );
+  fuelUniqueVehiclesCount = computed<number>(() =>
+    new Set(
+      this.fuelRows()
+        .map(x => x.vehicleId)
+        .filter(x => !!x && x.toLowerCase() !== 'n/a')
+    ).size
+  );
+  fuelAvailableYears = computed<number[]>(() => {
+    const years = new Set<number>();
+    for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      if (dt) years.add(dt.getUTCFullYear());
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  });
+  fuelAvailableWeeks = computed<FuelWeekOption[]>(() => {
+    const selectedYear = this.fuelYearFilter();
+    const weekMap = new Map<string, FuelWeekOption>();
+    for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      if (!dt) continue;
+      const info = this.getIsoWeekInfo(dt);
+      if (selectedYear !== 'all' && String(info.year) !== selectedYear) continue;
+      if (!weekMap.has(info.key)) {
+        weekMap.set(info.key, {
+          key: info.key,
+          label: `Week ${String(info.week).padStart(2, '0')} (${info.year})`,
+          year: info.year,
+          week: info.week
+        });
+      }
+    }
+    return Array.from(weekMap.values()).sort((a, b) => b.key.localeCompare(a.key));
+  });
   filteredFuelRows = computed<MotivFuelRow[]>(() => {
-    const merchant = this.fuelMerchantFilter().trim().toLowerCase();
-    const status = this.fuelStatusFilter().trim().toLowerCase();
+    const term = this.fuelSearchTerm().trim().toLowerCase();
+    const status = this.fuelStatusFilter();
+    const source = this.fuelSourceFilter();
+    const year = this.fuelYearFilter();
+    const week = this.fuelWeekFilter();
     return this.fuelRows().filter(row => {
-      const merchantOk = !merchant || row.merchant.toLowerCase().includes(merchant);
-      const statusOk = !status || row.status.toLowerCase().includes(status);
-      return merchantOk && statusOk;
+      const matchesSearch =
+        !term ||
+        row.transactionId.toLowerCase().includes(term) ||
+        row.merchant.toLowerCase().includes(term) ||
+        row.city.toLowerCase().includes(term) ||
+        row.state.toLowerCase().includes(term) ||
+        row.driverId.toLowerCase().includes(term) ||
+        row.vehicleId.toLowerCase().includes(term) ||
+        row.category.toLowerCase().includes(term) ||
+        row.source.toLowerCase().includes(term);
+
+      const normalizedStatus = row.status.trim().toLowerCase();
+      const matchesStatus =
+        status === 'all' ||
+        (status === 'completed' && (normalizedStatus === 'completed' || normalizedStatus === 'posted' || normalizedStatus === 'approved')) ||
+        (status === 'pending' && (normalizedStatus === 'pending' || normalizedStatus === 'processing' || normalizedStatus === 'queued')) ||
+        (status === 'other' && normalizedStatus !== 'completed' && normalizedStatus !== 'posted' && normalizedStatus !== 'approved' && normalizedStatus !== 'pending' && normalizedStatus !== 'processing' && normalizedStatus !== 'queued');
+
+      const normalizedSource = row.source.trim().toLowerCase();
+      const matchesSource =
+        source === 'all' ||
+        (source === 'motive-card' && normalizedSource === 'motive-card') ||
+        (source === 'other' && normalizedSource !== 'motive-card');
+
+      const dt = this.tryParseDate(row.date);
+      const iso = dt ? this.getIsoWeekInfo(dt) : null;
+      const matchesYear = year === 'all' || (!!iso && String(iso.year) === year);
+      const matchesWeek = week === 'all' || (!!iso && iso.key === week);
+
+      return matchesSearch && matchesStatus && matchesSource && matchesYear && matchesWeek;
     });
+  });
+  fuelTotalPages = computed<number>(() =>
+    Math.max(1, Math.ceil(this.filteredFuelRows().length / this.fuelPageSize()))
+  );
+  safeFuelPage = computed<number>(() =>
+    Math.max(1, Math.min(this.fuelPage(), this.fuelTotalPages()))
+  );
+  pagedFuelRows = computed<MotivFuelRow[]>(() => {
+    const page = this.safeFuelPage();
+    const size = this.fuelPageSize();
+    const start = (page - 1) * size;
+    return this.filteredFuelRows().slice(start, start + size);
+  });
+  fuelPageStartIndex = computed<number>(() => {
+    const total = this.filteredFuelRows().length;
+    if (!total) return 0;
+    return (this.safeFuelPage() - 1) * this.fuelPageSize() + 1;
+  });
+  fuelPageEndIndex = computed<number>(() => {
+    const total = this.filteredFuelRows().length;
+    if (!total) return 0;
+    return Math.min(this.safeFuelPage() * this.fuelPageSize(), total);
   });
 
   ngOnInit(): void {
@@ -1043,6 +1585,7 @@ export class MotivComponent implements OnInit {
 
   loadVehicles(background = false): void {
     this.loadingVehicles.set(true);
+    this.vehiclePage.set(1);
     if (!background) this.vehiclesError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
       next: (res) => {
@@ -1059,8 +1602,38 @@ export class MotivComponent implements OnInit {
     });
   }
 
+  setVehiclePageSize(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.vehiclePageSize.set(value);
+    this.vehiclePage.set(1);
+  }
+
+  goToPreviousVehiclePage(): void {
+    this.vehiclePage.set(Math.max(1, this.safeVehiclePage() - 1));
+  }
+
+  goToNextVehiclePage(): void {
+    this.vehiclePage.set(Math.min(this.vehicleTotalPages(), this.safeVehiclePage() + 1));
+  }
+
+  setVehicleSearchTerm(value: string): void {
+    this.vehicleSearchTerm.set(value ?? '');
+    this.vehiclePage.set(1);
+  }
+
+  setVehicleStatusFilter(value: 'all' | 'active' | 'deactivated' | 'other'): void {
+    this.vehicleStatusFilter.set(value ?? 'all');
+    this.vehiclePage.set(1);
+  }
+
+  setVehicleVinFilter(value: 'all' | 'with-vin' | 'without-vin'): void {
+    this.vehicleVinFilter.set(value ?? 'all');
+    this.vehiclePage.set(1);
+  }
+
   loadUsers(background = false): void {
     this.loadingUsers.set(true);
+    this.userPage.set(1);
     if (!background) this.usersError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/users`).subscribe({
       next: (res) => {
@@ -1106,16 +1679,78 @@ export class MotivComponent implements OnInit {
     this.driverPage.set(Math.min(this.driverTotalPages(), this.safeDriverPage() + 1));
   }
 
-  setFuelMerchantFilter(value: string): void {
-    this.fuelMerchantFilter.set(value ?? '');
+  setFuelSearchTerm(value: string): void {
+    this.fuelSearchTerm.set(value ?? '');
+    this.fuelPage.set(1);
   }
 
-  setFuelStatusFilter(value: string): void {
-    this.fuelStatusFilter.set(value ?? '');
+  setFuelStatusFilter(value: 'all' | 'completed' | 'pending' | 'other'): void {
+    this.fuelStatusFilter.set(value ?? 'all');
+    this.fuelPage.set(1);
+  }
+
+  setFuelSourceFilter(value: 'all' | 'motive-card' | 'other'): void {
+    this.fuelSourceFilter.set(value ?? 'all');
+    this.fuelPage.set(1);
+  }
+
+  setFuelYearFilter(value: string): void {
+    this.fuelYearFilter.set(value ?? 'all');
+    this.fuelWeekFilter.set('all');
+    this.fuelPage.set(1);
+  }
+
+  setFuelWeekFilter(value: string): void {
+    this.fuelWeekFilter.set(value ?? 'all');
+    this.fuelPage.set(1);
+  }
+
+  setFuelPageSize(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.fuelPageSize.set(value);
+    this.fuelPage.set(1);
+  }
+
+  goToPreviousFuelPage(): void {
+    this.fuelPage.set(Math.max(1, this.safeFuelPage() - 1));
+  }
+
+  goToNextFuelPage(): void {
+    this.fuelPage.set(Math.min(this.fuelTotalPages(), this.safeFuelPage() + 1));
+  }
+
+  setUserSearchTerm(value: string): void {
+    this.userSearchTerm.set(value ?? '');
+    this.userPage.set(1);
+  }
+
+  setUserStatusFilter(value: 'all' | 'active' | 'deactivated'): void {
+    this.userStatusFilter.set(value ?? 'all');
+    this.userPage.set(1);
+  }
+
+  setUserTypeFilter(value: 'all' | 'driver' | 'admin' | 'other'): void {
+    this.userTypeFilter.set(value ?? 'all');
+    this.userPage.set(1);
+  }
+
+  setUserPageSize(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.userPageSize.set(value);
+    this.userPage.set(1);
+  }
+
+  goToPreviousUserPage(): void {
+    this.userPage.set(Math.max(1, this.safeUserPage() - 1));
+  }
+
+  goToNextUserPage(): void {
+    this.userPage.set(Math.min(this.userTotalPages(), this.safeUserPage() + 1));
   }
 
   loadFuelPurchases(background = false): void {
     this.loadingFuel.set(true);
+    this.fuelPage.set(1);
     if (!background) {
       this.fuelError.set('');
       this.saveFuelMessage.set('');
@@ -1214,6 +1849,56 @@ export class MotivComponent implements OnInit {
     };
   }
 
+  private mapVehicleRow(raw: any): MotivVehicleTableRow {
+    const vehicle = raw?.vehicle ?? raw?.current_vehicle ?? raw ?? {};
+    const availability = vehicle?.availability_details ?? raw?.availability_details ?? {};
+    const location = raw?.current_location ?? raw?.location ?? vehicle?.current_location ?? {};
+    const lat = location?.lat ?? location?.latitude ?? raw?.lat ?? raw?.latitude;
+    const lon = location?.lon ?? location?.lng ?? location?.longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude;
+    const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? raw?.location ?? 'N/A');
+    return {
+      id: String(vehicle?.id ?? raw?.id ?? raw?.vehicle_id ?? 'N/A'),
+      number: String(vehicle?.number ?? vehicle?.fleet_number ?? vehicle?.fleetNumber ?? vehicle?.unit ?? vehicle?.unitNumber ?? raw?.number ?? 'N/A'),
+      make: String(vehicle?.make ?? vehicle?.vehicle_make ?? vehicle?.vehicleMake ?? raw?.make ?? 'N/A'),
+      model: String(vehicle?.model ?? vehicle?.vehicle_model ?? vehicle?.vehicleModel ?? raw?.model ?? 'N/A'),
+      year: String(vehicle?.year ?? vehicle?.vehicle_year ?? vehicle?.vehicleYear ?? raw?.year ?? 'N/A'),
+      vin: String(vehicle?.vin ?? vehicle?.vehicle_vin ?? vehicle?.vehicleVin ?? raw?.vin ?? 'N/A'),
+      status: String(vehicle?.status ?? availability?.availability_status ?? raw?.status ?? raw?.state ?? 'N/A'),
+      location: locationText,
+      lastUpdate: String(
+        location?.located_at ??
+        location?.locatedAt ??
+        vehicle?.updated_at ??
+        vehicle?.updatedAt ??
+        availability?.updated_at ??
+        availability?.updatedAt ??
+        raw?.updated_at ??
+        raw?.updatedAt ??
+        'N/A'
+      )
+    };
+  }
+
+  private mapUserRow(raw: any): MotivUserTableRow {
+    const user = raw?.user ?? raw ?? {};
+    const firstName = user?.first_name ?? user?.firstName ?? user?.FirstName ?? '';
+    const lastName = user?.last_name ?? user?.lastName ?? user?.LastName ?? '';
+    const fallbackName = user?.name ?? user?.Name ?? user?.full_name ?? user?.FullName ?? user?.username ?? user?.Username ?? 'N/A';
+    const name = `${firstName} ${lastName}`.trim() || fallbackName;
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    const roleLabel = roles.length
+      ? roles.map((r: any) => String(r?.name ?? r ?? '').trim()).filter((x: string) => !!x).join(', ')
+      : 'N/A';
+    return {
+      name,
+      email: String(user?.email ?? user?.Email ?? 'N/A'),
+      phone: String(user?.phone ?? user?.Phone ?? user?.phone_number ?? user?.PhoneNumber ?? 'N/A'),
+      userType: String(user?.user_type ?? user?.userType ?? user?.type ?? 'N/A'),
+      status: String(user?.status ?? user?.Status ?? 'N/A'),
+      role: roleLabel
+    };
+  }
+
   private isDriverUser(raw: any): boolean {
     const user = raw?.user ?? raw ?? {};
     const typeValue = String(
@@ -1223,55 +1908,73 @@ export class MotivComponent implements OnInit {
       user?.role ??
       ''
     ).trim().toLowerCase();
-    if (typeValue) return typeValue.includes('driver');
+    if (typeValue) return typeValue === 'driver' || typeValue === 'drivers';
 
     if (typeof user?.is_driver === 'boolean') return user.is_driver;
     if (typeof user?.isDriver === 'boolean') return user.isDriver;
 
     const roles = Array.isArray(user?.roles) ? user.roles : [];
-    const roleText = roles
-      .map((r: any) => String(r?.name ?? r ?? '').toLowerCase())
-      .join(' ');
-    if (roleText.includes('driver')) return true;
-
-    // Drivers loaded from Access DB are already driver records.
-    if (raw?.Id && (raw?.Name || raw?.Email || raw?.Phone)) return true;
-
-    return false;
+    return roles.some((r: any) => {
+      const roleName = String(r?.name ?? r ?? '').trim().toLowerCase();
+      return roleName === 'driver' || roleName === 'drivers';
+    });
   }
 
   private isMotivDriverRow(raw: any): boolean {
     // Keep explicit driver rows from MOTIV payloads.
     if (this.isDriverUser(raw)) return true;
 
-    // Keep Access DB rows that came from MOTIV sync.
-    const notes = String(raw?.notes ?? raw?.Notes ?? '').toLowerCase();
-    if (notes.includes('synced from motiv')) return true;
-
-    // Keep rows typed as driver in DB.
+    // Keep Access DB rows typed as drivers.
     const driverType = String(raw?.driverType ?? raw?.DriverType ?? '').toLowerCase();
-    if (driverType.includes('driver')) return true;
+    if (driverType === 'driver' || driverType === 'drivers') return true;
 
     return false;
   }
 
   private mapFuelRow(raw: any): MotivFuelRow {
-    const merchant = raw?.merchant_info ?? {};
-    const amount = raw?.total_amount ?? raw?.authorized_amount ?? 0;
-    const date = raw?.transaction_time ?? raw?.posted_at ?? raw?.created_at ?? 'N/A';
+    const fuel = raw?.fuel_purchase ?? raw ?? {};
+    const merchant = fuel?.merchant_info ?? fuel?.merchant ?? {};
+    const vehicle = fuel?.vehicle ?? {};
+    const driver = fuel?.driver ?? {};
+    const amountRaw = fuel?.total_cost ?? fuel?.total_amount ?? fuel?.authorized_amount ?? fuel?.amount ?? 0;
+    const amountNum = Number(amountRaw);
+    const date = fuel?.purchased_at ?? fuel?.transaction_time ?? fuel?.posted_at ?? fuel?.created_at ?? 'N/A';
+    const driverLabel = [
+      driver?.first_name ?? driver?.firstName,
+      driver?.last_name ?? driver?.lastName
+    ].filter((x: any) => !!x).join(' ').trim();
+    const vehicleLabel = vehicle?.number ?? vehicle?.unitNumber ?? vehicle?.fleet_number;
     return {
-      transactionId: String(raw?.id ?? raw?.transaction_id ?? 'N/A'),
+      transactionId: String(fuel?.id ?? fuel?.transaction_id ?? fuel?.offline_id ?? 'N/A'),
       date,
-      status: String(raw?.transaction_status ?? raw?.status ?? 'N/A'),
-      amount: Number.isFinite(Number(amount)) ? Number(amount).toFixed(2) : '0.00',
-      currency: String(raw?.currency ?? 'USD'),
-      merchant: String(merchant?.name ?? raw?.merchant_name ?? 'N/A'),
-      city: String(merchant?.city ?? raw?.city ?? 'N/A'),
-      state: String(merchant?.state ?? raw?.state ?? 'N/A'),
-      driverId: String(raw?.driver_id ?? 'N/A'),
-      vehicleId: String(raw?.vehicle_id ?? 'N/A'),
-      category: String(raw?.transaction_type ?? raw?.type ?? 'N/A')
+      status: String(fuel?.transaction_status ?? fuel?.status ?? fuel?.approval_status ?? 'N/A'),
+      amount: Number.isFinite(amountNum) ? amountNum.toFixed(2) : '0.00',
+      amountValue: Number.isFinite(amountNum) ? amountNum : 0,
+      currency: String(fuel?.currency ?? 'USD'),
+      merchant: String(fuel?.vendor ?? merchant?.name ?? fuel?.merchant_name ?? 'N/A'),
+      city: String(merchant?.city ?? fuel?.city ?? (fuel?.location ?? '').split(',')[1]?.trim() ?? 'N/A'),
+      state: String(fuel?.jurisdiction ?? merchant?.state ?? fuel?.state ?? 'N/A'),
+      driverId: String(driverLabel || driver?.driver_company_id || driver?.id || fuel?.driver_id || 'N/A'),
+      vehicleId: String(vehicleLabel || vehicle?.id || fuel?.vehicle_id || 'N/A'),
+      category: String(fuel?.fuel_type ?? fuel?.transaction_type ?? fuel?.type ?? 'N/A'),
+      source: String(fuel?.source ?? 'N/A')
     };
+  }
+
+  private tryParseDate(value: string): Date | null {
+    if (!value || value === 'N/A') return null;
+    const dt = new Date(value);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  private getIsoWeekInfo(date: Date): { year: number; week: number; key: string } {
+    const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    const year = d.getUTCFullYear();
+    return { year, week, key: `${year}-W${String(week).padStart(2, '0')}` };
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {

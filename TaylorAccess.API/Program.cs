@@ -295,6 +295,59 @@ using (var scope = app.Services.CreateScope())
             ON ""MotivFuelPurchases"" (""ExternalId"");
     ");
 
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""MotivDriverProfiles"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""DriverId"" INTEGER NOT NULL,
+            ""MotivUserId"" VARCHAR(100) NULL,
+            ""MotivVehicleId"" VARCHAR(100) NULL,
+            ""MotivStatus"" VARCHAR(50) NULL,
+            ""Latitude"" numeric(10,7) NULL,
+            ""Longitude"" numeric(10,7) NULL,
+            ""LastLocationUpdate"" TIMESTAMP NULL,
+            ""VehicleNumber"" VARCHAR(50) NULL,
+            ""VehicleMake"" VARCHAR(50) NULL,
+            ""VehicleModel"" VARCHAR(50) NULL,
+            ""VehicleYear"" INTEGER NULL,
+            ""VehicleVin"" VARCHAR(17) NULL,
+            ""RawJson"" text NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_MotivDriverProfiles_Drivers_DriverId"" FOREIGN KEY (""DriverId"") REFERENCES ""Drivers""(""Id"") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_MotivDriverProfiles_DriverId""
+            ON ""MotivDriverProfiles"" (""DriverId"");
+        CREATE INDEX IF NOT EXISTS ""IX_MotivDriverProfiles_MotivUserId""
+            ON ""MotivDriverProfiles"" (""MotivUserId"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""CompanyPermits"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""PermitNumber"" VARCHAR(100) NOT NULL,
+            ""PermitType"" VARCHAR(50) NOT NULL,
+            ""State"" VARCHAR(5) NULL,
+            ""IssueDate"" TIMESTAMP NULL,
+            ""ExpiryDate"" TIMESTAMP NULL,
+            ""Cost"" numeric(12,2) NULL,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'active',
+            ""AssignedDriverId"" INTEGER NULL,
+            ""AssignedTruckNumber"" VARCHAR(50) NULL,
+            ""Notes"" text NULL,
+            ""FileName"" text NULL,
+            ""FileContent"" text NULL,
+            ""ContentType"" text NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_CompanyPermits_Organizations_OrganizationId"" FOREIGN KEY (""OrganizationId"") REFERENCES ""Organizations""(""Id"") ON DELETE CASCADE,
+            CONSTRAINT ""FK_CompanyPermits_Drivers_AssignedDriverId"" FOREIGN KEY (""AssignedDriverId"") REFERENCES ""Drivers""(""Id"") ON DELETE SET NULL
+        );
+        ALTER TABLE ""CompanyPermits"" ADD COLUMN IF NOT EXISTS ""FileName"" text NULL;
+        ALTER TABLE ""CompanyPermits"" ADD COLUMN IF NOT EXISTS ""FileContent"" text NULL;
+        ALTER TABLE ""CompanyPermits"" ADD COLUMN IF NOT EXISTS ""ContentType"" text NULL;
+    ");
+
     await roleService.SeedDefaultRolesAsync();
 
     if (!context.Users.Any())

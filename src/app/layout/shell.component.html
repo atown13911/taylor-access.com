@@ -1,4 +1,7 @@
-<div class="app-shell" [class.sidebar-collapsed]="sidebarCollapsed()">
+<div class="app-shell"
+     [class.sidebar-collapsed]="sidebarCollapsed()"
+     [class.mode-soft]="visualMode() === 'soft'"
+     [class.mode-hard]="visualMode() === 'hard'">
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-header">
@@ -104,6 +107,11 @@
       </div>
 
       <div class="topbar-right">
+        <button class="topbar-btn mode-toggle-btn"
+                (click)="toggleVisualMode()"
+                [title]="visualMode() === 'soft' ? 'Switch to Hard Intelligence Mode' : 'Switch to Soft Intelligence Mode'">
+          <i class="bx" [class.bx-bulb]="visualMode() === 'soft'" [class.bx-radio-circle-marked]="visualMode() === 'hard'"></i>
+        </button>
         <a class="topbar-btn" href="https://tss-portal.com" title="TSS Portal">
           <i class="bx bx-grid-alt"></i>
         </a>

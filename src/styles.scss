@@ -197,3 +197,102 @@ tr:hover td { background: var(--accent-03); }
     -webkit-backdrop-filter: blur(10px) !important;
   }
 }
+
+// =============================================
+// FUTURISTIC GLASS UI BASELINE
+// =============================================
+.content-area .page-container,
+.content-area .tab-panel,
+.content-area .data-table-container,
+.content-area .card,
+.content-area .panel,
+.content-area .widget {
+  background: rgba(7, 14, 28, 0.48);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.content-area .page-header,
+.content-area .header,
+.content-area .toolbar {
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: linear-gradient(180deg, rgba(7, 16, 32, 0.62), rgba(7, 16, 32, 0.48));
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.content-area button,
+.content-area .btn {
+  border-radius: 10px;
+}
+
+.content-area input,
+.content-area select,
+.content-area textarea {
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  background: rgba(10, 20, 36, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+// =============================================
+// HARD INTELLIGENCE MODE (animated glow)
+// =============================================
+.app-shell.mode-hard .content-area .page-container,
+.app-shell.mode-hard .content-area .tab-panel,
+.app-shell.mode-hard .content-area .data-table-container,
+.app-shell.mode-hard .content-area .card,
+.app-shell.mode-hard .content-area .panel,
+.app-shell.mode-hard .content-area .widget {
+  position: relative;
+  border-color: rgba(168, 85, 247, 0.3);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(125, 211, 252, 0.08),
+    0 0 24px rgba(168, 85, 247, 0.12);
+}
+
+.app-shell.mode-hard .content-area .page-container::after,
+.app-shell.mode-hard .content-area .tab-panel::after,
+.app-shell.mode-hard .content-area .data-table-container::after,
+.app-shell.mode-hard .content-area .card::after,
+.app-shell.mode-hard .content-area .panel::after,
+.app-shell.mode-hard .content-area .widget::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    rgba(0, 212, 255, 0.0) 0%,
+    rgba(0, 212, 255, 0.16) 22%,
+    rgba(168, 85, 247, 0.22) 52%,
+    rgba(0, 212, 255, 0.16) 78%,
+    rgba(0, 212, 255, 0.0) 100%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  padding: 1px;
+  animation: ai-edge-flow 5s linear infinite;
+  opacity: 0.9;
+}
+
+.app-shell.mode-hard .content-area .status-pill.ok,
+.app-shell.mode-hard .content-area .status-chip.connected {
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.26), inset 0 0 0 1px rgba(125, 211, 252, 0.18);
+}
+
+@keyframes ai-edge-flow {
+  0% { filter: hue-rotate(0deg) saturate(1); opacity: 0.76; }
+  50% { filter: hue-rotate(18deg) saturate(1.25); opacity: 1; }
+  100% { filter: hue-rotate(0deg) saturate(1); opacity: 0.76; }
+}

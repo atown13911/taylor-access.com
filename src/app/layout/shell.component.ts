@@ -26,6 +26,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private apiUrl = environment.apiUrl;
 
   sidebarCollapsed = signal(false);
+  visualMode = signal<'soft' | 'hard'>('soft');
   profileMenuOpen = signal(false);
   showOrgDropdown = signal(false);
   currentUser = this.authService.currentUser;
@@ -105,8 +106,20 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
     this.inactivity.start();
     this.clockInterval = setInterval(() => this.currentTime = new Date(), 1000);
+    this.restoreVisualMode();
     this.restoreSavedStyles();
     this.startTimeclock();
+  }
+
+  private restoreVisualMode(): void {
+    try {
+      const saved = localStorage.getItem('ta_visual_mode');
+      if (saved === 'hard' || saved === 'soft') {
+        this.visualMode.set(saved);
+      }
+    } catch {
+      // Ignore storage issues
+    }
   }
 
   private startTimeclock(): void {
@@ -288,6 +301,16 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   toggleSidebar(): void {
     this.sidebarCollapsed.update(v => !v);
+  }
+
+  toggleVisualMode(): void {
+    const next = this.visualMode() === 'soft' ? 'hard' : 'soft';
+    this.visualMode.set(next);
+    try {
+      localStorage.setItem('ta_visual_mode', next);
+    } catch {
+      // Ignore storage issues
+    }
   }
 
   toggleProfileMenu(): void {
