@@ -228,6 +228,22 @@ type Phase2Row = {
               placeholder="Search drivers (name, email, phone, status, vehicle)"
               [value]="driverSearchTerm()"
               (input)="setDriverSearchTerm($any($event.target).value)" />
+            <select
+              class="filter-input filter-select"
+              [value]="driverStatusFilter()"
+              (change)="setDriverStatusFilter($any($event.target).value)">
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="deactivated">Deactivated</option>
+            </select>
+            <select
+              class="filter-input filter-select"
+              [value]="driverEmailFilter()"
+              (change)="setDriverEmailFilter($any($event.target).value)">
+              <option value="all">All Email</option>
+              <option value="with-email">With Email</option>
+              <option value="without-email">Without Email</option>
+            </select>
           </div>
           <p class="count">Rows: {{ filteredDriverRows().length }} / {{ driverTableRows().length }}</p>
           <div class="available-api-table-wrap" *ngIf="filteredDriverRows().length > 0">
@@ -426,7 +442,7 @@ type Phase2Row = {
       margin-bottom: 10px;
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-    .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
     .driver-dashboard-cards {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -473,6 +489,14 @@ type Phase2Row = {
       padding: 8px 10px;
       border-radius: 8px;
       min-width: 220px;
+    }
+    .driver-actions .filter-input {
+      flex: 1 1 420px;
+      min-width: 320px;
+    }
+    .driver-actions .filter-select {
+      flex: 0 0 180px;
+      min-width: 180px;
     }
     .status-grid { display: grid; gap: 8px; max-width: 360px; }
     .status-item {
@@ -564,6 +588,8 @@ export class MotivComponent implements OnInit {
   motivUsers = signal<any[]>([]);
   motivFuelPurchases = signal<any[]>([]);
   driverSearchTerm = signal('');
+  driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('all');
+  driverEmailFilter = signal<'all' | 'with-email' | 'without-email'>('all');
   fuelMerchantFilter = signal('');
   fuelStatusFilter = signal('');
   strictMode405 = signal(false);
@@ -595,16 +621,34 @@ export class MotivComponent implements OnInit {
   );
   filteredDriverRows = computed<MotivDriverTableRow[]>(() => {
     const term = this.driverSearchTerm().trim().toLowerCase();
-    if (!term) return this.driverTableRows();
-    return this.driverTableRows().filter(row =>
-      row.name.toLowerCase().includes(term) ||
-      row.email.toLowerCase().includes(term) ||
-      row.phone.toLowerCase().includes(term) ||
-      row.status.toLowerCase().includes(term) ||
-      row.location.toLowerCase().includes(term) ||
-      row.vehicle.toLowerCase().includes(term) ||
-      row.lastUpdate.toLowerCase().includes(term)
-    );
+    const statusFilter = this.driverStatusFilter();
+    const emailFilter = this.driverEmailFilter();
+
+    return this.driverTableRows().filter(row => {
+      const matchesSearch =
+        !term ||
+        row.name.toLowerCase().includes(term) ||
+        row.email.toLowerCase().includes(term) ||
+        row.phone.toLowerCase().includes(term) ||
+        row.status.toLowerCase().includes(term) ||
+        row.location.toLowerCase().includes(term) ||
+        row.vehicle.toLowerCase().includes(term) ||
+        row.lastUpdate.toLowerCase().includes(term);
+
+      const normalizedStatus = row.status.toLowerCase();
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && normalizedStatus === 'active') ||
+        (statusFilter === 'deactivated' && normalizedStatus === 'deactivated');
+
+      const hasEmail = !!row.email && row.email.toLowerCase() !== 'n/a';
+      const matchesEmail =
+        emailFilter === 'all' ||
+        (emailFilter === 'with-email' && hasEmail) ||
+        (emailFilter === 'without-email' && !hasEmail);
+
+      return matchesSearch && matchesStatus && matchesEmail;
+    });
   });
   activeDriversCount = computed<number>(() =>
     this.driverTableRows().filter(x => x.status.toLowerCase() === 'active').length
@@ -731,6 +775,8 @@ export class MotivComponent implements OnInit {
     this.loadingDrivers.set(true);
     this.driversError.set('');
     this.driverSearchTerm.set('');
+    this.driverStatusFilter.set('all');
+    this.driverEmailFilter.set('all');
     this.saveDriversMessage.set('');
     this.saveDriversError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/drivers`).subscribe({
@@ -798,6 +844,14 @@ export class MotivComponent implements OnInit {
 
   setDriverSearchTerm(value: string): void {
     this.driverSearchTerm.set(value ?? '');
+  }
+
+  setDriverStatusFilter(value: 'all' | 'active' | 'deactivated'): void {
+    this.driverStatusFilter.set(value ?? 'all');
+  }
+
+  setDriverEmailFilter(value: 'all' | 'with-email' | 'without-email'): void {
+    this.driverEmailFilter.set(value ?? 'all');
   }
 
   setFuelMerchantFilter(value: string): void {
