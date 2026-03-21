@@ -148,27 +148,51 @@ public class MotivController : ControllerBase
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers()
     {
-        var path = _config["MOTIV_USERS_PATH"]
-            ?? Environment.GetEnvironmentVariable("MOTIV_USERS_PATH")
-            ?? "/v1/users?per_page=100&page_no=1";
-        var fetch = await FetchAllMotivRows(path, "users");
-        if (!fetch.Success)
+        var configuredPath = _config["MOTIV_USERS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_USERS_PATH");
+
+        var candidatePaths = new[]
         {
-            return StatusCode(fetch.StatusCode, new
+            configuredPath,
+            "/v1/users?per_page=100&page_no=1",
+            "/v1/users"
+        };
+
+        (bool Success, int StatusCode, string? Error, List<JsonElement> Rows)? lastFailure = null;
+        foreach (var path in candidatePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var fetch = await FetchAllMotivRows(path, $"users:{path}");
+            if (!fetch.Success)
             {
-                error = "MOTIV users request failed.",
-                status = fetch.StatusCode,
-                details = fetch.Error
+                lastFailure = fetch;
+                continue;
+            }
+
+            return Ok(new
+            {
+                source = "motiv",
+                endpoint = "users",
+                path,
+                rows = fetch.Rows.Count,
+                data = JsonSerializer.SerializeToElement(fetch.Rows)
             });
         }
 
-        return Ok(new
+        if (lastFailure.HasValue)
         {
-            source = "motiv",
-            endpoint = "users",
-            rows = fetch.Rows.Count,
-            data = JsonSerializer.SerializeToElement(fetch.Rows)
-        });
+            var fail = lastFailure.Value;
+            return StatusCode(fail.StatusCode, new
+            {
+                error = "MOTIV users request failed.",
+                status = fail.StatusCode,
+                details = fail.Error
+            });
+        }
+
+        return StatusCode(500, new { error = "MOTIV users request failed: no valid users path configured." });
     }
 
     [HttpGet("fuel-purchases")]
