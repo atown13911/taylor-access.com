@@ -113,9 +113,9 @@ export class DriverListComponent implements OnInit {
   tabbedDrivers = computed(() => {
     const tab = this.activeTab();
     const all = this.drivers();
-    if (tab === 'archived') return all.filter(d => d.status === 'archived');
-    if (tab === 'inactive') return all.filter(d => d.status === 'inactive' || d.status === 'off-duty' || d.status === 'terminated');
-    return all.filter(d => d.status !== 'archived' && d.status !== 'inactive' && d.status !== 'terminated');
+    if (tab === 'archived') return all.filter(d => this.isArchivedStatus(d.status));
+    if (tab === 'inactive') return all.filter(d => this.isInactiveStatus(d.status));
+    return all.filter(d => !this.isArchivedStatus(d.status) && !this.isInactiveStatus(d.status));
   });
 
   filteredDrivers = computed(() => {
@@ -133,9 +133,9 @@ export class DriverListComponent implements OnInit {
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
-      active: all.filter(d => d.status !== 'archived' && d.status !== 'inactive' && d.status !== 'terminated').length,
-      inactive: all.filter(d => d.status === 'inactive' || d.status === 'off-duty' || d.status === 'terminated').length,
-      archived: all.filter(d => d.status === 'archived').length
+      active: all.filter(d => !this.isArchivedStatus(d.status) && !this.isInactiveStatus(d.status)).length,
+      inactive: all.filter(d => this.isInactiveStatus(d.status)).length,
+      archived: all.filter(d => this.isArchivedStatus(d.status)).length
     };
   });
 
@@ -143,9 +143,9 @@ export class DriverListComponent implements OnInit {
     const all = this.drivers();
     return {
       total: all.length,
-      active: all.filter(d => d.status === 'active' || d.status === 'available').length,
-      dispatched: all.filter(d => d.status === 'dispatched' || d.status === 'en-route').length,
-      offDuty: all.filter(d => d.status === 'off-duty' || d.status === 'inactive').length
+      active: all.filter(d => this.isActiveStatus(d.status)).length,
+      dispatched: all.filter(d => this.isDispatchedStatus(d.status)).length,
+      offDuty: all.filter(d => this.isInactiveStatus(d.status)).length
     };
   });
 
@@ -190,7 +190,7 @@ export class DriverListComponent implements OnInit {
           email: d.email || '',
           licenseNumber: d.licenseNumber || '',
           licenseExpiry: d.licenseExpiry || '',
-          status: d.status || 'active',
+          status: this.normalizeStatus(d.status || 'active'),
           fleetName: d.fleet?.name || '—',
           hireDate: d.hireDate || d.createdAt || '',
           type: d.driverType || 'company'
@@ -971,5 +971,37 @@ export class DriverListComponent implements OnInit {
   isExpired(dateString: string): boolean {
     if (!dateString) return false;
     return new Date(dateString) < new Date();
+  }
+
+  private normalizeStatus(status: string): string {
+    const normalized = String(status ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/_/g, '-');
+    return normalized || 'active';
+  }
+
+  private isArchivedStatus(status: string): boolean {
+    return this.normalizeStatus(status) === 'archived';
+  }
+
+  private isInactiveStatus(status: string): boolean {
+    const normalized = this.normalizeStatus(status);
+    return normalized === 'inactive' ||
+      normalized === 'off-duty' ||
+      normalized === 'terminated' ||
+      normalized === 'deactivated' ||
+      normalized === 'disabled';
+  }
+
+  private isActiveStatus(status: string): boolean {
+    const normalized = this.normalizeStatus(status);
+    return normalized === 'active' || normalized === 'available' || normalized === 'online';
+  }
+
+  private isDispatchedStatus(status: string): boolean {
+    const normalized = this.normalizeStatus(status);
+    return normalized === 'dispatched' || normalized === 'en-route' || normalized === 'at-location';
   }
 }
