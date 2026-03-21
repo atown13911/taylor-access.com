@@ -45,6 +45,8 @@ type MotivFuelRow = {
   state: string;
   driverId: string;
   vehicleId: string;
+  cardId: string;
+  cardLabel: string;
   category: string;
   source: string;
 };
@@ -597,6 +599,10 @@ type MotivStatusCache = {
                 <span class="label">Unique Vehicles</span>
                 <span class="value">{{ fuelUniqueVehiclesCount() }}</span>
               </div>
+              <div class="driver-card info">
+                <span class="label">Cards Used</span>
+                <span class="value">{{ fuelUniqueCardsCount() }}</span>
+              </div>
             </div>
             <div class="driver-actions">
               <input
@@ -621,6 +627,13 @@ type MotivStatusCache = {
                 <option value="all">All Sources</option>
                 <option value="motive-card">Motive Card</option>
                 <option value="other">Other</option>
+              </select>
+              <select
+                class="filter-input filter-select"
+                [value]="fuelCardFilter()"
+                (change)="setFuelCardFilter($any($event.target).value)">
+                <option value="all">All Cards</option>
+                <option *ngFor="let card of fuelCardOptions()" [value]="card">{{ card }}</option>
               </select>
               <select
                 class="filter-input filter-select"
@@ -653,6 +666,7 @@ type MotivStatusCache = {
                   <th>State</th>
                   <th>Driver</th>
                   <th>Vehicle</th>
+                  <th>Card</th>
                   <th>Category</th>
                   <th>Source</th>
                 </tr>
@@ -669,6 +683,7 @@ type MotivStatusCache = {
                   <td>{{ row.state }}</td>
                   <td>{{ row.driverId }}</td>
                   <td>{{ row.vehicleId }}</td>
+                  <td>{{ row.cardLabel }}</td>
                   <td>{{ row.category }}</td>
                   <td>{{ row.source }}</td>
                 </tr>
@@ -1041,6 +1056,7 @@ export class MotivComponent implements OnInit {
   fuelSearchTerm = signal('');
   fuelStatusFilter = signal<'all' | 'completed' | 'pending' | 'other'>('all');
   fuelSourceFilter = signal<'all' | 'motive-card' | 'other'>('all');
+  fuelCardFilter = signal<string>('all');
   fuelYearFilter = signal<string>('all');
   fuelWeekFilter = signal<string>('all');
   fuelPage = signal(1);
@@ -1331,6 +1347,21 @@ export class MotivComponent implements OnInit {
         .filter(x => !!x && x.toLowerCase() !== 'n/a')
     ).size
   );
+  fuelUniqueCardsCount = computed<number>(() =>
+    new Set(
+      this.fuelRows()
+        .map(x => x.cardId)
+        .filter(x => !!x && x.toLowerCase() !== 'n/a')
+    ).size
+  );
+  fuelCardOptions = computed<string[]>(() => {
+    const cards = new Set<string>();
+    for (const row of this.fuelRows()) {
+      const label = (row.cardLabel || '').trim();
+      if (label && label.toLowerCase() !== 'n/a') cards.add(label);
+    }
+    return Array.from(cards.values()).sort((a, b) => a.localeCompare(b));
+  });
   fuelAvailableYears = computed<number[]>(() => {
     const years = new Set<number>();
     for (const row of this.fuelRows()) {
@@ -1362,6 +1393,7 @@ export class MotivComponent implements OnInit {
     const term = this.fuelSearchTerm().trim().toLowerCase();
     const status = this.fuelStatusFilter();
     const source = this.fuelSourceFilter();
+    const card = this.fuelCardFilter();
     const year = this.fuelYearFilter();
     const week = this.fuelWeekFilter();
     return this.fuelRows().filter(row => {
@@ -1373,6 +1405,8 @@ export class MotivComponent implements OnInit {
         row.state.toLowerCase().includes(term) ||
         row.driverId.toLowerCase().includes(term) ||
         row.vehicleId.toLowerCase().includes(term) ||
+        row.cardLabel.toLowerCase().includes(term) ||
+        row.cardId.toLowerCase().includes(term) ||
         row.category.toLowerCase().includes(term) ||
         row.source.toLowerCase().includes(term);
 
@@ -1389,12 +1423,14 @@ export class MotivComponent implements OnInit {
         (source === 'motive-card' && normalizedSource === 'motive-card') ||
         (source === 'other' && normalizedSource !== 'motive-card');
 
+      const matchesCard = card === 'all' || row.cardLabel === card;
+
       const dt = this.tryParseDate(row.date);
       const iso = dt ? this.getIsoWeekInfo(dt) : null;
       const matchesYear = year === 'all' || (!!iso && String(iso.year) === year);
       const matchesWeek = week === 'all' || (!!iso && iso.key === week);
 
-      return matchesSearch && matchesStatus && matchesSource && matchesYear && matchesWeek;
+      return matchesSearch && matchesStatus && matchesSource && matchesCard && matchesYear && matchesWeek;
     });
   });
   fuelTotalPages = computed<number>(() =>
@@ -1955,6 +1991,11 @@ export class MotivComponent implements OnInit {
     this.fuelPage.set(1);
   }
 
+  setFuelCardFilter(value: string): void {
+    this.fuelCardFilter.set(value ?? 'all');
+    this.fuelPage.set(1);
+  }
+
   setFuelYearFilter(value: string): void {
     this.fuelYearFilter.set(value ?? 'all');
     this.fuelWeekFilter.set('all');
@@ -2234,6 +2275,26 @@ export class MotivComponent implements OnInit {
       driver?.last_name ?? driver?.lastName
     ].filter((x: any) => !!x).join(' ').trim();
     const vehicleLabel = vehicle?.number ?? vehicle?.unitNumber ?? vehicle?.fleet_number;
+    const card = fuel?.card ?? fuel?.payment_card ?? fuel?.motive_card ?? {};
+    const cardId = String(
+      card?.id ??
+      fuel?.card_id ??
+      fuel?.payment_card_id ??
+      fuel?.motive_card_id ??
+      fuel?.cardId ??
+      'N/A'
+    );
+    const maskedCard = String(
+      card?.last_four ??
+      card?.last4 ??
+      fuel?.card_last_four ??
+      fuel?.cardLast4 ??
+      fuel?.card_last4 ??
+      ''
+    ).trim();
+    const cardName = String(card?.name ?? fuel?.card_name ?? fuel?.cardName ?? '').trim();
+    const cardLabel = cardName || (maskedCard ? `**** ${maskedCard}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'));
+
     return {
       transactionId: String(fuel?.id ?? fuel?.transaction_id ?? fuel?.offline_id ?? 'N/A'),
       date,
@@ -2246,6 +2307,8 @@ export class MotivComponent implements OnInit {
       state: String(fuel?.jurisdiction ?? merchant?.state ?? fuel?.state ?? 'N/A'),
       driverId: String(driverLabel || driver?.driver_company_id || driver?.id || fuel?.driver_id || 'N/A'),
       vehicleId: String(vehicleLabel || vehicle?.id || fuel?.vehicle_id || 'N/A'),
+      cardId,
+      cardLabel,
       category: String(fuel?.fuel_type ?? fuel?.transaction_type ?? fuel?.type ?? 'N/A'),
       source: String(fuel?.source ?? 'N/A')
     };
