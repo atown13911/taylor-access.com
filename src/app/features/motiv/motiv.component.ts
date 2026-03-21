@@ -76,6 +76,12 @@ type DriverSyncSummary = {
   skipped: number;
   finishedAt: string;
 };
+type MotivStatusCache = {
+  timestamp: number;
+  apiConfig: { headerName: string; hasApiKey: boolean; hasBaseUrl: boolean } | null;
+  availableApis: ApiHealthRow[];
+  phase2Apis: Phase2Row[];
+};
 
 @Component({
   selector: 'app-motiv',
@@ -991,6 +997,8 @@ export class MotivComponent implements OnInit {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
   private strictModeStorageKey = 'motiv.strictMode405';
+  private motivStatusCacheKey = 'motiv.statusCache.v1';
+  private motivStatusCacheMaxAgeMs = 15 * 60 * 1000;
 
   activeTab = signal<MotivTab>('api');
   loading = signal(false);
@@ -1413,8 +1421,14 @@ export class MotivComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadStrictMode();
-    this.loadApiConfig();
-    this.checkAvailableApis();
+    const restoredFromCache = this.restoreMotivStatusCache();
+    if (!restoredFromCache) {
+      this.loadApiConfig();
+      this.checkAvailableApis();
+    } else {
+      this.loading.set(false);
+      this.error.set('');
+    }
     this.preloadMotivTabsInBackground();
   }
 
@@ -2148,12 +2162,14 @@ export class MotivComponent implements OnInit {
     this.availableApis.update(rows =>
       rows.map(row => row.route === route ? { ...row, status } : row)
     );
+    this.persistMotivStatusCache();
   }
 
   private setPhase2Status(path: string, method: 'GET' | 'OPTIONS', status: 'connected' | 'not-connected'): void {
     this.phase2Apis.update(rows =>
       rows.map(row => row.path === path && row.method === method ? { ...row, status } : row)
     );
+    this.persistMotivStatusCache();
   }
 
   private loadStrictMode(): void {
@@ -2162,6 +2178,42 @@ export class MotivComponent implements OnInit {
       this.strictMode405.set(raw === '1');
     } catch {
       this.strictMode405.set(false);
+    }
+  }
+
+  private restoreMotivStatusCache(): boolean {
+    try {
+      const raw = localStorage.getItem(this.motivStatusCacheKey);
+      if (!raw) return false;
+
+      const parsed = JSON.parse(raw) as MotivStatusCache;
+      if (!parsed || typeof parsed.timestamp !== 'number') return false;
+      if ((Date.now() - parsed.timestamp) > this.motivStatusCacheMaxAgeMs) return false;
+
+      if (Array.isArray(parsed.availableApis) && parsed.availableApis.length > 0) {
+        this.availableApis.set(parsed.availableApis);
+      }
+      if (Array.isArray(parsed.phase2Apis) && parsed.phase2Apis.length > 0) {
+        this.phase2Apis.set(parsed.phase2Apis);
+      }
+      this.apiConfig.set(parsed.apiConfig ?? null);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private persistMotivStatusCache(): void {
+    try {
+      const snapshot: MotivStatusCache = {
+        timestamp: Date.now(),
+        apiConfig: this.apiConfig(),
+        availableApis: this.availableApis(),
+        phase2Apis: this.phase2Apis()
+      };
+      localStorage.setItem(this.motivStatusCacheKey, JSON.stringify(snapshot));
+    } catch {
+      // Ignore storage failures; status still updates in-memory.
     }
   }
 
