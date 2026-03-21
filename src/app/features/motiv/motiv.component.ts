@@ -1583,7 +1583,8 @@ export class MotivComponent implements OnInit {
       const keys = [
         this.normalizeFuelCardKey(row.cardId),
         this.normalizeFuelCardKey(row.cardLabel),
-        this.normalizeFuelCardKey(this.parseCardLast4(row.cardLabel))
+        this.normalizeFuelCardKey(this.parseCardLast4(row.cardLabel)),
+        this.normalizeFuelCardKey(this.parseCardLast4(row.cardId))
       ].filter((k): k is string => !!k);
 
       for (const key of keys) {
@@ -1661,8 +1662,20 @@ export class MotivComponent implements OnInit {
     } else {
       this.loading.set(false);
       this.error.set('');
+      this.refreshCheckingProbeStatusesInBackground();
     }
     this.preloadMotivTabsInBackground();
+  }
+
+  private refreshCheckingProbeStatusesInBackground(): void {
+    const hasChecking =
+      this.availableApis().some((row) => row.status === 'checking') ||
+      this.phase2Apis().some((row) => row.status === 'checking');
+    if (!hasChecking) return;
+
+    setTimeout(() => {
+      this.checkAvailableApis();
+    }, 250);
   }
 
   setTab(tab: MotivTab): void {
@@ -1681,6 +1694,10 @@ export class MotivComponent implements OnInit {
     }
     if (tab === 'fuel-cards' && this.motivFuelCards().length === 0 && !this.loadingFuelCards()) {
       this.loadFuelCards();
+    }
+    // Fuel card spend/purchase rollups are built from fuel purchase transactions.
+    if (tab === 'fuel-cards' && this.motivFuelPurchases().length === 0 && !this.loadingFuel()) {
+      this.loadFuelPurchases(true);
     }
   }
 
@@ -2545,56 +2562,114 @@ export class MotivComponent implements OnInit {
   }
 
   private mapFuelCardRow(raw: any): MotivFuelCardRow {
-    const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
+    const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw?.motive_card ?? raw ?? {};
+    const limits = card?.limits ?? card?.spend_limits ?? raw?.limits ?? raw?.spend_limits ?? {};
+    const stats = card?.stats ?? card?.usage ?? card?.metrics ?? raw?.stats ?? raw?.usage ?? raw?.metrics ?? {};
     const cardId = String(
       card?.id ??
       card?.card_id ??
       card?.cardId ??
+      card?.external_id ??
+      card?.uuid ??
       raw?.id ??
       raw?.card_id ??
       raw?.cardId ??
+      raw?.external_id ??
+      raw?.uuid ??
       'N/A'
     ).trim() || 'N/A';
     const last4 = this.parseCardLast4(
       card?.last_four ??
       card?.last4 ??
       card?.last_digits ??
+      card?.number_last4 ??
       card?.pan_last4 ??
       card?.masked_card_number ??
       card?.card_number ??
+      card?.masked_pan ??
       raw?.last_four ??
       raw?.last4 ??
+      raw?.last_digits ??
+      raw?.number_last4 ??
+      raw?.pan_last4 ??
       raw?.masked_card_number ??
-      raw?.card_number
+      raw?.card_number ??
+      raw?.masked_pan
     );
     const label = String(
       card?.name ??
       card?.card_name ??
       card?.nickname ??
+      card?.display_name ??
+      card?.holder_name ??
       raw?.name ??
       raw?.card_name ??
       raw?.nickname ??
+      raw?.display_name ??
+      raw?.holder_name ??
       (last4 ? `**** ${last4}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'))
     ).trim() || 'N/A';
     const status = String(card?.status ?? card?.state ?? raw?.status ?? raw?.state ?? 'N/A').trim() || 'N/A';
-    const type = String(card?.type ?? card?.card_type ?? raw?.type ?? raw?.card_type ?? 'N/A').trim() || 'N/A';
+    const type = String(card?.type ?? card?.card_type ?? card?.product_type ?? raw?.type ?? raw?.card_type ?? raw?.product_type ?? 'N/A').trim() || 'N/A';
     const limitValue = Number(
+      limits?.daily ??
+      limits?.total ??
+      limits?.overall ??
       card?.spend_limit ??
       card?.credit_limit ??
       card?.limit ??
+      card?.amount_limit ??
+      card?.spending_limit ??
+      raw?.amount_limit ??
+      raw?.spending_limit ??
       raw?.spend_limit ??
       raw?.credit_limit ??
       raw?.limit ??
       0
     );
-    const currency = String(card?.currency ?? raw?.currency ?? 'USD').trim() || 'USD';
+    const currency = String(
+      card?.currency ??
+      limits?.currency ??
+      raw?.currency ??
+      raw?.limit_currency ??
+      'USD'
+    ).trim() || 'USD';
     const normalizedKeys = [
       this.normalizeFuelCardKey(cardId),
       this.normalizeFuelCardKey(label),
       this.normalizeFuelCardKey(last4)
     ].filter((x): x is string => !!x);
-    let purchases = 0;
-    let spend = 0;
+    let purchases = Number(
+      stats?.purchases ??
+      stats?.purchase_count ??
+      stats?.transactions ??
+      stats?.transaction_count ??
+      card?.purchase_count ??
+      card?.transactions_count ??
+      card?.transaction_count ??
+      raw?.purchase_count ??
+      raw?.transactions_count ??
+      raw?.transaction_count ??
+      0
+    );
+    if (!Number.isFinite(purchases) || purchases < 0) purchases = 0;
+    let spend = Number(
+      stats?.spend ??
+      stats?.total_spend ??
+      stats?.amount_spent ??
+      card?.spend ??
+      card?.spent_amount ??
+      card?.amount_spent ??
+      card?.total_spend ??
+      card?.lifetime_spend ??
+      raw?.spend ??
+      raw?.spent_amount ??
+      raw?.amount_spent ??
+      raw?.total_spend ??
+      raw?.lifetime_spend ??
+      0
+    );
+    if (!Number.isFinite(spend) || spend < 0) spend = 0;
     const spendIndex = this.fuelCardSpendIndex();
     for (const key of normalizedKeys) {
       const found = spendIndex.get(key);
@@ -2636,19 +2711,25 @@ export class MotivComponent implements OnInit {
 
     const cardIdRaw =
       cardObjects.find((x: any) => x?.id)?.id ??
+      cardObjects.find((x: any) => x?.external_id)?.external_id ??
+      cardObjects.find((x: any) => x?.uuid)?.uuid ??
       fuel?.card_id ??
       fuel?.payment_card_id ??
       fuel?.motive_card_id ??
       fuel?.fuel_card_id ??
       fuel?.cardId ??
+      fuel?.card_uuid ??
       raw?.card_id ??
       raw?.payment_card_id ??
       raw?.motive_card_id ??
       raw?.fuel_card_id ??
-      raw?.cardId;
+      raw?.cardId ??
+      raw?.card_uuid;
 
     const explicitNameRaw =
       cardObjects.find((x: any) => x?.name)?.name ??
+      cardObjects.find((x: any) => x?.display_name)?.display_name ??
+      cardObjects.find((x: any) => x?.holder_name)?.holder_name ??
       fuel?.card_name ??
       fuel?.cardName ??
       fuel?.payment_method_name ??
@@ -2662,16 +2743,19 @@ export class MotivComponent implements OnInit {
       cardObjects.find((x: any) => x?.last_four)?.last_four ??
       cardObjects.find((x: any) => x?.last4)?.last4 ??
       cardObjects.find((x: any) => x?.last_digits)?.last_digits ??
+      cardObjects.find((x: any) => x?.number_last4)?.number_last4 ??
       cardObjects.find((x: any) => x?.pan_last4)?.pan_last4 ??
       fuel?.card_last_four ??
       fuel?.card_last4 ??
       fuel?.cardLast4 ??
       fuel?.pan_last4 ??
+      fuel?.number_last4 ??
       fuel?.last4 ??
       raw?.card_last_four ??
       raw?.card_last4 ??
       raw?.cardLast4 ??
       raw?.pan_last4 ??
+      raw?.number_last4 ??
       raw?.last4 ??
       fuel?.card_number ??
       fuel?.masked_card_number ??
@@ -2697,7 +2781,9 @@ export class MotivComponent implements OnInit {
   private normalizeFuelCardKey(value: any): string {
     const text = String(value ?? '').trim().toLowerCase();
     if (!text || text === 'n/a') return '';
-    return text.replace(/\s+/g, ' ');
+    return text
+      .replace(/^card\s+/i, '')
+      .replace(/[^a-z0-9]/g, '');
   }
 
   private isFuelCardActiveStatus(status: string): boolean {

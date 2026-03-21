@@ -2,7 +2,8 @@ import { Injectable, inject, ErrorHandler } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router, NavigationEnd, NavigationStart } from '@angular/router';
 import { environment } from '../../../environments/environment';
-import { filter } from 'rxjs/operators';
+import { catchError, filter, timeout } from 'rxjs/operators';
+import { of } from 'rxjs';
 
 export interface TrackingEvent {
   eventType: string;
@@ -42,6 +43,9 @@ export class EventTrackingService {
   private batchSize = 10;
   private flushInterval = 5000;
   private enabled = true;
+  private telemetryBackoffUntil = 0;
+  private readonly telemetryTimeoutMs = 5000;
+  private readonly telemetryBackoffMs = 5 * 60 * 1000;
 
   // Session tracking
   private sessionStartTime = Date.now();
@@ -530,6 +534,7 @@ export class EventTrackingService {
   // ========== PAGE VIEW (existing) ==========
 
   trackPageView(url: string) {
+    if (this.isTelemetryBackedOff()) return;
     const pageView = {
       pageUrl: url,
       pageTitle: document.title,
@@ -540,9 +545,13 @@ export class EventTrackingService {
       browser: this.getBrowser()
     };
 
-    this.http.post(`${this.apiUrl}/api/v1/events/page-view`, pageView).subscribe({
-      error: () => {} // silent
-    });
+    this.http.post(`${this.apiUrl}/api/v1/events/page-view`, pageView).pipe(
+      timeout(this.telemetryTimeoutMs),
+      catchError((err) => {
+        this.markTelemetryFailure(err);
+        return of(null);
+      })
+    ).subscribe();
   }
 
   /** Track custom event (existing) */
@@ -632,10 +641,29 @@ export class EventTrackingService {
 
   private flushEvents() {
     if (this.eventQueue.length === 0) return;
+    if (this.isTelemetryBackedOff()) {
+      this.eventQueue = [];
+      return;
+    }
     const events = [...this.eventQueue];
     this.eventQueue = [];
-    this.http.post(`${this.apiUrl}/api/v1/events/batch`, events).subscribe({
-      error: () => {} // silent -- never block the UI
-    });
+    this.http.post(`${this.apiUrl}/api/v1/events/batch`, events).pipe(
+      timeout(this.telemetryTimeoutMs),
+      catchError((err) => {
+        this.markTelemetryFailure(err);
+        return of(null);
+      })
+    ).subscribe();
+  }
+
+  private isTelemetryBackedOff(): boolean {
+    return Date.now() < this.telemetryBackoffUntil;
+  }
+
+  private markTelemetryFailure(error: any): void {
+    const status = Number((error as HttpErrorResponse)?.status ?? 0);
+    if (status === 0 || status >= 500 || status === 408 || status === 504) {
+      this.telemetryBackoffUntil = Date.now() + this.telemetryBackoffMs;
+    }
   }
 }

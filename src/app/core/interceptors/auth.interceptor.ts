@@ -51,9 +51,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
     }),
     catchError((error: HttpErrorResponse) => {
-      const isSilentSessionTelemetryCall =
+      const isSilentTelemetryCall =
         req.url.includes('/api/v1/sessions/start') ||
-        req.url.includes('/api/v1/sessions/end');
+        req.url.includes('/api/v1/sessions/end') ||
+        req.url.includes('/api/v1/events/page-view') ||
+        req.url.includes('/api/v1/events/batch');
 
       if (error.status === 401) {
         // #region agent log
@@ -67,7 +69,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
       
       // Handle 500 Server Error
-      if (error.status >= 500 && !isSilentSessionTelemetryCall) {
+      if (error.status >= 500 && !isSilentTelemetryCall) {
         console.error('Server error:', error.message);
       }
       

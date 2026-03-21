@@ -21,14 +21,14 @@ public class SessionsController : ControllerBase
     }
 
     [HttpPost("start")]
-    public async Task<ActionResult> StartSession()
+    public Task<ActionResult> StartSession()
     {
         // Use claims directly to avoid blocking on a DB lookup during session start.
         // This endpoint is called on app bootstrap and should remain fast/resilient.
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
         if (!int.TryParse(userIdValue, out var userId) || userId <= 0)
-            return Unauthorized();
+            return Task.FromResult<ActionResult>(Unauthorized());
 
         var userEmail = User.FindFirstValue(ClaimTypes.Email)
             ?? User.FindFirstValue("email");
@@ -40,6 +40,7 @@ public class SessionsController : ControllerBase
 
         var session = new UserSession
         {
+            Id = Guid.NewGuid().ToString("N"),
             UserId = userId,
             UserName = userName,
             UserEmail = userEmail,
@@ -50,16 +51,39 @@ public class SessionsController : ControllerBase
             UserAgent = Request.Headers.UserAgent.ToString()
         };
 
-        var sessionId = await _mongo.LogSessionStartAsync(session);
-        return Ok(new { sessionId });
+        // Best-effort telemetry write: do not block user bootstrap path on analytics persistence.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _mongo.LogSessionStartAsync(session);
+            }
+            catch
+            {
+                // Intentionally swallow errors for non-critical session telemetry.
+            }
+        });
+
+        return Task.FromResult<ActionResult>(Ok(new { sessionId = session.Id }));
     }
 
     [HttpPost("end")]
-    public async Task<ActionResult> EndSession([FromBody] EndSessionRequest request)
+    public Task<ActionResult> EndSession([FromBody] EndSessionRequest request)
     {
-        if (string.IsNullOrEmpty(request.SessionId)) return BadRequest(new { error = "sessionId required" });
-        await _mongo.LogSessionEndAsync(request.SessionId, request.Reason ?? "manual");
-        return Ok(new { ended = true });
+        if (string.IsNullOrEmpty(request.SessionId))
+            return Task.FromResult<ActionResult>(BadRequest(new { error = "sessionId required" }));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _mongo.LogSessionEndAsync(request.SessionId, request.Reason ?? "manual");
+            }
+            catch
+            {
+                // Intentionally swallow errors for non-critical session telemetry.
+            }
+        });
+        return Task.FromResult<ActionResult>(Ok(new { ended = true }));
     }
 
     [HttpGet]

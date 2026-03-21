@@ -2,6 +2,8 @@ import { Injectable, inject, signal, OnDestroy, NgZone } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
+import { catchError, timeout } from 'rxjs/operators';
+import { of } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class InactivityService implements OnDestroy {
@@ -113,13 +115,15 @@ export class InactivityService implements OnDestroy {
   }
 
   logSessionStart(): void {
-    this.http.post<any>(`${environment.apiUrl}/api/v1/sessions/start`, {}).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/api/v1/sessions/start`, {}).pipe(
+      timeout(5000),
+      catchError(() => of(null))
+    ).subscribe({
       next: (res) => {
         if (res?.sessionId) {
           localStorage.setItem(this.SESSION_KEY, res.sessionId);
         }
-      },
-      error: () => {}
+      }
     });
   }
 
