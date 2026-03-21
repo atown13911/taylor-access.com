@@ -46,6 +46,7 @@ interface ZoomMetricRow {
   employeeId: number;
   callVolume: number;
   textVolume: number;
+  email?: string;
 }
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
@@ -531,6 +532,7 @@ export class PerformanceReviewsComponent implements OnInit {
   timeclockSummaries = signal<any[]>([]);
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
+  zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
   googleApiStatus = signal<IntegrationState>('checking');
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
@@ -791,19 +793,29 @@ export class PerformanceReviewsComponent implements OnInit {
         .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&sync=true`)
         .toPromise();
       const map: Record<number, ZoomMetricRow> = {};
+      const emailMap: Record<string, ZoomMetricRow> = {};
       const rows = Array.isArray(res?.data) ? res.data : [];
       for (const row of rows) {
         const employeeId = Number(row?.employeeId);
-        if (!employeeId) continue;
-        map[employeeId] = {
-          employeeId,
+        const email = String(row?.email || row?.userEmail || row?.zoomEmail || '').trim().toLowerCase();
+        const metric: ZoomMetricRow = {
+          employeeId: Number.isFinite(employeeId) ? employeeId : 0,
           callVolume: Number(row?.callVolume || 0),
-          textVolume: Number(row?.textVolume || 0)
+          textVolume: Number(row?.textVolume || 0),
+          email: email || undefined
         };
+        if (employeeId) {
+          map[employeeId] = metric;
+        }
+        if (email) {
+          emailMap[email] = metric;
+        }
       }
       this.zoomMetricMap.set(map);
+      this.zoomMetricByEmail.set(emailMap);
     } catch {
       this.zoomMetricMap.set({});
+      this.zoomMetricByEmail.set({});
     }
   }
 
@@ -979,7 +991,22 @@ export class PerformanceReviewsComponent implements OnInit {
   private getEmployeeCommunicationMetrics(employeeId: number): { callVolume: number; textVolume: number } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
-    const zoom = this.zoomMetricMap()[employeeId];
+    const zoomById = this.zoomMetricMap()[employeeId];
+    const emp = this.employees().find(e => Number(e.id) === Number(employeeId));
+    const candidateEmails = [
+      String(emp?.email || '').trim().toLowerCase(),
+      String(emp?.personalEmail || '').trim().toLowerCase(),
+      String(emp?.zoomEmail || '').trim().toLowerCase()
+    ].filter(Boolean);
+    let zoomByEmail: ZoomMetricRow | undefined;
+    for (const key of candidateEmails) {
+      const match = this.zoomMetricByEmail()[key];
+      if (match) {
+        zoomByEmail = match;
+        break;
+      }
+    }
+    const zoom = zoomById ?? zoomByEmail;
     return {
       callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0))
