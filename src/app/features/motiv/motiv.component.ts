@@ -1020,7 +1020,7 @@ export class MotivComponent implements OnInit {
   motivFuelPurchases = signal<any[]>([]);
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
-  driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('all');
+  driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
   driverEmailFilter = signal<'all' | 'with-email' | 'without-email'>('all');
   driverPage = signal(1);
   driverPageSize = signal(25);
@@ -1530,7 +1530,7 @@ export class MotivComponent implements OnInit {
     this.loadedDriverRows.set(0);
     if (runBackgroundSync) {
       this.driverSearchTerm.set('');
-      this.driverStatusFilter.set('all');
+      this.driverStatusFilter.set('active');
       this.driverEmailFilter.set('all');
       this.driverPage.set(1);
     }
@@ -1539,7 +1539,7 @@ export class MotivComponent implements OnInit {
     }
     this.saveDriversError.set('');
     this.syncStatusMessage.set('Loading drivers from Access DB...');
-    this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1&status=active`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
