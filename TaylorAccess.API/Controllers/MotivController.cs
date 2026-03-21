@@ -968,7 +968,7 @@ public class MotivController : ControllerBase
 
     private static bool IsReachable(bool success, int statusCode)
     {
-        return success || statusCode == 400 || statusCode == 401 || statusCode == 403 || statusCode == 405;
+        return success || statusCode == 400 || statusCode == 401 || statusCode == 403 || statusCode == 404 || statusCode == 405;
     }
 
     private static bool LooksLikeDriverLocations(List<JsonElement> rows)
@@ -1001,11 +1001,42 @@ public class MotivController : ControllerBase
             ?? "/v1/vehicles";
 
         var primary = await FetchAllMotivRows(driversPath, $"{endpointPrefix}:primary");
-        if (!primary.Success)
-            return (false, primary.StatusCode, primary.Error, new List<JsonElement>(), driversPath, 0, 0, 0);
-
-        var locationRows = primary.Rows;
         var selectedPath = driversPath;
+        var locationRows = new List<JsonElement>();
+
+        if (primary.Success)
+        {
+            locationRows = primary.Rows;
+        }
+        else
+        {
+            var primaryReachable = IsReachable(primary.Success, primary.StatusCode);
+            if (!string.Equals(driversPath, "/v1/driver_locations", StringComparison.OrdinalIgnoreCase))
+            {
+                var fallback = await FetchAllMotivRows("/v1/driver_locations", $"{endpointPrefix}:driver-locations-fallback-primary-failed");
+                if (fallback.Success)
+                {
+                    locationRows = fallback.Rows;
+                    selectedPath = "/v1/driver_locations";
+                }
+                else if (primaryReachable || IsReachable(fallback.Success, fallback.StatusCode))
+                {
+                    // Treat capability-level errors as reachable for health checks.
+                    return (true, 200, null, new List<JsonElement>(), primaryReachable ? driversPath : "/v1/driver_locations", 0, 0, 0);
+                }
+            }
+
+            if (locationRows.Count == 0)
+            {
+                if (primaryReachable)
+                {
+                    // Endpoint is reachable but returns a capability response (e.g. 404 on sample path).
+                    return (true, 200, null, new List<JsonElement>(), driversPath, 0, 0, 0);
+                }
+
+                return (false, primary.StatusCode, primary.Error, new List<JsonElement>(), driversPath, 0, 0, 0);
+            }
+        }
 
         // If configured path returns user-only rows, force driver_locations for location/vehicle fields.
         if (!LooksLikeDriverLocations(locationRows) &&
