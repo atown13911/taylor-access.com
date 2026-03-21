@@ -51,6 +51,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
     }),
     catchError((error: HttpErrorResponse) => {
+      const isSilentSessionTelemetryCall =
+        req.url.includes('/api/v1/sessions/start') ||
+        req.url.includes('/api/v1/sessions/end');
+
       if (error.status === 401) {
         // #region agent log
         console.warn('[DEBUG-INTERCEPT] 401 for:', req.url, '- NOT logging out (auth guard handles auth)');
@@ -63,7 +67,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }
       
       // Handle 500 Server Error
-      if (error.status >= 500) {
+      if (error.status >= 500 && !isSilentSessionTelemetryCall) {
         console.error('Server error:', error.message);
       }
       

@@ -221,6 +221,58 @@ public class MotivController : ControllerBase
         });
     }
 
+    [HttpGet("fuel-cards")]
+    public async Task<IActionResult> GetFuelCards()
+    {
+        var configuredPath = _config["MOTIV_FUEL_CARDS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_CARDS_PATH");
+
+        var candidatePaths = new[]
+        {
+            configuredPath,
+            "/motive_card/v1/cards",
+            "/motive_card/v2/cards",
+            "/v1/fuel_cards",
+            "/v1/cards"
+        };
+
+        (bool Success, int StatusCode, string? Error, List<JsonElement> Rows)? lastFailure = null;
+        foreach (var path in candidatePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var fetch = await FetchAllMotivRows(path, $"fuel-cards:{path}");
+            if (!fetch.Success)
+            {
+                lastFailure = fetch;
+                continue;
+            }
+
+            return Ok(new
+            {
+                source = "motiv",
+                endpoint = "fuel-cards",
+                path,
+                rows = fetch.Rows.Count,
+                data = JsonSerializer.SerializeToElement(fetch.Rows)
+            });
+        }
+
+        if (lastFailure.HasValue)
+        {
+            var fail = lastFailure.Value;
+            return StatusCode(fail.StatusCode, new
+            {
+                error = "MOTIV fuel-cards request failed.",
+                status = fail.StatusCode,
+                details = fail.Error
+            });
+        }
+
+        return StatusCode(500, new { error = "MOTIV fuel-cards request failed: no valid cards path configured." });
+    }
+
     [HttpGet("probe")]
     public async Task<IActionResult> Probe([FromQuery] string? path)
     {
@@ -748,7 +800,7 @@ public class MotivController : ControllerBase
         if (payload.ValueKind != JsonValueKind.Object)
             return new List<JsonElement>();
 
-        foreach (var key in new[] { "driver_locations", "vehicle_locations", "vehicles", "users", "data", "items", "results", "fuel_purchases", "transactions" })
+        foreach (var key in new[] { "driver_locations", "vehicle_locations", "vehicles", "users", "cards", "fuel_cards", "payment_cards", "data", "items", "results", "fuel_purchases", "transactions" })
         {
             if (payload.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray().Select(x => x.Clone()).ToList();

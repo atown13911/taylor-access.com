@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { timeout } from 'rxjs/operators';
 
-type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users' | 'fuel';
+type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users' | 'fuel' | 'fuel-cards';
 type MotivDriverTableRow = {
   name: string;
   email: string;
@@ -49,6 +49,17 @@ type MotivFuelRow = {
   cardLabel: string;
   category: string;
   source: string;
+};
+type MotivFuelCardRow = {
+  id: string;
+  label: string;
+  last4: string;
+  status: string;
+  type: string;
+  limit: string;
+  currency: string;
+  purchases: number;
+  spend: number;
 };
 type FuelWeekOption = {
   key: string;
@@ -126,6 +137,12 @@ type MotivStatusCache = {
           [class.active]="activeTab() === 'fuel'"
           (click)="setTab('fuel')">
           5. Fuel
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'fuel-cards'"
+          (click)="setTab('fuel-cards')">
+          6. Fuel Cards
         </button>
       </div>
 
@@ -711,6 +728,103 @@ type MotivStatusCache = {
           </div>
         </div>
       </section>
+      <section class="tab-panel" *ngIf="activeTab() === 'fuel-cards'">
+        <h2>Fuel Cards</h2>
+        <p>MOTIV fuel cards pulled through the secure backend proxy.</p>
+        <div class="api-status">
+          <div class="driver-actions">
+            <button class="refresh-btn" (click)="loadFuelCards()" [disabled]="loadingFuelCards()">
+              {{ loadingFuelCards() ? 'Loading...' : 'Refresh Fuel Cards' }}
+            </button>
+          </div>
+          <p class="error" *ngIf="fuelCardsError()">{{ fuelCardsError() }}</p>
+          <div class="driver-glass-panel" *ngIf="fuelCardRows().length > 0">
+            <div class="driver-dashboard-cards">
+              <div class="driver-card total">
+                <span class="label">Cards Issued</span>
+                <span class="value">{{ fuelCardRows().length }}</span>
+              </div>
+              <div class="driver-card active">
+                <span class="label">Active Cards</span>
+                <span class="value">{{ fuelCardsActiveCount() }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">Cards Used</span>
+                <span class="value">{{ fuelCardsUsedCount() }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Card Spend</span>
+                <span class="value">{{ fuelCardsTotalSpend() | number:'1.0-2' }}</span>
+              </div>
+            </div>
+            <div class="driver-actions">
+              <input
+                class="filter-input"
+                type="text"
+                placeholder="Search cards (name, last4, status, type)"
+                [value]="fuelCardSearchTerm()"
+                (input)="setFuelCardSearchTerm($any($event.target).value)" />
+              <select
+                class="filter-input filter-select"
+                [value]="fuelCardStatusFilter()"
+                (change)="setFuelCardStatusFilter($any($event.target).value)">
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <p class="count">Rows: {{ filteredFuelCardRows().length }} / {{ fuelCardRows().length }}</p>
+          </div>
+          <div class="available-api-table-wrap" *ngIf="filteredFuelCardRows().length > 0">
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Card</th>
+                  <th>Last4</th>
+                  <th>Status</th>
+                  <th>Type</th>
+                  <th>Limit</th>
+                  <th>Purchases</th>
+                  <th>Spend</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of pagedFuelCardRows(); let i = index">
+                  <td>{{ fuelCardPageStartIndex() + i }}</td>
+                  <td>{{ row.label }}</td>
+                  <td>{{ row.last4 }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.type }}</td>
+                  <td>{{ row.limit }} {{ row.currency }}</td>
+                  <td>{{ row.purchases }}</td>
+                  <td>{{ row.spend | number:'1.0-2' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-pagination">
+              <div class="page-meta">
+                Showing {{ fuelCardPageStartIndex() }}-{{ fuelCardPageEndIndex() }} of {{ filteredFuelCardRows().length }}
+              </div>
+              <div class="page-controls">
+                <select
+                  class="filter-input filter-select page-size-select"
+                  [value]="fuelCardPageSize()"
+                  (change)="setFuelCardPageSize(+$any($event.target).value)">
+                  <option [value]="10">10 / page</option>
+                  <option [value]="25">25 / page</option>
+                  <option [value]="50">50 / page</option>
+                  <option [value]="100">100 / page</option>
+                </select>
+                <button class="refresh-btn" (click)="goToPreviousFuelCardPage()" [disabled]="fuelCardPage() <= 1">Prev</button>
+                <span class="page-counter">Page {{ safeFuelCardPage() }} / {{ fuelCardTotalPages() }}</span>
+                <button class="refresh-btn" (click)="goToNextFuelCardPage()" [disabled]="safeFuelCardPage() >= fuelCardTotalPages()">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   `,
   styles: [`
@@ -1023,6 +1137,7 @@ export class MotivComponent implements OnInit {
   loadingDrivers = signal(false);
   loadingVehicles = signal(false);
   loadingUsers = signal(false);
+  loadingFuelCards = signal(false);
   savingDrivers = signal(false);
   syncingDrivers = signal(false);
   loadingFuel = signal(false);
@@ -1032,6 +1147,7 @@ export class MotivComponent implements OnInit {
   vehicleLocationSyncMessage = signal('');
   usersError = signal('');
   fuelError = signal('');
+  fuelCardsError = signal('');
   saveDriversMessage = signal('');
   saveDriversError = signal('');
   syncStatusMessage = signal('Ready.');
@@ -1042,6 +1158,7 @@ export class MotivComponent implements OnInit {
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
   motivFuelPurchases = signal<any[]>([]);
+  motivFuelCards = signal<any[]>([]);
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
@@ -1061,6 +1178,10 @@ export class MotivComponent implements OnInit {
   fuelWeekFilter = signal<string>('all');
   fuelPage = signal(1);
   fuelPageSize = signal(25);
+  fuelCardSearchTerm = signal('');
+  fuelCardStatusFilter = signal<'all' | 'active' | 'inactive' | 'other'>('all');
+  fuelCardPage = signal(1);
+  fuelCardPageSize = signal(25);
   userSearchTerm = signal('');
   userStatusFilter = signal<'all' | 'active' | 'deactivated'>('all');
   userTypeFilter = signal<'all' | 'driver' | 'admin' | 'other'>('all');
@@ -1455,6 +1576,81 @@ export class MotivComponent implements OnInit {
     if (!total) return 0;
     return Math.min(this.safeFuelPage() * this.fuelPageSize(), total);
   });
+  fuelCardSpendIndex = computed<Map<string, { purchases: number; spend: number }>>(() => {
+    const index = new Map<string, { purchases: number; spend: number }>();
+    for (const row of this.fuelRows()) {
+      const amount = Number.isFinite(row.amountValue) ? row.amountValue : 0;
+      const keys = [
+        this.normalizeFuelCardKey(row.cardId),
+        this.normalizeFuelCardKey(row.cardLabel),
+        this.normalizeFuelCardKey(this.parseCardLast4(row.cardLabel))
+      ].filter((k): k is string => !!k);
+
+      for (const key of keys) {
+        const current = index.get(key) ?? { purchases: 0, spend: 0 };
+        current.purchases += 1;
+        current.spend += amount;
+        index.set(key, current);
+      }
+    }
+    return index;
+  });
+  fuelCardRows = computed<MotivFuelCardRow[]>(() =>
+    this.motivFuelCards().map((raw) => this.mapFuelCardRow(raw))
+  );
+  fuelCardsActiveCount = computed<number>(() =>
+    this.fuelCardRows().filter((row) => this.isFuelCardActiveStatus(row.status)).length
+  );
+  fuelCardsUsedCount = computed<number>(() =>
+    this.fuelCardRows().filter((row) => row.purchases > 0).length
+  );
+  fuelCardsTotalSpend = computed<number>(() =>
+    this.fuelCardRows().reduce((sum, row) => sum + (Number.isFinite(row.spend) ? row.spend : 0), 0)
+  );
+  filteredFuelCardRows = computed<MotivFuelCardRow[]>(() => {
+    const term = this.fuelCardSearchTerm().trim().toLowerCase();
+    const status = this.fuelCardStatusFilter();
+    return this.fuelCardRows().filter((row) => {
+      const normalizedStatus = row.status.trim().toLowerCase();
+      const matchesSearch =
+        !term ||
+        row.id.toLowerCase().includes(term) ||
+        row.label.toLowerCase().includes(term) ||
+        row.last4.toLowerCase().includes(term) ||
+        row.status.toLowerCase().includes(term) ||
+        row.type.toLowerCase().includes(term);
+
+      const matchesStatus =
+        status === 'all' ||
+        (status === 'active' && this.isFuelCardActiveStatus(normalizedStatus)) ||
+        (status === 'inactive' && this.isFuelCardInactiveStatus(normalizedStatus)) ||
+        (status === 'other' && !this.isFuelCardActiveStatus(normalizedStatus) && !this.isFuelCardInactiveStatus(normalizedStatus));
+
+      return matchesSearch && matchesStatus;
+    });
+  });
+  fuelCardTotalPages = computed<number>(() =>
+    Math.max(1, Math.ceil(this.filteredFuelCardRows().length / this.fuelCardPageSize()))
+  );
+  safeFuelCardPage = computed<number>(() =>
+    Math.max(1, Math.min(this.fuelCardPage(), this.fuelCardTotalPages()))
+  );
+  pagedFuelCardRows = computed<MotivFuelCardRow[]>(() => {
+    const page = this.safeFuelCardPage();
+    const size = this.fuelCardPageSize();
+    const start = (page - 1) * size;
+    return this.filteredFuelCardRows().slice(start, start + size);
+  });
+  fuelCardPageStartIndex = computed<number>(() => {
+    const total = this.filteredFuelCardRows().length;
+    if (!total) return 0;
+    return (this.safeFuelCardPage() - 1) * this.fuelCardPageSize() + 1;
+  });
+  fuelCardPageEndIndex = computed<number>(() => {
+    const total = this.filteredFuelCardRows().length;
+    if (!total) return 0;
+    return Math.min(this.safeFuelCardPage() * this.fuelCardPageSize(), total);
+  });
 
   ngOnInit(): void {
     this.loadStrictMode();
@@ -1482,6 +1678,9 @@ export class MotivComponent implements OnInit {
     }
     if (tab === 'fuel' && this.motivFuelPurchases().length === 0 && !this.loadingFuel()) {
       this.loadFuelPurchases();
+    }
+    if (tab === 'fuel-cards' && this.motivFuelCards().length === 0 && !this.loadingFuelCards()) {
+      this.loadFuelCards();
     }
   }
 
@@ -1515,6 +1714,7 @@ export class MotivComponent implements OnInit {
       if (!this.loadingVehicles() && this.motivVehicles().length === 0) this.loadVehicles(true);
       if (!this.loadingUsers() && this.motivUsers().length === 0) this.loadUsers(true);
       if (!this.loadingFuel() && this.motivFuelPurchases().length === 0) this.loadFuelPurchases(true);
+      if (!this.loadingFuelCards() && this.motivFuelCards().length === 0) this.loadFuelCards(true);
     }, 300);
   }
 
@@ -2021,6 +2221,30 @@ export class MotivComponent implements OnInit {
     this.fuelPage.set(Math.min(this.fuelTotalPages(), this.safeFuelPage() + 1));
   }
 
+  setFuelCardSearchTerm(value: string): void {
+    this.fuelCardSearchTerm.set(value ?? '');
+    this.fuelCardPage.set(1);
+  }
+
+  setFuelCardStatusFilter(value: 'all' | 'active' | 'inactive' | 'other'): void {
+    this.fuelCardStatusFilter.set(value ?? 'all');
+    this.fuelCardPage.set(1);
+  }
+
+  setFuelCardPageSize(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.fuelCardPageSize.set(value);
+    this.fuelCardPage.set(1);
+  }
+
+  goToPreviousFuelCardPage(): void {
+    this.fuelCardPage.set(Math.max(1, this.safeFuelCardPage() - 1));
+  }
+
+  goToNextFuelCardPage(): void {
+    this.fuelCardPage.set(Math.min(this.fuelCardTotalPages(), this.safeFuelCardPage() + 1));
+  }
+
   setUserSearchTerm(value: string): void {
     this.userSearchTerm.set(value ?? '');
     this.userPage.set(1);
@@ -2073,6 +2297,27 @@ export class MotivComponent implements OnInit {
     });
   }
 
+  loadFuelCards(background = false): void {
+    this.loadingFuelCards.set(true);
+    this.fuelCardPage.set(1);
+    if (!background) {
+      this.fuelCardsError.set('');
+    }
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/fuel-cards`).subscribe({
+      next: (res) => {
+        const payload = res?.data ?? res;
+        this.motivFuelCards.set(this.extractRows(payload));
+        this.loadingFuelCards.set(false);
+      },
+      error: (err) => {
+        if (!background) {
+          this.fuelCardsError.set(err?.error?.error || 'Unable to load MOTIV fuel cards.');
+        }
+        this.loadingFuelCards.set(false);
+      }
+    });
+  }
+
   saveFuelPurchasesToDb(): void {
     this.savingFuel.set(true);
     this.saveFuelMessage.set('');
@@ -2097,6 +2342,9 @@ export class MotivComponent implements OnInit {
     if (Array.isArray(payload?.driver_locations)) return payload.driver_locations;
     if (Array.isArray(payload?.vehicles)) return payload.vehicles;
     if (Array.isArray(payload?.users)) return payload.users;
+    if (Array.isArray(payload?.cards)) return payload.cards;
+    if (Array.isArray(payload?.fuel_cards)) return payload.fuel_cards;
+    if (Array.isArray(payload?.payment_cards)) return payload.payment_cards;
     if (Array.isArray(payload?.fuel_purchases)) return payload.fuel_purchases;
     if (Array.isArray(payload?.transactions)) return payload.transactions;
     if (Array.isArray(payload?.data)) return payload.data;
@@ -2296,6 +2544,78 @@ export class MotivComponent implements OnInit {
     };
   }
 
+  private mapFuelCardRow(raw: any): MotivFuelCardRow {
+    const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
+    const cardId = String(
+      card?.id ??
+      card?.card_id ??
+      card?.cardId ??
+      raw?.id ??
+      raw?.card_id ??
+      raw?.cardId ??
+      'N/A'
+    ).trim() || 'N/A';
+    const last4 = this.parseCardLast4(
+      card?.last_four ??
+      card?.last4 ??
+      card?.last_digits ??
+      card?.pan_last4 ??
+      card?.masked_card_number ??
+      card?.card_number ??
+      raw?.last_four ??
+      raw?.last4 ??
+      raw?.masked_card_number ??
+      raw?.card_number
+    );
+    const label = String(
+      card?.name ??
+      card?.card_name ??
+      card?.nickname ??
+      raw?.name ??
+      raw?.card_name ??
+      raw?.nickname ??
+      (last4 ? `**** ${last4}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'))
+    ).trim() || 'N/A';
+    const status = String(card?.status ?? card?.state ?? raw?.status ?? raw?.state ?? 'N/A').trim() || 'N/A';
+    const type = String(card?.type ?? card?.card_type ?? raw?.type ?? raw?.card_type ?? 'N/A').trim() || 'N/A';
+    const limitValue = Number(
+      card?.spend_limit ??
+      card?.credit_limit ??
+      card?.limit ??
+      raw?.spend_limit ??
+      raw?.credit_limit ??
+      raw?.limit ??
+      0
+    );
+    const currency = String(card?.currency ?? raw?.currency ?? 'USD').trim() || 'USD';
+    const normalizedKeys = [
+      this.normalizeFuelCardKey(cardId),
+      this.normalizeFuelCardKey(label),
+      this.normalizeFuelCardKey(last4)
+    ].filter((x): x is string => !!x);
+    let purchases = 0;
+    let spend = 0;
+    const spendIndex = this.fuelCardSpendIndex();
+    for (const key of normalizedKeys) {
+      const found = spendIndex.get(key);
+      if (!found) continue;
+      purchases = Math.max(purchases, found.purchases);
+      spend = Math.max(spend, found.spend);
+    }
+
+    return {
+      id: cardId,
+      label,
+      last4: last4 || 'N/A',
+      status,
+      type,
+      limit: Number.isFinite(limitValue) ? limitValue.toFixed(2) : '0.00',
+      currency,
+      purchases,
+      spend
+    };
+  }
+
   private extractFuelCardMeta(raw: any, fuel: any): { cardId: string; cardLabel: string } {
     const cardObjects = [
       fuel?.card,
@@ -2374,6 +2694,22 @@ export class MotivComponent implements OnInit {
     return '';
   }
 
+  private normalizeFuelCardKey(value: any): string {
+    const text = String(value ?? '').trim().toLowerCase();
+    if (!text || text === 'n/a') return '';
+    return text.replace(/\s+/g, ' ');
+  }
+
+  private isFuelCardActiveStatus(status: string): boolean {
+    const normalized = String(status ?? '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    return normalized === 'active' || normalized === 'enabled' || normalized === 'open' || normalized === 'issued';
+  }
+
+  private isFuelCardInactiveStatus(status: string): boolean {
+    const normalized = String(status ?? '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    return normalized === 'inactive' || normalized === 'disabled' || normalized === 'closed' || normalized === 'blocked' || normalized === 'deactivated' || normalized === 'suspended';
+  }
+
   private tryParseDate(value: string): Date | null {
     if (!value || value === 'N/A') return null;
     const dt = new Date(value);
@@ -2427,10 +2763,20 @@ export class MotivComponent implements OnInit {
       }
 
       if (Array.isArray(parsed.availableApis) && parsed.availableApis.length > 0) {
-        this.availableApis.set(parsed.availableApis);
+        const cachedByRoute = new Map(parsed.availableApis.map((row) => [row.route, row.status] as const));
+        const mergedAvailable = this.createApiRows().map((row) => ({
+          ...row,
+          status: cachedByRoute.get(row.route) ?? row.status
+        }));
+        this.availableApis.set(mergedAvailable);
       }
       if (Array.isArray(parsed.phase2Apis) && parsed.phase2Apis.length > 0) {
-        this.phase2Apis.set(parsed.phase2Apis);
+        const cachedByKey = new Map(parsed.phase2Apis.map((row) => [`${row.method}:${row.path}`, row.status] as const));
+        const mergedPhase2 = this.createPhase2Rows().map((row) => ({
+          ...row,
+          status: cachedByKey.get(`${row.method}:${row.path}`) ?? row.status
+        }));
+        this.phase2Apis.set(mergedPhase2);
       }
       this.apiConfig.set(parsed.apiConfig ?? null);
       return true;
@@ -2504,6 +2850,7 @@ export class MotivComponent implements OnInit {
       { name: 'MOTIV Timecard Entries', route: '/api/v1/motiv/probe?path=/v1/time_tracking/timecard_entries', status: 'checking' },
       { name: 'MOTIV Card Transactions (v2)', route: '/api/v1/motiv/probe?path=/motive_card/v2/transactions', status: 'checking' },
       { name: 'MOTIV Fuel Purchases', route: '/api/v1/motiv/probe?path=/v1/fuel_purchases', status: 'checking' },
+      { name: 'MOTIV Fuel Cards', route: '/api/v1/motiv/fuel-cards', status: 'checking' },
       { name: 'MOTIV Inspection Reports (v1)', route: '/api/v1/motiv/probe?path=/v1/inspection_reports', status: 'checking' },
       { name: 'MOTIV Inspection Reports (v2)', route: '/api/v1/motiv/probe?path=/v2/inspection_reports', status: 'checking' },
       { name: 'MOTIV IFTA Summary', route: '/api/v1/motiv/probe?path=/v1/ifta/summary', status: 'checking' },
