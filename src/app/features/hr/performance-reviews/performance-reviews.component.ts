@@ -497,6 +497,7 @@ export class PerformanceReviewsComponent implements OnInit {
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
+  private readonly managementTabsStorageKey = 'ta.performanceReviews.managementTabs.v1';
 
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
@@ -590,12 +591,14 @@ export class PerformanceReviewsComponent implements OnInit {
       return [...tabs, title];
     });
     this.activeManagementTitleTab.set(title);
+    this.persistManagementTabs();
     this.newManagementTitle.set('');
     this.showTitlePicker.set(false);
   }
 
   selectManagementTitleTab(title: string): void {
     this.activeManagementTitleTab.set(title);
+    this.persistManagementTabs();
   }
 
   getReviewCount(status: string): number {
@@ -700,6 +703,7 @@ export class PerformanceReviewsComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.restoreManagementTabs();
     this.loadEmployees();
     this.loadTimeclockSummary();
     this.loadRevenueData();
@@ -1013,5 +1017,44 @@ export class PerformanceReviewsComponent implements OnInit {
     const year = Number(parts[0]) || now.getFullYear();
     const month = Number(parts[1]) || (now.getMonth() + 1);
     return { year, month };
+  }
+
+  private restoreManagementTabs(): void {
+    try {
+      const raw = localStorage.getItem(this.managementTabsStorageKey);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as { tabs?: string[]; active?: string };
+      const tabs = Array.isArray(parsed?.tabs)
+        ? parsed.tabs.map(v => String(v || '').trim()).filter(Boolean)
+        : [];
+
+      if (!tabs.length) return;
+
+      const deduped = Array.from(new Set(tabs));
+      this.managementTitleTabs.set(deduped);
+
+      const active = String(parsed?.active || '').trim();
+      if (active && deduped.some(t => t.toLowerCase() === active.toLowerCase())) {
+        const exact = deduped.find(t => t.toLowerCase() === active.toLowerCase()) || deduped[0];
+        this.activeManagementTitleTab.set(exact);
+      } else {
+        this.activeManagementTitleTab.set(deduped[0]);
+      }
+    } catch {
+      // Ignore storage parsing issues and continue with defaults.
+    }
+  }
+
+  private persistManagementTabs(): void {
+    try {
+      const payload = {
+        tabs: this.managementTitleTabs(),
+        active: this.activeManagementTitleTab()
+      };
+      localStorage.setItem(this.managementTabsStorageKey, JSON.stringify(payload));
+    } catch {
+      // Ignore storage write failures.
+    }
   }
 }
