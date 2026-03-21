@@ -991,7 +991,9 @@ export class DriverListComponent implements OnInit {
             ? { ...row, status: this.normalizeStatus(targetStatus) }
             : row
         ));
-        this.loadDrivers();
+        // Avoid immediate stale overwrite from eventual-consistent reads.
+        // Keep UI snappy now, then reconcile shortly after.
+        setTimeout(() => this.loadDrivers(), 1200);
       },
       error: (err: any) => this.toast.error(err?.error?.error || fallbackError, 'Error')
     });
