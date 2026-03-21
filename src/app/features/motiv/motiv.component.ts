@@ -1806,7 +1806,7 @@ export class MotivComponent implements OnInit {
       );
 
       const matched = (vin && byVin.get(vin)) || (unit && byUnit.get(unit));
-      if (matched) return matched;
+      if (matched) return this.applyDriverStatusToVehicleRow(matched, driver);
 
       return this.buildDriverFallbackVehicleRow(driver);
     });
@@ -1837,6 +1837,19 @@ export class MotivComponent implements OnInit {
       status: driver?.status ?? driver?.Status ?? 'active',
       location: 'N/A',
       updated_at: driver?.lastLocationUpdate ?? driver?.LastLocationUpdate ?? driver?.updatedAt ?? driver?.UpdatedAt ?? null
+    };
+  }
+
+  private applyDriverStatusToVehicleRow(vehicleRow: any, driver: any): any {
+    const driverStatus = String(driver?.status ?? driver?.Status ?? '').trim();
+    if (!driverStatus) return vehicleRow;
+
+    return {
+      ...vehicleRow,
+      status: driverStatus,
+      vehicle: vehicleRow?.vehicle
+        ? { ...vehicleRow.vehicle, status: vehicleRow?.vehicle?.status ?? driverStatus }
+        : vehicleRow?.vehicle
     };
   }
 
