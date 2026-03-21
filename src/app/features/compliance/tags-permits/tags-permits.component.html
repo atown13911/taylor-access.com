@@ -247,6 +247,7 @@
             <th>Truck #</th>
             <th>Status</th>
             <th>Assigned Fuel Card</th>
+            <th>Last4</th>
           </tr>
         </thead>
         <tbody>
@@ -258,14 +259,21 @@
               <td><span class="tp-status active">Active</span></td>
               <td>
                 @if (d.assignedFuelCard !== 'Unassigned') {
-                  <span class="tp-type-badge">{{ d.assignedFuelCard }}</span>
+                  <button
+                    type="button"
+                    class="tp-card-chip"
+                    title="Click to copy fuel card"
+                    (click)="copyAssignedFuelCard(d.assignedFuelCard)">
+                    {{ d.assignedFuelCard }}
+                  </button>
                 } @else {
                   <span class="tp-muted">Unassigned</span>
                 }
               </td>
+              <td class="tp-mono">{{ d.assignedFuelCardLast4 || 'N/A' }}</td>
             </tr>
           } @empty {
-            <tr><td colspan="5" class="tp-empty">No active drivers found.</td></tr>
+            <tr><td colspan="6" class="tp-empty">No active drivers found.</td></tr>
           }
         </tbody>
       </table>

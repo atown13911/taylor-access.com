@@ -96,8 +96,7 @@ export class TagsPermitsComponent implements OnInit {
         const key = this.buildDriverLookupKeys(d);
         const assigned = key
           .map(k => assignments.get(k))
-          .find(v => !!v)
-          ?? 'Unassigned';
+          .find(v => !!v);
 
         return {
           id: d?.id,
@@ -105,7 +104,8 @@ export class TagsPermitsComponent implements OnInit {
           email: d?.email || '',
           truckNumber: d?.truckNumber || d?.assignedTruckNumber || d?.truckTag || '',
           status: d?.status || 'active',
-          assignedFuelCard: assigned
+          assignedFuelCard: assigned?.label ?? 'Unassigned',
+          assignedFuelCardLast4: assigned?.last4 ?? 'N/A'
         };
       });
 
@@ -355,11 +355,27 @@ export class TagsPermitsComponent implements OnInit {
     return 'Assigned';
   }
 
-  private buildFuelCardAssignmentMap(): Map<string, string> {
-    const map = new Map<string, string>();
+  private buildFuelCardLast4(card: any): string {
+    const rawLast4 =
+      card?.last_four ??
+      card?.last4 ??
+      card?.last_digits ??
+      card?.number_last4 ??
+      card?.pan_last4 ??
+      card?.masked_card_number ??
+      card?.card_number;
+    const digits = String(rawLast4 ?? '').replace(/\D/g, '');
+    return digits.length >= 4 ? digits.slice(-4) : 'N/A';
+  }
+
+  private buildFuelCardAssignmentMap(): Map<string, { label: string; last4: string }> {
+    const map = new Map<string, { label: string; last4: string }>();
     for (const raw of this.motivFuelCards()) {
       const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
-      const display = this.buildFuelCardDisplay(card);
+      const assignment = {
+        label: this.buildFuelCardDisplay(card),
+        last4: this.buildFuelCardLast4(card)
+      };
       const assigned = card?.assigned_driver ?? card?.driver ?? card?.user ?? card?.holder ?? raw?.assigned_driver ?? raw?.driver ?? raw?.user ?? raw?.holder ?? {};
       const assignedName = [assigned?.first_name ?? assigned?.firstName, assigned?.last_name ?? assigned?.lastName].filter(Boolean).join(' ').trim() || assigned?.name;
       const assignedEmail = assigned?.email ?? assigned?.driver_email ?? raw?.assigned_driver_email;
@@ -369,10 +385,21 @@ export class TagsPermitsComponent implements OnInit {
       const emailKey = this.normalizeKey(assignedEmail);
       const nameKey = this.normalizeNameKey(assignedName);
 
-      if (idKey) map.set(`id:${idKey}`, display);
-      if (emailKey) map.set(`email:${emailKey}`, display);
-      if (nameKey) map.set(`name:${nameKey}`, display);
+      if (idKey) map.set(`id:${idKey}`, assignment);
+      if (emailKey) map.set(`email:${emailKey}`, assignment);
+      if (nameKey) map.set(`name:${nameKey}`, assignment);
     }
     return map;
+  }
+
+  async copyAssignedFuelCard(value: string): Promise<void> {
+    const text = String(value ?? '').trim();
+    if (!text || text === 'Unassigned') return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toast.success('Fuel card copied', 'Copied');
+    } catch {
+      this.toast.error('Unable to copy fuel card', 'Error');
+    }
   }
 }

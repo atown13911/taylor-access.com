@@ -118,6 +118,21 @@
   padding: 3px 10px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize;
   background: rgba(0,212,255,0.08); color: var(--cyan); border: 1px solid rgba(0,212,255,0.15);
 }
+.tp-card-chip {
+  border: 1px solid rgba(0,212,255,0.25);
+  background: rgba(0,212,255,0.08);
+  color: var(--cyan);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    background: rgba(0,212,255,0.16);
+    border-color: rgba(0,212,255,0.45);
+  }
+}
 .tp-driver-link { color: var(--cyan); font-weight: 500; }
 .tp-actions { display: flex; gap: 4px; }
 .tp-doc-cell { display: flex; gap: 3px; align-items: center; }
