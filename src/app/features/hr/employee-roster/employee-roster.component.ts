@@ -2422,6 +2422,8 @@ import { AuthService } from '../../../core/services/auth.service';
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 20px;
+      overflow-y: auto;
       z-index: 2000;
       animation: fadeIn 0.2s ease;
     }
@@ -2437,7 +2439,7 @@ import { AuthService } from '../../../core/services/auth.service';
       border-radius: 20px;
       width: 90%;
       max-width: 900px;
-      max-height: 90vh;
+      max-height: calc(100vh - 40px);
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 242, 254, 0.3);
       animation: slideUp 0.3s ease;
@@ -2668,6 +2670,12 @@ import { AuthService } from '../../../core/services/auth.service';
 
     .modal-compact {
       max-width: 600px;
+    }
+    .modal-content.modal-compact .modal-body {
+      padding-bottom: 20px;
+    }
+    .modal-content.modal-compact .modal-footer {
+      position: static;
     }
 
     .add-hint {

@@ -38,6 +38,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin-security/structure/structure.component').then(m => m.StructureComponent)
       },
       {
+        path: 'satellites',
+        loadComponent: () => import('./features/admin-security/satellites/satellites.component').then(m => m.SatellitesComponent)
+      },
+      {
         path: 'database',
         loadComponent: () => import('./features/system/database/database.component').then(m => m.DatabaseComponent)
       },
