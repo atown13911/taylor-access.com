@@ -1101,9 +1101,9 @@ export class MotivComponent implements OnInit {
       const normalizedStatus = row.status.trim().toLowerCase();
       const matchesStatus =
         statusFilter === 'all' ||
-        (statusFilter === 'active' && (normalizedStatus === 'active' || normalizedStatus === 'in_service')) ||
-        (statusFilter === 'deactivated' && normalizedStatus === 'deactivated') ||
-        (statusFilter === 'other' && normalizedStatus !== 'active' && normalizedStatus !== 'in_service' && normalizedStatus !== 'deactivated');
+        (statusFilter === 'active' && this.isActiveLikeStatus(normalizedStatus)) ||
+        (statusFilter === 'deactivated' && this.isVehicleDeactivatedStatus(normalizedStatus)) ||
+        (statusFilter === 'other' && !this.isActiveLikeStatus(normalizedStatus) && !this.isVehicleDeactivatedStatus(normalizedStatus));
 
       const hasVin = !!row.vin && row.vin.toLowerCase() !== 'n/a';
       const matchesVin =
@@ -1117,8 +1117,8 @@ export class MotivComponent implements OnInit {
     return filtered.sort((a, b) => {
       const statusA = a.status.trim().toLowerCase();
       const statusB = b.status.trim().toLowerCase();
-      const rankA = statusA === 'active' || statusA === 'in_service' ? 0 : statusA === 'deactivated' ? 1 : 2;
-      const rankB = statusB === 'active' || statusB === 'in_service' ? 0 : statusB === 'deactivated' ? 1 : 2;
+      const rankA = this.isActiveLikeStatus(statusA) ? 0 : this.isVehicleDeactivatedStatus(statusA) ? 1 : 2;
+      const rankB = this.isActiveLikeStatus(statusB) ? 0 : this.isVehicleDeactivatedStatus(statusB) ? 1 : 2;
       if (rankA !== rankB) return rankA - rankB;
       return a.number.localeCompare(b.number);
     });
@@ -1126,11 +1126,11 @@ export class MotivComponent implements OnInit {
   activeVehiclesCount = computed<number>(() =>
     this.vehicleTableRows().filter(x => {
       const status = x.status.trim().toLowerCase();
-      return status === 'active' || status === 'in_service';
+      return this.isActiveLikeStatus(status);
     }).length
   );
   deactivatedVehiclesCount = computed<number>(() =>
-    this.vehicleTableRows().filter(x => x.status.trim().toLowerCase() === 'deactivated').length
+    this.vehicleTableRows().filter(x => this.isVehicleDeactivatedStatus(x.status.trim().toLowerCase())).length
   );
   vehiclesWithVinCount = computed<number>(() =>
     this.vehicleTableRows().filter(x => x.vin && x.vin.toLowerCase() !== 'n/a').length
@@ -1847,8 +1847,18 @@ export class MotivComponent implements OnInit {
     return {
       ...vehicleRow,
       status: driverStatus,
+      state: driverStatus,
+      availability_details: vehicleRow?.availability_details
+        ? { ...vehicleRow.availability_details, availability_status: driverStatus }
+        : vehicleRow?.availability_details,
       vehicle: vehicleRow?.vehicle
-        ? { ...vehicleRow.vehicle, status: vehicleRow?.vehicle?.status ?? driverStatus }
+        ? {
+            ...vehicleRow.vehicle,
+            status: driverStatus,
+            availability_details: vehicleRow?.vehicle?.availability_details
+              ? { ...vehicleRow.vehicle.availability_details, availability_status: driverStatus }
+              : vehicleRow?.vehicle?.availability_details
+          }
         : vehicleRow?.vehicle
     };
   }
@@ -2337,7 +2347,12 @@ export class MotivComponent implements OnInit {
 
   private isActiveLikeStatus(status: string): boolean {
     const normalized = (status ?? '').trim().toLowerCase();
-    return normalized === 'active' || normalized === 'available' || normalized === 'online';
+    return normalized === 'active' || normalized === 'available' || normalized === 'online' || normalized === 'in_service';
+  }
+
+  private isVehicleDeactivatedStatus(status: string): boolean {
+    const normalized = (status ?? '').trim().toLowerCase();
+    return normalized === 'deactivated' || normalized === 'inactive' || normalized === 'disabled' || normalized === 'off_duty';
   }
 
   private createApiRows(): ApiHealthRow[] {
