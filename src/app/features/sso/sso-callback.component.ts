@@ -64,6 +64,7 @@ export class SsoCallbackComponent implements OnInit {
         email: payload.email,
         role: payload.app_role || payload.role,
         organizationId: payload.organizationId,
+        avatarUrl: payload.avatarUrl || payload.avatar,
         avatar: payload.avatar,
       }));
       localStorage.setItem('vantac_permissions', JSON.stringify(
@@ -111,6 +112,7 @@ export class SsoCallbackComponent implements OnInit {
             localStorage.setItem('vantac_user', JSON.stringify({
               id: userInfo.sub, name: userInfo.name, email: userInfo.email,
               role: userInfo.role, avatar: userInfo.avatar,
+              avatarUrl: userInfo.avatarUrl || userInfo.avatar,
               organizationId: userInfo.organizationId,
               organizationName: userInfo.organizationName,
             }));

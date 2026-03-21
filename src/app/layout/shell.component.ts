@@ -56,10 +56,16 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   avatarUrl = computed(() => {
     const user = this.currentUser();
-    const url = user?.avatarUrl;
+    const rawUrl = ((user as any)?.avatarUrl
+      ?? (user as any)?.AvatarUrl
+      ?? (user as any)?.avatar
+      ?? (user as any)?.Avatar) as string | undefined;
+    if (!rawUrl) return null;
+    const url = String(rawUrl).trim();
     if (!url) return null;
-    if (url.startsWith('data:') || url.startsWith('http')) return url;
-    return null;
+    if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return `${this.apiUrl}${url}`;
+    return `${this.apiUrl}/${url}`;
   });
 
   navSections: NavSection[] = [

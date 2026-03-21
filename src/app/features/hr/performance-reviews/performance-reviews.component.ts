@@ -21,6 +21,7 @@ interface Review {
   comments: string;
   status: string;
   createdAt?: string;
+  isSeeded?: boolean;
 }
 
 @Component({
@@ -52,7 +53,7 @@ interface Review {
       @if (pageTab() === 'reviews') {
       <!-- Stats -->
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div><span class="stat-val">{{ reviews().length }}</span><span class="stat-lbl">Total Reviews</span></div></div>
+        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div><span class="stat-val">{{ reviewRows().length }}</span><span class="stat-lbl">Total Reviews</span></div></div>
         <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-time'></i></div><div><span class="stat-val">{{ getReviewCount('pending') }}</span><span class="stat-lbl">Pending</span></div></div>
         <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-check-circle'></i></div><div><span class="stat-val">{{ getReviewCount('completed') }}</span><span class="stat-lbl">Completed</span></div></div>
         <div class="stat-card"><div class="stat-icon draft"><i class='bx bx-edit'></i></div><div><span class="stat-val">{{ getReviewCount('draft') }}</span><span class="stat-lbl">Drafts</span></div></div>
@@ -110,6 +111,9 @@ interface Review {
                   <td>
                     <button class="icon-btn" title="View" (click)="viewReview(review)"><i class='bx bx-show'></i></button>
                     <button class="icon-btn" title="Edit" (click)="editReview(review)"><i class='bx bx-edit'></i></button>
+                    @if (review.isSeeded) {
+                      <button class="icon-btn" title="Create Review" (click)="createFromSeed(review)"><i class='bx bx-plus-circle'></i></button>
+                    }
                   </td>
                 </tr>
               }
@@ -478,17 +482,48 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   getReviewCount(status: string): number {
-    return this.reviews().filter(r => r.status === status).length;
+    return this.reviewRows().filter(r => r.status === status).length;
   }
 
   setRating(star: number): void {
     this.formData.overallRating = star;
   }
 
+  reviewRows = computed<Review[]>(() => {
+    const activeEmployees = this.employees();
+    if (!activeEmployees.length) return this.reviews();
+
+    // Latest authored review per employee takes precedence.
+    const latestByEmployee = new Map<number, Review>();
+    for (const review of this.reviews()) {
+      const employeeId = Number(review.employeeId);
+      if (!employeeId) continue;
+      const current = latestByEmployee.get(employeeId);
+      const reviewTs = review.createdAt ? new Date(review.createdAt).getTime() : 0;
+      const currentTs = current?.createdAt ? new Date(current.createdAt).getTime() : 0;
+      if (!current || reviewTs >= currentTs) {
+        latestByEmployee.set(employeeId, { ...review, isSeeded: false });
+      }
+    }
+
+    return activeEmployees
+      .map((emp: any) => {
+        const employeeId = Number(emp.id);
+        return latestByEmployee.get(employeeId) ?? this.buildSeedReview(emp);
+      })
+      .sort((a, b) => {
+        // Real reviews first, then seeded.
+        if (!!a.isSeeded !== !!b.isSeeded) return a.isSeeded ? 1 : -1;
+        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTs - aTs;
+      });
+  });
+
   filteredReviews = computed(() => {
     const tab = this.activeTab();
-    if (tab === 'all') return this.reviews();
-    return this.reviews().filter(r => r.status === tab);
+    if (tab === 'all') return this.reviewRows();
+    return this.reviewRows().filter(r => r.status === tab);
   });
 
   ngOnInit() {
@@ -499,7 +534,7 @@ export class PerformanceReviewsComponent implements OnInit {
 
   async loadEmployees() {
     try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/users?status=active&pageSize=5000`).toPromise();
+      const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-roster?status=active&limit=5000`).toPromise();
       this.employees.set(res?.data || []);
     } catch { }
   }
@@ -511,6 +546,10 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   editReview(review: Review) {
+    if (review.isSeeded) {
+      this.createFromSeed(review);
+      return;
+    }
     this.editingReview.set(review);
     this.formData = { ...review };
     this.showModal.set(true);
@@ -541,5 +580,46 @@ export class PerformanceReviewsComponent implements OnInit {
       this.toast.champagne('Performance review created!');
     }
     this.showModal.set(false);
+  }
+
+  createFromSeed(review: Review) {
+    this.editingReview.set(null);
+    this.formData = {
+      employeeId: review.employeeId,
+      reviewType: review.reviewType || 'annual',
+      period: review.period || this.getDefaultPeriod(),
+      overallRating: review.overallRating && review.overallRating > 0 ? review.overallRating : 3,
+      strengths: '',
+      areasForImprovement: '',
+      goals: '',
+      comments: '',
+      status: 'draft'
+    };
+    this.showModal.set(true);
+  }
+
+  private buildSeedReview(emp: any): Review {
+    const employeeId = Number(emp.id);
+    return {
+      id: -employeeId,
+      employeeId,
+      employeeName: emp.name || `Employee #${employeeId}`,
+      reviewerId: 999,
+      reviewerName: '—',
+      reviewType: 'annual',
+      period: this.getDefaultPeriod(),
+      overallRating: 0,
+      strengths: '',
+      areasForImprovement: '',
+      goals: '',
+      comments: '',
+      status: 'draft',
+      createdAt: emp.updatedAt || emp.lastLoginAt || emp.createdAt || new Date().toISOString(),
+      isSeeded: true
+    };
+  }
+
+  private getDefaultPeriod(): string {
+    return `${new Date().getFullYear()}`;
   }
 }
