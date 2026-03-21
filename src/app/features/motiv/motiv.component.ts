@@ -1622,9 +1622,11 @@ export class MotivComponent implements OnInit {
     this.vehiclePage.set(1);
     if (!background) this.vehiclesError.set('');
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
-      next: (res) => {
+      next: async (res) => {
         const payload = res?.data ?? res;
-        this.motivVehicles.set(this.extractRows(payload));
+        const vehicleRows = this.extractRows(payload);
+        const locationRows = await this.fetchVehicleLocationRows();
+        this.motivVehicles.set(this.mergeVehicleRowsWithLocations(vehicleRows, locationRows));
         this.loadingVehicles.set(false);
       },
       error: (err) => {
@@ -1633,6 +1635,96 @@ export class MotivComponent implements OnInit {
         }
         this.loadingVehicles.set(false);
       }
+    });
+  }
+
+  private async fetchVehicleLocationRows(): Promise<any[]> {
+    const paths = [
+      '/v1/vehicle_locations',
+      '/v2/vehicle_locations',
+      '/v3/vehicle_locations',
+      '/v1/freight_visibility/vehicle_locations'
+    ];
+
+    for (const path of paths) {
+      try {
+        const res: any = await this.http
+          .get(`${this.apiUrl}/api/v1/motiv/probe?path=${encodeURIComponent(path)}`)
+          .pipe(timeout(12000))
+          .toPromise();
+        const rows = this.extractRows(res?.data ?? res);
+        if (rows.length > 0) return rows;
+      } catch {
+        // Try next endpoint candidate.
+      }
+    }
+
+    return [];
+  }
+
+  private mergeVehicleRowsWithLocations(vehicleRows: any[], locationRows: any[]): any[] {
+    if (!Array.isArray(vehicleRows) || vehicleRows.length === 0 || !Array.isArray(locationRows) || locationRows.length === 0) {
+      return vehicleRows;
+    }
+
+    const byVehicleId = new Map<string, any>();
+    const byUnitNumber = new Map<string, any>();
+
+    for (const row of locationRows) {
+      const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
+      const vehicleId = String(
+        normalized?.id ??
+        normalized?.vehicle_id ??
+        row?.vehicle_id ??
+        row?.vehicleId ??
+        ''
+      ).trim();
+      const unitNumber = String(
+        normalized?.number ??
+        normalized?.fleet_number ??
+        normalized?.fleetNumber ??
+        normalized?.unit ??
+        normalized?.unit_number ??
+        row?.number ??
+        row?.unit ??
+        row?.unit_number ??
+        ''
+      ).trim();
+
+      if (vehicleId) byVehicleId.set(vehicleId, row);
+      if (unitNumber) byUnitNumber.set(unitNumber, row);
+    }
+
+    return vehicleRows.map((row) => {
+      const vehicle = row?.vehicle ?? row ?? {};
+      const vehicleId = String(vehicle?.id ?? row?.id ?? row?.vehicle_id ?? '').trim();
+      const unitNumber = String(
+        vehicle?.number ??
+        vehicle?.fleet_number ??
+        vehicle?.fleetNumber ??
+        vehicle?.unit ??
+        vehicle?.unit_number ??
+        row?.number ??
+        ''
+      ).trim();
+
+      const locationMatch = (vehicleId && byVehicleId.get(vehicleId)) || (unitNumber && byUnitNumber.get(unitNumber));
+      if (!locationMatch) return row;
+
+      const mergedLocation =
+        locationMatch?.current_location ??
+        locationMatch?.currentLocation ??
+        locationMatch?.location ??
+        null;
+
+      return {
+        ...row,
+        current_location: row?.current_location ?? mergedLocation,
+        location: row?.location ?? mergedLocation,
+        vehicle: row?.vehicle
+          ? { ...row.vehicle, current_location: row?.vehicle?.current_location ?? mergedLocation }
+          : row?.vehicle
+      };
     });
   }
 
@@ -1886,10 +1978,36 @@ export class MotivComponent implements OnInit {
   private mapVehicleRow(raw: any): MotivVehicleTableRow {
     const vehicle = raw?.vehicle ?? raw?.current_vehicle ?? raw ?? {};
     const availability = vehicle?.availability_details ?? raw?.availability_details ?? {};
-    const location = raw?.current_location ?? raw?.location ?? vehicle?.current_location ?? {};
-    const lat = location?.lat ?? location?.latitude ?? raw?.lat ?? raw?.latitude;
-    const lon = location?.lon ?? location?.lng ?? location?.longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude;
-    const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? raw?.location ?? 'N/A');
+    const locationSeed =
+      raw?.current_location ??
+      raw?.currentLocation ??
+      raw?.location ??
+      vehicle?.current_location ??
+      vehicle?.currentLocation ??
+      vehicle?.location ??
+      availability?.current_location ??
+      availability?.location ??
+      raw?.last_known_location ??
+      raw?.latest_location ??
+      vehicle?.last_known_location ??
+      {};
+    const location = locationSeed?.current_location ?? locationSeed?.location ?? locationSeed;
+    const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
+    const lon = location?.lon ?? location?.lng ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
+    const fallbackLocationText = [location?.city, location?.state].filter(Boolean).join(', ');
+    const locationText =
+      lat != null && lon != null
+        ? `${lat}, ${lon}`
+        : String(
+          location?.description ??
+          location?.name ??
+          location?.address ??
+          location?.formatted_address ??
+          fallbackLocationText ??
+          raw?.location_name ??
+          raw?.location ??
+          'N/A'
+        );
     return {
       id: String(vehicle?.id ?? raw?.id ?? raw?.vehicle_id ?? 'N/A'),
       number: String(vehicle?.number ?? vehicle?.fleet_number ?? vehicle?.fleetNumber ?? vehicle?.unit ?? vehicle?.unitNumber ?? raw?.number ?? 'N/A'),
@@ -1902,6 +2020,9 @@ export class MotivComponent implements OnInit {
       lastUpdate: String(
         location?.located_at ??
         location?.locatedAt ??
+        location?.last_update ??
+        location?.lastUpdate ??
+        location?.timestamp ??
         vehicle?.updated_at ??
         vehicle?.updatedAt ??
         availability?.updated_at ??
