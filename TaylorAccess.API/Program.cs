@@ -348,6 +348,42 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""CompanyPermits"" ADD COLUMN IF NOT EXISTS ""ContentType"" text NULL;
     ");
 
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""PerformanceReviews"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""EmployeeId"" INTEGER NOT NULL,
+            ""ReviewerId"" INTEGER NULL,
+            ""EmployeeName"" VARCHAR(100) NULL,
+            ""ReviewerName"" VARCHAR(100) NULL,
+            ""ReviewType"" VARCHAR(30) NOT NULL DEFAULT 'monthly',
+            ""Year"" INTEGER NOT NULL,
+            ""Month"" INTEGER NOT NULL,
+            ""Period"" VARCHAR(20) NOT NULL,
+            ""OverallRating"" INTEGER NOT NULL DEFAULT 3,
+            ""Strengths"" text NULL,
+            ""AreasForImprovement"" text NULL,
+            ""Goals"" text NULL,
+            ""Comments"" text NULL,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'pending',
+            ""CallVolume"" INTEGER NOT NULL DEFAULT 0,
+            ""TextVolume"" INTEGER NOT NULL DEFAULT 0,
+            ""ClockedHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""WorkHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""ActivityRate"" numeric(6,4) NOT NULL DEFAULT 0,
+            ""InvoicedRevenue"" numeric(12,2) NOT NULL DEFAULT 0,
+            ""Score"" INTEGER NOT NULL DEFAULT 0,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_PerformanceReviews_Users_EmployeeId"" FOREIGN KEY (""EmployeeId"") REFERENCES ""Users""(""Id"") ON DELETE CASCADE,
+            CONSTRAINT ""FK_PerformanceReviews_Users_ReviewerId"" FOREIGN KEY (""ReviewerId"") REFERENCES ""Users""(""Id"") ON DELETE SET NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PerformanceReviews_Org_Employee_Year_Month""
+            ON ""PerformanceReviews"" (""OrganizationId"", ""EmployeeId"", ""Year"", ""Month"");
+        CREATE INDEX IF NOT EXISTS ""IX_PerformanceReviews_Org_Year_Month""
+            ON ""PerformanceReviews"" (""OrganizationId"", ""Year"", ""Month"");
+    ");
+
     await roleService.SeedDefaultRolesAsync();
 
     if (!context.Users.Any())

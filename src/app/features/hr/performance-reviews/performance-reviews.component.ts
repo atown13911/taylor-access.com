@@ -20,8 +20,27 @@ interface Review {
   goals: string;
   comments: string;
   status: string;
+  year?: number;
+  month?: number;
+  callVolume?: number;
+  textVolume?: number;
+  clockedHours?: number;
+  workHours?: number;
+  activityRate?: number;
+  invoicedRevenue?: number;
+  score?: number;
   createdAt?: string;
   isSeeded?: boolean;
+}
+interface ReviewMetricRow extends Review {
+  callVolume: number;
+  textVolume: number;
+  totalHours: number;
+  activeHours: number;
+  idleHours: number;
+  activityRate: number;
+  invoicedRevenue: number;
+  score: number;
 }
 
 @Component({
@@ -56,15 +75,23 @@ interface Review {
         <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div><span class="stat-val">{{ reviewRows().length }}</span><span class="stat-lbl">Total Reviews</span></div></div>
         <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-time'></i></div><div><span class="stat-val">{{ getReviewCount('pending') }}</span><span class="stat-lbl">Pending</span></div></div>
         <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-check-circle'></i></div><div><span class="stat-val">{{ getReviewCount('completed') }}</span><span class="stat-lbl">Completed</span></div></div>
-        <div class="stat-card"><div class="stat-icon draft"><i class='bx bx-edit'></i></div><div><span class="stat-val">{{ getReviewCount('draft') }}</span><span class="stat-lbl">Drafts</span></div></div>
       </div>
 
       <!-- Sub-Tabs -->
-      <div class="tabs">
-        <button class="tab" [class.active]="activeTab() === 'all'" (click)="activeTab.set('all')">All</button>
-        <button class="tab" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">Pending</button>
-        <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
-        <button class="tab" [class.active]="activeTab() === 'draft'" (click)="activeTab.set('draft')">Drafts</button>
+      <div class="review-controls">
+        <div class="tabs">
+          <button class="tab" [class.active]="activeTab() === 'all'" (click)="activeTab.set('all')">All</button>
+          <button class="tab" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">Pending</button>
+          <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
+        </div>
+        <div class="month-filter">
+          <label>Review Month</label>
+          <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
+            @for (opt of reviewMonthOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
       </div>
 
       <!-- Reviews Table -->
@@ -80,34 +107,33 @@ interface Review {
             <thead>
               <tr>
                 <th>Employee</th>
-                <th>Type</th>
-                <th>Period</th>
-                <th>Rating</th>
-                <th>Reviewer</th>
+                <th>Calls</th>
+                <th>Texts</th>
+                <th>Clocked Hrs</th>
+                <th>Work Hrs</th>
+                <th>Activity %</th>
+                <th>Invoiced Rev (30d)</th>
+                <th>Score</th>
                 <th>Status</th>
-                <th>Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              @for (review of filteredReviews(); track review.id) {
+              @for (review of metricRows(); track review.id) {
                 <tr>
                   <td><strong>{{ review.employeeName || 'Employee #' + review.employeeId }}</strong></td>
-                  <td><span class="type-badge">{{ review.reviewType | titlecase }}</span></td>
-                  <td>{{ review.period }}</td>
+                  <td>{{ review.callVolume }}</td>
+                  <td>{{ review.textVolume }}</td>
+                  <td>{{ review.totalHours | number:'1.1-1' }}</td>
+                  <td>{{ review.activeHours | number:'1.1-1' }}</td>
+                  <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
+                  <td>{{ review.invoicedRevenue | currency:'USD':'symbol':'1.0-0' }}</td>
                   <td>
-                    <div class="rating">
-                      @for (star of stars; track star) {
-                        <i class='bx'
-                           [class.bxs-star]="star <= review.overallRating"
-                           [class.bx-star]="star > review.overallRating"
-                           [class.filled]="star <= review.overallRating"></i>
-                      }
+                    <div class="score-pill" [class.high]="review.score >= 80" [class.med]="review.score >= 60 && review.score < 80" [class.low]="review.score < 60">
+                      {{ review.score }}
                     </div>
                   </td>
-                  <td>{{ review.reviewerName || '—' }}</td>
                   <td><span class="status-badge" [class]="review.status">{{ review.status | titlecase }}</span></td>
-                  <td>{{ review.createdAt | date:'shortDate' }}</td>
                   <td>
                     <button class="icon-btn" title="View" (click)="viewReview(review)"><i class='bx bx-show'></i></button>
                     <button class="icon-btn" title="Edit" (click)="editReview(review)"><i class='bx bx-edit'></i></button>
@@ -203,6 +229,7 @@ interface Review {
                   <select [(ngModel)]="callForm.callType">
                     <option value="outbound">Outbound</option>
                     <option value="inbound">Inbound</option>
+                    <option value="text">Text</option>
                     <option value="follow_up">Follow Up</option>
                     <option value="conference">Conference</option>
                   </select>
@@ -270,19 +297,13 @@ interface Review {
                 </div>
                 <div class="form-group">
                   <label>Review Type</label>
-                  <select [(ngModel)]="formData.reviewType">
-                    <option value="annual">Annual</option>
-                    <option value="quarterly">Quarterly</option>
-                    <option value="probation">Probation</option>
-                    <option value="promotion">Promotion</option>
-                    <option value="improvement_plan">Improvement Plan</option>
-                  </select>
+                  <input type="text" [ngModel]="'Monthly'" disabled>
                 </div>
               </div>
               <div class="form-row">
                 <div class="form-group">
                   <label>Review Period</label>
-                  <input type="text" [(ngModel)]="formData.period" placeholder="e.g., Q1 2026, Jan-Jun 2026">
+                  <input type="text" [ngModel]="selectedReviewMonthLabel()" disabled>
                 </div>
                 <div class="form-group">
                   <label>Overall Rating (1-5)</label>
@@ -316,7 +337,6 @@ interface Review {
               <div class="form-group">
                 <label>Status</label>
                 <select [(ngModel)]="formData.status">
-                  <option value="draft">Draft</option>
                   <option value="pending">Pending Review</option>
                   <option value="completed">Completed</option>
                 </select>
@@ -399,6 +419,10 @@ interface Review {
     .page-tab { padding: 12px 22px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.95rem; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: all 0.2s; margin-bottom: -2px; }
     .page-tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
     .page-tab:hover { color: #ccc; }
+    .review-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .month-filter { display: flex; align-items: center; gap: 8px; }
+    .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .month-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
     .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
@@ -412,6 +436,10 @@ interface Review {
     .status-badge.pending { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
     .status-badge.completed { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
     .status-badge.draft { background: rgba(156, 163, 175, 0.12); color: #9ca3af; }
+    .score-pill { display: inline-flex; min-width: 42px; justify-content: center; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .score-pill.high { background: rgba(34, 197, 94, 0.16); color: #22c55e; }
+    .score-pill.med { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+    .score-pill.low { background: rgba(239, 68, 68, 0.16); color: #ef4444; }
     .rating i { font-size: 1rem; color: #333; &.filled { color: #fbbf24; } }
     .star-input i { font-size: 1.4rem; cursor: pointer; color: #333; &.filled { color: #fbbf24; } &:hover { color: #fbbf24; } }
     .icon-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 1.1rem; padding: 4px; &:hover { color: #00d4ff; } }
@@ -441,6 +469,9 @@ export class PerformanceReviewsComponent implements OnInit {
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
   reviews = signal<Review[]>([]);
+  timeclockSummaries = signal<any[]>([]);
+  revenueSeries = signal<any[]>([]);
+  selectedReviewMonth = signal(this.getCurrentMonthKey());
 
   // Call Metrics
   callLogs = signal<any[]>([]);
@@ -450,7 +481,7 @@ export class PerformanceReviewsComponent implements OnInit {
     duration: 0, outcome: 'answered', notes: ''
   };
   employees = signal<any[]>([]);
-  activeTab = signal<'all' | 'pending' | 'completed' | 'draft'>('all');
+  activeTab = signal<'all' | 'pending' | 'completed'>('all');
   showModal = signal(false);
   editingReview = signal<Review | null>(null);
   viewingReview = signal<Review | null>(null);
@@ -458,7 +489,7 @@ export class PerformanceReviewsComponent implements OnInit {
 
   formData: any = {
     employeeId: 0, reviewType: 'annual', period: '', overallRating: 3,
-    strengths: '', areasForImprovement: '', goals: '', comments: '', status: 'draft'
+    strengths: '', areasForImprovement: '', goals: '', comments: '', status: 'pending'
   };
 
   getCallCount(type: string): number {
@@ -482,7 +513,10 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   getReviewCount(status: string): number {
-    return this.reviewRows().filter(r => r.status === status).length;
+    if (status === 'pending') {
+      return this.reviewRows().filter(r => this.normalizeReviewStatus(r.status) === 'pending').length;
+    }
+    return this.reviewRows().filter(r => this.normalizeReviewStatus(r.status) === status).length;
   }
 
   setRating(star: number): void {
@@ -523,13 +557,67 @@ export class PerformanceReviewsComponent implements OnInit {
   filteredReviews = computed(() => {
     const tab = this.activeTab();
     if (tab === 'all') return this.reviewRows();
-    return this.reviewRows().filter(r => r.status === tab);
+    return this.reviewRows().filter(r => this.normalizeReviewStatus(r.status) === tab);
+  });
+  metricRows = computed<ReviewMetricRow[]>(() => {
+    return this.filteredReviews().map((review) => {
+      const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
+      const liveCallVolume = this.getEmployeeCallVolume(review.employeeId);
+      const liveTextVolume = this.getEmployeeTextVolume(review.employeeId);
+      const liveTime = this.getEmployeeTime(review.employeeId);
+      const liveRevenue = this.getAttributedRevenue(review.employeeId);
+      const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
+
+      const callVolume = hasSnapshot ? Number(review.callVolume || 0) : liveCallVolume;
+      const textVolume = hasSnapshot ? Number(review.textVolume || 0) : liveTextVolume;
+      const totalHours = hasSnapshot ? Number(review.clockedHours || 0) : liveTime.totalHours;
+      const activeHours = hasSnapshot ? Number(review.workHours || 0) : liveTime.activeHours;
+      const idleHours = hasSnapshot ? Math.max(0, totalHours - activeHours) : liveTime.idleHours;
+      const activityRate = hasSnapshot ? Number(review.activityRate || 0) : liveTime.activityRate;
+      const invoicedRevenue = hasSnapshot ? Number(review.invoicedRevenue || 0) : liveRevenue;
+      const score = hasSnapshot ? Number(review.score || 0) : liveScore;
+
+      return {
+        ...review,
+        callVolume,
+        textVolume,
+        totalHours,
+        activeHours,
+        idleHours,
+        activityRate,
+        invoicedRevenue,
+        score
+      };
+    });
+  });
+  totalInvoicedRevenue30d = computed(() =>
+    this.revenueSeries().reduce((sum: number, point: any) =>
+      sum + Number(point?.value ?? point?.revenue ?? 0), 0)
+  );
+
+  reviewMonthOptions = (() => {
+    const opts: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 18; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      opts.push({ value, label });
+    }
+    return opts;
+  })();
+
+  selectedReviewMonthLabel = computed(() => {
+    const selected = this.selectedReviewMonth();
+    const found = this.reviewMonthOptions.find(o => o.value === selected);
+    return found?.label || selected;
   });
 
   ngOnInit() {
     this.loadEmployees();
-    // Reviews would load from API when backend endpoint exists
-    // For now, stored in-memory
+    this.loadTimeclockSummary();
+    this.loadRevenueData();
+    this.loadReviews();
   }
 
   async loadEmployees() {
@@ -538,10 +626,56 @@ export class PerformanceReviewsComponent implements OnInit {
       this.employees.set(res?.data || []);
     } catch { }
   }
+  async loadTimeclockSummary() {
+    try {
+      const date = new Date().toISOString().split('T')[0];
+      const res: any = await this.http.get(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`).toPromise();
+      this.timeclockSummaries.set(res?.data || []);
+    } catch {
+      this.timeclockSummaries.set([]);
+    }
+  }
+
+  async loadRevenueData() {
+    try {
+      const res: any = await this.http.get(`${this.apiUrl}/api/v1/dashboard/charts/revenue?days=30`).toPromise();
+      this.revenueSeries.set(res?.data || []);
+    } catch {
+      this.revenueSeries.set([]);
+    }
+  }
+
+  async loadReviews() {
+    try {
+      const { year, month } = this.parseMonthKey(this.selectedReviewMonth());
+      const res: any = await this.http
+        .get(`${this.apiUrl}/api/v1/performance-reviews?year=${year}&month=${month}&limit=500`)
+        .toPromise();
+      this.reviews.set(res?.data || []);
+    } catch {
+      this.reviews.set([]);
+    }
+  }
+
+  onReviewMonthChange(value: string) {
+    if (!value) return;
+    this.selectedReviewMonth.set(value);
+    this.loadReviews();
+  }
 
   openCreateModal() {
     this.editingReview.set(null);
-    this.formData = { employeeId: 0, reviewType: 'annual', period: '', overallRating: 3, strengths: '', areasForImprovement: '', goals: '', comments: '', status: 'draft' };
+    this.formData = {
+      employeeId: 0,
+      reviewType: 'monthly',
+      period: this.selectedReviewMonth(),
+      overallRating: 3,
+      strengths: '',
+      areasForImprovement: '',
+      goals: '',
+      comments: '',
+      status: 'pending'
+    };
     this.showModal.set(true);
   }
 
@@ -559,41 +693,83 @@ export class PerformanceReviewsComponent implements OnInit {
     this.viewingReview.set(review);
   }
 
-  saveReview() {
+  async saveReview() {
     if (!this.formData.employeeId) { this.toast.warning('Please select an employee'); return; }
 
     const emp = this.employees().find(e => e.id === +this.formData.employeeId);
+    const employeeId = Number(this.formData.employeeId);
+    const monthInfo = this.parseMonthKey(this.selectedReviewMonth());
+    const liveCallVolume = this.getEmployeeCallVolume(employeeId);
+    const liveTextVolume = this.getEmployeeTextVolume(employeeId);
+    const liveTime = this.getEmployeeTime(employeeId);
+    const liveRevenue = this.getAttributedRevenue(employeeId);
+    const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
+
     const review: Review = {
       ...this.formData,
-      id: this.editingReview()?.id || Date.now(),
+      id: this.editingReview()?.id,
       employeeName: emp?.name || 'Unknown',
-      reviewerName: 'Austin Taylor', // TODO: use current user
-      reviewerId: 999,
-      createdAt: this.editingReview()?.createdAt || new Date().toISOString()
+      reviewType: 'monthly',
+      period: this.selectedReviewMonth(),
+      year: monthInfo.year,
+      month: monthInfo.month,
+      reviewerName: this.editingReview()?.reviewerName || '—',
+      reviewerId: this.editingReview()?.reviewerId || 0,
+      status: this.normalizeReviewStatus(this.formData.status),
+      callVolume: liveCallVolume,
+      textVolume: liveTextVolume,
+      clockedHours: Number(liveTime.totalHours.toFixed(2)),
+      workHours: Number(liveTime.activeHours.toFixed(2)),
+      activityRate: Number(liveTime.activityRate.toFixed(4)),
+      invoicedRevenue: Number(liveRevenue.toFixed(2)),
+      score: liveScore,
+      createdAt: this.editingReview()?.createdAt
     };
 
-    if (this.editingReview()) {
-      this.reviews.update(list => list.map(r => r.id === review.id ? review : r));
-      this.toast.success('Review updated');
-    } else {
-      this.reviews.update(list => [review, ...list]);
-      this.toast.champagne('Performance review created!');
+    this.saving.set(true);
+    try {
+      const payload = {
+        employeeId: review.employeeId,
+        year: monthInfo.year,
+        month: monthInfo.month,
+        period: review.period,
+        overallRating: review.overallRating,
+        strengths: review.strengths,
+        areasForImprovement: review.areasForImprovement,
+        goals: review.goals,
+        comments: review.comments,
+        status: review.status,
+        callVolume: review.callVolume,
+        textVolume: review.textVolume,
+        clockedHours: review.clockedHours,
+        workHours: review.workHours,
+        activityRate: review.activityRate,
+        invoicedRevenue: review.invoicedRevenue,
+        score: review.score
+      };
+      await this.http.post(`${this.apiUrl}/api/v1/performance-reviews/monthly-upsert`, payload).toPromise();
+      await this.loadReviews();
+      this.toast.success(this.editingReview() ? 'Monthly review updated' : 'Monthly review saved');
+      this.showModal.set(false);
+    } catch {
+      this.toast.error('Failed to save monthly review');
+    } finally {
+      this.saving.set(false);
     }
-    this.showModal.set(false);
   }
 
   createFromSeed(review: Review) {
     this.editingReview.set(null);
     this.formData = {
       employeeId: review.employeeId,
-      reviewType: review.reviewType || 'annual',
-      period: review.period || this.getDefaultPeriod(),
+      reviewType: 'monthly',
+      period: this.selectedReviewMonth(),
       overallRating: review.overallRating && review.overallRating > 0 ? review.overallRating : 3,
       strengths: '',
       areasForImprovement: '',
       goals: '',
       comments: '',
-      status: 'draft'
+      status: 'pending'
     };
     this.showModal.set(true);
   }
@@ -606,20 +782,83 @@ export class PerformanceReviewsComponent implements OnInit {
       employeeName: emp.name || `Employee #${employeeId}`,
       reviewerId: 999,
       reviewerName: '—',
-      reviewType: 'annual',
-      period: this.getDefaultPeriod(),
+      reviewType: 'monthly',
+      period: this.selectedReviewMonth(),
       overallRating: 0,
       strengths: '',
       areasForImprovement: '',
       goals: '',
       comments: '',
-      status: 'draft',
+      status: 'pending',
       createdAt: emp.updatedAt || emp.lastLoginAt || emp.createdAt || new Date().toISOString(),
       isSeeded: true
     };
   }
 
-  private getDefaultPeriod(): string {
-    return `${new Date().getFullYear()}`;
+  private normalizeReviewStatus(status: string): 'pending' | 'completed' {
+    return status === 'completed' ? 'completed' : 'pending';
+  }
+
+  private getEmployeeCallVolume(employeeId: number): number {
+    return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
+  }
+
+  private getEmployeeTextVolume(employeeId: number): number {
+    return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
+  }
+
+  private getEmployeeTime(employeeId: number): { totalHours: number; activeHours: number; idleHours: number; activityRate: number; totalSeconds: number } {
+    const emp = this.employees().find(e => Number(e.id) === Number(employeeId));
+    const email = String(emp?.email || '').toLowerCase();
+    const row = this.timeclockSummaries().find((s: any) =>
+      Number(s?.userId) === Number(employeeId) || String(s?.userEmail || '').toLowerCase() === email
+    );
+    const activeSeconds = Number(row?.activeSeconds || 0);
+    const idleSeconds = Number(row?.idleSeconds || 0);
+    const totalSeconds = Number(row?.totalSeconds || (activeSeconds + idleSeconds) || 0);
+    const totalHours = totalSeconds / 3600;
+    const activeHours = activeSeconds / 3600;
+    const idleHours = idleSeconds / 3600;
+    const activityRate = totalSeconds > 0 ? activeSeconds / totalSeconds : 0;
+    return { totalHours, activeHours, idleHours, activityRate, totalSeconds };
+  }
+
+  private getAttributedRevenue(employeeId: number): number {
+    const totalRevenue = this.totalInvoicedRevenue30d();
+    if (totalRevenue <= 0) return 0;
+    const allTime = this.employees().map(e => this.getEmployeeTime(Number(e.id)).totalSeconds);
+    const totalTrackedSeconds = allTime.reduce((sum, s) => sum + s, 0);
+    if (totalTrackedSeconds <= 0) return 0;
+    const empSeconds = this.getEmployeeTime(employeeId).totalSeconds;
+    return totalRevenue * (empSeconds / totalTrackedSeconds);
+  }
+
+  private computePerformanceScore(
+    callVolume: number,
+    textVolume: number,
+    activeHours: number,
+    totalHours: number,
+    invoicedRevenue: number
+  ): number {
+    const targetRevenue = Math.max(1, this.totalInvoicedRevenue30d() / Math.max(1, this.employees().length));
+    const callScore = Math.min(callVolume / 20, 1) * 25;
+    const textScore = Math.min(textVolume / 40, 1) * 15;
+    const activeHoursScore = Math.min(activeHours / 160, 1) * 30;
+    const activityRatioScore = (totalHours > 0 ? Math.min(activeHours / totalHours, 1) : 0) * 15;
+    const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 15;
+    return Math.round(callScore + textScore + activeHoursScore + activityRatioScore + revenueScore);
+  }
+
+  private getCurrentMonthKey(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  private parseMonthKey(value: string): { year: number; month: number } {
+    const parts = String(value || '').split('-');
+    const now = new Date();
+    const year = Number(parts[0]) || now.getFullYear();
+    const month = Number(parts[1]) || (now.getMonth() + 1);
+    return { year, month };
   }
 }
