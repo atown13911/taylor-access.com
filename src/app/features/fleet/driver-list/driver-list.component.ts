@@ -977,17 +977,17 @@ export class DriverListComponent implements OnInit {
     successVerb: string,
     fallbackError: string
   ): void {
-    const driverId = Number(driver.id);
-    if (!Number.isFinite(driverId)) {
+    const targetIdRaw = String(driver.id ?? '').trim();
+    if (!targetIdRaw) {
       this.toast.error(`Invalid driver id for ${driver.name}`, 'Error');
       return;
     }
 
-    this.api.updateDriver(driverId, { status: targetStatus }).subscribe({
+    this.api.updateDriver(driver.id, { status: targetStatus }).subscribe({
       next: () => {
         this.toast.success(`${driver.name} ${successVerb}`, 'Success');
         this.drivers.update(rows => rows.map((row) =>
-          Number(row.id) === driverId
+          String(row.id ?? '').trim() === targetIdRaw
             ? { ...row, status: this.normalizeStatus(targetStatus) }
             : row
         ));
