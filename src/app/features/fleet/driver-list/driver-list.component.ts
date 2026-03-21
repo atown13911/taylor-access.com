@@ -6,6 +6,7 @@ import { VanTacApiService } from '../../../core/services/vantac-api.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { EventTrackingService } from '../../../core/services/event-tracking.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 
 interface DriverRow {
   id: string;
@@ -33,6 +34,7 @@ export class DriverListComponent implements OnInit {
   private toast = inject(ToastService);
   private router = inject(Router);
   private tracking = inject(EventTrackingService);
+  private confirmDialog = inject(ConfirmService);
 
   isLoading = signal(false);
   syncingArchived = signal(false);
@@ -923,47 +925,75 @@ export class DriverListComponent implements OnInit {
     }
   }
 
-  deactivateDriver(driver: DriverRow): void {
-    if (!confirm(`Deactivate ${driver.name}?`)) return;
-    this.api.updateDriver(driver.id, { status: 'inactive' }).subscribe({
-      next: () => {
-        this.toast.success(`${driver.name} deactivated`, 'Success');
-        this.loadDrivers();
-      },
-      error: () => this.toast.error('Failed to deactivate driver', 'Error')
+  async deactivateDriver(driver: DriverRow): Promise<void> {
+    const ok = await this.confirmDialog.show({
+      title: 'Deactivate Driver',
+      message: `Deactivate ${driver.name}?`,
+      confirmText: 'Deactivate',
+      cancelText: 'Cancel',
+      type: 'danger'
     });
+    if (!ok) return;
+    this.updateDriverStatus(driver, 'inactive', 'deactivated', 'Failed to deactivate driver');
   }
 
-  reactivateDriver(driver: DriverRow): void {
-    if (!confirm(`Reactivate ${driver.name}?`)) return;
-    this.api.updateDriver(driver.id, { status: 'active' }).subscribe({
-      next: () => {
-        this.toast.success(`${driver.name} reactivated`, 'Success');
-        this.loadDrivers();
-      },
-      error: () => this.toast.error('Failed to reactivate driver', 'Error')
+  async reactivateDriver(driver: DriverRow): Promise<void> {
+    const ok = await this.confirmDialog.show({
+      title: 'Reactivate Driver',
+      message: `Reactivate ${driver.name}?`,
+      confirmText: 'Reactivate',
+      cancelText: 'Cancel'
     });
+    if (!ok) return;
+    this.updateDriverStatus(driver, 'active', 'reactivated', 'Failed to reactivate driver');
   }
 
-  archiveDriver(driver: DriverRow): void {
-    if (!confirm(`Archive ${driver.name}?`)) return;
-    this.api.updateDriver(driver.id, { status: 'archived' }).subscribe({
-      next: () => {
-        this.toast.success(`${driver.name} archived`, 'Success');
-        this.loadDrivers();
-      },
-      error: () => this.toast.error('Failed to archive driver', 'Error')
+  async archiveDriver(driver: DriverRow): Promise<void> {
+    const ok = await this.confirmDialog.show({
+      title: 'Archive Driver',
+      message: `Archive ${driver.name}?`,
+      confirmText: 'Archive',
+      cancelText: 'Cancel',
+      type: 'danger'
     });
+    if (!ok) return;
+    this.updateDriverStatus(driver, 'archived', 'archived', 'Failed to archive driver');
   }
 
-  restoreArchivedDriver(driver: DriverRow): void {
-    if (!confirm(`Restore ${driver.name} to active?`)) return;
-    this.api.updateDriver(driver.id, { status: 'active' }).subscribe({
+  async restoreArchivedDriver(driver: DriverRow): Promise<void> {
+    const ok = await this.confirmDialog.show({
+      title: 'Restore Driver',
+      message: `Restore ${driver.name} to active?`,
+      confirmText: 'Restore',
+      cancelText: 'Cancel'
+    });
+    if (!ok) return;
+    this.updateDriverStatus(driver, 'active', 'restored', 'Failed to restore driver');
+  }
+
+  private updateDriverStatus(
+    driver: DriverRow,
+    targetStatus: 'active' | 'inactive' | 'archived',
+    successVerb: string,
+    fallbackError: string
+  ): void {
+    const driverId = Number(driver.id);
+    if (!Number.isFinite(driverId)) {
+      this.toast.error(`Invalid driver id for ${driver.name}`, 'Error');
+      return;
+    }
+
+    this.api.updateDriver(driverId, { status: targetStatus }).subscribe({
       next: () => {
-        this.toast.success(`${driver.name} restored`, 'Success');
+        this.toast.success(`${driver.name} ${successVerb}`, 'Success');
+        this.drivers.update(rows => rows.map((row) =>
+          Number(row.id) === driverId
+            ? { ...row, status: this.normalizeStatus(targetStatus) }
+            : row
+        ));
         this.loadDrivers();
       },
-      error: () => this.toast.error('Failed to restore driver', 'Error')
+      error: (err: any) => this.toast.error(err?.error?.error || fallbackError, 'Error')
     });
   }
 
