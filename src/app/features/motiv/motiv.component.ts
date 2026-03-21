@@ -2003,9 +2003,9 @@ export class MotivComponent implements OnInit {
           location?.name ??
           location?.address ??
           location?.formatted_address ??
-          fallbackLocationText ??
+          (fallbackLocationText || null) ??
           raw?.location_name ??
-          raw?.location ??
+          (typeof raw?.location === 'string' ? raw.location : null) ??
           'N/A'
         );
     return {
