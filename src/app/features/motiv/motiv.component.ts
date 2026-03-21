@@ -775,6 +775,13 @@ type MotivStatusCache = {
               </select>
               <select
                 class="filter-input filter-select"
+                [value]="fuelCardYearFilter()"
+                (change)="setFuelCardYearFilter($any($event.target).value)">
+                <option value="all">All Years</option>
+                <option *ngFor="let y of fuelCardAvailableYears()" [value]="y">{{ y }}</option>
+              </select>
+              <select
+                class="filter-input filter-select"
                 [value]="fuelCardWeekFilter()"
                 (change)="setFuelCardWeekFilter($any($event.target).value)">
                 <option value="all">All Weeks</option>
@@ -1188,6 +1195,7 @@ export class MotivComponent implements OnInit {
   fuelPageSize = signal(100);
   fuelCardSearchTerm = signal('');
   fuelCardStatusFilter = signal<'all' | 'active' | 'inactive' | 'other'>('all');
+  fuelCardYearFilter = signal<string>('all');
   fuelCardWeekFilter = signal<string>('all');
   fuelCardPage = signal(1);
   fuelCardPageSize = signal(100);
@@ -1588,10 +1596,12 @@ export class MotivComponent implements OnInit {
   fuelCardSpendIndex = computed<Map<string, { purchases: number; spend: number }>>(() => {
     const index = new Map<string, { purchases: number; spend: number }>();
     const seenTransactionIds = new Set<string>();
+    const selectedYear = this.fuelCardYearFilter();
     const selectedWeek = this.fuelCardWeekFilter();
     for (const row of this.fuelRows()) {
       const dt = this.tryParseDate(row.date);
       const iso = dt ? this.getIsoWeekInfo(dt) : null;
+      if (selectedYear !== 'all' && (!iso || String(iso.year) !== selectedYear)) continue;
       if (selectedWeek !== 'all' && (!iso || iso.key !== selectedWeek)) continue;
 
       const amount = Number.isFinite(row.amountValue) ? row.amountValue : 0;
@@ -1619,6 +1629,7 @@ export class MotivComponent implements OnInit {
       const txDate = this.extractCardTransactionDate(tx, raw);
       const dt = this.tryParseDate(txDate);
       const iso = dt ? this.getIsoWeekInfo(dt) : null;
+      if (selectedYear !== 'all' && (!iso || String(iso.year) !== selectedYear)) continue;
       if (selectedWeek !== 'all' && (!iso || iso.key !== selectedWeek)) continue;
 
       const transactionId = String(
@@ -1683,13 +1694,32 @@ export class MotivComponent implements OnInit {
   fuelCardsTotalSpend = computed<number>(() =>
     this.fuelCardRows().reduce((sum, row) => sum + (Number.isFinite(row.spend) ? row.spend : 0), 0)
   );
+  fuelCardAvailableYears = computed<number[]>(() => {
+    const years = new Set<number>();
+
+    for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      if (dt) years.add(dt.getUTCFullYear());
+    }
+
+    for (const raw of this.motivCardTransactions()) {
+      const tx = raw?.transaction ?? raw?.fuel_purchase ?? raw ?? {};
+      const txDate = this.extractCardTransactionDate(tx, raw);
+      const dt = this.tryParseDate(txDate);
+      if (dt) years.add(dt.getUTCFullYear());
+    }
+
+    return Array.from(years).sort((a, b) => b - a);
+  });
   fuelCardAvailableWeeks = computed<FuelWeekOption[]>(() => {
+    const selectedYear = this.fuelCardYearFilter();
     const weekMap = new Map<string, FuelWeekOption>();
 
     for (const row of this.fuelRows()) {
       const dt = this.tryParseDate(row.date);
       if (!dt) continue;
       const info = this.getIsoWeekInfo(dt);
+      if (selectedYear !== 'all' && String(info.year) !== selectedYear) continue;
       if (!weekMap.has(info.key)) {
         weekMap.set(info.key, {
           key: info.key,
@@ -1706,6 +1736,7 @@ export class MotivComponent implements OnInit {
       const dt = this.tryParseDate(txDate);
       if (!dt) continue;
       const info = this.getIsoWeekInfo(dt);
+      if (selectedYear !== 'all' && String(info.year) !== selectedYear) continue;
       if (!weekMap.has(info.key)) {
         weekMap.set(info.key, {
           key: info.key,
@@ -1721,6 +1752,7 @@ export class MotivComponent implements OnInit {
   filteredFuelCardRows = computed<MotivFuelCardRow[]>(() => {
     const term = this.fuelCardSearchTerm().trim().toLowerCase();
     const status = this.fuelCardStatusFilter();
+    const year = this.fuelCardYearFilter();
     const week = this.fuelCardWeekFilter();
     return this.fuelCardRows().filter((row) => {
       const normalizedStatus = row.status.trim().toLowerCase();
@@ -1738,9 +1770,10 @@ export class MotivComponent implements OnInit {
         (status === 'inactive' && this.isFuelCardInactiveStatus(normalizedStatus)) ||
         (status === 'other' && !this.isFuelCardActiveStatus(normalizedStatus) && !this.isFuelCardInactiveStatus(normalizedStatus));
 
-      const matchesWeek = week === 'all' || row.purchases > 0;
+      const hasPeriodFilter = year !== 'all' || week !== 'all';
+      const matchesPeriod = !hasPeriodFilter || row.purchases > 0;
 
-      return matchesSearch && matchesStatus && matchesWeek;
+      return matchesSearch && matchesStatus && matchesPeriod;
     });
   });
   fuelCardTotalPages = computed<number>(() =>
@@ -2364,6 +2397,12 @@ export class MotivComponent implements OnInit {
 
   setFuelCardStatusFilter(value: 'all' | 'active' | 'inactive' | 'other'): void {
     this.fuelCardStatusFilter.set(value ?? 'all');
+    this.fuelCardPage.set(1);
+  }
+
+  setFuelCardYearFilter(value: string): void {
+    this.fuelCardYearFilter.set(value ?? 'all');
+    this.fuelCardWeekFilter.set('all');
     this.fuelCardPage.set(1);
   }
 
