@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
@@ -14,11 +16,22 @@ public class PerformanceReviewsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<PerformanceReviewsController> _logger;
 
-    public PerformanceReviewsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public PerformanceReviewsController(
+        TaylorAccessDbContext context,
+        CurrentUserService currentUserService,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        ILogger<PerformanceReviewsController> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -142,6 +155,190 @@ public class PerformanceReviewsController : ControllerBase
         return Ok(new { data = existing });
     }
 
+    [HttpGet("zoom-metrics")]
+    public async Task<ActionResult<object>> GetZoomMetrics([FromQuery] int? year, [FromQuery] int? month, [FromQuery] bool sync = true)
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var now = DateTime.UtcNow;
+        var targetYear = year ?? now.Year;
+        var targetMonth = month ?? now.Month;
+        var targetStart = new DateTime(targetYear, targetMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+        var nextMonth = targetStart.AddMonths(1);
+
+        // CRM endpoint only supports "last N days". For exact historical months, use saved snapshots.
+        if (targetStart.Month != now.Month || targetStart.Year != now.Year)
+        {
+            return Ok(new
+            {
+                data = Array.Empty<object>(),
+                meta = new
+                {
+                    year = targetYear,
+                    month = targetMonth,
+                    source = "ttac-gateway->taylor-crm/zoom",
+                    note = "Live Zoom monthly pull is only available for current month. Historical months are served from saved review snapshots."
+                }
+            });
+        }
+
+        var orgFilter = orgId ?? user.OrganizationId ?? 0;
+        if (orgFilter <= 0)
+            return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No organization context" } });
+
+        var employees = await _context.EmployeeRosters
+            .AsNoTracking()
+            .Include(er => er.User)
+            .Where(er => er.OrganizationId == orgFilter
+                && er.User != null
+                && !string.IsNullOrWhiteSpace(er.User.Email)
+                && (er.EmploymentStatus == null || er.EmploymentStatus == "" || er.EmploymentStatus.ToLower() == "active"))
+            .Select(er => new
+            {
+                employeeId = er.UserId,
+                email = er.User!.Email!,
+                name = er.User.Name
+            })
+            .ToListAsync();
+
+        if (employees.Count == 0)
+            return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found" } });
+
+        var days = Math.Max(1, (int)Math.Ceiling((now.Date - targetStart.Date).TotalDays) + 1);
+        var gatewayBase = _configuration["GatewayPublicOpenUrl"]
+            ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
+            ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
+        var crmBase = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom";
+
+        var incomingAuth = Request.Headers.Authorization.ToString();
+        var client = _httpClientFactory.CreateClient();
+        if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
+        }
+
+        if (sync)
+        {
+            try
+            {
+                await client.PostAsync($"{crmBase}/metrics/compute?days={days}", content: null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Zoom metrics compute call via gateway failed; continuing with available CRM data");
+            }
+        }
+
+        var metricsResponse = await client.GetAsync($"{crmBase}/metrics/users?days={days}");
+        if (!metricsResponse.IsSuccessStatusCode)
+        {
+            return Ok(new
+            {
+                data = Array.Empty<object>(),
+                meta = new
+                {
+                    year = targetYear,
+                    month = targetMonth,
+                    source = "ttac-gateway->taylor-crm/zoom",
+                    error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}"
+                }
+            });
+        }
+
+        var metricsJson = await metricsResponse.Content.ReadAsStringAsync();
+        using var metricsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(metricsJson) ? "{}" : metricsJson);
+        var metricsByEmail = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+        var metricsByZoomUserId = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+
+        if (TryGetPropertyIgnoreCase(metricsDoc.RootElement, "data", out var metricsData)
+            && metricsData.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in metricsData.EnumerateArray())
+            {
+                var row = new ZoomUserMetricLite
+                {
+                    ZoomUserId = ReadString(item, "zoomUserId"),
+                    Email = ReadString(item, "email"),
+                    TotalCalls = ReadInt(item, "totalCalls"),
+                    SmsSessionCount = ReadInt(item, "smsSessionCount"),
+                    MeetingsHosted = ReadInt(item, "meetingsHosted")
+                };
+
+                if (!string.IsNullOrWhiteSpace(row.Email))
+                    metricsByEmail[row.Email!.Trim().ToLower()] = row;
+                if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
+                    metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
+            }
+        }
+
+        var fromDate = targetStart.ToString("yyyy-MM-dd");
+        var toDate = now.ToString("yyyy-MM-dd");
+        var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var smsResponse = await client.GetAsync($"{crmBase}/phone/sms?from={fromDate}&to={toDate}&pageSize=500");
+            if (smsResponse.IsSuccessStatusCode)
+            {
+                var smsJson = await smsResponse.Content.ReadAsStringAsync();
+                using var smsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(smsJson) ? "{}" : smsJson);
+                if (TryGetPropertyIgnoreCase(smsDoc.RootElement, "data", out var smsData)
+                    && smsData.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in smsData.EnumerateArray())
+                    {
+                        var ownerId = ReadString(item, "ownerUserId");
+                        if (string.IsNullOrWhiteSpace(ownerId)) continue;
+                        if (!smsByOwner.TryGetValue(ownerId!, out var count)) count = 0;
+                        smsByOwner[ownerId!] = count + 1;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Zoom SMS pull via gateway failed; using smsSessionCount fallback");
+        }
+
+        var rows = new List<object>(employees.Count);
+        foreach (var emp in employees)
+        {
+            var emailKey = emp.email.Trim().ToLower();
+            metricsByEmail.TryGetValue(emailKey, out var zoomMetric);
+            var zoomUserId = zoomMetric?.ZoomUserId;
+            var smsCount = 0;
+            if (!string.IsNullOrWhiteSpace(zoomUserId) && smsByOwner.TryGetValue(zoomUserId!, out var mappedSms))
+                smsCount = mappedSms;
+            else
+                smsCount = zoomMetric?.SmsSessionCount ?? 0;
+
+            rows.Add(new
+            {
+                employeeId = emp.employeeId,
+                employeeName = emp.name,
+                email = emp.email,
+                callVolume = zoomMetric?.TotalCalls ?? 0,
+                textVolume = smsCount,
+                meetingsHosted = zoomMetric?.MeetingsHosted ?? 0,
+                source = "zoom-crm-via-ttac-gateway"
+            });
+        }
+
+        return Ok(new
+        {
+            data = rows,
+            meta = new
+            {
+                year = targetYear,
+                month = targetMonth,
+                days,
+                source = "ttac-gateway->taylor-crm/zoom",
+                synced = sync
+            }
+        });
+    }
+
     private static decimal ToMoney(decimal value) => Math.Round(Math.Max(value, 0), 2);
     private static decimal ToRate(decimal value) => Math.Round(Math.Clamp(value, 0m, 1m), 4);
 
@@ -163,6 +360,41 @@ public class PerformanceReviewsController : ControllerBase
 
         var now = DateTime.UtcNow;
         return (now.Year, now.Month);
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = prop.Value;
+                return true;
+            }
+        }
+        value = default;
+        return false;
+    }
+
+    private static string? ReadString(JsonElement element, string propName)
+    {
+        if (!TryGetPropertyIgnoreCase(element, propName, out var value)) return null;
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    private static int ReadInt(JsonElement element, string propName)
+    {
+        if (!TryGetPropertyIgnoreCase(element, propName, out var value)) return 0;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var num)) return num;
+        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var parsed)) return parsed;
+        return 0;
     }
 }
 
@@ -186,4 +418,13 @@ public class UpsertMonthlyPerformanceReviewRequest
     public decimal ActivityRate { get; set; }
     public decimal InvoicedRevenue { get; set; }
     public int Score { get; set; }
+}
+
+internal class ZoomUserMetricLite
+{
+    public string? ZoomUserId { get; set; }
+    public string? Email { get; set; }
+    public int TotalCalls { get; set; }
+    public int SmsSessionCount { get; set; }
+    public int MeetingsHosted { get; set; }
 }

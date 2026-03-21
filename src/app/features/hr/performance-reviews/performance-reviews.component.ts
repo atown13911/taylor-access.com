@@ -42,6 +42,11 @@ interface ReviewMetricRow extends Review {
   invoicedRevenue: number;
   score: number;
 }
+interface ZoomMetricRow {
+  employeeId: number;
+  callVolume: number;
+  textVolume: number;
+}
 
 @Component({
   selector: 'app-performance-reviews',
@@ -471,6 +476,7 @@ export class PerformanceReviewsComponent implements OnInit {
   reviews = signal<Review[]>([]);
   timeclockSummaries = signal<any[]>([]);
   revenueSeries = signal<any[]>([]);
+  zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
   selectedReviewMonth = signal(this.getCurrentMonthKey());
 
   // Call Metrics
@@ -562,8 +568,9 @@ export class PerformanceReviewsComponent implements OnInit {
   metricRows = computed<ReviewMetricRow[]>(() => {
     return this.filteredReviews().map((review) => {
       const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
-      const liveCallVolume = this.getEmployeeCallVolume(review.employeeId);
-      const liveTextVolume = this.getEmployeeTextVolume(review.employeeId);
+      const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId);
+      const liveCallVolume = liveComms.callVolume;
+      const liveTextVolume = liveComms.textVolume;
       const liveTime = this.getEmployeeTime(review.employeeId);
       const liveRevenue = this.getAttributedRevenue(review.employeeId);
       const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
@@ -618,6 +625,7 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadTimeclockSummary();
     this.loadRevenueData();
     this.loadReviews();
+    this.loadZoomMetrics();
   }
 
   async loadEmployees() {
@@ -657,10 +665,34 @@ export class PerformanceReviewsComponent implements OnInit {
     }
   }
 
+  async loadZoomMetrics() {
+    try {
+      const { year, month } = this.parseMonthKey(this.selectedReviewMonth());
+      const res: any = await this.http
+        .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&sync=true`)
+        .toPromise();
+      const map: Record<number, ZoomMetricRow> = {};
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      for (const row of rows) {
+        const employeeId = Number(row?.employeeId);
+        if (!employeeId) continue;
+        map[employeeId] = {
+          employeeId,
+          callVolume: Number(row?.callVolume || 0),
+          textVolume: Number(row?.textVolume || 0)
+        };
+      }
+      this.zoomMetricMap.set(map);
+    } catch {
+      this.zoomMetricMap.set({});
+    }
+  }
+
   onReviewMonthChange(value: string) {
     if (!value) return;
     this.selectedReviewMonth.set(value);
     this.loadReviews();
+    this.loadZoomMetrics();
   }
 
   openCreateModal() {
@@ -699,8 +731,9 @@ export class PerformanceReviewsComponent implements OnInit {
     const emp = this.employees().find(e => e.id === +this.formData.employeeId);
     const employeeId = Number(this.formData.employeeId);
     const monthInfo = this.parseMonthKey(this.selectedReviewMonth());
-    const liveCallVolume = this.getEmployeeCallVolume(employeeId);
-    const liveTextVolume = this.getEmployeeTextVolume(employeeId);
+    const liveComms = this.getEmployeeCommunicationMetrics(employeeId);
+    const liveCallVolume = liveComms.callVolume;
+    const liveTextVolume = liveComms.textVolume;
     const liveTime = this.getEmployeeTime(employeeId);
     const liveRevenue = this.getAttributedRevenue(employeeId);
     const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
@@ -805,6 +838,16 @@ export class PerformanceReviewsComponent implements OnInit {
 
   private getEmployeeTextVolume(employeeId: number): number {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
+  }
+
+  private getEmployeeCommunicationMetrics(employeeId: number): { callVolume: number; textVolume: number } {
+    const localCalls = this.getEmployeeCallVolume(employeeId);
+    const localTexts = this.getEmployeeTextVolume(employeeId);
+    const zoom = this.zoomMetricMap()[employeeId];
+    return {
+      callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
+      textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0))
+    };
   }
 
   private getEmployeeTime(employeeId: number): { totalHours: number; activeHours: number; idleHours: number; activityRate: number; totalSeconds: number } {
