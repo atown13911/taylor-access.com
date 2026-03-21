@@ -47,6 +47,7 @@ interface ZoomMetricRow {
   callVolume: number;
   textVolume: number;
 }
+type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
 
 @Component({
@@ -81,6 +82,24 @@ type RosterEmployee = Record<string, any>;
         <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div><span class="stat-val">{{ reviewRows().length }}</span><span class="stat-lbl">Total Reviews</span></div></div>
         <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-time'></i></div><div><span class="stat-val">{{ getReviewCount('pending') }}</span><span class="stat-lbl">Pending</span></div></div>
         <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-check-circle'></i></div><div><span class="stat-val">{{ getReviewCount('completed') }}</span><span class="stat-lbl">Completed</span></div></div>
+      </div>
+      <div class="integration-status-row">
+        <div class="status-item">
+          <span class="label">Google API</span>
+          <span class="status-chip" [class.connected]="googleApiStatus() === 'connected'" [class.not-connected]="googleApiStatus() === 'not-connected'">
+            {{ integrationStatusLabel(googleApiStatus()) }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="label">Zoom API</span>
+          <span class="status-chip" [class.connected]="zoomApiStatus() === 'connected'" [class.not-connected]="zoomApiStatus() === 'not-connected'">
+            {{ integrationStatusLabel(zoomApiStatus()) }}
+          </span>
+        </div>
+        <div class="status-item">
+          <span class="label">Last API Check</span>
+          <span class="value">{{ lastApiCheckAt() || '—' }}</span>
+        </div>
       </div>
 
       <!-- Sub-Tabs -->
@@ -435,6 +454,13 @@ type RosterEmployee = Record<string, any>;
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); color: #0a0a14; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; &:disabled { opacity: 0.5; } }
     .btn-secondary { padding: 10px 20px; background: #2a2a4e; color: #aaa; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
     .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .status-item { background: #131a2e; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .status-item .label { color: #8aa0b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .status-item .value { color: #dbeafe; font-size: 0.86rem; font-weight: 600; }
+    .status-chip { border: 1px solid #334155; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border-radius: 999px; font-size: 0.72rem; padding: 3px 10px; font-weight: 700; }
+    .status-chip.connected { color: #22c55e; border-color: rgba(34, 197, 94, 0.5); background: rgba(34, 197, 94, 0.12); }
+    .status-chip.not-connected { color: #ef4444; border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.12); }
     .stat-card { background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 14px; }
     .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
     .stat-icon.total { background: rgba(0, 212, 255, 0.12); color: #00d4ff; }
@@ -505,6 +531,9 @@ export class PerformanceReviewsComponent implements OnInit {
   timeclockSummaries = signal<any[]>([]);
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
+  googleApiStatus = signal<IntegrationState>('checking');
+  zoomApiStatus = signal<IntegrationState>('checking');
+  lastApiCheckAt = signal<string>('');
   selectedReviewMonth = signal(this.getCurrentMonthKey());
 
   // Call Metrics
@@ -709,6 +738,13 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadRevenueData();
     this.loadReviews();
     this.loadZoomMetrics();
+    this.loadIntegrationStatuses();
+  }
+
+  integrationStatusLabel(status: IntegrationState): string {
+    if (status === 'connected') return 'Connected';
+    if (status === 'not-connected') return 'Not Connected';
+    return 'Checking...';
   }
 
   async loadEmployees() {
@@ -768,6 +804,23 @@ export class PerformanceReviewsComponent implements OnInit {
       this.zoomMetricMap.set(map);
     } catch {
       this.zoomMetricMap.set({});
+    }
+  }
+
+  async loadIntegrationStatuses() {
+    this.googleApiStatus.set('checking');
+    this.zoomApiStatus.set('checking');
+    try {
+      const res: any = await this.http.get(`${this.apiUrl}/api/v1/performance-reviews/integration-status`).toPromise();
+      const data = res?.data ?? {};
+      this.googleApiStatus.set(data?.google?.connected ? 'connected' : 'not-connected');
+      this.zoomApiStatus.set(data?.zoom?.connected ? 'connected' : 'not-connected');
+      const checkedAt = data?.last?.checkedAtUtc ? new Date(data.last.checkedAtUtc) : null;
+      this.lastApiCheckAt.set(checkedAt && !Number.isNaN(checkedAt.getTime()) ? checkedAt.toLocaleString() : '');
+    } catch {
+      this.googleApiStatus.set('not-connected');
+      this.zoomApiStatus.set('not-connected');
+      this.lastApiCheckAt.set(new Date().toLocaleString());
     }
   }
 

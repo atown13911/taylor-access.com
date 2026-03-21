@@ -339,6 +339,78 @@ public class PerformanceReviewsController : ControllerBase
         });
     }
 
+    [HttpGet("integration-status")]
+    public async Task<ActionResult<object>> GetIntegrationStatus()
+    {
+        var (_, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var googleConnected =
+            !string.IsNullOrWhiteSpace(_configuration["GOOGLE_CLIENT_ID"])
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID"))
+            || !string.IsNullOrWhiteSpace(_configuration["GOOGLE_API_KEY"])
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOOGLE_API_KEY"))
+            || !string.IsNullOrWhiteSpace(_configuration["GOOGLE_SERVICE_ACCOUNT_JSON"])
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_JSON"));
+
+        var gatewayBase = _configuration["GatewayPublicOpenUrl"]
+            ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
+            ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
+        var zoomUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom/metrics/users?days=1";
+
+        var zoomConnected = false;
+        var zoomStatus = 0;
+        string? zoomError = null;
+
+        try
+        {
+            var incomingAuth = Request.Headers.Authorization.ToString();
+            var client = _httpClientFactory.CreateClient();
+            if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
+            }
+
+            using var response = await client.GetAsync(zoomUrl);
+            zoomStatus = (int)response.StatusCode;
+            zoomConnected = response.IsSuccessStatusCode || zoomStatus == 400 || zoomStatus == 401 || zoomStatus == 403 || zoomStatus == 404 || zoomStatus == 405;
+
+            if (!zoomConnected)
+            {
+                zoomError = $"Zoom gateway probe returned HTTP {zoomStatus}";
+            }
+        }
+        catch (Exception ex)
+        {
+            zoomConnected = false;
+            zoomError = ex.Message;
+            _logger.LogWarning(ex, "Performance reviews integration-status zoom probe failed");
+        }
+
+        return Ok(new
+        {
+            data = new
+            {
+                google = new
+                {
+                    connected = googleConnected,
+                    status = googleConnected ? "configured" : "not-configured"
+                },
+                zoom = new
+                {
+                    connected = zoomConnected,
+                    status = zoomConnected ? "connected" : "not-connected",
+                    statusCode = zoomStatus > 0 ? zoomStatus : (int?)null,
+                    error = zoomConnected ? null : zoomError
+                },
+                last = new
+                {
+                    checkedAtUtc = DateTime.UtcNow
+                }
+            }
+        });
+    }
+
     private static decimal ToMoney(decimal value) => Math.Round(Math.Max(value, 0), 2);
     private static decimal ToRate(decimal value) => Math.Round(Math.Clamp(value, 0m, 1m), 4);
 
