@@ -400,6 +400,7 @@ type DriverSyncSummary = {
               </select>
             </div>
             <p class="count">Rows: {{ filteredVehicleRows().length }} / {{ vehicleTableRows().length }}</p>
+            <p class="count" *ngIf="vehicleLocationSyncMessage()">{{ vehicleLocationSyncMessage() }}</p>
           </div>
           <div class="available-api-table-wrap" *ngIf="filteredVehicleRows().length > 0">
             <table class="available-api-table">
@@ -1004,6 +1005,7 @@ export class MotivComponent implements OnInit {
   savingFuel = signal(false);
   driversError = signal('');
   vehiclesError = signal('');
+  vehicleLocationSyncMessage = signal('');
   usersError = signal('');
   fuelError = signal('');
   saveDriversMessage = signal('');
@@ -1620,33 +1622,52 @@ export class MotivComponent implements OnInit {
   loadVehicles(background = false): void {
     this.loadingVehicles.set(true);
     this.vehiclePage.set(1);
-    if (!background) this.vehiclesError.set('');
+    if (!background) {
+      this.vehiclesError.set('');
+      this.vehicleLocationSyncMessage.set('Syncing location payloads...');
+    }
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/vehicles`).subscribe({
       next: async (res) => {
         const payload = res?.data ?? res;
         const vehicleRows = this.extractRows(payload);
-        const locationRows = await this.fetchVehicleLocationRows();
-        this.motivVehicles.set(this.mergeVehicleRowsWithLocations(vehicleRows, locationRows));
+        const locationPayload = await this.fetchVehicleLocationRows();
+        const mergedRows = this.mergeVehicleRowsWithLocations(vehicleRows, locationPayload.rows);
+        this.motivVehicles.set(mergedRows);
+        const withLocationCount = mergedRows.reduce((count, row) => {
+          const location = this.mapVehicleRow(row).location;
+          return location && location !== 'N/A' ? count + 1 : count;
+        }, 0);
+        const sourceLabel = locationPayload.sourcePath ? `source: ${locationPayload.sourcePath}` : 'source: none';
+        const attemptsLabel = locationPayload.attempted.length > 0 ? `paths tried: ${locationPayload.attempted.length}` : 'paths tried: 0';
+        this.vehicleLocationSyncMessage.set(
+          `Location sync: ${locationPayload.rows.length} location rows, ${withLocationCount}/${mergedRows.length} vehicles mapped (${sourceLabel}, ${attemptsLabel}).`
+        );
         this.loadingVehicles.set(false);
       },
       error: (err) => {
         if (!background) {
           this.vehiclesError.set(err?.error?.error || 'Unable to load MOTIV vehicles.');
+          this.vehicleLocationSyncMessage.set('');
         }
         this.loadingVehicles.set(false);
       }
     });
   }
 
-  private async fetchVehicleLocationRows(): Promise<any[]> {
+  private async fetchVehicleLocationRows(): Promise<{ rows: any[]; attempted: string[]; sourcePath: string | null }> {
     try {
       const res: any = await this.http
         .get(`${this.apiUrl}/api/v1/motiv/vehicle-locations`)
         .pipe(timeout(15000))
         .toPromise();
-      return this.extractRows(res?.data ?? res);
+      const payload = res?.data ?? res;
+      return {
+        rows: this.extractRows(payload),
+        attempted: Array.isArray(payload?.attempted) ? payload.attempted : [],
+        sourcePath: typeof payload?.sourcePath === 'string' ? payload.sourcePath : null
+      };
     } catch {
-      return [];
+      return { rows: [], attempted: [], sourcePath: null };
     }
   }
 
