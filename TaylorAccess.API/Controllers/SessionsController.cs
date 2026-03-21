@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 
@@ -22,15 +23,27 @@ public class SessionsController : ControllerBase
     [HttpPost("start")]
     public async Task<ActionResult> StartSession()
     {
-        var user = await _currentUser.GetUserAsync();
-        if (user == null) return Unauthorized();
+        // Use claims directly to avoid blocking on a DB lookup during session start.
+        // This endpoint is called on app bootstrap and should remain fast/resilient.
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+        if (!int.TryParse(userIdValue, out var userId) || userId <= 0)
+            return Unauthorized();
+
+        var userEmail = User.FindFirstValue(ClaimTypes.Email)
+            ?? User.FindFirstValue("email");
+        var userName = User.FindFirstValue(ClaimTypes.Name)
+            ?? User.FindFirstValue("name");
+        var orgIdValue = User.FindFirstValue("orgId")
+            ?? User.FindFirstValue("organizationId");
+        int? organizationId = int.TryParse(orgIdValue, out var orgId) ? orgId : null;
 
         var session = new UserSession
         {
-            UserId = user.Id,
-            UserName = user.Name,
-            UserEmail = user.Email,
-            OrganizationId = user.OrganizationId,
+            UserId = userId,
+            UserName = userName,
+            UserEmail = userEmail,
+            OrganizationId = organizationId,
             LoginTime = DateTime.UtcNow,
             LogoutReason = "active",
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),

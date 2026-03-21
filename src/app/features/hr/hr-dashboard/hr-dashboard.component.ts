@@ -67,6 +67,38 @@ interface ActivityItem { id: string; icon: string; title: string; description: s
           <i class="bx bx-table stat-icon"></i>
           <div><span class="stat-value">{{ stats().bulkStaging }}</span><span class="stat-label">Bulk Staging</span></div>
         </a>
+        <div class="stat-card inactive">
+          <i class="bx bx-user-x stat-icon"></i>
+          <div><span class="stat-value">{{ inactiveEmployees() }}</span><span class="stat-label">Inactive</span></div>
+        </div>
+        <div class="stat-card sessioncount">
+          <i class="bx bx-pulse stat-icon"></i>
+          <div><span class="stat-value">{{ dashStats()?.totalSessionsToday ?? 0 }}</span><span class="stat-label">Sessions Today</span></div>
+        </div>
+        <div class="stat-card login-rate">
+          <i class="bx bx-signal-5 stat-icon"></i>
+          <div><span class="stat-value">{{ loginCoveragePercent() }}%</span><span class="stat-label">Login Coverage</span></div>
+        </div>
+        <div class="stat-card avg-hours">
+          <i class="bx bx-line-chart-down stat-icon"></i>
+          <div><span class="stat-value">{{ averageDailyHours30d() }}</span><span class="stat-label">Avg Hours / Day</span></div>
+        </div>
+        <div class="stat-card peak-shift">
+          <i class="bx bx-timer stat-icon"></i>
+          <div><span class="stat-value">{{ peakShiftLabel() }}</span><span class="stat-label">Peak Login Window</span></div>
+        </div>
+        <div class="stat-card lead-dept">
+          <i class="bx bx-building-house stat-icon"></i>
+          <div><span class="stat-value">{{ topDepartmentName() }}</span><span class="stat-label">Largest Department</span></div>
+        </div>
+        <div class="stat-card lead-role">
+          <i class="bx bx-id-card stat-icon"></i>
+          <div><span class="stat-value">{{ topRoleName() }}</span><span class="stat-label">Largest Role</span></div>
+        </div>
+        <div class="stat-card growth">
+          <i class="bx bx-trending-up stat-icon"></i>
+          <div><span class="stat-value">{{ headcountDelta30d() }}</span><span class="stat-label">30d Headcount Delta</span></div>
+        </div>
       </div>
 
       <!-- Row 2: Work Hours Charts -->
@@ -246,24 +278,33 @@ interface ActivityItem { id: string; icon: string; title: string; description: s
     .btn-refresh:hover:not(:disabled) { background: rgba(0,242,254,0.2); }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0 32px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin: 20px 0 28px; }
     .stat-card {
       background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
-      padding: 20px; display: flex; align-items: center; gap: 16px; transition: all 0.3s ease;
+      padding: 14px 12px; display: flex; align-items: center; gap: 10px; transition: all 0.3s ease;
       box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      min-height: 84px;
     }
     .stat-card:hover { transform: translateY(-3px); box-shadow: 0 0 25px rgba(0,242,254,0.2); }
     .stat-card.clickable { cursor: pointer; text-decoration: none; }
-    .stat-icon { font-size: 2.2rem; }
-    .stat-value { font-size: 1.8rem; font-weight: 700; display: block; }
-    .stat-label { font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-icon { font-size: 1.35rem; }
+    .stat-value { font-size: 1.15rem; font-weight: 700; display: block; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+    .stat-label { font-size: 0.66rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
     .stat-card.total .stat-icon, .stat-card.total .stat-value { color: #00d4ff; }
     .stat-card.active-card .stat-icon, .stat-card.active-card .stat-value { color: #22c55e; }
     .stat-card.timeoff .stat-icon, .stat-card.timeoff .stat-value { color: #fbbf24; }
     .stat-card.attendance .stat-icon, .stat-card.attendance .stat-value { color: #a855f7; }
     .stat-card.payroll .stat-icon, .stat-card.payroll .stat-value { color: #3b82f6; }
     .stat-card.staging .stat-icon, .stat-card.staging .stat-value { color: #00f2fe; }
+    .stat-card.inactive .stat-icon, .stat-card.inactive .stat-value { color: #fb7185; }
+    .stat-card.sessioncount .stat-icon, .stat-card.sessioncount .stat-value { color: #60a5fa; }
+    .stat-card.login-rate .stat-icon, .stat-card.login-rate .stat-value { color: #2dd4bf; }
+    .stat-card.avg-hours .stat-icon, .stat-card.avg-hours .stat-value { color: #facc15; }
+    .stat-card.peak-shift .stat-icon, .stat-card.peak-shift .stat-value { color: #c084fc; }
+    .stat-card.lead-dept .stat-icon, .stat-card.lead-dept .stat-value { color: #22d3ee; }
+    .stat-card.lead-role .stat-icon, .stat-card.lead-role .stat-value { color: #38bdf8; }
+    .stat-card.growth .stat-icon, .stat-card.growth .stat-value { color: #34d399; }
 
     .chart-section { margin-bottom: 32px; }
     .chart-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; i { color: var(--cyan); } }
@@ -349,6 +390,41 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   headcountChartData = computed(() =>
     [{ name: 'Headcount', series: this.headcountData() }]
   );
+  inactiveEmployees = computed(() =>
+    Math.max((this.stats().totalEmployees ?? 0) - (this.stats().activeEmployees ?? 0), 0)
+  );
+  loginCoveragePercent = computed(() => {
+    const active = this.stats().activeEmployees ?? 0;
+    if (active <= 0) return 0;
+    const loggedIn = this.dashStats()?.uniqueUsersToday ?? 0;
+    return Math.min(100, Math.round((loggedIn / active) * 100));
+  });
+  averageDailyHours30d = computed(() => {
+    const rows = this.dailyHoursData();
+    if (!rows.length) return '0.0';
+    const total = rows.reduce((sum, row) => sum + (row.value ?? 0), 0);
+    return (total / rows.length).toFixed(1);
+  });
+  peakShiftLabel = computed(() => {
+    const dist = this.dashStats()?.clockInDistribution;
+    if (!dist) return 'N/A';
+    const buckets: { name: string; value: number }[] = [
+      { name: 'Morning', value: dist.morning ?? 0 },
+      { name: 'Afternoon', value: dist.afternoon ?? 0 },
+      { name: 'Evening', value: dist.evening ?? 0 },
+      { name: 'Night', value: dist.night ?? 0 }
+    ];
+    const top = buckets.sort((a, b) => b.value - a.value)[0];
+    return top.value > 0 ? top.name : 'N/A';
+  });
+  topDepartmentName = computed(() => this.deptChartData()[0]?.name ?? 'N/A');
+  topRoleName = computed(() => this.roleChartData()[0]?.name ?? 'N/A');
+  headcountDelta30d = computed(() => {
+    const points = this.headcountData();
+    if (points.length < 2) return '0';
+    const delta = (points[points.length - 1]?.value ?? 0) - (points[0]?.value ?? 0);
+    return delta > 0 ? `+${delta}` : `${delta}`;
+  });
 
   lineScheme: Color = { name: 'line', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
   barScheme: Color = { name: 'bar', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
