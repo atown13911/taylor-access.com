@@ -17,9 +17,10 @@ export class TagsPermitsComponent implements OnInit {
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
 
-  activeTab = signal<'permits' | 'irp'>('permits');
+  activeTab = signal<'permits' | 'irp' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
   drivers = signal<any[]>([]);
+  motivFuelCards = signal<any[]>([]);
   searchTerm = signal('');
   typeFilter = signal('');
   statusFilter = signal('');
@@ -86,6 +87,40 @@ export class TagsPermitsComponent implements OnInit {
     return list;
   });
 
+  filteredFuelCardDrivers = computed(() => {
+    const search = this.searchTerm().toLowerCase();
+    const assignments = this.buildFuelCardAssignmentMap();
+    let list = this.drivers()
+      .filter((d: any) => this.isActiveDriverStatus(d?.status))
+      .map((d: any) => {
+        const key = this.buildDriverLookupKeys(d);
+        const assigned = key
+          .map(k => assignments.get(k))
+          .find(v => !!v)
+          ?? 'Unassigned';
+
+        return {
+          id: d?.id,
+          name: d?.name || d?.driverName || 'Unknown Driver',
+          email: d?.email || '',
+          truckNumber: d?.truckNumber || d?.assignedTruckNumber || d?.truckTag || '',
+          status: d?.status || 'active',
+          assignedFuelCard: assigned
+        };
+      });
+
+    if (search) {
+      list = list.filter((d: any) =>
+        String(d.name || '').toLowerCase().includes(search) ||
+        String(d.email || '').toLowerCase().includes(search) ||
+        String(d.truckNumber || '').toLowerCase().includes(search) ||
+        String(d.assignedFuelCard || '').toLowerCase().includes(search)
+      );
+    }
+
+    return list.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
+  });
+
   activePermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'active').length);
   expiringPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expiring').length);
   expiredPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expired').length);
@@ -103,6 +138,13 @@ export class TagsPermitsComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=1000`).subscribe({
       next: (res) => { this.drivers.set(res?.data || []); this.loading.set(false); },
       error: () => { this.drivers.set([]); this.loading.set(false); }
+    });
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/fuel-cards`).subscribe({
+      next: (res) => {
+        const payload = res?.data ?? res;
+        this.motivFuelCards.set(this.extractRows(payload));
+      },
+      error: () => this.motivFuelCards.set([])
     });
   }
 
@@ -256,5 +298,81 @@ export class TagsPermitsComponent implements OnInit {
       next: () => { this.toast.success('Document removed', 'Removed'); this.loadData(); },
       error: () => this.toast.error('Failed to remove document', 'Error')
     });
+  }
+
+  private extractRows(payload: any): any[] {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.cards)) return payload.cards;
+    if (Array.isArray(payload?.fuel_cards)) return payload.fuel_cards;
+    if (Array.isArray(payload?.payment_cards)) return payload.payment_cards;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.results)) return payload.results;
+    return [];
+  }
+
+  private isActiveDriverStatus(status: string): boolean {
+    const normalized = String(status ?? '').trim().toLowerCase();
+    return !normalized || normalized === 'active' || normalized === 'available' || normalized === 'online' || normalized === 'in_service';
+  }
+
+  private normalizeKey(value: any): string {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  private normalizeNameKey(value: any): string {
+    return this.normalizeKey(value).replace(/\s+/g, ' ').trim();
+  }
+
+  private buildDriverLookupKeys(driver: any): string[] {
+    const keys = new Set<string>();
+    const idKey = this.normalizeKey(driver?.id);
+    const emailKey = this.normalizeKey(driver?.email);
+    const nameKey = this.normalizeNameKey(driver?.name || driver?.driverName);
+    if (idKey) keys.add(`id:${idKey}`);
+    if (emailKey) keys.add(`email:${emailKey}`);
+    if (nameKey) keys.add(`name:${nameKey}`);
+    return Array.from(keys);
+  }
+
+  private buildFuelCardDisplay(card: any): string {
+    const id = String(card?.id ?? card?.card_id ?? card?.cardId ?? '').trim();
+    const name = String(card?.name ?? card?.card_name ?? card?.display_name ?? card?.nickname ?? '').trim();
+    const rawLast4 =
+      card?.last_four ??
+      card?.last4 ??
+      card?.last_digits ??
+      card?.number_last4 ??
+      card?.pan_last4 ??
+      card?.masked_card_number ??
+      card?.card_number;
+    const digits = String(rawLast4 ?? '').replace(/\D/g, '');
+    const last4 = digits.length >= 4 ? digits.slice(-4) : '';
+    if (name) return name;
+    if (last4) return `**** ${last4}`;
+    if (id) return `Card ${id}`;
+    return 'Assigned';
+  }
+
+  private buildFuelCardAssignmentMap(): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const raw of this.motivFuelCards()) {
+      const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
+      const display = this.buildFuelCardDisplay(card);
+      const assigned = card?.assigned_driver ?? card?.driver ?? card?.user ?? card?.holder ?? raw?.assigned_driver ?? raw?.driver ?? raw?.user ?? raw?.holder ?? {};
+      const assignedName = [assigned?.first_name ?? assigned?.firstName, assigned?.last_name ?? assigned?.lastName].filter(Boolean).join(' ').trim() || assigned?.name;
+      const assignedEmail = assigned?.email ?? assigned?.driver_email ?? raw?.assigned_driver_email;
+      const assignedId = assigned?.id ?? assigned?.driver_id ?? assigned?.user_id ?? raw?.assigned_driver_id ?? raw?.driver_id ?? raw?.user_id;
+
+      const idKey = this.normalizeKey(assignedId);
+      const emailKey = this.normalizeKey(assignedEmail);
+      const nameKey = this.normalizeNameKey(assignedName);
+
+      if (idKey) map.set(`id:${idKey}`, display);
+      if (emailKey) map.set(`email:${emailKey}`, display);
+      if (nameKey) map.set(`name:${nameKey}`, display);
+    }
+    return map;
   }
 }

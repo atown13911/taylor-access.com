@@ -5,7 +5,9 @@
       <p class="tp-sub">Manage company-owned overweight/oversize permits and IRP registrations</p>
     </div>
     <div class="tp-header-actions">
-      <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : 'Add Permit' }}</button>
+      @if (activeTab() !== 'fuel-cards') {
+        <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : 'Add Permit' }}</button>
+      }
       <button class="tp-btn" (click)="loadData()"><i class="bx bx-refresh"></i> Refresh</button>
     </div>
   </div>
@@ -50,6 +52,9 @@
     <button class="tp-tab" [class.active]="activeTab() === 'irp'" (click)="activeTab.set('irp')">
       <i class="bx bx-globe"></i> IRP
     </button>
+    <button class="tp-tab" [class.active]="activeTab() === 'fuel-cards'" (click)="activeTab.set('fuel-cards')">
+      <i class="bx bx-credit-card"></i> Fuel Cards
+    </button>
   </div>
 
   <!-- Search & Filter -->
@@ -58,22 +63,24 @@
       <i class="bx bx-search"></i>
       <input type="text" placeholder="Search permits..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
     </div>
-    <select class="tp-filter-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
-      <option value="">All Types</option>
-      <option value="overweight">Overweight</option>
-      <option value="oversize">Oversize</option>
-      <option value="trip">Trip Permit</option>
-      <option value="fuel">Fuel Permit</option>
-      <option value="irp">IRP</option>
-      <option value="ifta">IFTA</option>
-      <option value="other">Other</option>
-    </select>
-    <select class="tp-filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
-      <option value="">All Statuses</option>
-      <option value="active">Active</option>
-      <option value="expiring">Expiring</option>
-      <option value="expired">Expired</option>
-    </select>
+    @if (activeTab() !== 'fuel-cards') {
+      <select class="tp-filter-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
+        <option value="">All Types</option>
+        <option value="overweight">Overweight</option>
+        <option value="oversize">Oversize</option>
+        <option value="trip">Trip Permit</option>
+        <option value="fuel">Fuel Permit</option>
+        <option value="irp">IRP</option>
+        <option value="ifta">IFTA</option>
+        <option value="other">Other</option>
+      </select>
+      <select class="tp-filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+        <option value="">All Statuses</option>
+        <option value="active">Active</option>
+        <option value="expiring">Expiring</option>
+        <option value="expired">Expired</option>
+      </select>
+    }
   </div>
 
   @if (loading()) {
@@ -229,6 +236,42 @@
     </div>
   }
 
+  <!-- Fuel Cards Tab -->
+  @if (activeTab() === 'fuel-cards' && !loading()) {
+    <div class="tp-table-wrap">
+      <table class="tp-table">
+        <thead>
+          <tr>
+            <th>Driver</th>
+            <th>Email</th>
+            <th>Truck #</th>
+            <th>Status</th>
+            <th>Assigned Fuel Card</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of filteredFuelCardDrivers(); track d.id) {
+            <tr>
+              <td>{{ d.name }}</td>
+              <td>{{ d.email || '—' }}</td>
+              <td class="tp-mono">{{ d.truckNumber || '—' }}</td>
+              <td><span class="tp-status active">Active</span></td>
+              <td>
+                @if (d.assignedFuelCard !== 'Unassigned') {
+                  <span class="tp-type-badge">{{ d.assignedFuelCard }}</span>
+                } @else {
+                  <span class="tp-muted">Unassigned</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5" class="tp-empty">No active drivers found.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
   <!-- Add/Edit Permit Modal -->
   @if (showAddModal()) {
     <div class="tp-modal-overlay" (click)="closeModal()">
@@ -318,7 +361,9 @@
   }
 
   <!-- Floating Add Button -->
-  <button class="tp-fab" (click)="openAddModal()" title="Add Permit">
-    <i class="bx bx-plus"></i>
-  </button>
+  @if (activeTab() !== 'fuel-cards') {
+    <button class="tp-fab" (click)="openAddModal()" title="Add Permit">
+      <i class="bx bx-plus"></i>
+    </button>
+  }
 </div>
