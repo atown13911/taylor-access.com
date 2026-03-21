@@ -1649,15 +1649,18 @@ export class MotivComponent implements OnInit {
         const vehicleRows = this.extractRows(payload);
         const locationPayload = await this.fetchVehicleLocationRows();
         const mergedRows = this.mergeVehicleRowsWithLocations(vehicleRows, locationPayload.rows);
-        this.motivVehicles.set(mergedRows);
-        const withLocationCount = mergedRows.reduce((count, row) => {
+        const activeDriverRows = await this.fetchActiveDriverRows();
+        const scopedRows = this.filterVehicleRowsByDrivers(mergedRows, activeDriverRows);
+        this.motivVehicles.set(scopedRows);
+        const withLocationCount = scopedRows.reduce((count, row) => {
           const location = this.mapVehicleRow(row).location;
           return location && location !== 'N/A' ? count + 1 : count;
         }, 0);
         const sourceLabel = locationPayload.sourcePath ? `source: ${locationPayload.sourcePath}` : 'source: none';
         const attemptsLabel = locationPayload.attempted.length > 0 ? `paths tried: ${locationPayload.attempted.length}` : 'paths tried: 0';
+        const scopeLabel = `driver scoped: ${scopedRows.length}/${mergedRows.length}`;
         this.vehicleLocationSyncMessage.set(
-          `Location sync: ${locationPayload.rows.length} location rows, ${withLocationCount}/${mergedRows.length} vehicles mapped (${sourceLabel}, ${attemptsLabel}).`
+          `Location sync: ${locationPayload.rows.length} location rows, ${withLocationCount}/${scopedRows.length} vehicles mapped (${sourceLabel}, ${attemptsLabel}, ${scopeLabel}).`
         );
         this.loadingVehicles.set(false);
       },
@@ -1752,6 +1755,66 @@ export class MotivComponent implements OnInit {
           : row?.vehicle
       };
     });
+  }
+
+  private async fetchActiveDriverRows(): Promise<any[]> {
+    try {
+      const res: any = await this.http
+        .get(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`)
+        .pipe(timeout(15000))
+        .toPromise();
+      const payload = res?.data ?? res;
+      const rows = this.extractRows(payload);
+      return rows.filter((row: any) => this.isActiveLikeStatus(String(row?.status ?? row?.Status ?? '').trim().toLowerCase()));
+    } catch {
+      return [];
+    }
+  }
+
+  private filterVehicleRowsByDrivers(vehicleRows: any[], activeDriverRows: any[]): any[] {
+    if (!Array.isArray(vehicleRows) || vehicleRows.length === 0) return [];
+    if (!Array.isArray(activeDriverRows) || activeDriverRows.length === 0) return [];
+
+    const unitKeys = new Set<string>();
+    const vinKeys = new Set<string>();
+
+    for (const driver of activeDriverRows) {
+      const unit = this.normalizeVehicleMatchValue(
+        driver?.truckNumber ??
+        driver?.TruckNumber ??
+        driver?.unit ??
+        driver?.Unit ??
+        driver?.vehicleNumber ??
+        driver?.VehicleNumber
+      );
+      const vin = this.normalizeVehicleMatchValue(
+        driver?.truckVin ??
+        driver?.TruckVin ??
+        driver?.vin ??
+        driver?.Vin ??
+        driver?.vehicleVin ??
+        driver?.VehicleVin
+      );
+
+      if (unit) unitKeys.add(unit);
+      if (vin) vinKeys.add(vin);
+    }
+
+    if (unitKeys.size === 0 && vinKeys.size === 0) return [];
+
+    return vehicleRows.filter((raw) => {
+      const mapped = this.mapVehicleRow(raw);
+      const unit = this.normalizeVehicleMatchValue(mapped.number);
+      const vin = this.normalizeVehicleMatchValue(mapped.vin);
+      return (!!unit && unitKeys.has(unit)) || (!!vin && vinKeys.has(vin));
+    });
+  }
+
+  private normalizeVehicleMatchValue(value: any): string {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
   }
 
   setVehiclePageSize(value: number): void {
