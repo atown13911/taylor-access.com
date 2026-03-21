@@ -67,10 +67,10 @@ interface ZoomMetricRow {
       <!-- Page Tabs -->
       <div class="page-tabs">
         <button class="page-tab" [class.active]="pageTab() === 'reviews'" (click)="pageTab.set('reviews')">
-          <i class='bx bx-file'></i> Reviews
+          <i class='bx bx-file'></i> Brokerage
         </button>
         <button class="page-tab" [class.active]="pageTab() === 'calls'" (click)="pageTab.set('calls')">
-          <i class='bx bx-phone'></i> Call Metrics
+          <i class='bx bx-phone'></i> Management
         </button>
       </div>
 
@@ -85,7 +85,6 @@ interface ZoomMetricRow {
       <!-- Sub-Tabs -->
       <div class="review-controls">
         <div class="tabs">
-          <button class="tab" [class.active]="activeTab() === 'all'" (click)="activeTab.set('all')">All</button>
           <button class="tab" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">Pending</button>
           <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
         </div>
@@ -487,7 +486,7 @@ export class PerformanceReviewsComponent implements OnInit {
     duration: 0, outcome: 'answered', notes: ''
   };
   employees = signal<any[]>([]);
-  activeTab = signal<'all' | 'pending' | 'completed'>('all');
+  activeTab = signal<'pending' | 'completed'>('pending');
   showModal = signal(false);
   editingReview = signal<Review | null>(null);
   viewingReview = signal<Review | null>(null);
@@ -562,7 +561,6 @@ export class PerformanceReviewsComponent implements OnInit {
 
   filteredReviews = computed(() => {
     const tab = this.activeTab();
-    if (tab === 'all') return this.reviewRows();
     return this.reviewRows().filter(r => this.normalizeReviewStatus(r.status) === tab);
   });
   metricRows = computed<ReviewMetricRow[]>(() => {
