@@ -945,6 +945,28 @@ export class DriverListComponent implements OnInit {
     });
   }
 
+  archiveDriver(driver: DriverRow): void {
+    if (!confirm(`Archive ${driver.name}?`)) return;
+    this.api.updateDriver(driver.id, { status: 'archived' }).subscribe({
+      next: () => {
+        this.toast.success(`${driver.name} archived`, 'Success');
+        this.loadDrivers();
+      },
+      error: () => this.toast.error('Failed to archive driver', 'Error')
+    });
+  }
+
+  restoreArchivedDriver(driver: DriverRow): void {
+    if (!confirm(`Restore ${driver.name} to active?`)) return;
+    this.api.updateDriver(driver.id, { status: 'active' }).subscribe({
+      next: () => {
+        this.toast.success(`${driver.name} restored`, 'Success');
+        this.loadDrivers();
+      },
+      error: () => this.toast.error('Failed to restore driver', 'Error')
+    });
+  }
+
   formatDate(dateString: string): string {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

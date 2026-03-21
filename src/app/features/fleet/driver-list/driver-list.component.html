@@ -136,10 +136,12 @@
               <td class="actions-cell">
                 <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                 <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
-                @if (driver.status === 'active' || driver.status === 'available') {
+                @if (activeTab() === 'active') {
                   <button class="action-btn deactivate" title="Deactivate" (click)="$event.stopPropagation(); deactivateDriver(driver)"><i class='bx bx-power-off'></i></button>
+                } @else if (activeTab() === 'inactive') {
+                  <button class="action-btn archive" title="Archive" (click)="$event.stopPropagation(); archiveDriver(driver)"><i class='bx bx-archive-in'></i></button>
                 } @else {
-                  <button class="action-btn activate" title="Reactivate" (click)="$event.stopPropagation(); reactivateDriver(driver)"><i class='bx bx-check-circle'></i></button>
+                  <button class="action-btn restore" title="Restore" (click)="$event.stopPropagation(); restoreArchivedDriver(driver)"><i class='bx bx-archive-out'></i></button>
                 }
               </td>
             </tr>

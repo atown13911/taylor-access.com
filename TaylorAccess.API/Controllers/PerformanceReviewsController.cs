@@ -187,20 +187,30 @@ public class PerformanceReviewsController : ControllerBase
         if (orgFilter <= 0)
             return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No organization context" } });
 
-        var employees = await _context.EmployeeRosters
+        var employeeCandidates = await _context.EmployeeRosters
             .AsNoTracking()
             .Include(er => er.User)
             .Where(er => er.OrganizationId == orgFilter
                 && er.User != null
-                && !string.IsNullOrWhiteSpace(er.User.Email)
-                && (er.EmploymentStatus == null || er.EmploymentStatus == "" || er.EmploymentStatus.ToLower() == "active"))
+                && !string.IsNullOrWhiteSpace(er.User.Email))
             .Select(er => new
             {
                 employeeId = er.UserId,
                 email = er.User!.Email!,
-                name = er.User.Name
+                name = er.User.Name,
+                employmentStatus = er.EmploymentStatus
             })
             .ToListAsync();
+
+        var employees = employeeCandidates
+            .Where(emp => IsActiveEmploymentStatus(emp.employmentStatus))
+            .Select(emp => new
+            {
+                emp.employeeId,
+                emp.email,
+                emp.name
+            })
+            .ToList();
 
         if (employees.Count == 0)
             return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found" } });
@@ -258,11 +268,11 @@ public class PerformanceReviewsController : ControllerBase
             {
                 var row = new ZoomUserMetricLite
                 {
-                    ZoomUserId = ReadString(item, "zoomUserId"),
-                    Email = ReadString(item, "email"),
-                    TotalCalls = ReadInt(item, "totalCalls"),
-                    SmsSessionCount = ReadInt(item, "smsSessionCount"),
-                    MeetingsHosted = ReadInt(item, "meetingsHosted")
+                    ZoomUserId = ReadStringAny(item, "zoomUserId", "zoom_user_id", "userId", "user_id"),
+                    Email = ReadStringAny(item, "email", "userEmail", "user_email"),
+                    TotalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count"),
+                    SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count"),
+                    MeetingsHosted = ReadIntAny(item, "meetingsHosted", "meetings_hosted")
                 };
 
                 if (!string.IsNullOrWhiteSpace(row.Email))
@@ -467,6 +477,38 @@ public class PerformanceReviewsController : ControllerBase
         if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var num)) return num;
         if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var parsed)) return parsed;
         return 0;
+    }
+
+    private static string? ReadStringAny(JsonElement element, params string[] propNames)
+    {
+        foreach (var propName in propNames)
+        {
+            var value = ReadString(element, propName);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return null;
+    }
+
+    private static int ReadIntAny(JsonElement element, params string[] propNames)
+    {
+        foreach (var propName in propNames)
+        {
+            var value = ReadInt(element, propName);
+            if (value > 0) return value;
+        }
+        return 0;
+    }
+
+    private static bool IsActiveEmploymentStatus(string? employmentStatus)
+    {
+        var status = (employmentStatus ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(status)) return true;
+        if (status.Contains("inactive") || status.Contains("terminated") || status.Contains("deactivated")) return false;
+        return status.Contains("active")
+            || status.Contains("full-time")
+            || status.Contains("full time")
+            || status.Contains("part-time")
+            || status.Contains("part time");
     }
 }
 
