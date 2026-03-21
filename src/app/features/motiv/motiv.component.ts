@@ -1773,13 +1773,21 @@ export class MotivComponent implements OnInit {
   }
 
   private filterVehicleRowsByDrivers(vehicleRows: any[], activeDriverRows: any[]): any[] {
-    if (!Array.isArray(vehicleRows) || vehicleRows.length === 0) return [];
     if (!Array.isArray(activeDriverRows) || activeDriverRows.length === 0) return [];
 
-    const unitKeys = new Set<string>();
-    const vinKeys = new Set<string>();
+    const sourceRows = Array.isArray(vehicleRows) ? vehicleRows : [];
+    const byUnit = new Map<string, any>();
+    const byVin = new Map<string, any>();
 
-    for (const driver of activeDriverRows) {
+    for (const raw of sourceRows) {
+      const mapped = this.mapVehicleRow(raw);
+      const unit = this.normalizeVehicleMatchValue(mapped.number);
+      const vin = this.normalizeVehicleMatchValue(mapped.vin);
+      if (unit && !byUnit.has(unit)) byUnit.set(unit, raw);
+      if (vin && !byVin.has(vin)) byVin.set(vin, raw);
+    }
+
+    return activeDriverRows.map((driver) => {
       const unit = this.normalizeVehicleMatchValue(
         driver?.truckNumber ??
         driver?.TruckNumber ??
@@ -1797,17 +1805,10 @@ export class MotivComponent implements OnInit {
         driver?.VehicleVin
       );
 
-      if (unit) unitKeys.add(unit);
-      if (vin) vinKeys.add(vin);
-    }
+      const matched = (vin && byVin.get(vin)) || (unit && byUnit.get(unit));
+      if (matched) return matched;
 
-    if (unitKeys.size === 0 && vinKeys.size === 0) return [];
-
-    return vehicleRows.filter((raw) => {
-      const mapped = this.mapVehicleRow(raw);
-      const unit = this.normalizeVehicleMatchValue(mapped.number);
-      const vin = this.normalizeVehicleMatchValue(mapped.vin);
-      return (!!unit && unitKeys.has(unit)) || (!!vin && vinKeys.has(vin));
+      return this.buildDriverFallbackVehicleRow(driver);
     });
   }
 
@@ -1816,6 +1817,27 @@ export class MotivComponent implements OnInit {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
+  }
+
+  private buildDriverFallbackVehicleRow(driver: any): any {
+    const fallbackId =
+      driver?.vehicleId ??
+      driver?.VehicleId ??
+      driver?.truckNumber ??
+      driver?.TruckNumber ??
+      `driver-${driver?.id ?? driver?.Id ?? 'unknown'}`;
+
+    return {
+      id: fallbackId,
+      number: driver?.truckNumber ?? driver?.TruckNumber ?? driver?.vehicleNumber ?? driver?.VehicleNumber ?? 'N/A',
+      make: driver?.truckMake ?? driver?.TruckMake ?? 'N/A',
+      model: driver?.truckModel ?? driver?.TruckModel ?? 'N/A',
+      year: driver?.truckYear ?? driver?.TruckYear ?? 'N/A',
+      vin: driver?.truckVin ?? driver?.TruckVin ?? driver?.vehicleVin ?? driver?.VehicleVin ?? 'N/A',
+      status: driver?.status ?? driver?.Status ?? 'active',
+      location: 'N/A',
+      updated_at: driver?.lastLocationUpdate ?? driver?.LastLocationUpdate ?? driver?.updatedAt ?? driver?.UpdatedAt ?? null
+    };
   }
 
   setVehiclePageSize(value: number): void {
