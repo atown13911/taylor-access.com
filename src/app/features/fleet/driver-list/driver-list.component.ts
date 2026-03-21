@@ -983,19 +983,23 @@ export class DriverListComponent implements OnInit {
       return;
     }
 
+    const previousRows = this.drivers();
+    this.drivers.update(rows => rows.map((row) =>
+      String(row.id ?? '').trim() === targetIdRaw
+        ? { ...row, status: this.normalizeStatus(targetStatus) }
+        : row
+    ));
+    this.toast.success(`${driver.name} ${successVerb}`, 'Success');
+
     this.api.updateDriver(driver.id, { status: targetStatus }).subscribe({
       next: () => {
-        this.toast.success(`${driver.name} ${successVerb}`, 'Success');
-        this.drivers.update(rows => rows.map((row) =>
-          String(row.id ?? '').trim() === targetIdRaw
-            ? { ...row, status: this.normalizeStatus(targetStatus) }
-            : row
-        ));
-        // Avoid immediate stale overwrite from eventual-consistent reads.
-        // Keep UI snappy now, then reconcile shortly after.
-        setTimeout(() => this.loadDrivers(), 1200);
+        // Reconcile with server shortly after optimistic update.
+        setTimeout(() => this.loadDrivers(), 1500);
       },
-      error: (err: any) => this.toast.error(err?.error?.error || fallbackError, 'Error')
+      error: (err: any) => {
+        this.drivers.set(previousRows);
+        this.toast.error(err?.error?.error || fallbackError, 'Error');
+      }
     });
   }
 
