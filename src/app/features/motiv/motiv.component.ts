@@ -1159,6 +1159,7 @@ export class MotivComponent implements OnInit {
   motivUsers = signal<any[]>([]);
   motivFuelPurchases = signal<any[]>([]);
   motivFuelCards = signal<any[]>([]);
+  motivCardTransactions = signal<any[]>([]);
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
@@ -1578,8 +1579,13 @@ export class MotivComponent implements OnInit {
   });
   fuelCardSpendIndex = computed<Map<string, { purchases: number; spend: number }>>(() => {
     const index = new Map<string, { purchases: number; spend: number }>();
+    const seenTransactionIds = new Set<string>();
     for (const row of this.fuelRows()) {
       const amount = Number.isFinite(row.amountValue) ? row.amountValue : 0;
+      const txId = String(row.transactionId ?? '').trim().toLowerCase();
+      if (txId && txId !== 'n/a') {
+        seenTransactionIds.add(txId);
+      }
       const keys = [
         this.normalizeFuelCardKey(row.cardId),
         this.normalizeFuelCardKey(row.cardLabel),
@@ -1594,6 +1600,57 @@ export class MotivComponent implements OnInit {
         index.set(key, current);
       }
     }
+
+    for (const raw of this.motivCardTransactions()) {
+      const tx = raw?.transaction ?? raw?.fuel_purchase ?? raw ?? {};
+      const transactionId = String(
+        tx?.id ??
+        tx?.transaction_id ??
+        tx?.offline_id ??
+        tx?.reference_id ??
+        raw?.id ??
+        raw?.transaction_id ??
+        raw?.offline_id ??
+        raw?.reference_id ??
+        ''
+      ).trim().toLowerCase();
+      if (transactionId && seenTransactionIds.has(transactionId)) continue;
+
+      const amountNum = Number(
+        tx?.total_cost ??
+        tx?.total_amount ??
+        tx?.authorized_amount ??
+        tx?.amount ??
+        tx?.net_amount ??
+        tx?.gross_amount ??
+        tx?.cost ??
+        raw?.total_cost ??
+        raw?.total_amount ??
+        raw?.authorized_amount ??
+        raw?.amount ??
+        raw?.net_amount ??
+        raw?.gross_amount ??
+        raw?.cost ??
+        0
+      );
+      const amount = Number.isFinite(amountNum) ? amountNum : 0;
+      const cardMeta = this.extractFuelCardMeta(raw, tx);
+      const keys = [
+        this.normalizeFuelCardKey(cardMeta.cardId),
+        this.normalizeFuelCardKey(cardMeta.cardLabel),
+        this.normalizeFuelCardKey(this.parseCardLast4(cardMeta.cardLabel)),
+        this.normalizeFuelCardKey(this.parseCardLast4(cardMeta.cardId)),
+        this.normalizeFuelCardKey(this.parseCardLast4(tx?.card_number ?? tx?.masked_card_number ?? tx?.masked_pan ?? raw?.card_number ?? raw?.masked_card_number ?? raw?.masked_pan))
+      ].filter((k): k is string => !!k);
+
+      for (const key of keys) {
+        const current = index.get(key) ?? { purchases: 0, spend: 0 };
+        current.purchases += 1;
+        current.spend += amount;
+        index.set(key, current);
+      }
+    }
+
     return index;
   });
   fuelCardRows = computed<MotivFuelCardRow[]>(() =>
@@ -1699,6 +1756,9 @@ export class MotivComponent implements OnInit {
     if (tab === 'fuel-cards' && this.motivFuelPurchases().length === 0 && !this.loadingFuel()) {
       this.loadFuelPurchases(true);
     }
+    if (tab === 'fuel-cards' && this.motivCardTransactions().length === 0) {
+      this.loadCardTransactions(true);
+    }
   }
 
   loadApiConfig(): void {
@@ -1732,6 +1792,7 @@ export class MotivComponent implements OnInit {
       if (!this.loadingUsers() && this.motivUsers().length === 0) this.loadUsers(true);
       if (!this.loadingFuel() && this.motivFuelPurchases().length === 0) this.loadFuelPurchases(true);
       if (!this.loadingFuelCards() && this.motivFuelCards().length === 0) this.loadFuelCards(true);
+      if (this.motivCardTransactions().length === 0) this.loadCardTransactions(true);
     }, 300);
   }
 
@@ -2337,6 +2398,21 @@ export class MotivComponent implements OnInit {
     });
   }
 
+  loadCardTransactions(background = false): void {
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/card-transactions`).subscribe({
+      next: (res) => {
+        const payload = res?.data ?? res;
+        this.motivCardTransactions.set(this.extractRows(payload));
+      },
+      error: () => {
+        if (!background) {
+          // Best-effort enrichment only; keep table usable with zeroed rollups when unavailable.
+          this.motivCardTransactions.set([]);
+        }
+      }
+    });
+  }
+
   saveFuelPurchasesToDb(): void {
     this.savingFuel.set(true);
     this.saveFuelMessage.set('');
@@ -2713,19 +2789,23 @@ export class MotivComponent implements OnInit {
 
     const cardIdRaw =
       cardObjects.find((x: any) => x?.id)?.id ??
+      cardObjects.find((x: any) => x?.card_id)?.card_id ??
+      cardObjects.find((x: any) => x?.cardId)?.cardId ??
       cardObjects.find((x: any) => x?.external_id)?.external_id ??
       cardObjects.find((x: any) => x?.uuid)?.uuid ??
       fuel?.card_id ??
+      fuel?.cardId ??
+      fuel?.payment_method_id ??
       fuel?.payment_card_id ??
       fuel?.motive_card_id ??
       fuel?.fuel_card_id ??
-      fuel?.cardId ??
       fuel?.card_uuid ??
       raw?.card_id ??
+      raw?.cardId ??
+      raw?.payment_method_id ??
       raw?.payment_card_id ??
       raw?.motive_card_id ??
       raw?.fuel_card_id ??
-      raw?.cardId ??
       raw?.card_uuid;
 
     const explicitNameRaw =

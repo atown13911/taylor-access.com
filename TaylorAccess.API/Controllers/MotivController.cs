@@ -273,6 +273,57 @@ public class MotivController : ControllerBase
         return StatusCode(500, new { error = "MOTIV fuel-cards request failed: no valid cards path configured." });
     }
 
+    [HttpGet("card-transactions")]
+    public async Task<IActionResult> GetCardTransactions()
+    {
+        var configuredPath = _config["MOTIV_CARD_TRANSACTIONS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_CARD_TRANSACTIONS_PATH");
+
+        var candidatePaths = new[]
+        {
+            configuredPath,
+            "/motive_card/v2/transactions",
+            "/motive_card/v1/transactions",
+            "/v1/fuel_purchases"
+        };
+
+        (bool Success, int StatusCode, string? Error, List<JsonElement> Rows)? lastFailure = null;
+        foreach (var path in candidatePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var fetch = await FetchAllMotivRows(path, $"card-transactions:{path}");
+            if (!fetch.Success)
+            {
+                lastFailure = fetch;
+                continue;
+            }
+
+            return Ok(new
+            {
+                source = "motiv",
+                endpoint = "card-transactions",
+                path,
+                rows = fetch.Rows.Count,
+                data = JsonSerializer.SerializeToElement(fetch.Rows)
+            });
+        }
+
+        if (lastFailure.HasValue)
+        {
+            var fail = lastFailure.Value;
+            return StatusCode(fail.StatusCode, new
+            {
+                error = "MOTIV card-transactions request failed.",
+                status = fail.StatusCode,
+                details = fail.Error
+            });
+        }
+
+        return StatusCode(500, new { error = "MOTIV card-transactions request failed: no valid transactions path configured." });
+    }
+
     [HttpGet("probe")]
     public async Task<IActionResult> Probe([FromQuery] string? path)
     {
