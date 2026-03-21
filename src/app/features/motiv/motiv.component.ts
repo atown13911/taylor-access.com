@@ -2275,25 +2275,7 @@ export class MotivComponent implements OnInit {
       driver?.last_name ?? driver?.lastName
     ].filter((x: any) => !!x).join(' ').trim();
     const vehicleLabel = vehicle?.number ?? vehicle?.unitNumber ?? vehicle?.fleet_number;
-    const card = fuel?.card ?? fuel?.payment_card ?? fuel?.motive_card ?? {};
-    const cardId = String(
-      card?.id ??
-      fuel?.card_id ??
-      fuel?.payment_card_id ??
-      fuel?.motive_card_id ??
-      fuel?.cardId ??
-      'N/A'
-    );
-    const maskedCard = String(
-      card?.last_four ??
-      card?.last4 ??
-      fuel?.card_last_four ??
-      fuel?.cardLast4 ??
-      fuel?.card_last4 ??
-      ''
-    ).trim();
-    const cardName = String(card?.name ?? fuel?.card_name ?? fuel?.cardName ?? '').trim();
-    const cardLabel = cardName || (maskedCard ? `**** ${maskedCard}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'));
+    const cardMeta = this.extractFuelCardMeta(raw, fuel);
 
     return {
       transactionId: String(fuel?.id ?? fuel?.transaction_id ?? fuel?.offline_id ?? 'N/A'),
@@ -2307,11 +2289,89 @@ export class MotivComponent implements OnInit {
       state: String(fuel?.jurisdiction ?? merchant?.state ?? fuel?.state ?? 'N/A'),
       driverId: String(driverLabel || driver?.driver_company_id || driver?.id || fuel?.driver_id || 'N/A'),
       vehicleId: String(vehicleLabel || vehicle?.id || fuel?.vehicle_id || 'N/A'),
-      cardId,
-      cardLabel,
+      cardId: cardMeta.cardId,
+      cardLabel: cardMeta.cardLabel,
       category: String(fuel?.fuel_type ?? fuel?.transaction_type ?? fuel?.type ?? 'N/A'),
       source: String(fuel?.source ?? 'N/A')
     };
+  }
+
+  private extractFuelCardMeta(raw: any, fuel: any): { cardId: string; cardLabel: string } {
+    const cardObjects = [
+      fuel?.card,
+      fuel?.payment_card,
+      fuel?.motive_card,
+      fuel?.fuel_card,
+      fuel?.card_details,
+      fuel?.cardInfo,
+      fuel?.payment_method,
+      raw?.card,
+      raw?.payment_card,
+      raw?.motive_card,
+      raw?.fuel_card,
+      raw?.card_details,
+      raw?.cardInfo,
+      raw?.payment_method
+    ].filter((x: any) => !!x);
+
+    const cardIdRaw =
+      cardObjects.find((x: any) => x?.id)?.id ??
+      fuel?.card_id ??
+      fuel?.payment_card_id ??
+      fuel?.motive_card_id ??
+      fuel?.fuel_card_id ??
+      fuel?.cardId ??
+      raw?.card_id ??
+      raw?.payment_card_id ??
+      raw?.motive_card_id ??
+      raw?.fuel_card_id ??
+      raw?.cardId;
+
+    const explicitNameRaw =
+      cardObjects.find((x: any) => x?.name)?.name ??
+      fuel?.card_name ??
+      fuel?.cardName ??
+      fuel?.payment_method_name ??
+      fuel?.card_program_name ??
+      raw?.card_name ??
+      raw?.cardName ??
+      raw?.payment_method_name ??
+      raw?.card_program_name;
+
+    const last4Raw =
+      cardObjects.find((x: any) => x?.last_four)?.last_four ??
+      cardObjects.find((x: any) => x?.last4)?.last4 ??
+      cardObjects.find((x: any) => x?.last_digits)?.last_digits ??
+      cardObjects.find((x: any) => x?.pan_last4)?.pan_last4 ??
+      fuel?.card_last_four ??
+      fuel?.card_last4 ??
+      fuel?.cardLast4 ??
+      fuel?.pan_last4 ??
+      fuel?.last4 ??
+      raw?.card_last_four ??
+      raw?.card_last4 ??
+      raw?.cardLast4 ??
+      raw?.pan_last4 ??
+      raw?.last4 ??
+      fuel?.card_number ??
+      fuel?.masked_card_number ??
+      raw?.card_number ??
+      raw?.masked_card_number;
+
+    const cardId = String(cardIdRaw ?? '').trim() || 'N/A';
+    const explicitName = String(explicitNameRaw ?? '').trim();
+    const parsedLast4 = this.parseCardLast4(last4Raw);
+    const cardLabel = explicitName || (parsedLast4 ? `**** ${parsedLast4}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'));
+
+    return { cardId, cardLabel };
+  }
+
+  private parseCardLast4(value: any): string {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    const digits = text.replace(/\D/g, '');
+    if (digits.length >= 4) return digits.slice(-4);
+    return '';
   }
 
   private tryParseDate(value: string): Date | null {
