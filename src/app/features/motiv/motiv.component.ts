@@ -1639,27 +1639,15 @@ export class MotivComponent implements OnInit {
   }
 
   private async fetchVehicleLocationRows(): Promise<any[]> {
-    const paths = [
-      '/v1/vehicle_locations',
-      '/v2/vehicle_locations',
-      '/v3/vehicle_locations',
-      '/v1/freight_visibility/vehicle_locations'
-    ];
-
-    for (const path of paths) {
-      try {
-        const res: any = await this.http
-          .get(`${this.apiUrl}/api/v1/motiv/probe?path=${encodeURIComponent(path)}`)
-          .pipe(timeout(12000))
-          .toPromise();
-        const rows = this.extractRows(res?.data ?? res);
-        if (rows.length > 0) return rows;
-      } catch {
-        // Try next endpoint candidate.
-      }
+    try {
+      const res: any = await this.http
+        .get(`${this.apiUrl}/api/v1/motiv/vehicle-locations`)
+        .pipe(timeout(15000))
+        .toPromise();
+      return this.extractRows(res?.data ?? res);
+    } catch {
+      return [];
     }
-
-    return [];
   }
 
   private mergeVehicleRowsWithLocations(vehicleRows: any[], locationRows: any[]): any[] {

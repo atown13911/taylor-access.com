@@ -101,6 +101,50 @@ public class MotivController : ControllerBase
         });
     }
 
+    [HttpGet("vehicle-locations")]
+    public async Task<IActionResult> GetVehicleLocations()
+    {
+        var candidatePaths = new[]
+        {
+            _config["MOTIV_VEHICLE_LOCATIONS_PATH"] ?? Environment.GetEnvironmentVariable("MOTIV_VEHICLE_LOCATIONS_PATH") ?? "/v1/vehicle_locations",
+            "/v2/vehicle_locations",
+            "/v3/vehicle_locations",
+            "/v1/freight_visibility/vehicle_locations"
+        };
+
+        var attempted = new List<object>();
+        foreach (var path in candidatePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var fetch = await FetchAllMotivRows(path, $"vehicle-locations:{path}");
+            attempted.Add(new { path, status = fetch.StatusCode, rows = fetch.Rows.Count, success = fetch.Success });
+
+            if (fetch.Success && fetch.Rows.Count > 0)
+            {
+                return Ok(new
+                {
+                    source = "motiv",
+                    endpoint = "vehicle-locations",
+                    path,
+                    rows = fetch.Rows.Count,
+                    data = JsonSerializer.SerializeToElement(fetch.Rows),
+                    attempted
+                });
+            }
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "vehicle-locations",
+            rows = 0,
+            data = JsonSerializer.SerializeToElement(new List<JsonElement>()),
+            attempted
+        });
+    }
+
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers()
     {
