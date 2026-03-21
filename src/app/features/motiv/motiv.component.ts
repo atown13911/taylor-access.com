@@ -692,29 +692,42 @@ type DriverSyncSummary = {
     </div>
   `,
   styles: [`
-    .motiv-page { padding: 20px; color: #e2e8f0; }
+    .motiv-page {
+      padding: 20px;
+      color: var(--text-primary);
+      border: 1px solid rgba(125, 211, 252, 0.18);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(7, 16, 32, 0.62), rgba(7, 16, 32, 0.42));
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+    }
     .page-header { margin-bottom: 16px; }
     .page-header h1 { margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
     .page-header p { margin: 0; color: #94a3b8; }
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
     .tab-btn {
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #cbd5e1;
+      border: 1px solid rgba(125, 211, 252, 0.2);
+      background: rgba(10, 20, 36, 0.58);
+      color: var(--text-secondary);
       padding: 8px 12px;
       border-radius: 8px;
       cursor: pointer;
+      transition: all 0.18s ease;
     }
     .tab-btn.active {
-      border-color: #06b6d4;
-      color: #06b6d4;
-      background: rgba(6, 182, 212, 0.08);
+      border-color: rgba(0, 212, 255, 0.42);
+      color: #9fe9ff;
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.18), rgba(0, 212, 255, 0.07));
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.18);
     }
     .tab-panel {
-      border: 1px solid #1e293b;
-      background: #0b1220;
+      border: 1px solid rgba(125, 211, 252, 0.16);
+      background: rgba(9, 18, 34, 0.56);
       border-radius: 12px;
       padding: 16px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
     .tab-panel h2 { margin: 0 0 8px; }
     .tab-panel p { margin: 0; color: #94a3b8; }
@@ -757,13 +770,18 @@ type DriverSyncSummary = {
     }
     .status-pill.bad .dot { background: #ef4444; }
     .refresh-btn {
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #cbd5e1;
+      border: 1px solid rgba(125, 211, 252, 0.24);
+      background: rgba(10, 20, 36, 0.62);
+      color: var(--text-primary);
       padding: 8px 12px;
       border-radius: 8px;
       cursor: pointer;
       margin-bottom: 10px;
+      transition: all 0.16s ease;
+    }
+    .refresh-btn:hover {
+      border-color: rgba(0, 212, 255, 0.42);
+      box-shadow: 0 0 14px rgba(0, 212, 255, 0.2);
     }
     .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .driver-actions { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -839,12 +857,14 @@ type DriverSyncSummary = {
       user-select: none;
     }
     .filter-input {
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #cbd5e1;
+      border: 1px solid rgba(125, 211, 252, 0.24);
+      background: rgba(10, 20, 36, 0.58);
+      color: var(--text-primary);
       padding: 8px 10px;
       border-radius: 8px;
       min-width: 220px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
     }
     .driver-actions .filter-input {
       flex: 1 1 420px;
@@ -911,21 +931,23 @@ type DriverSyncSummary = {
     .available-api-table {
       width: 100%;
       border-collapse: collapse;
-      border: 1px solid #1e293b;
+      border: 1px solid rgba(125, 211, 252, 0.18);
       border-radius: 8px;
       overflow: hidden;
-      background: #0f172a;
+      background: rgba(9, 18, 34, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
     .available-api-table th,
     .available-api-table td {
       padding: 8px 10px;
-      border-bottom: 1px solid #1e293b;
+      border-bottom: 1px solid rgba(125, 211, 252, 0.12);
       text-align: left;
       font-size: 12px;
-      color: #cbd5e1;
+      color: var(--text-primary);
     }
     .available-api-table tr:last-child td { border-bottom: none; }
-    .available-api-table th { color: #94a3b8; background: #111827; }
+    .available-api-table th { color: #9ccde0; background: rgba(10, 20, 36, 0.7); }
     .status-chip {
       display: inline-block;
       padding: 3px 8px;
@@ -949,6 +971,18 @@ type DriverSyncSummary = {
       color: #f59e0b;
       border-color: rgba(245, 158, 11, 0.5);
       background: rgba(245, 158, 11, 0.12);
+    }
+
+    :host-context(.mode-hard) .motiv-page {
+      border-color: rgba(168, 85, 247, 0.28);
+      box-shadow:
+        0 12px 30px rgba(0, 0, 0, 0.35),
+        0 0 22px rgba(168, 85, 247, 0.14);
+    }
+
+    :host-context(.mode-hard) .tab-btn.active,
+    :host-context(.mode-hard) .status-pill.ok {
+      box-shadow: 0 0 18px rgba(168, 85, 247, 0.16), 0 0 12px rgba(0, 212, 255, 0.2);
     }
   `]
 })
