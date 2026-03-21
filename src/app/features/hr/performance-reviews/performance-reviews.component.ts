@@ -47,6 +47,7 @@ interface ZoomMetricRow {
   callVolume: number;
   textVolume: number;
 }
+type RosterEmployee = Record<string, any>;
 
 @Component({
   selector: 'app-performance-reviews',
@@ -155,9 +156,32 @@ interface ZoomMetricRow {
       } <!-- end reviews tab -->
 
       @if (pageTab() === 'calls') {
+      <div class="management-title-tabs">
+        @for (title of managementTitleTabs(); track title) {
+          <button class="tab" [class.active]="activeManagementTitleTab() === title" (click)="selectManagementTitleTab(title)">
+            {{ title }}
+          </button>
+        }
+        <button class="tab add-title-tab" (click)="toggleTitlePicker()">
+          <i class='bx bx-plus'></i>
+        </button>
+      </div>
+
+      @if (showTitlePicker()) {
+        <div class="title-picker">
+          <select [ngModel]="newManagementTitle()" (ngModelChange)="newManagementTitle.set($event)">
+            <option value="">Select job title</option>
+            @for (title of availableManagementTitleOptions(); track title) {
+              <option [value]="title">{{ title }}</option>
+            }
+          </select>
+          <button class="btn-secondary" (click)="addManagementTitleTab()">Add Tab</button>
+        </div>
+      }
+
       <!-- Call Metrics Stats -->
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ callLogs().length }}</span><span class="stat-lbl">Total Calls</span></div></div>
+        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ managementCallLogs().length }}</span><span class="stat-lbl">Total Calls</span></div></div>
         <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-phone-incoming'></i></div><div><span class="stat-val">{{ getCallCount('answered') }}</span><span class="stat-lbl">Answered</span></div></div>
         <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-phone-outgoing'></i></div><div><span class="stat-val">{{ getCallCount('outbound') }}</span><span class="stat-lbl">Outbound</span></div></div>
         <div class="stat-card"><div class="stat-icon draft"><i class='bx bx-phone-off'></i></div><div><span class="stat-val">{{ getCallCount('missed') }}</span><span class="stat-lbl">Missed</span></div></div>
@@ -171,7 +195,7 @@ interface ZoomMetricRow {
       </div>
 
       <!-- Call Logs Table -->
-      @if (callLogs().length === 0) {
+      @if (managementCallLogs().length === 0) {
         <div class="empty-state">
           <i class='bx bx-phone'></i>
           <h3>No call logs yet</h3>
@@ -192,7 +216,7 @@ interface ZoomMetricRow {
               </tr>
             </thead>
             <tbody>
-              @for (call of callLogs(); track call.id) {
+              @for (call of managementCallLogs(); track call.id) {
                 <tr>
                   <td><strong>{{ call.employeeName }}</strong></td>
                   <td><span class="type-badge">{{ call.callType }}</span></td>
@@ -223,7 +247,7 @@ interface ZoomMetricRow {
                   <label>Employee *</label>
                   <select [(ngModel)]="callForm.employeeId">
                     <option [ngValue]="0">Select Employee</option>
-                    @for (emp of employees(); track emp.id) {
+                    @for (emp of managementEmployees(); track emp.id) {
                       <option [ngValue]="emp.id">{{ emp.name }}</option>
                     }
                   </select>
@@ -428,6 +452,10 @@ interface ZoomMetricRow {
     .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
+    .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
+    .add-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
+    .title-picker { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+    .title-picker select { min-width: 220px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
     .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
     .table-wrap { border-radius: 12px; border: 1px solid #2a2a4e; overflow: hidden; }
@@ -480,6 +508,10 @@ export class PerformanceReviewsComponent implements OnInit {
 
   // Call Metrics
   callLogs = signal<any[]>([]);
+  managementTitleTabs = signal<string[]>([]);
+  activeManagementTitleTab = signal<string>('');
+  showTitlePicker = signal(false);
+  newManagementTitle = signal<string>('');
   showCallModal = signal(false);
   callForm: any = {
     employeeId: 0, callType: 'outbound', contactName: '', contactNumber: '',
@@ -498,13 +530,14 @@ export class PerformanceReviewsComponent implements OnInit {
   };
 
   getCallCount(type: string): number {
-    if (type === 'outbound') return this.callLogs().filter(c => c.callType === 'outbound' || c.callType === 'follow_up').length;
-    return this.callLogs().filter(c => c.outcome === type).length;
+    const rows = this.managementCallLogs();
+    if (type === 'outbound') return rows.filter(c => c.callType === 'outbound' || c.callType === 'follow_up').length;
+    return rows.filter(c => c.outcome === type).length;
   }
 
   saveCallLog(): void {
     if (!this.callForm.employeeId) { this.toast.warning('Please select an employee'); return; }
-    const emp = this.employees().find(e => e.id === +this.callForm.employeeId);
+    const emp = this.managementEmployees().find(e => e.id === +this.callForm.employeeId);
     const log = {
       ...this.callForm,
       id: Date.now(),
@@ -515,6 +548,54 @@ export class PerformanceReviewsComponent implements OnInit {
     this.showCallModal.set(false);
     this.callForm = { employeeId: 0, callType: 'outbound', contactName: '', contactNumber: '', duration: 0, outcome: 'answered', notes: '' };
     this.toast.success('Call logged');
+  }
+
+  availableManagementTitleOptions = computed(() => {
+    const selected = new Set(this.managementTitleTabs().map(t => t.toLowerCase()));
+    const titles = this.employees()
+      .map(emp => this.extractEmployeeTitleRaw(emp))
+      .filter((title): title is string => !!title && !selected.has(title.toLowerCase()));
+    return Array.from(new Set(titles)).sort((a, b) => a.localeCompare(b));
+  });
+
+  managementEmployees = computed(() => {
+    const all = this.employees();
+    const tabs = this.managementTitleTabs();
+    if (tabs.length === 0) return all;
+
+    const selectedTab = this.activeManagementTitleTab();
+    const effectiveTab = selectedTab || tabs[0];
+    return all.filter((emp) => this.extractEmployeeTitleRaw(emp) === effectiveTab);
+  });
+
+  managementEmployeeIdSet = computed(() => new Set(this.managementEmployees().map(e => Number(e.id)).filter(Boolean)));
+
+  managementCallLogs = computed(() => {
+    const idSet = this.managementEmployeeIdSet();
+    return this.callLogs().filter(c => idSet.has(Number(c.employeeId)));
+  });
+
+  toggleTitlePicker(): void {
+    const next = !this.showTitlePicker();
+    this.showTitlePicker.set(next);
+    if (next) this.newManagementTitle.set('');
+  }
+
+  addManagementTitleTab(): void {
+    const title = (this.newManagementTitle() || '').trim();
+    if (!title) return;
+
+    this.managementTitleTabs.update((tabs) => {
+      if (tabs.some(t => t.toLowerCase() === title.toLowerCase())) return tabs;
+      return [...tabs, title];
+    });
+    this.activeManagementTitleTab.set(title);
+    this.newManagementTitle.set('');
+    this.showTitlePicker.set(false);
+  }
+
+  selectManagementTitleTab(title: string): void {
+    this.activeManagementTitleTab.set(title);
   }
 
   getReviewCount(status: string): number {
@@ -839,13 +920,44 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   private getEmployeeCommunicationMetrics(employeeId: number): { callVolume: number; textVolume: number } {
-    const localCalls = this.getEmployeeCallVolume(employeeId);
-    const localTexts = this.getEmployeeTextVolume(employeeId);
+    const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
+    const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoom = this.zoomMetricMap()[employeeId];
     return {
       callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0))
     };
+  }
+
+  private extractEmployeeTitle(emp: RosterEmployee): string {
+    const value = emp?.['jobTitle']
+      ?? emp?.['title']
+      ?? emp?.['positionTitle']
+      ?? emp?.['position']
+      ?? emp?.['role']
+      ?? emp?.['departmentTitle']
+      ?? '';
+    return String(value).toLowerCase().trim();
+  }
+
+  private extractEmployeeTitleRaw(emp: RosterEmployee): string {
+    const value = emp?.['jobTitle']
+      ?? emp?.['title']
+      ?? emp?.['positionTitle']
+      ?? emp?.['position']
+      ?? emp?.['role']
+      ?? emp?.['departmentTitle']
+      ?? '';
+    return String(value).trim();
+  }
+
+  private extractEmployeeDescription(emp: RosterEmployee): string {
+    const value = emp?.['jobDescription']
+      ?? emp?.['description']
+      ?? emp?.['positionDescription']
+      ?? emp?.['notes']
+      ?? '';
+    return String(value).toLowerCase().trim();
   }
 
   private getEmployeeTime(employeeId: number): { totalHours: number; activeHours: number; idleHours: number; activityRate: number; totalSeconds: number } {
