@@ -1773,7 +1773,7 @@ export class MotivComponent implements OnInit {
     rows.forEach(row => {
       if (row.method === 'GET') {
         this.http.get<any>(`${this.apiUrl}/api/v1/motiv/probe?path=${encodeURIComponent(row.path)}`).pipe(timeout(15000)).subscribe({
-          next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res)),
+          next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res, row.method)),
           error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
         });
       } else {
@@ -1781,7 +1781,7 @@ export class MotivComponent implements OnInit {
           path: row.path,
           method: row.method
         }).pipe(timeout(15000)).subscribe({
-          next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res)),
+          next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res, row.method)),
           error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
         });
       }
@@ -2885,9 +2885,10 @@ export class MotivComponent implements OnInit {
     }
   }
 
-  private mapProbeResultToStatus(res: any): 'connected' | 'not-connected' {
+  private mapProbeResultToStatus(res: any, method: 'GET' | 'OPTIONS' = 'GET'): 'connected' | 'not-connected' {
     const status = Number(res?.status ?? 0);
-    if (this.strictMode405() && status === 405) {
+    // Strict 405 mode is useful for GET capability checks but too noisy for write OPTIONS probes.
+    if (method !== 'OPTIONS' && this.strictMode405() && status === 405) {
       return 'not-connected';
     }
     return !!res?.connected ? 'connected' : 'not-connected';
@@ -2969,7 +2970,7 @@ export class MotivComponent implements OnInit {
         category: 'write',
         name: 'Locate Asset',
         method: 'OPTIONS',
-        path: '/assets/1/locate',
+        path: '/v1/assets/1/locate',
         status: 'checking',
         notes: 'Write endpoint; id-specific path used for capability probe.'
       },

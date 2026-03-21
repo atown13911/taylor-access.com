@@ -968,7 +968,15 @@ public class MotivController : ControllerBase
 
     private static bool IsReachable(bool success, int statusCode)
     {
-        return success || statusCode == 400 || statusCode == 401 || statusCode == 403 || statusCode == 404 || statusCode == 405;
+        return success
+            || statusCode == 400
+            || statusCode == 401
+            || statusCode == 403
+            || statusCode == 404
+            || statusCode == 405
+            || statusCode == 409
+            || statusCode == 415
+            || statusCode == 422;
     }
 
     private static bool LooksLikeDriverLocations(List<JsonElement> rows)
