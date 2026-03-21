@@ -319,14 +319,35 @@ public class MotivController : ControllerBase
             new HttpMethod(method),
             includeIncomingQuery: false);
 
+        var connected = IsReachable(result.Success, result.StatusCode);
+        var fallbackStatus = 0;
+        string? fallbackDetails = null;
+
+        if (!connected && method == "OPTIONS")
+        {
+            // Some MOTIV paths reject OPTIONS at edge/proxy level even when the endpoint is reachable.
+            // Fall back to a GET reachability probe to avoid false "Not Connected" for write capability checks.
+            var fallback = await FetchMotivResponse(
+                normalizedPath,
+                $"probe-method-fallback:GET:{normalizedPath}",
+                HttpMethod.Get,
+                includeIncomingQuery: false);
+
+            connected = IsReachable(fallback.Success, fallback.StatusCode);
+            fallbackStatus = fallback.StatusCode;
+            fallbackDetails = fallback.Success ? null : fallback.Error;
+        }
+
         return Ok(new
         {
             source = "motiv",
             path = normalizedPath,
             method,
-            connected = IsReachable(result.Success, result.StatusCode),
+            connected,
             status = result.StatusCode,
-            details = result.Success ? null : result.Error
+            details = result.Success ? null : result.Error,
+            fallbackStatus = fallbackStatus > 0 ? fallbackStatus : (int?)null,
+            fallbackDetails
         });
     }
 
