@@ -998,7 +998,8 @@ export class MotivComponent implements OnInit {
   private apiUrl = environment.apiUrl;
   private strictModeStorageKey = 'motiv.strictMode405';
   private motivStatusCacheKey = 'motiv.statusCache.v1';
-  private motivStatusCacheMaxAgeMs = 15 * 60 * 1000;
+  // Manual refresh only: keep cached MOTIV status until user refreshes.
+  private motivStatusCacheMaxAgeMs: number | null = null;
 
   activeTab = signal<MotivTab>('api');
   loading = signal(false);
@@ -2251,7 +2252,11 @@ export class MotivComponent implements OnInit {
 
       const parsed = JSON.parse(raw) as MotivStatusCache;
       if (!parsed || typeof parsed.timestamp !== 'number') return false;
-      if ((Date.now() - parsed.timestamp) > this.motivStatusCacheMaxAgeMs) return false;
+      if (typeof this.motivStatusCacheMaxAgeMs === 'number' &&
+        this.motivStatusCacheMaxAgeMs > 0 &&
+        (Date.now() - parsed.timestamp) > this.motivStatusCacheMaxAgeMs) {
+        return false;
+      }
 
       if (Array.isArray(parsed.availableApis) && parsed.availableApis.length > 0) {
         this.availableApis.set(parsed.availableApis);
