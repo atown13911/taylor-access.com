@@ -1771,7 +1771,9 @@ export class MotivComponent implements OnInit {
     this.phase2Apis.set(rows);
 
     rows.forEach(row => {
-      if (row.method === 'GET') {
+      // For capability health, probe endpoint reachability via GET for both rows.
+      // OPTIONS handling can vary by upstream proxies and cause false negatives.
+      if (row.method === 'GET' || row.method === 'OPTIONS') {
         this.http.get<any>(`${this.apiUrl}/api/v1/motiv/probe?path=${encodeURIComponent(row.path)}`).pipe(timeout(15000)).subscribe({
           next: (res) => this.setPhase2Status(row.path, row.method, this.mapProbeResultToStatus(res, row.method)),
           error: () => this.setPhase2Status(row.path, row.method, 'not-connected')
