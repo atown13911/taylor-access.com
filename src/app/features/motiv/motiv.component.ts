@@ -773,6 +773,13 @@ type MotivStatusCache = {
                 <option value="inactive">Inactive</option>
                 <option value="other">Other</option>
               </select>
+              <select
+                class="filter-input filter-select"
+                [value]="fuelCardWeekFilter()"
+                (change)="setFuelCardWeekFilter($any($event.target).value)">
+                <option value="all">All Weeks</option>
+                <option *ngFor="let w of fuelCardAvailableWeeks()" [value]="w.key">{{ w.label }}</option>
+              </select>
             </div>
             <p class="count">Rows: {{ filteredFuelCardRows().length }} / {{ fuelCardRows().length }}</p>
           </div>
@@ -1181,6 +1188,7 @@ export class MotivComponent implements OnInit {
   fuelPageSize = signal(100);
   fuelCardSearchTerm = signal('');
   fuelCardStatusFilter = signal<'all' | 'active' | 'inactive' | 'other'>('all');
+  fuelCardWeekFilter = signal<string>('all');
   fuelCardPage = signal(1);
   fuelCardPageSize = signal(100);
   userSearchTerm = signal('');
@@ -1580,7 +1588,12 @@ export class MotivComponent implements OnInit {
   fuelCardSpendIndex = computed<Map<string, { purchases: number; spend: number }>>(() => {
     const index = new Map<string, { purchases: number; spend: number }>();
     const seenTransactionIds = new Set<string>();
+    const selectedWeek = this.fuelCardWeekFilter();
     for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      const iso = dt ? this.getIsoWeekInfo(dt) : null;
+      if (selectedWeek !== 'all' && (!iso || iso.key !== selectedWeek)) continue;
+
       const amount = Number.isFinite(row.amountValue) ? row.amountValue : 0;
       const txId = String(row.transactionId ?? '').trim().toLowerCase();
       if (txId && txId !== 'n/a') {
@@ -1603,6 +1616,11 @@ export class MotivComponent implements OnInit {
 
     for (const raw of this.motivCardTransactions()) {
       const tx = raw?.transaction ?? raw?.fuel_purchase ?? raw ?? {};
+      const txDate = this.extractCardTransactionDate(tx, raw);
+      const dt = this.tryParseDate(txDate);
+      const iso = dt ? this.getIsoWeekInfo(dt) : null;
+      if (selectedWeek !== 'all' && (!iso || iso.key !== selectedWeek)) continue;
+
       const transactionId = String(
         tx?.id ??
         tx?.transaction_id ??
@@ -1665,9 +1683,45 @@ export class MotivComponent implements OnInit {
   fuelCardsTotalSpend = computed<number>(() =>
     this.fuelCardRows().reduce((sum, row) => sum + (Number.isFinite(row.spend) ? row.spend : 0), 0)
   );
+  fuelCardAvailableWeeks = computed<FuelWeekOption[]>(() => {
+    const weekMap = new Map<string, FuelWeekOption>();
+
+    for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      if (!dt) continue;
+      const info = this.getIsoWeekInfo(dt);
+      if (!weekMap.has(info.key)) {
+        weekMap.set(info.key, {
+          key: info.key,
+          label: `Week ${String(info.week).padStart(2, '0')} (${info.year})`,
+          year: info.year,
+          week: info.week
+        });
+      }
+    }
+
+    for (const raw of this.motivCardTransactions()) {
+      const tx = raw?.transaction ?? raw?.fuel_purchase ?? raw ?? {};
+      const txDate = this.extractCardTransactionDate(tx, raw);
+      const dt = this.tryParseDate(txDate);
+      if (!dt) continue;
+      const info = this.getIsoWeekInfo(dt);
+      if (!weekMap.has(info.key)) {
+        weekMap.set(info.key, {
+          key: info.key,
+          label: `Week ${String(info.week).padStart(2, '0')} (${info.year})`,
+          year: info.year,
+          week: info.week
+        });
+      }
+    }
+
+    return Array.from(weekMap.values()).sort((a, b) => b.key.localeCompare(a.key));
+  });
   filteredFuelCardRows = computed<MotivFuelCardRow[]>(() => {
     const term = this.fuelCardSearchTerm().trim().toLowerCase();
     const status = this.fuelCardStatusFilter();
+    const week = this.fuelCardWeekFilter();
     return this.fuelCardRows().filter((row) => {
       const normalizedStatus = row.status.trim().toLowerCase();
       const matchesSearch =
@@ -1684,7 +1738,9 @@ export class MotivComponent implements OnInit {
         (status === 'inactive' && this.isFuelCardInactiveStatus(normalizedStatus)) ||
         (status === 'other' && !this.isFuelCardActiveStatus(normalizedStatus) && !this.isFuelCardInactiveStatus(normalizedStatus));
 
-      return matchesSearch && matchesStatus;
+      const matchesWeek = week === 'all' || row.purchases > 0;
+
+      return matchesSearch && matchesStatus && matchesWeek;
     });
   });
   fuelCardTotalPages = computed<number>(() =>
@@ -2311,6 +2367,11 @@ export class MotivComponent implements OnInit {
     this.fuelCardPage.set(1);
   }
 
+  setFuelCardWeekFilter(value: string): void {
+    this.fuelCardWeekFilter.set(value ?? 'all');
+    this.fuelCardPage.set(1);
+  }
+
   setFuelCardPageSize(value: number): void {
     if (!Number.isFinite(value) || value <= 0) return;
     this.fuelCardPageSize.set(value);
@@ -2882,6 +2943,26 @@ export class MotivComponent implements OnInit {
     if (!value || value === 'N/A') return null;
     const dt = new Date(value);
     return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  private extractCardTransactionDate(tx: any, raw: any): string {
+    return String(
+      tx?.purchased_at ??
+      tx?.transaction_time ??
+      tx?.posted_at ??
+      tx?.processed_at ??
+      tx?.occurred_at ??
+      tx?.created_at ??
+      tx?.date ??
+      raw?.purchased_at ??
+      raw?.transaction_time ??
+      raw?.posted_at ??
+      raw?.processed_at ??
+      raw?.occurred_at ??
+      raw?.created_at ??
+      raw?.date ??
+      'N/A'
+    );
   }
 
   private getIsoWeekInfo(date: Date): { year: number; week: number; key: string } {
