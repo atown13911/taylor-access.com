@@ -1539,15 +1539,18 @@ export class MotivComponent implements OnInit {
     }
     this.saveDriversError.set('');
     this.syncStatusMessage.set('Loading drivers from Access DB...');
-    this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1&status=active`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
-        const driverRows = rows.filter((row: any) => this.isMotivDriverRow(row));
-        this.motivDrivers.set(driverRows);
-        this.loadedDriverRows.set(driverRows.length);
+        // Mirror the Drivers page "Active" panel semantics in MOTIV.
+        const activeDriverRows = rows.filter((row: any) =>
+          this.isActiveLikeStatus(this.mapDriverRow(row).status)
+        );
+        this.motivDrivers.set(activeDriverRows);
+        this.loadedDriverRows.set(activeDriverRows.length);
         this.loadingDrivers.set(false);
-        this.syncStatusMessage.set(`Loaded ${driverRows.length} MOTIV driver rows from Access DB.`);
+        this.syncStatusMessage.set(`Loaded ${activeDriverRows.length} active driver rows from Drivers DB.`);
         if (runBackgroundSync) {
           this.autoSyncDriversToDb();
         }
