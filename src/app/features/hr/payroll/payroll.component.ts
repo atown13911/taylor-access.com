@@ -194,13 +194,13 @@ export class PayrollComponent implements OnInit {
   periodFilter = signal('current');
 
   periodOptions = (() => {
-    const options = [{ value: 'current', label: 'Current Pay Period' }];
+    const options = [{ value: 'current', label: 'Current Week' }];
     const now = new Date();
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 12; i++) {
       const d = new Date(now);
-      d.setDate(d.getDate() - (i * 14));
+      d.setDate(d.getDate() - (i * 7));
       const start = new Date(d);
-      const end = new Date(start); end.setDate(end.getDate() + 13);
+      const end = new Date(start); end.setDate(end.getDate() + 6);
       const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       options.push({ value: i.toString(), label: `${fmt(start)} – ${fmt(end)}` });
     }
