@@ -387,7 +387,9 @@ public class PerformanceReviewsController : ControllerBase
             _logger.LogWarning(ex, "Zoom SMS pull via gateway failed; using smsSessionCount fallback");
         }
 
-        var rows = new List<object>(employees.Count);
+        var callByEmployee = new Dictionary<int, int>();
+        var textByEmployee = new Dictionary<int, int>();
+        var meetingsByEmployee = new Dictionary<int, int>();
         var matchedCount = 0;
         foreach (var emp in employees)
         {
@@ -448,15 +450,119 @@ public class PerformanceReviewsController : ControllerBase
             if ((zoomMetric?.TotalCalls ?? 0) > 0 || smsCount > 0)
                 matchedCount++;
 
+            callByEmployee[emp.EmployeeId] = zoomMetric?.TotalCalls ?? 0;
+            textByEmployee[emp.EmployeeId] = smsCount;
+            meetingsByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsHosted ?? 0;
+        }
+
+        var usedCallLogFallback = false;
+        var callLogFallbackMatchedEmployees = 0;
+        if (matchedCount == 0)
+        {
+            try
+            {
+                var emailToEmployeeIds = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+                var nameToEmployeeIds = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var emp in employees)
+                {
+                    var keys = new[] { emp.Email, emp.ZoomEmail, emp.PersonalEmail }
+                        .Where(v => !string.IsNullOrWhiteSpace(v))
+                        .Select(v => v!.Trim().ToLowerInvariant())
+                        .Distinct();
+                    foreach (var key in keys)
+                    {
+                        if (!emailToEmployeeIds.TryGetValue(key, out var ids))
+                        {
+                            ids = new HashSet<int>();
+                            emailToEmployeeIds[key] = ids;
+                        }
+                        ids.Add(emp.EmployeeId);
+                    }
+
+                    var nameKey = NormalizeName(emp.Name);
+                    if (!string.IsNullOrWhiteSpace(nameKey))
+                    {
+                        if (!nameToEmployeeIds.TryGetValue(nameKey, out var ids))
+                        {
+                            ids = new HashSet<int>();
+                            nameToEmployeeIds[nameKey] = ids;
+                        }
+                        ids.Add(emp.EmployeeId);
+                    }
+                }
+
+                var callLogsResponse = await client.GetAsync($"{crmBase}/phone/call-logs?from={fromDate}&to={toDate}&pageSize=500");
+                if (callLogsResponse.IsSuccessStatusCode)
+                {
+                    var body = await callLogsResponse.Content.ReadAsStringAsync();
+                    using var callDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+                    if (TryGetPropertyIgnoreCase(callDoc.RootElement, "data", out var callData)
+                        && callData.ValueKind == JsonValueKind.Array)
+                    {
+                        var matchedEmployees = new HashSet<int>();
+                        foreach (var item in callData.EnumerateArray())
+                        {
+                            var matchedIds = new HashSet<int>();
+                            var callerEmail = ReadStringAny(item, "caller_email", "callerEmail");
+                            var calleeEmail = ReadStringAny(item, "callee_email", "calleeEmail");
+                            var callerName = NormalizeName(ReadStringAny(item, "caller_name", "callerName"));
+                            var calleeName = NormalizeName(ReadStringAny(item, "callee_name", "calleeName"));
+
+                            foreach (var key in new[] { callerEmail, calleeEmail }
+                                .Where(v => !string.IsNullOrWhiteSpace(v))
+                                .Select(v => v!.Trim().ToLowerInvariant()))
+                            {
+                                if (emailToEmployeeIds.TryGetValue(key, out var ids))
+                                {
+                                    foreach (var id in ids) matchedIds.Add(id);
+                                }
+                            }
+
+                            if (matchedIds.Count == 0)
+                            {
+                                foreach (var nameKey in new[] { callerName, calleeName }.Where(v => !string.IsNullOrWhiteSpace(v)))
+                                {
+                                    if (nameToEmployeeIds.TryGetValue(nameKey!, out var ids))
+                                    {
+                                        foreach (var id in ids) matchedIds.Add(id);
+                                    }
+                                }
+                            }
+
+                            foreach (var id in matchedIds)
+                            {
+                                callByEmployee[id] = callByEmployee.GetValueOrDefault(id) + 1;
+                                matchedEmployees.Add(id);
+                            }
+                        }
+
+                        if (matchedEmployees.Count > 0)
+                        {
+                            usedCallLogFallback = true;
+                            callLogFallbackMatchedEmployees = matchedEmployees.Count;
+                            matchedCount = matchedEmployees.Count;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Call-log fallback aggregation failed for Zoom metrics");
+            }
+        }
+
+        var rows = new List<object>(employees.Count);
+        foreach (var emp in employees)
+        {
             rows.Add(new
             {
                 employeeId = emp.EmployeeId,
                 employeeName = emp.Name,
                 email = emp.Email,
-                callVolume = zoomMetric?.TotalCalls ?? 0,
-                textVolume = smsCount,
-                meetingsHosted = zoomMetric?.MeetingsHosted ?? 0,
-                source = "zoom-crm-via-ttac-gateway"
+                callVolume = callByEmployee.GetValueOrDefault(emp.EmployeeId),
+                textVolume = textByEmployee.GetValueOrDefault(emp.EmployeeId),
+                meetingsHosted = meetingsByEmployee.GetValueOrDefault(emp.EmployeeId),
+                source = usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway"
             });
         }
 
@@ -472,6 +578,8 @@ public class PerformanceReviewsController : ControllerBase
                 synced = sync,
                 matchedEmployees = matchedCount,
                 totalEmployees = employees.Count,
+                usedCallLogFallback,
+                callLogFallbackMatchedEmployees,
                 employeeSource,
                 orgFilter
             }
