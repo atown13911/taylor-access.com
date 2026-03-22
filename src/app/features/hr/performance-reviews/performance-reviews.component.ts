@@ -687,38 +687,7 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.reviewRows().filter(r => this.normalizeReviewStatus(r.status) === tab);
   });
   metricRows = computed<ReviewMetricRow[]>(() => {
-    return this.filteredReviews().map((review) => {
-      const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
-      const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId);
-      const liveCallVolume = liveComms.callVolume;
-      const liveTextVolume = liveComms.textVolume;
-      const liveTime = this.getEmployeeTime(review.employeeId);
-      const liveRevenue = this.getAttributedRevenue(review.employeeId);
-      const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
-
-      const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
-      const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
-      const callVolume = Math.max(snapshotCallVolume, liveCallVolume);
-      const textVolume = Math.max(snapshotTextVolume, liveTextVolume);
-      const totalHours = hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours;
-      const activeHours = hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours;
-      const idleHours = hasSnapshot ? Math.max(0, totalHours - activeHours) : liveTime.idleHours;
-      const activityRate = hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate;
-      const invoicedRevenue = hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue;
-      const score = hasSnapshot ? Math.max(Number(review.score || 0), liveScore) : liveScore;
-
-      return {
-        ...review,
-        callVolume,
-        textVolume,
-        totalHours,
-        activeHours,
-        idleHours,
-        activityRate,
-        invoicedRevenue,
-        score
-      };
-    });
+    return this.filteredReviews().map((review) => this.toMetricRow(review));
   });
   totalInvoicedRevenue30d = computed(() => {
     const seriesTotal = this.revenueSeries().reduce(
@@ -864,6 +833,7 @@ export class PerformanceReviewsComponent implements OnInit {
       this.loadReviews(),
       this.loadZoomMetrics()
     ]);
+    await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
 
@@ -875,6 +845,7 @@ export class PerformanceReviewsComponent implements OnInit {
       this.loadReviews(),
       this.loadZoomMetrics()
     ]);
+    await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
 
@@ -1055,6 +1026,68 @@ export class PerformanceReviewsComponent implements OnInit {
       if (Number.isFinite(value) && value > 0) return value;
     }
     return 0;
+  }
+
+  private toMetricRow(review: Review): ReviewMetricRow {
+    const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
+    const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId);
+    const liveCallVolume = liveComms.callVolume;
+    const liveTextVolume = liveComms.textVolume;
+    const liveTime = this.getEmployeeTime(review.employeeId);
+    const liveRevenue = this.getAttributedRevenue(review.employeeId);
+    const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
+
+    const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
+    const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
+    const callVolume = Math.max(snapshotCallVolume, liveCallVolume);
+    const textVolume = Math.max(snapshotTextVolume, liveTextVolume);
+    const totalHours = hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours;
+    const activeHours = hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours;
+    const idleHours = hasSnapshot ? Math.max(0, totalHours - activeHours) : liveTime.idleHours;
+    const activityRate = hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate;
+    const invoicedRevenue = hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue;
+    const score = hasSnapshot ? Math.max(Number(review.score || 0), liveScore) : liveScore;
+
+    return {
+      ...review,
+      callVolume,
+      textVolume,
+      totalHours,
+      activeHours,
+      idleHours,
+      activityRate,
+      invoicedRevenue,
+      score
+    };
+  }
+
+  private async persistMonthlyMetricsSnapshot(): Promise<void> {
+    const rows = this.reviewRows().map((review) => this.toMetricRow(review));
+    if (!rows.length) return;
+
+    const { year, month } = this.parseMonthKey(this.selectedReviewMonth());
+    const payload = {
+      year,
+      month,
+      period: this.selectedReviewMonth(),
+      rows: rows.map((row) => ({
+        employeeId: Number(row.employeeId),
+        employeeName: row.employeeName || '',
+        callVolume: Number(row.callVolume || 0),
+        textVolume: Number(row.textVolume || 0),
+        clockedHours: Number((row.totalHours || 0).toFixed(2)),
+        workHours: Number((row.activeHours || 0).toFixed(2)),
+        activityRate: Number((row.activityRate || 0).toFixed(4)),
+        invoicedRevenue: Number((row.invoicedRevenue || 0).toFixed(2)),
+        score: Number(row.score || 0)
+      }))
+    };
+
+    try {
+      await this.http.post(`${this.apiUrl}/api/v1/performance-reviews/metrics-snapshot`, payload).toPromise();
+    } catch {
+      // Snapshot persistence is best-effort; keep screen responsive even if background save fails.
+    }
   }
 
   private extractEmployeeTitle(emp: RosterEmployee): string {

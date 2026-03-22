@@ -456,17 +456,122 @@ public class PerformanceReviewsController : ControllerBase
         });
     }
 
+    [HttpPost("metrics-snapshot")]
+    public async Task<ActionResult<object>> SnapshotMonthlyMetrics([FromBody] BulkMonthlyPerformanceMetricsSnapshotRequest request)
+    {
+        if (request.Rows == null || request.Rows.Count == 0)
+            return BadRequest(new { message = "rows are required" });
+
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var (year, month) = ResolvePeriod(request.Year, request.Month, request.Period);
+        if (month is < 1 or > 12)
+            return BadRequest(new { message = "month must be between 1 and 12" });
+
+        var organizationId = orgId ?? user.OrganizationId ?? request.OrganizationId ?? 0;
+        if (organizationId <= 0)
+            return BadRequest(new { message = "organizationId is required" });
+
+        var period = $"{year:D4}-{month:D2}";
+        var byEmployee = request.Rows
+            .Where(r => r != null && r.EmployeeId > 0)
+            .GroupBy(r => r.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        if (byEmployee.Count == 0)
+            return BadRequest(new { message = "at least one row with a valid employeeId is required" });
+
+        var employeeIds = byEmployee.Keys.ToList();
+        var userNames = await _context.Users
+            .AsNoTracking()
+            .Where(u => employeeIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.Name })
+            .ToDictionaryAsync(u => u.Id, u => u.Name ?? string.Empty);
+
+        var existingRows = await _context.PerformanceReviews
+            .Where(r => r.OrganizationId == organizationId
+                && r.Year == year
+                && r.Month == month
+                && employeeIds.Contains(r.EmployeeId))
+            .ToListAsync();
+
+        var existingByEmployee = existingRows.ToDictionary(r => r.EmployeeId, r => r);
+        var now = DateTime.UtcNow;
+        var updated = 0;
+        var inserted = 0;
+
+        foreach (var (employeeId, metric) in byEmployee)
+        {
+            if (!existingByEmployee.TryGetValue(employeeId, out var review))
+            {
+                review = new PerformanceReview
+                {
+                    OrganizationId = organizationId,
+                    EmployeeId = employeeId,
+                    EmployeeName = FirstNonEmpty(metric.EmployeeName, userNames.GetValueOrDefault(employeeId), $"Employee #{employeeId}"),
+                    ReviewerId = user.Id,
+                    ReviewerName = user.Name,
+                    ReviewType = "monthly",
+                    Year = year,
+                    Month = month,
+                    Period = period,
+                    OverallRating = 3,
+                    Status = "pending",
+                    CreatedAt = now
+                };
+                _context.PerformanceReviews.Add(review);
+                existingByEmployee[employeeId] = review;
+                inserted++;
+            }
+            else
+            {
+                review.EmployeeName = FirstNonEmpty(review.EmployeeName, metric.EmployeeName, userNames.GetValueOrDefault(employeeId), $"Employee #{employeeId}");
+                updated++;
+            }
+
+            review.Period = period;
+            review.CallVolume = Math.Max(metric.CallVolume, 0);
+            review.TextVolume = Math.Max(metric.TextVolume, 0);
+            review.ClockedHours = ToMoney(metric.ClockedHours);
+            review.WorkHours = ToMoney(metric.WorkHours);
+            review.ActivityRate = ToRate(metric.ActivityRate);
+            review.InvoicedRevenue = ToMoney(metric.InvoicedRevenue);
+            review.Score = Math.Clamp(metric.Score, 0, 100);
+            review.UpdatedAt = now;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                organizationId,
+                year,
+                month,
+                period,
+                inserted,
+                updated,
+                total = byEmployee.Count
+            }
+        });
+    }
+
     private static decimal ToMoney(decimal value) => Math.Round(Math.Max(value, 0), 2);
     private static decimal ToRate(decimal value) => Math.Round(Math.Clamp(value, 0m, 1m), 4);
 
     private static (int year, int month) ResolvePeriod(UpsertMonthlyPerformanceReviewRequest request)
-    {
-        if (request.Year.HasValue && request.Month.HasValue)
-            return (request.Year.Value, request.Month.Value);
+        => ResolvePeriod(request.Year, request.Month, request.Period);
 
-        if (!string.IsNullOrWhiteSpace(request.Period))
+    private static (int year, int month) ResolvePeriod(int? year, int? month, string? period)
+    {
+        if (year.HasValue && month.HasValue)
+            return (year.Value, month.Value);
+
+        if (!string.IsNullOrWhiteSpace(period))
         {
-            var parts = request.Period.Split('-', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var parts = period.Split('-', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 2
                 && int.TryParse(parts[0], out var pYear)
                 && int.TryParse(parts[1], out var pMonth))
@@ -478,6 +583,9 @@ public class PerformanceReviewsController : ControllerBase
         var now = DateTime.UtcNow;
         return (now.Year, now.Month);
     }
+
+    private static string FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? string.Empty;
 
     private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
     {
@@ -576,4 +684,26 @@ internal class ZoomUserMetricLite
     public int TotalCalls { get; set; }
     public int SmsSessionCount { get; set; }
     public int MeetingsHosted { get; set; }
+}
+
+public class BulkMonthlyPerformanceMetricsSnapshotRequest
+{
+    public int? OrganizationId { get; set; }
+    public int? Year { get; set; }
+    public int? Month { get; set; }
+    public string? Period { get; set; }
+    public List<MonthlyPerformanceMetricSnapshotRow> Rows { get; set; } = new();
+}
+
+public class MonthlyPerformanceMetricSnapshotRow
+{
+    public int EmployeeId { get; set; }
+    public string? EmployeeName { get; set; }
+    public int CallVolume { get; set; }
+    public int TextVolume { get; set; }
+    public decimal ClockedHours { get; set; }
+    public decimal WorkHours { get; set; }
+    public decimal ActivityRate { get; set; }
+    public decimal InvoicedRevenue { get; set; }
+    public int Score { get; set; }
 }
