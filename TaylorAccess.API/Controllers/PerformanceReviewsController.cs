@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
@@ -420,10 +422,15 @@ public class PerformanceReviewsController : ControllerBase
     private static string NormalizeName(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-        return string.Join(' ', value
-            .Trim()
-            .ToLowerInvariant()
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(decomposed.Length);
+        foreach (var c in decomposed)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (category == UnicodeCategory.NonSpacingMark) continue;
+            sb.Append(char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : ' ');
+        }
+        return string.Join(' ', sb.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
     private static string? ExtractEmailLocalPart(string? email)

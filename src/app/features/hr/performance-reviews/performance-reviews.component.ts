@@ -1043,8 +1043,11 @@ export class PerformanceReviewsComponent implements OnInit {
 
   private normalizeName(value: any): string {
     return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .trim()
       .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
       .replace(/\s+/g, ' ');
   }
 
