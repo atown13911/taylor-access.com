@@ -703,12 +703,12 @@ export class PerformanceReviewsComponent implements OnInit {
   reviewPeriodOptions = (() => {
     const opts: { value: string; label: string }[] = [];
     const now = new Date();
-    opts.push({ value: 'current', label: 'Current Pay Period' });
-    for (let i = 1; i <= 8; i++) {
+    opts.push({ value: 'current', label: 'Current Week' });
+    for (let i = 1; i <= 12; i++) {
       const start = new Date(now);
-      start.setDate(start.getDate() - (i * 14));
+      start.setDate(start.getDate() - (i * 7));
       const end = new Date(start);
-      end.setDate(end.getDate() + 13);
+      end.setDate(end.getDate() + 6);
       const value = `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`;
       const label = `${this.formatShortDate(start)} - ${this.formatShortDate(end)}`;
       opts.push({ value, label });
@@ -1241,7 +1241,7 @@ export class PerformanceReviewsComponent implements OnInit {
 
     if (!value || value === 'current') {
       to = toUtcDate(now);
-      from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13));
+      from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
     } else if (value.includes('_')) {
       const [fromRaw, toRaw] = value.split('_');
       const fromParsed = new Date(fromRaw);
@@ -1251,16 +1251,16 @@ export class PerformanceReviewsComponent implements OnInit {
         to = toUtcDate(toParsed);
       } else {
         to = toUtcDate(now);
-        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13));
+        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
       }
     } else {
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) {
         to = toUtcDate(parsed);
-        from = toUtcDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() - 13));
+        from = toUtcDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() - 6));
       } else {
         to = toUtcDate(now);
-        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13));
+        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
       }
     }
 
