@@ -47,6 +47,7 @@ interface ZoomMetricRow {
   callVolume: number;
   textVolume: number;
   email?: string;
+  employeeName?: string;
 }
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
@@ -541,6 +542,7 @@ export class PerformanceReviewsComponent implements OnInit {
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
   zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
+  zoomMetricByName = signal<Record<string, ZoomMetricRow>>({});
   googleApiStatus = signal<IntegrationState>('checking');
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
@@ -770,6 +772,7 @@ export class PerformanceReviewsComponent implements OnInit {
         .toPromise();
       const map: Record<number, ZoomMetricRow> = {};
       const emailMap: Record<string, ZoomMetricRow> = {};
+      const nameMap: Record<string, ZoomMetricRow> = {};
       const rows = Array.isArray(res?.data)
         ? res.data
         : Array.isArray(res?.data?.metrics)
@@ -791,7 +794,8 @@ export class PerformanceReviewsComponent implements OnInit {
           employeeId: Number.isFinite(employeeId) ? employeeId : 0,
           callVolume: this.readNumeric(row, ['callVolume', 'totalCalls', 'calls', 'callCount', 'phoneCalls']),
           textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
-          email: email || undefined
+          email: email || undefined,
+          employeeName: String(row?.employeeName || row?.name || row?.displayName || '').trim() || undefined
         };
         if (employeeId) {
           map[employeeId] = metric;
@@ -799,12 +803,18 @@ export class PerformanceReviewsComponent implements OnInit {
         if (email) {
           emailMap[email] = metric;
         }
+        const nameKey = this.normalizeName(metric.employeeName);
+        if (nameKey) {
+          nameMap[nameKey] = metric;
+        }
       }
       this.zoomMetricMap.set(map);
       this.zoomMetricByEmail.set(emailMap);
+      this.zoomMetricByName.set(nameMap);
     } catch {
       this.zoomMetricMap.set({});
       this.zoomMetricByEmail.set({});
+      this.zoomMetricByName.set({});
     }
   }
 
@@ -994,11 +1004,12 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
   }
 
-  private getEmployeeCommunicationMetrics(employeeId: number): { callVolume: number; textVolume: number } {
+  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; textVolume: number } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoomById = this.zoomMetricMap()[employeeId];
-    const emp = this.employees().find(e => Number(e.id) === Number(employeeId));
+    const emp = this.employees().find(e => Number(e.id) === Number(employeeId))
+      ?? this.employees().find(e => this.normalizeName(e?.name) === this.normalizeName(employeeName));
     const candidateEmails = [
       String(emp?.email || '').trim().toLowerCase(),
       String(emp?.workEmail || '').trim().toLowerCase(),
@@ -1013,7 +1024,9 @@ export class PerformanceReviewsComponent implements OnInit {
         break;
       }
     }
-    const zoom = zoomById ?? zoomByEmail;
+    const nameKey = this.normalizeName(employeeName || emp?.name);
+    const zoomByName = nameKey ? this.zoomMetricByName()[nameKey] : undefined;
+    const zoom = zoomById ?? zoomByEmail ?? zoomByName;
     return {
       callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0))
@@ -1028,12 +1041,19 @@ export class PerformanceReviewsComponent implements OnInit {
     return 0;
   }
 
+  private normalizeName(value: any): string {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
   private toMetricRow(review: Review): ReviewMetricRow {
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
-    const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId);
+    const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
     const liveCallVolume = liveComms.callVolume;
     const liveTextVolume = liveComms.textVolume;
-    const liveTime = this.getEmployeeTime(review.employeeId);
+    const liveTime = this.getEmployeeTime(review.employeeId, review.employeeName);
     const liveRevenue = this.getAttributedRevenue(review.employeeId);
     const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
 
@@ -1121,11 +1141,15 @@ export class PerformanceReviewsComponent implements OnInit {
     return String(value).toLowerCase().trim();
   }
 
-  private getEmployeeTime(employeeId: number): { totalHours: number; activeHours: number; idleHours: number; activityRate: number; totalSeconds: number } {
-    const emp = this.employees().find(e => Number(e.id) === Number(employeeId));
+  private getEmployeeTime(employeeId: number, employeeName?: string): { totalHours: number; activeHours: number; idleHours: number; activityRate: number; totalSeconds: number } {
+    const emp = this.employees().find(e => Number(e.id) === Number(employeeId))
+      ?? this.employees().find(e => this.normalizeName(e?.name) === this.normalizeName(employeeName));
     const email = String(emp?.email || '').toLowerCase();
+    const name = this.normalizeName(employeeName || emp?.name);
     const row = this.timeclockSummaries().find((s: any) =>
-      Number(s?.userId) === Number(employeeId) || String(s?.userEmail || '').toLowerCase() === email
+      Number(s?.userId) === Number(employeeId)
+      || (email.length > 0 && String(s?.userEmail || '').toLowerCase() === email)
+      || (name.length > 0 && this.normalizeName(s?.userName || s?.employeeName || s?.name) === name)
     );
     const activeSeconds = Number(row?.activeSeconds || 0);
     const idleSeconds = Number(row?.idleSeconds || 0);
