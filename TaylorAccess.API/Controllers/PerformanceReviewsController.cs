@@ -265,6 +265,8 @@ public class PerformanceReviewsController : ControllerBase
         var metricsJson = await metricsResponse.Content.ReadAsStringAsync();
         using var metricsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(metricsJson) ? "{}" : metricsJson);
         var metricsByEmail = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+        var metricsByEmailLocal = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+        var metricsByName = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
         var metricsByZoomUserId = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
 
         if (TryGetPropertyIgnoreCase(metricsDoc.RootElement, "data", out var metricsData)
@@ -282,9 +284,18 @@ public class PerformanceReviewsController : ControllerBase
                 };
 
                 if (!string.IsNullOrWhiteSpace(row.Email))
-                    metricsByEmail[row.Email!.Trim().ToLower()] = row;
+                {
+                    var emailKey = row.Email!.Trim().ToLower();
+                    metricsByEmail[emailKey] = row;
+                    var localPart = ExtractEmailLocalPart(emailKey);
+                    if (!string.IsNullOrWhiteSpace(localPart))
+                        metricsByEmailLocal[localPart] = row;
+                }
                 if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
                     metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
+                var nameKey = NormalizeName(ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name"));
+                if (!string.IsNullOrWhiteSpace(nameKey))
+                    metricsByName[nameKey] = row;
             }
         }
 
@@ -331,6 +342,12 @@ public class PerformanceReviewsController : ControllerBase
             .Select(v => v!.Trim().ToLowerInvariant())
             .Distinct()
             .ToList();
+            var emailLocalCandidates = emailCandidates
+                .Select(ExtractEmailLocalPart)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var employeeNameKey = NormalizeName(emp.name);
 
             ZoomUserMetricLite? zoomMetric = null;
             foreach (var emailKey in emailCandidates)
@@ -339,11 +356,27 @@ public class PerformanceReviewsController : ControllerBase
                     break;
             }
 
+            if (zoomMetric == null)
+            {
+                foreach (var localEmailKey in emailLocalCandidates)
+                {
+                    if (metricsByEmailLocal.TryGetValue(localEmailKey!, out zoomMetric))
+                        break;
+                }
+            }
+
             if (zoomMetric == null
                 && !string.IsNullOrWhiteSpace(emp.zoomUserId)
                 && metricsByZoomUserId.TryGetValue(emp.zoomUserId.Trim(), out var byZoomUser))
             {
                 zoomMetric = byZoomUser;
+            }
+
+            if (zoomMetric == null
+                && !string.IsNullOrWhiteSpace(employeeNameKey)
+                && metricsByName.TryGetValue(employeeNameKey, out var byName))
+            {
+                zoomMetric = byName;
             }
 
             var zoomUserId = zoomMetric?.ZoomUserId ?? emp.zoomUserId;
@@ -382,6 +415,24 @@ public class PerformanceReviewsController : ControllerBase
                 totalEmployees = employees.Count
             }
         });
+    }
+
+    private static string NormalizeName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        return string.Join(' ', value
+            .Trim()
+            .ToLowerInvariant()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string? ExtractEmailLocalPart(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return null;
+        var trimmed = email.Trim().ToLowerInvariant();
+        var at = trimmed.IndexOf('@');
+        if (at <= 0) return null;
+        return trimmed[..at];
     }
 
     [HttpGet("integration-status")]

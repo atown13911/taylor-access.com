@@ -1084,6 +1084,15 @@ export class PerformanceReviewsComponent implements OnInit {
   private async persistMonthlyMetricsSnapshot(): Promise<void> {
     const rows = this.reviewRows().map((review) => this.toMetricRow(review));
     if (!rows.length) return;
+    const hasAnySignal = rows.some((row) =>
+      Number(row.callVolume || 0) > 0
+      || Number(row.textVolume || 0) > 0
+      || Number(row.totalHours || 0) > 0
+      || Number(row.activeHours || 0) > 0
+      || Number(row.invoicedRevenue || 0) > 0
+      || Number(row.score || 0) > 0
+    );
+    if (!hasAnySignal) return;
 
     const { year, month } = this.parseMonthKey(this.selectedReviewMonth());
     const payload = {
