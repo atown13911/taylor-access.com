@@ -256,9 +256,47 @@ public class PerformanceReviewsController : ControllerBase
 
         if (sync)
         {
+            var syncSucceeded = false;
+            string? syncError = null;
             try
             {
-                await client.PostAsync($"{crmBase}/metrics/compute?days={days}", content: null);
+                var syncResponse = await client.PostAsync($"{crmBase}/sync?days={days}", content: null);
+                var syncBody = await syncResponse.Content.ReadAsStringAsync();
+                syncSucceeded = syncResponse.IsSuccessStatusCode;
+
+                if (syncSucceeded && !string.IsNullOrWhiteSpace(syncBody))
+                {
+                    try
+                    {
+                        using var syncDoc = JsonDocument.Parse(syncBody);
+                        if (TryGetPropertyIgnoreCase(syncDoc.RootElement, "success", out var successProp)
+                            && successProp.ValueKind == JsonValueKind.False)
+                        {
+                            syncSucceeded = false;
+                            if (TryGetPropertyIgnoreCase(syncDoc.RootElement, "error", out var syncErrorProp))
+                                syncError = syncErrorProp.GetString();
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore parse failures and continue with compute fallback.
+                    }
+                }
+
+                var computeResponse = await client.PostAsync($"{crmBase}/metrics/compute?days={days}", content: null);
+                if (!computeResponse.IsSuccessStatusCode && string.IsNullOrWhiteSpace(syncError))
+                {
+                    syncError = $"Compute returned HTTP {(int)computeResponse.StatusCode}";
+                }
+                if (!syncSucceeded && string.IsNullOrWhiteSpace(syncError))
+                {
+                    syncError = "Zoom sync endpoint did not report success";
+                }
+
+                if (!syncSucceeded && !string.IsNullOrWhiteSpace(syncError))
+                {
+                    _logger.LogWarning("Zoom sync/compute preflight was not fully successful: {Error}", syncError);
+                }
             }
             catch (Exception ex)
             {
