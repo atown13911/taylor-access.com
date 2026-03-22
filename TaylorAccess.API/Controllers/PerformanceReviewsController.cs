@@ -189,42 +189,52 @@ public class PerformanceReviewsController : ControllerBase
         }
 
         var orgFilter = orgId ?? user.OrganizationId ?? 0;
-        if (orgFilter <= 0)
-            return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No organization context" } });
+        var employeeSource = "employee-rosters";
 
-        var employeeCandidates = await _context.EmployeeRosters
+        var rosterCandidates = await _context.EmployeeRosters
             .AsNoTracking()
             .Include(er => er.User)
-            .Where(er => er.OrganizationId == orgFilter
-                && er.User != null
-                && !string.IsNullOrWhiteSpace(er.User.Email))
-            .Select(er => new
+            .Where(er => er.User != null && (orgFilter <= 0 || er.OrganizationId == orgFilter))
+            .Select(er => new ZoomEmployeeCandidate
             {
-                employeeId = er.UserId,
-                email = er.User!.Email!,
-                name = er.User.Name,
-                employmentStatus = er.EmploymentStatus,
-                zoomEmail = er.User.ZoomEmail,
-                zoomUserId = er.User.ZoomUserId,
-                personalEmail = er.User.PersonalEmail
+                EmployeeId = er.UserId,
+                Email = er.User!.Email,
+                Name = er.User.Name,
+                EmploymentStatus = er.EmploymentStatus,
+                Status = er.User.Status,
+                ZoomEmail = er.User.ZoomEmail,
+                ZoomUserId = er.User.ZoomUserId,
+                PersonalEmail = er.User.PersonalEmail
             })
             .ToListAsync();
 
-        var employees = employeeCandidates
-            .Where(emp => IsActiveEmploymentStatus(emp.employmentStatus))
-            .Select(emp => new
-            {
-                emp.employeeId,
-                emp.email,
-                emp.name,
-                emp.zoomEmail,
-                emp.zoomUserId,
-                emp.personalEmail
-            })
+        var employees = rosterCandidates
+            .Where(emp => IsActiveEmploymentStatus(emp.EmploymentStatus ?? emp.Status))
             .ToList();
 
+        // Fallback: some orgs don't have complete EmployeeRoster rows.
         if (employees.Count == 0)
-            return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found" } });
+        {
+            employeeSource = "users-fallback";
+            employees = await _context.Users
+                .AsNoTracking()
+                .Where(u => (orgFilter <= 0 || u.OrganizationId == orgFilter) && u.Status == "active")
+                .Select(u => new ZoomEmployeeCandidate
+                {
+                    EmployeeId = u.Id,
+                    Email = u.Email,
+                    Name = u.Name,
+                    EmploymentStatus = u.Status,
+                    Status = u.Status,
+                    ZoomEmail = u.ZoomEmail,
+                    ZoomUserId = u.ZoomUserId,
+                    PersonalEmail = u.PersonalEmail
+                })
+                .ToListAsync();
+        }
+
+        if (employees.Count == 0)
+            return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found", employeeSource, orgFilter } });
 
         var days = Math.Max(1, (int)Math.Ceiling((now.Date - targetStart.Date).TotalDays) + 1);
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
@@ -345,9 +355,9 @@ public class PerformanceReviewsController : ControllerBase
         {
             var emailCandidates = new[]
             {
-                emp.email,
-                emp.zoomEmail,
-                emp.personalEmail
+                emp.Email,
+                emp.ZoomEmail,
+                emp.PersonalEmail
             }
             .Where(v => !string.IsNullOrWhiteSpace(v))
             .Select(v => v!.Trim().ToLowerInvariant())
@@ -358,7 +368,7 @@ public class PerformanceReviewsController : ControllerBase
                 .Where(v => !string.IsNullOrWhiteSpace(v))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            var employeeNameKey = NormalizeName(emp.name);
+            var employeeNameKey = NormalizeName(emp.Name);
 
             ZoomUserMetricLite? zoomMetric = null;
             foreach (var emailKey in emailCandidates)
@@ -377,8 +387,8 @@ public class PerformanceReviewsController : ControllerBase
             }
 
             if (zoomMetric == null
-                && !string.IsNullOrWhiteSpace(emp.zoomUserId)
-                && metricsByZoomUserId.TryGetValue(emp.zoomUserId.Trim(), out var byZoomUser))
+                && !string.IsNullOrWhiteSpace(emp.ZoomUserId)
+                && metricsByZoomUserId.TryGetValue(emp.ZoomUserId.Trim(), out var byZoomUser))
             {
                 zoomMetric = byZoomUser;
             }
@@ -390,7 +400,7 @@ public class PerformanceReviewsController : ControllerBase
                 zoomMetric = byName;
             }
 
-            var zoomUserId = zoomMetric?.ZoomUserId ?? emp.zoomUserId;
+            var zoomUserId = zoomMetric?.ZoomUserId ?? emp.ZoomUserId;
             var smsCount = 0;
             if (!string.IsNullOrWhiteSpace(zoomUserId) && smsByOwner.TryGetValue(zoomUserId!, out var mappedSms))
                 smsCount = mappedSms;
@@ -402,9 +412,9 @@ public class PerformanceReviewsController : ControllerBase
 
             rows.Add(new
             {
-                employeeId = emp.employeeId,
-                employeeName = emp.name,
-                email = emp.email,
+                employeeId = emp.EmployeeId,
+                employeeName = emp.Name,
+                email = emp.Email,
                 callVolume = zoomMetric?.TotalCalls ?? 0,
                 textVolume = smsCount,
                 meetingsHosted = zoomMetric?.MeetingsHosted ?? 0,
@@ -423,7 +433,9 @@ public class PerformanceReviewsController : ControllerBase
                 source = "ttac-gateway->taylor-crm/zoom",
                 synced = sync,
                 matchedEmployees = matchedCount,
-                totalEmployees = employees.Count
+                totalEmployees = employees.Count,
+                employeeSource,
+                orgFilter
             }
         });
     }
@@ -778,4 +790,16 @@ public class MonthlyPerformanceMetricSnapshotRow
     public decimal ActivityRate { get; set; }
     public decimal InvoicedRevenue { get; set; }
     public int Score { get; set; }
+}
+
+internal class ZoomEmployeeCandidate
+{
+    public int EmployeeId { get; set; }
+    public string? Email { get; set; }
+    public string? Name { get; set; }
+    public string? EmploymentStatus { get; set; }
+    public string? Status { get; set; }
+    public string? ZoomEmail { get; set; }
+    public string? ZoomUserId { get; set; }
+    public string? PersonalEmail { get; set; }
 }
