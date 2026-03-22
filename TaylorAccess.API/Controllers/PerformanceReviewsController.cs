@@ -328,11 +328,15 @@ public class PerformanceReviewsController : ControllerBase
         var metricsByName = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
         var metricsByZoomUserId = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
 
+        var crmMetricsRows = 0;
+        var crmMetricsRowsWithCalls = 0;
+        var crmMetricsRowsWithTexts = 0;
         if (TryGetPropertyIgnoreCase(metricsDoc.RootElement, "data", out var metricsData)
             && metricsData.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in metricsData.EnumerateArray())
             {
+                crmMetricsRows++;
                 var row = new ZoomUserMetricLite
                 {
                     ZoomUserId = ReadStringAny(item, "zoomUserId", "zoom_user_id", "userId", "user_id"),
@@ -355,6 +359,8 @@ public class PerformanceReviewsController : ControllerBase
                 var nameKey = NormalizeName(ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name"));
                 if (!string.IsNullOrWhiteSpace(nameKey))
                     metricsByName[nameKey] = row;
+                if (row.TotalCalls > 0) crmMetricsRowsWithCalls++;
+                if (row.SmsSessionCount > 0) crmMetricsRowsWithTexts++;
             }
         }
 
@@ -362,6 +368,7 @@ public class PerformanceReviewsController : ControllerBase
         var toDate = now.ToString("yyyy-MM-dd");
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+        var smsRows = 0;
         try
         {
             var smsResponse = await client.GetAsync($"{crmBase}/phone/sms?from={fromDate}&to={toDate}&pageSize=500");
@@ -374,6 +381,7 @@ public class PerformanceReviewsController : ControllerBase
                 {
                     foreach (var item in smsData.EnumerateArray())
                     {
+                        smsRows++;
                         var ownerId = ReadString(item, "ownerUserId");
                         if (string.IsNullOrWhiteSpace(ownerId)) continue;
                         if (!smsByOwner.TryGetValue(ownerId!, out var count)) count = 0;
@@ -457,6 +465,8 @@ public class PerformanceReviewsController : ControllerBase
 
         var usedCallLogFallback = false;
         var callLogFallbackMatchedEmployees = 0;
+        var callLogRows = 0;
+        var callLogRowsMatched = 0;
         if (matchedCount == 0)
         {
             try
@@ -477,6 +487,17 @@ public class PerformanceReviewsController : ControllerBase
                             emailToEmployeeIds[key] = ids;
                         }
                         ids.Add(emp.EmployeeId);
+
+                        var localPart = ExtractEmailLocalPart(key);
+                        if (!string.IsNullOrWhiteSpace(localPart))
+                        {
+                            if (!emailToEmployeeIds.TryGetValue(localPart!, out var localIds))
+                            {
+                                localIds = new HashSet<int>();
+                                emailToEmployeeIds[localPart!] = localIds;
+                            }
+                            localIds.Add(emp.EmployeeId);
+                        }
                     }
 
                     var nameKey = NormalizeName(emp.Name);
@@ -502,6 +523,7 @@ public class PerformanceReviewsController : ControllerBase
                         var matchedEmployees = new HashSet<int>();
                         foreach (var item in callData.EnumerateArray())
                         {
+                            callLogRows++;
                             var matchedIds = new HashSet<int>();
                             var callerEmail = ReadStringAny(item, "caller_email", "callerEmail");
                             var calleeEmail = ReadStringAny(item, "callee_email", "calleeEmail");
@@ -515,6 +537,12 @@ public class PerformanceReviewsController : ControllerBase
                                 if (emailToEmployeeIds.TryGetValue(key, out var ids))
                                 {
                                     foreach (var id in ids) matchedIds.Add(id);
+                                }
+                                var localPart = ExtractEmailLocalPart(key);
+                                if (!string.IsNullOrWhiteSpace(localPart)
+                                    && emailToEmployeeIds.TryGetValue(localPart!, out var localIds))
+                                {
+                                    foreach (var id in localIds) matchedIds.Add(id);
                                 }
                             }
 
@@ -534,6 +562,7 @@ public class PerformanceReviewsController : ControllerBase
                                 callByEmployee[id] = callByEmployee.GetValueOrDefault(id) + 1;
                                 matchedEmployees.Add(id);
                             }
+                            if (matchedIds.Count > 0) callLogRowsMatched++;
                         }
 
                         if (matchedEmployees.Count > 0)
@@ -580,6 +609,12 @@ public class PerformanceReviewsController : ControllerBase
                 totalEmployees = employees.Count,
                 usedCallLogFallback,
                 callLogFallbackMatchedEmployees,
+                crmMetricsRows,
+                crmMetricsRowsWithCalls,
+                crmMetricsRowsWithTexts,
+                smsRows,
+                callLogRows,
+                callLogRowsMatched,
                 employeeSource,
                 orgFilter
             }
