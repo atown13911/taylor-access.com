@@ -198,7 +198,10 @@ public class PerformanceReviewsController : ControllerBase
                 employeeId = er.UserId,
                 email = er.User!.Email!,
                 name = er.User.Name,
-                employmentStatus = er.EmploymentStatus
+                employmentStatus = er.EmploymentStatus,
+                zoomEmail = er.User.ZoomEmail,
+                zoomUserId = er.User.ZoomUserId,
+                personalEmail = er.User.PersonalEmail
             })
             .ToListAsync();
 
@@ -208,7 +211,10 @@ public class PerformanceReviewsController : ControllerBase
             {
                 emp.employeeId,
                 emp.email,
-                emp.name
+                emp.name,
+                emp.zoomEmail,
+                emp.zoomUserId,
+                emp.personalEmail
             })
             .ToList();
 
@@ -312,16 +318,43 @@ public class PerformanceReviewsController : ControllerBase
         }
 
         var rows = new List<object>(employees.Count);
+        var matchedCount = 0;
         foreach (var emp in employees)
         {
-            var emailKey = emp.email.Trim().ToLower();
-            metricsByEmail.TryGetValue(emailKey, out var zoomMetric);
-            var zoomUserId = zoomMetric?.ZoomUserId;
+            var emailCandidates = new[]
+            {
+                emp.email,
+                emp.zoomEmail,
+                emp.personalEmail
+            }
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v!.Trim().ToLowerInvariant())
+            .Distinct()
+            .ToList();
+
+            ZoomUserMetricLite? zoomMetric = null;
+            foreach (var emailKey in emailCandidates)
+            {
+                if (metricsByEmail.TryGetValue(emailKey, out zoomMetric))
+                    break;
+            }
+
+            if (zoomMetric == null
+                && !string.IsNullOrWhiteSpace(emp.zoomUserId)
+                && metricsByZoomUserId.TryGetValue(emp.zoomUserId.Trim(), out var byZoomUser))
+            {
+                zoomMetric = byZoomUser;
+            }
+
+            var zoomUserId = zoomMetric?.ZoomUserId ?? emp.zoomUserId;
             var smsCount = 0;
             if (!string.IsNullOrWhiteSpace(zoomUserId) && smsByOwner.TryGetValue(zoomUserId!, out var mappedSms))
                 smsCount = mappedSms;
             else
                 smsCount = zoomMetric?.SmsSessionCount ?? 0;
+
+            if ((zoomMetric?.TotalCalls ?? 0) > 0 || smsCount > 0)
+                matchedCount++;
 
             rows.Add(new
             {
@@ -344,7 +377,9 @@ public class PerformanceReviewsController : ControllerBase
                 month = targetMonth,
                 days,
                 source = "ttac-gateway->taylor-crm/zoom",
-                synced = sync
+                synced = sync,
+                matchedEmployees = matchedCount,
+                totalEmployees = employees.Count
             }
         });
     }
