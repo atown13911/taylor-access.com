@@ -189,47 +189,45 @@ public class PerformanceReviewsController : ControllerBase
         }
 
         var orgFilter = orgId ?? user.OrganizationId ?? 0;
-        var employeeSource = "employee-rosters";
+        var employeeSource = "users-active";
 
-        var rosterCandidates = await _context.EmployeeRosters
+        // Keep employee population aligned with the roster table, which is Users-based.
+        var employees = await _context.Users
             .AsNoTracking()
-            .Include(er => er.User)
-            .Where(er => er.User != null && (orgFilter <= 0 || er.OrganizationId == orgFilter))
-            .Select(er => new ZoomEmployeeCandidate
+            .Where(u => (orgFilter <= 0 || u.OrganizationId == orgFilter) && u.Status == "active")
+            .Select(u => new ZoomEmployeeCandidate
             {
-                EmployeeId = er.UserId,
-                Email = er.User!.Email,
-                Name = er.User.Name,
-                EmploymentStatus = er.EmploymentStatus,
-                Status = er.User.Status,
-                ZoomEmail = er.User.ZoomEmail,
-                ZoomUserId = er.User.ZoomUserId,
-                PersonalEmail = er.User.PersonalEmail
+                EmployeeId = u.Id,
+                Email = u.Email,
+                Name = u.Name,
+                EmploymentStatus = u.Status,
+                Status = u.Status,
+                ZoomEmail = u.ZoomEmail,
+                ZoomUserId = u.ZoomUserId,
+                PersonalEmail = u.PersonalEmail
             })
             .ToListAsync();
 
-        var employees = rosterCandidates
-            .Where(emp => IsActiveEmploymentStatus(emp.EmploymentStatus ?? emp.Status))
-            .ToList();
-
-        // Fallback: some orgs don't have complete EmployeeRoster rows.
+        // Fallback: some records can exist only in EmployeeRosters in edge cases.
         if (employees.Count == 0)
         {
-            employeeSource = "users-fallback";
-            employees = await _context.Users
+            employeeSource = "employee-rosters-fallback";
+            employees = await _context.EmployeeRosters
                 .AsNoTracking()
-                .Where(u => (orgFilter <= 0 || u.OrganizationId == orgFilter) && u.Status == "active")
-                .Select(u => new ZoomEmployeeCandidate
+                .Include(er => er.User)
+                .Where(er => er.User != null && (orgFilter <= 0 || er.OrganizationId == orgFilter))
+                .Select(er => new ZoomEmployeeCandidate
                 {
-                    EmployeeId = u.Id,
-                    Email = u.Email,
-                    Name = u.Name,
-                    EmploymentStatus = u.Status,
-                    Status = u.Status,
-                    ZoomEmail = u.ZoomEmail,
-                    ZoomUserId = u.ZoomUserId,
-                    PersonalEmail = u.PersonalEmail
+                    EmployeeId = er.UserId,
+                    Email = er.User!.Email,
+                    Name = er.User.Name,
+                    EmploymentStatus = er.EmploymentStatus,
+                    Status = er.User.Status,
+                    ZoomEmail = er.User.ZoomEmail,
+                    ZoomUserId = er.User.ZoomUserId,
+                    PersonalEmail = er.User.PersonalEmail
                 })
+                .Where(emp => IsActiveEmploymentStatus(emp.EmploymentStatus ?? emp.Status))
                 .ToListAsync();
         }
 
