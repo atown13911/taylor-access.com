@@ -469,19 +469,18 @@ public class PerformanceReviewsController : ControllerBase
         var (_, user, error) = await _currentUserService.ResolveOrgFilterAsync();
         if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
 
-        var googleConnected =
-            !string.IsNullOrWhiteSpace(_configuration["GOOGLE_CLIENT_ID"])
-            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID"))
-            || !string.IsNullOrWhiteSpace(_configuration["GOOGLE_API_KEY"])
-            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOOGLE_API_KEY"))
-            || !string.IsNullOrWhiteSpace(_configuration["GOOGLE_SERVICE_ACCOUNT_JSON"])
-            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_JSON"));
-
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
             ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
             ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
         var zoomUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom/metrics/users?days=1";
+        var googleUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail/status";
 
+        var serviceToken = _jwtService.GenerateToken(user);
+        var authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt" : "incoming-bearer";
+
+        var googleConnected = false;
+        var googleStatus = 0;
+        string? googleError = null;
         var zoomConnected = false;
         var zoomStatus = 0;
         string? zoomError = null;
@@ -490,7 +489,6 @@ public class PerformanceReviewsController : ControllerBase
         {
             var incomingAuth = Request.Headers.Authorization.ToString();
             var client = _httpClientFactory.CreateClient();
-            var serviceToken = _jwtService.GenerateToken(user);
             if (!string.IsNullOrWhiteSpace(serviceToken))
             {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
@@ -498,6 +496,20 @@ public class PerformanceReviewsController : ControllerBase
             else if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
+            }
+
+            using var googleResponse = await client.GetAsync(googleUrl);
+            googleStatus = (int)googleResponse.StatusCode;
+            if (googleResponse.IsSuccessStatusCode)
+            {
+                var googleBody = await googleResponse.Content.ReadAsStringAsync();
+                using var googleDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(googleBody) ? "{}" : googleBody);
+                googleConnected = TryGetPropertyIgnoreCase(googleDoc.RootElement, "connected", out var connectedProp)
+                    && connectedProp.ValueKind == JsonValueKind.True;
+            }
+            else
+            {
+                googleError = $"Google status probe returned HTTP {googleStatus}";
             }
 
             using var response = await client.GetAsync(zoomUrl);
@@ -511,9 +523,11 @@ public class PerformanceReviewsController : ControllerBase
         }
         catch (Exception ex)
         {
+            googleConnected = false;
+            googleError = ex.Message;
             zoomConnected = false;
             zoomError = ex.Message;
-            _logger.LogWarning(ex, "Performance reviews integration-status zoom probe failed");
+            _logger.LogWarning(ex, "Performance reviews integration-status probe failed");
         }
 
         return Ok(new
@@ -523,7 +537,9 @@ public class PerformanceReviewsController : ControllerBase
                 google = new
                 {
                     connected = googleConnected,
-                    status = googleConnected ? "configured" : "not-configured"
+                    status = googleConnected ? "connected" : "not-connected",
+                    statusCode = googleStatus > 0 ? googleStatus : (int?)null,
+                    error = googleConnected ? null : googleError
                 },
                 zoom = new
                 {
@@ -532,6 +548,7 @@ public class PerformanceReviewsController : ControllerBase
                     statusCode = zoomStatus > 0 ? zoomStatus : (int?)null,
                     error = zoomConnected ? null : zoomError
                 },
+                authMode,
                 last = new
                 {
                     checkedAtUtc = DateTime.UtcNow
