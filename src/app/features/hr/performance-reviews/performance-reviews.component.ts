@@ -710,10 +710,14 @@ export class PerformanceReviewsComponent implements OnInit {
       };
     });
   });
-  totalInvoicedRevenue30d = computed(() =>
-    this.revenueSeries().reduce((sum: number, point: any) =>
-      sum + Number(point?.value ?? point?.revenue ?? 0), 0)
-  );
+  totalInvoicedRevenue30d = computed(() => {
+    const seriesTotal = this.revenueSeries().reduce(
+      (sum: number, point: any) => sum + Number(point?.value ?? point?.revenue ?? 0),
+      0
+    );
+    if (seriesTotal > 0) return seriesTotal;
+    return this.reviews().reduce((sum: number, review: any) => sum + Number(review?.invoicedRevenue ?? 0), 0);
+  });
 
   reviewMonthOptions = (() => {
     const opts: { value: string; label: string }[] = [];
@@ -737,7 +741,6 @@ export class PerformanceReviewsComponent implements OnInit {
     this.restoreManagementTabs();
     this.loadEmployees();
     this.loadTimeclockSummary();
-    this.loadRevenueData();
     this.loadReviews();
     this.loadZoomMetrics();
     this.loadIntegrationStatuses();
@@ -766,12 +769,9 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   async loadRevenueData() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/dashboard/charts/revenue?days=30`).toPromise();
-      this.revenueSeries.set(res?.data || []);
-    } catch {
-      this.revenueSeries.set([]);
-    }
+    // Revenue chart endpoint is not available in TaylorAccess.API.
+    // Keep this as a no-op and rely on review snapshots as fallback revenue source.
+    this.revenueSeries.set([]);
   }
 
   async loadReviews() {
