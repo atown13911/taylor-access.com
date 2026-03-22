@@ -111,9 +111,9 @@ type RosterEmployee = Record<string, any>;
           <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
         </div>
         <div class="month-filter">
-          <label>Review Month</label>
+          <label>Review Period</label>
           <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
-            @for (opt of reviewMonthOptions; track opt.value) {
+            @for (opt of reviewPeriodOptions; track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
@@ -546,7 +546,7 @@ export class PerformanceReviewsComponent implements OnInit {
   googleApiStatus = signal<IntegrationState>('checking');
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
-  selectedReviewMonth = signal(this.getCurrentMonthKey());
+  selectedReviewMonth = signal('current');
 
   // Call Metrics
   callLogs = signal<any[]>([]);
@@ -700,13 +700,17 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.reviews().reduce((sum: number, review: any) => sum + Number(review?.invoicedRevenue ?? 0), 0);
   });
 
-  reviewMonthOptions = (() => {
+  reviewPeriodOptions = (() => {
     const opts: { value: string; label: string }[] = [];
     const now = new Date();
-    for (let i = 0; i < 18; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    opts.push({ value: 'current', label: 'Current Pay Period' });
+    for (let i = 1; i <= 8; i++) {
+      const start = new Date(now);
+      start.setDate(start.getDate() - (i * 14));
+      const end = new Date(start);
+      end.setDate(end.getDate() + 13);
+      const value = `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`;
+      const label = `${this.formatShortDate(start)} - ${this.formatShortDate(end)}`;
       opts.push({ value, label });
     }
     return opts;
@@ -714,8 +718,10 @@ export class PerformanceReviewsComponent implements OnInit {
 
   selectedReviewMonthLabel = computed(() => {
     const selected = this.selectedReviewMonth();
-    const found = this.reviewMonthOptions.find(o => o.value === selected);
-    return found?.label || selected;
+    const found = this.reviewPeriodOptions.find(o => o.value === selected);
+    if (found) return found.label;
+    const parsed = this.parseMonthKey(selected);
+    return `${this.formatShortDate(parsed.from)} - ${this.formatShortDate(parsed.to)}`;
   });
 
   ngOnInit() {
@@ -738,9 +744,37 @@ export class PerformanceReviewsComponent implements OnInit {
   }
   async loadTimeclockSummary() {
     try {
-      const date = new Date().toISOString().split('T')[0];
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`).toPromise();
-      this.timeclockSummaries.set(res?.data || []);
+      const range = this.parseMonthKey(this.selectedReviewMonth());
+      const dates = this.enumerateDateKeys(range.from, range.to);
+      const merged = new Map<string, any>();
+      for (const date of dates) {
+        try {
+          const res: any = await this.http.get(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`).toPromise();
+          const rows: any[] = Array.isArray(res?.data) ? res.data : [];
+          for (const row of rows) {
+            const userId = Number(row?.userId || 0);
+            const userEmail = String(row?.userEmail || '').trim().toLowerCase();
+            const userName = String(row?.userName || row?.employeeName || row?.name || '').trim();
+            const key = userId > 0 ? `id:${userId}` : (userEmail ? `email:${userEmail}` : `name:${this.normalizeName(userName)}`);
+            if (!key || key.endsWith(':')) continue;
+            const existing = merged.get(key) || {
+              userId: userId || null,
+              userEmail,
+              userName,
+              activeSeconds: 0,
+              idleSeconds: 0,
+              totalSeconds: 0
+            };
+            existing.activeSeconds += Number(row?.activeSeconds || 0);
+            existing.idleSeconds += Number(row?.idleSeconds || 0);
+            existing.totalSeconds += Number(row?.totalSeconds || 0);
+            merged.set(key, existing);
+          }
+        } catch {
+          // Keep aggregating other dates.
+        }
+      }
+      this.timeclockSummaries.set(Array.from(merged.values()));
     } catch {
       this.timeclockSummaries.set([]);
     }
@@ -766,9 +800,9 @@ export class PerformanceReviewsComponent implements OnInit {
 
   async loadZoomMetrics() {
     try {
-      const { year, month } = this.parseMonthKey(this.selectedReviewMonth());
+      const { year, month, fromKey, toKey } = this.parseMonthKey(this.selectedReviewMonth());
       const res: any = await this.http
-        .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&sync=true`)
+        .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(toKey)}&sync=true`)
         .toPromise();
       const map: Record<number, ZoomMetricRow> = {};
       const emailMap: Record<string, ZoomMetricRow> = {};
@@ -864,7 +898,7 @@ export class PerformanceReviewsComponent implements OnInit {
     this.formData = {
       employeeId: 0,
       reviewType: 'monthly',
-      period: this.selectedReviewMonth(),
+      period: this.selectedReviewMonthLabel(),
       overallRating: 3,
       strengths: '',
       areasForImprovement: '',
@@ -907,7 +941,7 @@ export class PerformanceReviewsComponent implements OnInit {
       id: this.editingReview()?.id,
       employeeName: emp?.name || 'Unknown',
       reviewType: 'monthly',
-      period: this.selectedReviewMonth(),
+      period: this.selectedReviewMonthLabel(),
       year: monthInfo.year,
       month: monthInfo.month,
       reviewerName: this.editingReview()?.reviewerName || '—',
@@ -960,7 +994,7 @@ export class PerformanceReviewsComponent implements OnInit {
     this.formData = {
       employeeId: review.employeeId,
       reviewType: 'monthly',
-      period: this.selectedReviewMonth(),
+      period: this.selectedReviewMonthLabel(),
       overallRating: review.overallRating && review.overallRating > 0 ? review.overallRating : 3,
       strengths: '',
       areasForImprovement: '',
@@ -980,7 +1014,7 @@ export class PerformanceReviewsComponent implements OnInit {
       reviewerId: 999,
       reviewerName: '—',
       reviewType: 'monthly',
-      period: this.selectedReviewMonth(),
+      period: this.selectedReviewMonthLabel(),
       overallRating: 0,
       strengths: '',
       areasForImprovement: '',
@@ -1097,11 +1131,11 @@ export class PerformanceReviewsComponent implements OnInit {
     );
     if (!hasAnySignal) return;
 
-    const { year, month } = this.parseMonthKey(this.selectedReviewMonth());
+    const { year, month, fromKey, toKey } = this.parseMonthKey(this.selectedReviewMonth());
     const payload = {
       year,
       month,
-      period: this.selectedReviewMonth(),
+      period: `${fromKey}_${toKey}`,
       rows: rows.map((row) => ({
         employeeId: Number(row.employeeId),
         employeeName: row.employeeName || '',
@@ -1199,17 +1233,54 @@ export class PerformanceReviewsComponent implements OnInit {
     return Math.round(callScore + textScore + activeHoursScore + activityRatioScore + revenueScore);
   }
 
-  private getCurrentMonthKey(): string {
+  private parseMonthKey(value: string): { year: number; month: number; from: Date; to: Date; fromKey: string; toKey: string } {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const toUtcDate = (d: Date) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    let from: Date;
+    let to: Date;
+
+    if (!value || value === 'current') {
+      to = toUtcDate(now);
+      from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13));
+    } else if (value.includes('_')) {
+      const [fromRaw, toRaw] = value.split('_');
+      const fromParsed = new Date(fromRaw);
+      const toParsed = new Date(toRaw);
+      if (!Number.isNaN(fromParsed.getTime()) && !Number.isNaN(toParsed.getTime())) {
+        from = toUtcDate(fromParsed);
+        to = toUtcDate(toParsed);
+      } else {
+        to = toUtcDate(now);
+        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13));
+      }
+    } else {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        to = toUtcDate(parsed);
+        from = toUtcDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() - 13));
+      } else {
+        to = toUtcDate(now);
+        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13));
+      }
+    }
+
+    const fromKey = from.toISOString().slice(0, 10);
+    const toKey = to.toISOString().slice(0, 10);
+    return { year: to.getUTCFullYear(), month: to.getUTCMonth() + 1, from, to, fromKey, toKey };
   }
 
-  private parseMonthKey(value: string): { year: number; month: number } {
-    const parts = String(value || '').split('-');
-    const now = new Date();
-    const year = Number(parts[0]) || now.getFullYear();
-    const month = Number(parts[1]) || (now.getMonth() + 1);
-    return { year, month };
+  private enumerateDateKeys(from: Date, to: Date): string[] {
+    const dates: string[] = [];
+    const cursor = new Date(from.getTime());
+    while (cursor.getTime() <= to.getTime()) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return dates;
+  }
+
+  private formatShortDate(date: Date): string {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   private restoreManagementTabs(): void {

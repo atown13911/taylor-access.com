@@ -161,19 +161,45 @@ public class PerformanceReviewsController : ControllerBase
     }
 
     [HttpGet("zoom-metrics")]
-    public async Task<ActionResult<object>> GetZoomMetrics([FromQuery] int? year, [FromQuery] int? month, [FromQuery] bool sync = true)
+    public async Task<ActionResult<object>> GetZoomMetrics(
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] bool sync = true)
     {
         var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
         if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
 
         var now = DateTime.UtcNow;
-        var targetYear = year ?? now.Year;
-        var targetMonth = month ?? now.Month;
-        var targetStart = new DateTime(targetYear, targetMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+        var hasCustomRange = !string.IsNullOrWhiteSpace(from) && !string.IsNullOrWhiteSpace(to);
+        DateTime targetStart;
+        DateTime rangeEnd;
+        int targetYear;
+        int targetMonth;
+
+        if (hasCustomRange)
+        {
+            if (!DateTime.TryParse(from, out var parsedFrom) || !DateTime.TryParse(to, out var parsedTo))
+                return BadRequest(new { message = "from/to must be valid ISO dates" });
+            targetStart = DateTime.SpecifyKind(parsedFrom.Date, DateTimeKind.Utc);
+            rangeEnd = DateTime.SpecifyKind(parsedTo.Date, DateTimeKind.Utc);
+            if (rangeEnd < targetStart) (targetStart, rangeEnd) = (rangeEnd, targetStart);
+            targetYear = rangeEnd.Year;
+            targetMonth = rangeEnd.Month;
+            sync = false; // custom windows should be read-only period reports
+        }
+        else
+        {
+            targetYear = year ?? now.Year;
+            targetMonth = month ?? now.Month;
+            targetStart = new DateTime(targetYear, targetMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+            rangeEnd = now.Date;
+        }
         var nextMonth = targetStart.AddMonths(1);
 
         // CRM endpoint only supports "last N days". For exact historical months, use saved snapshots.
-        if (targetStart.Month != now.Month || targetStart.Year != now.Year)
+        if (!hasCustomRange && (targetStart.Month != now.Month || targetStart.Year != now.Year))
         {
             return Ok(new
             {
@@ -235,7 +261,7 @@ public class PerformanceReviewsController : ControllerBase
         if (employees.Count == 0)
             return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found", employeeSource, orgFilter } });
 
-        var days = Math.Max(1, (int)Math.Ceiling((now.Date - targetStart.Date).TotalDays) + 1);
+        var days = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
             ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
             ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
@@ -303,68 +329,80 @@ public class PerformanceReviewsController : ControllerBase
             }
         }
 
-        var metricsResponse = await client.GetAsync($"{crmBase}/metrics/users?days={days}");
-        if (!metricsResponse.IsSuccessStatusCode)
+        var skipWindowUnsupportedMetrics = hasCustomRange;
+        JsonDocument? metricsDoc = null;
+        if (!skipWindowUnsupportedMetrics)
         {
-            return Ok(new
+            var metricsResponse = await client.GetAsync($"{crmBase}/metrics/users?days={days}");
+            if (!metricsResponse.IsSuccessStatusCode)
             {
-                data = Array.Empty<object>(),
-                meta = new
+                return Ok(new
                 {
-                    year = targetYear,
-                    month = targetMonth,
-                    source = "ttac-gateway->taylor-crm/zoom",
-                    error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}",
-                    authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt" : "incoming-bearer"
-                }
-            });
-        }
-
-        var metricsJson = await metricsResponse.Content.ReadAsStringAsync();
-        using var metricsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(metricsJson) ? "{}" : metricsJson);
-        var metricsByEmail = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
-        var metricsByEmailLocal = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
-        var metricsByName = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
-        var metricsByZoomUserId = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
-
-        var crmMetricsRows = 0;
-        var crmMetricsRowsWithCalls = 0;
-        var crmMetricsRowsWithTexts = 0;
-        if (TryGetPropertyIgnoreCase(metricsDoc.RootElement, "data", out var metricsData)
-            && metricsData.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in metricsData.EnumerateArray())
-            {
-                crmMetricsRows++;
-                var row = new ZoomUserMetricLite
-                {
-                    ZoomUserId = ReadStringAny(item, "zoomUserId", "zoom_user_id", "userId", "user_id"),
-                    Email = ReadStringAny(item, "email", "userEmail", "user_email"),
-                    TotalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count"),
-                    SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count"),
-                    MeetingsHosted = ReadIntAny(item, "meetingsHosted", "meetings_hosted")
-                };
-
-                if (!string.IsNullOrWhiteSpace(row.Email))
-                {
-                    var emailKey = row.Email!.Trim().ToLower();
-                    metricsByEmail[emailKey] = row;
-                    var localPart = ExtractEmailLocalPart(emailKey);
-                    if (!string.IsNullOrWhiteSpace(localPart))
-                        metricsByEmailLocal[localPart] = row;
-                }
-                if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
-                    metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
-                var nameKey = NormalizeName(ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name"));
-                if (!string.IsNullOrWhiteSpace(nameKey))
-                    metricsByName[nameKey] = row;
-                if (row.TotalCalls > 0) crmMetricsRowsWithCalls++;
-                if (row.SmsSessionCount > 0) crmMetricsRowsWithTexts++;
+                    data = Array.Empty<object>(),
+                    meta = new
+                    {
+                        year = targetYear,
+                        month = targetMonth,
+                        source = "ttac-gateway->taylor-crm/zoom",
+                        error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}",
+                        authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt" : "incoming-bearer"
+                    }
+                });
             }
+
+            var metricsJson = await metricsResponse.Content.ReadAsStringAsync();
+            metricsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(metricsJson) ? "{}" : metricsJson);
         }
+        else
+        {
+            metricsDoc = JsonDocument.Parse("{}");
+        }
+        using (metricsDoc)
+        {
+            var metricsByEmail = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+            var metricsByEmailLocal = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+            var metricsByName = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+            var metricsByZoomUserId = new Dictionary<string, ZoomUserMetricLite>(StringComparer.OrdinalIgnoreCase);
+
+            var crmMetricsRows = 0;
+            var crmMetricsRowsWithCalls = 0;
+            var crmMetricsRowsWithTexts = 0;
+            if (!skipWindowUnsupportedMetrics
+                && TryGetPropertyIgnoreCase(metricsDoc.RootElement, "data", out var metricsData)
+                && metricsData.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in metricsData.EnumerateArray())
+                {
+                    crmMetricsRows++;
+                    var row = new ZoomUserMetricLite
+                    {
+                        ZoomUserId = ReadStringAny(item, "zoomUserId", "zoom_user_id", "userId", "user_id"),
+                        Email = ReadStringAny(item, "email", "userEmail", "user_email"),
+                        TotalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count"),
+                        SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count"),
+                        MeetingsHosted = ReadIntAny(item, "meetingsHosted", "meetings_hosted")
+                    };
+
+                    if (!string.IsNullOrWhiteSpace(row.Email))
+                    {
+                        var emailKey = row.Email!.Trim().ToLower();
+                        metricsByEmail[emailKey] = row;
+                        var localPart = ExtractEmailLocalPart(emailKey);
+                        if (!string.IsNullOrWhiteSpace(localPart))
+                            metricsByEmailLocal[localPart] = row;
+                    }
+                    if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
+                        metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
+                    var nameKey = NormalizeName(ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name"));
+                    if (!string.IsNullOrWhiteSpace(nameKey))
+                        metricsByName[nameKey] = row;
+                    if (row.TotalCalls > 0) crmMetricsRowsWithCalls++;
+                    if (row.SmsSessionCount > 0) crmMetricsRowsWithTexts++;
+                }
+            }
 
         var fromDate = targetStart.ToString("yyyy-MM-dd");
-        var toDate = now.ToString("yyyy-MM-dd");
+        var toDate = rangeEnd.ToString("yyyy-MM-dd");
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var smsRows = 0;
@@ -604,31 +642,34 @@ public class PerformanceReviewsController : ControllerBase
             });
         }
 
-        return Ok(new
-        {
-            data = rows,
-            meta = new
+            return Ok(new
             {
-                year = targetYear,
-                month = targetMonth,
-                days,
-                source = "ttac-gateway->taylor-crm/zoom",
-                synced = sync,
-                matchedEmployees = matchedCount,
-                totalEmployees = employees.Count,
-                usedCallLogFallback,
-                fallbackTriggered = shouldUseCallLogFallback,
-                callLogFallbackMatchedEmployees,
-                crmMetricsRows,
-                crmMetricsRowsWithCalls,
-                crmMetricsRowsWithTexts,
-                smsRows,
-                callLogRows,
-                callLogRowsMatched,
-                employeeSource,
-                orgFilter
-            }
-        });
+                data = rows,
+                meta = new
+                {
+                    year = targetYear,
+                    month = targetMonth,
+                    from = fromDate,
+                    to = toDate,
+                    days,
+                    source = "ttac-gateway->taylor-crm/zoom",
+                    synced = sync,
+                    matchedEmployees = matchedCount,
+                    totalEmployees = employees.Count,
+                    usedCallLogFallback,
+                    fallbackTriggered = shouldUseCallLogFallback,
+                    callLogFallbackMatchedEmployees,
+                    crmMetricsRows,
+                    crmMetricsRowsWithCalls,
+                    crmMetricsRowsWithTexts,
+                    smsRows,
+                    callLogRows,
+                    callLogRowsMatched,
+                    employeeSource,
+                    orgFilter
+                }
+            });
+        }
     }
 
     private static string NormalizeName(string? value)
