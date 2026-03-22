@@ -120,7 +120,13 @@ type RosterEmployee = Record<string, any>;
       </div>
 
       <!-- Reviews Table -->
-      @if (filteredReviews().length === 0) {
+      @if (loadingReviews()) {
+        <div class="loading-state">
+          <i class='bx bx-loader-alt bx-spin'></i>
+          <h3>Loading performance reviews...</h3>
+          <p>Please wait while data syncs</p>
+        </div>
+      } @else if (filteredReviews().length === 0) {
         <div class="empty-state">
           <i class='bx bx-bar-chart-square'></i>
           <h3>No reviews found</h3>
@@ -502,6 +508,7 @@ type RosterEmployee = Record<string, any>;
     .rating i { font-size: 1rem; color: #333; &.filled { color: #fbbf24; } }
     .star-input i { font-size: 1.4rem; cursor: pointer; color: #333; &.filled { color: #fbbf24; } &:hover { color: #fbbf24; } }
     .icon-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 1.1rem; padding: 4px; &:hover { color: #00d4ff; } }
+    .loading-state { text-align: center; padding: 60px 20px; color: #8fb6ff; i { font-size: 2.4rem; color: #42a5ff; display: block; margin-bottom: 10px; } h3 { color: #d7e7ff; margin: 0 0 6px; } p { margin: 0; font-size: 0.9rem; color: #9bb5d3; } }
     .empty-state { text-align: center; padding: 60px 20px; color: #888; i { font-size: 3rem; color: #444; display: block; margin-bottom: 12px; } h3 { color: #ccc; margin: 0 0 6px; } p { margin: 0; font-size: 0.9rem; } }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 14px; width: 90%; max-width: 650px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
@@ -529,6 +536,7 @@ export class PerformanceReviewsComponent implements OnInit {
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
   reviews = signal<Review[]>([]);
+  loadingReviews = signal<boolean>(true);
   timeclockSummaries = signal<any[]>([]);
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
@@ -739,10 +747,7 @@ export class PerformanceReviewsComponent implements OnInit {
 
   ngOnInit() {
     this.restoreManagementTabs();
-    this.loadEmployees();
-    this.loadTimeclockSummary();
-    this.loadReviews();
-    this.loadZoomMetrics();
+    void this.reloadReviewData();
     this.loadIntegrationStatuses();
   }
 
@@ -836,11 +841,26 @@ export class PerformanceReviewsComponent implements OnInit {
     }
   }
 
-  onReviewMonthChange(value: string) {
+  async onReviewMonthChange(value: string) {
     if (!value) return;
     this.selectedReviewMonth.set(value);
-    this.loadReviews();
-    this.loadZoomMetrics();
+    this.loadingReviews.set(true);
+    await Promise.all([
+      this.loadReviews(),
+      this.loadZoomMetrics()
+    ]);
+    this.loadingReviews.set(false);
+  }
+
+  private async reloadReviewData(): Promise<void> {
+    this.loadingReviews.set(true);
+    await Promise.all([
+      this.loadEmployees(),
+      this.loadTimeclockSummary(),
+      this.loadReviews(),
+      this.loadZoomMetrics()
+    ]);
+    this.loadingReviews.set(false);
   }
 
   openCreateModal() {
