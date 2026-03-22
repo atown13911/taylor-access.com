@@ -188,13 +188,14 @@ public class PerformanceReviewsController : ControllerBase
             });
         }
 
-        var orgFilter = orgId ?? user.OrganizationId ?? 0;
+        // Align with employee-roster behavior used by the frontend table (global active users).
+        var orgFilter = 0;
         var employeeSource = "users-active";
 
         // Keep employee population aligned with the roster table, which is Users-based.
         var employees = await _context.Users
             .AsNoTracking()
-            .Where(u => (orgFilter <= 0 || u.OrganizationId == orgFilter) && u.Status == "active")
+            .Where(u => u.Status == "active")
             .Select(u => new ZoomEmployeeCandidate
             {
                 EmployeeId = u.Id,
@@ -215,7 +216,7 @@ public class PerformanceReviewsController : ControllerBase
             employees = await _context.EmployeeRosters
                 .AsNoTracking()
                 .Include(er => er.User)
-                .Where(er => er.User != null && (orgFilter <= 0 || er.OrganizationId == orgFilter))
+                .Where(er => er.User != null)
                 .Select(er => new ZoomEmployeeCandidate
                 {
                     EmployeeId = er.UserId,
@@ -465,7 +466,8 @@ public class PerformanceReviewsController : ControllerBase
         var callLogFallbackMatchedEmployees = 0;
         var callLogRows = 0;
         var callLogRowsMatched = 0;
-        if (matchedCount == 0)
+        var shouldUseCallLogFallback = matchedCount == 0 || matchedCount < Math.Min(5, employees.Count);
+        if (shouldUseCallLogFallback)
         {
             try
             {
@@ -519,6 +521,7 @@ public class PerformanceReviewsController : ControllerBase
                         && callData.ValueKind == JsonValueKind.Array)
                     {
                         var matchedEmployees = new HashSet<int>();
+                        var fallbackCallByEmployee = new Dictionary<int, int>();
                         foreach (var item in callData.EnumerateArray())
                         {
                             callLogRows++;
@@ -557,7 +560,7 @@ public class PerformanceReviewsController : ControllerBase
 
                             foreach (var id in matchedIds)
                             {
-                                callByEmployee[id] = callByEmployee.GetValueOrDefault(id) + 1;
+                                fallbackCallByEmployee[id] = fallbackCallByEmployee.GetValueOrDefault(id) + 1;
                                 matchedEmployees.Add(id);
                             }
                             if (matchedIds.Count > 0) callLogRowsMatched++;
@@ -565,9 +568,17 @@ public class PerformanceReviewsController : ControllerBase
 
                         if (matchedEmployees.Count > 0)
                         {
+                            foreach (var kvp in fallbackCallByEmployee)
+                            {
+                                var existing = callByEmployee.GetValueOrDefault(kvp.Key);
+                                callByEmployee[kvp.Key] = Math.Max(existing, kvp.Value);
+                            }
+
                             usedCallLogFallback = true;
                             callLogFallbackMatchedEmployees = matchedEmployees.Count;
-                            matchedCount = matchedEmployees.Count;
+                            matchedCount = employees.Count(emp =>
+                                callByEmployee.GetValueOrDefault(emp.EmployeeId) > 0
+                                || textByEmployee.GetValueOrDefault(emp.EmployeeId) > 0);
                         }
                     }
                 }
@@ -606,6 +617,7 @@ public class PerformanceReviewsController : ControllerBase
                 matchedEmployees = matchedCount,
                 totalEmployees = employees.Count,
                 usedCallLogFallback,
+                fallbackTriggered = shouldUseCallLogFallback,
                 callLogFallbackMatchedEmployees,
                 crmMetricsRows,
                 crmMetricsRowsWithCalls,
