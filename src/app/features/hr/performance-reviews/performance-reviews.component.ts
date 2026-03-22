@@ -103,12 +103,6 @@ type RosterEmployee = Record<string, any>;
           <span class="value">{{ lastApiCheckAt() || '—' }}</span>
         </div>
       </div>
-      @if (zoomMetricsDebugLabel()) {
-        <div class="zoom-debug-row" [class.warn]="zoomMetricsHasNoMatches()">
-          <i class='bx bx-data'></i>
-          <span>{{ zoomMetricsDebugLabel() }}</span>
-        </div>
-      }
 
       <!-- Sub-Tabs -->
       <div class="review-controls">
@@ -468,8 +462,7 @@ type RosterEmployee = Record<string, any>;
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); color: #0a0a14; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; &:disabled { opacity: 0.5; } }
     .btn-secondary { padding: 10px 20px; background: #2a2a4e; color: #aaa; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
     .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
-    .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 10px; }
-    .zoom-debug-row { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.2); background: rgba(0, 212, 255, 0.06); color: #9ed6ff; font-size: 0.8rem; i { color: #5ac2ff; font-size: 1rem; } &.warn { border-color: rgba(255, 182, 72, 0.35); background: rgba(255, 182, 72, 0.08); color: #ffd59a; i { color: #ffbe63; } } }
+    .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
     .status-item { background: #131a2e; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .status-item .label { color: #8aa0b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
     .status-item .value { color: #dbeafe; font-size: 0.86rem; font-weight: 600; }
@@ -550,7 +543,6 @@ export class PerformanceReviewsComponent implements OnInit {
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
   zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
   zoomMetricByName = signal<Record<string, ZoomMetricRow>>({});
-  zoomMetricsMeta = signal<any | null>(null);
   googleApiStatus = signal<IntegrationState>('checking');
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
@@ -725,20 +717,6 @@ export class PerformanceReviewsComponent implements OnInit {
     const found = this.reviewMonthOptions.find(o => o.value === selected);
     return found?.label || selected;
   });
-  zoomMetricsDebugLabel = computed(() => {
-    const meta = this.zoomMetricsMeta();
-    if (!meta) return '';
-    const matched = Number(meta?.matchedEmployees ?? 0);
-    const total = Number(meta?.totalEmployees ?? 0);
-    const source = String(meta?.employeeSource || 'unknown');
-    const fallback = meta?.usedCallLogFallback ? `call-log fallback matched ${Number(meta?.callLogFallbackMatchedEmployees ?? 0)}` : 'metrics/users matching';
-    return `Zoom match: ${matched}/${total} employees | source: ${source} | mode: ${fallback}`;
-  });
-  zoomMetricsHasNoMatches = computed(() => {
-    const meta = this.zoomMetricsMeta();
-    if (!meta) return false;
-    return Number(meta?.totalEmployees ?? 0) > 0 && Number(meta?.matchedEmployees ?? 0) === 0;
-  });
 
   ngOnInit() {
     this.restoreManagementTabs();
@@ -833,12 +811,10 @@ export class PerformanceReviewsComponent implements OnInit {
       this.zoomMetricMap.set(map);
       this.zoomMetricByEmail.set(emailMap);
       this.zoomMetricByName.set(nameMap);
-      this.zoomMetricsMeta.set(res?.meta ?? null);
     } catch {
       this.zoomMetricMap.set({});
       this.zoomMetricByEmail.set({});
       this.zoomMetricByName.set({});
-      this.zoomMetricsMeta.set(null);
     }
   }
 
