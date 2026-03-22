@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
@@ -14,11 +16,25 @@ public class TimeclockController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUser;
+    private readonly IMongoDbService _mongo;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<TimeclockController> _logger;
 
-    public TimeclockController(TaylorAccessDbContext context, CurrentUserService currentUser)
+    public TimeclockController(
+        TaylorAccessDbContext context,
+        CurrentUserService currentUser,
+        IMongoDbService mongo,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        ILogger<TimeclockController> logger)
     {
         _context = context;
         _currentUser = currentUser;
+        _mongo = mongo;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+        _logger = logger;
     }
 
     // ── Session lifecycle ──────────────────────────────────────────────────
@@ -183,6 +199,34 @@ public class TimeclockController : ControllerBase
         var dayStart  = targetDate;
         var dayEnd    = targetDate.AddDays(1);
         var isToday   = targetDate.Date == DateTime.UtcNow.Date;
+
+        // Prefer TSS Portal source when available so work hours reflect shared timeclock.
+        var tssRows = await TryFetchTssPortalDailySummaryAsync(targetDate);
+        if (tssRows.Count > 0)
+        {
+            return Ok(new
+            {
+                date = targetDate.ToString("yyyy-MM-dd"),
+                activeNow = tssRows.Count(u => string.Equals(u.Status, "active", StringComparison.OrdinalIgnoreCase)),
+                totalUsers = tssRows.Count,
+                data = tssRows.Select(u => new
+                {
+                    userEmail = u.UserEmail,
+                    userName = u.UserName,
+                    userId = u.UserId,
+                    firstLogin = u.FirstLogin,
+                    lastLogout = u.LastLogout,
+                    lastHeartbeat = u.LastHeartbeat,
+                    activeSeconds = u.ActiveSeconds,
+                    idleSeconds = u.IdleSeconds,
+                    totalSeconds = u.TotalSeconds,
+                    status = u.Status,
+                    sessions = u.Sessions,
+                    source = "tss-portal"
+                })
+            });
+        }
+
         // For past days, cap session end at midnight; for today, cap at now
         var maxEndTime = isToday ? DateTime.UtcNow : dayEnd;
 
@@ -267,6 +311,37 @@ public class TimeclockController : ControllerBase
             .OrderBy(u => u.firstLogin)
             .ToList();
 
+        // Secondary fallback: if tracked rows are present but all durations are zero,
+        // use shared session telemetry (Mongo) to avoid blank work-hour columns.
+        if (result.Count > 0 && result.All(u => u.totalSeconds == 0))
+        {
+            var mongoRows = await BuildSummaryFromMongoSessionsAsync(dayStart, dayEnd, isToday);
+            if (mongoRows.Count > 0)
+            {
+                return Ok(new
+                {
+                    date = targetDate.ToString("yyyy-MM-dd"),
+                    activeNow = mongoRows.Count(u => string.Equals(u.Status, "active", StringComparison.OrdinalIgnoreCase)),
+                    totalUsers = mongoRows.Count,
+                    data = mongoRows.Select(u => new
+                    {
+                        userEmail = u.UserEmail,
+                        userName = u.UserName,
+                        userId = u.UserId,
+                        firstLogin = u.FirstLogin,
+                        lastLogout = u.LastLogout,
+                        lastHeartbeat = u.LastHeartbeat,
+                        activeSeconds = u.ActiveSeconds,
+                        idleSeconds = u.IdleSeconds,
+                        totalSeconds = u.TotalSeconds,
+                        status = u.Status,
+                        sessions = u.Sessions,
+                        source = "mongo-user-sessions"
+                    })
+                });
+            }
+        }
+
         return Ok(new
         {
             date         = targetDate.ToString("yyyy-MM-dd"),
@@ -274,6 +349,187 @@ public class TimeclockController : ControllerBase
             totalUsers   = result.Count,
             data         = result
         });
+    }
+
+    private async Task<List<DailySummaryRow>> TryFetchTssPortalDailySummaryAsync(DateTime targetDate)
+    {
+        try
+        {
+            var defaultGatewayBase = _configuration["GatewayPublicOpenUrl"]
+                ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
+                ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
+            var configuredBase = _configuration["TssPortalTimeclockDailySummaryUrl"]
+                ?? Environment.GetEnvironmentVariable("TSS_PORTAL_TIMECLOCK_DAILY_SUMMARY_URL");
+            var baseUrl = string.IsNullOrWhiteSpace(configuredBase)
+                ? $"{defaultGatewayBase.TrimEnd('/')}/tss-portal/api/v1/timeclock/daily-summary"
+                : configuredBase.Trim();
+            var separator = baseUrl.Contains('?') ? "&" : "?";
+            var url = $"{baseUrl}{separator}date={targetDate:yyyy-MM-dd}";
+
+            var client = _httpClientFactory.CreateClient();
+            var incomingAuth = Request.Headers.Authorization.ToString();
+            if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
+            }
+
+            using var response = await client.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+                return new List<DailySummaryRow>();
+
+            var body = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(body))
+                return new List<DailySummaryRow>();
+
+            using var doc = JsonDocument.Parse(body);
+            if (!TryGetPropertyIgnoreCase(doc.RootElement, "data", out var dataElement) || dataElement.ValueKind != JsonValueKind.Array)
+                return new List<DailySummaryRow>();
+
+            var rows = new List<DailySummaryRow>();
+            foreach (var item in dataElement.EnumerateArray())
+            {
+                rows.Add(new DailySummaryRow
+                {
+                    UserEmail = ReadStringAny(item, "userEmail", "email"),
+                    UserName = ReadStringAny(item, "userName", "name", "employeeName"),
+                    UserId = ReadNullableIntAny(item, "userId", "employeeId", "id"),
+                    FirstLogin = ReadNullableDateTimeAny(item, "firstLogin", "loginTime"),
+                    LastLogout = ReadNullableDateTimeAny(item, "lastLogout", "logoutTime"),
+                    LastHeartbeat = ReadNullableDateTimeAny(item, "lastHeartbeat", "heartbeatAt"),
+                    ActiveSeconds = ReadIntAny(item, "activeSeconds", "activeTimeSeconds"),
+                    IdleSeconds = ReadIntAny(item, "idleSeconds", "idleTimeSeconds"),
+                    TotalSeconds = Math.Max(
+                        ReadIntAny(item, "totalSeconds", "durationSeconds"),
+                        (int)Math.Round(ReadDoubleAny(item, "durationMinutes", "totalMinutes") * 60)),
+                    Status = ReadStringAny(item, "status") ?? "offline",
+                    Sessions = Math.Max(ReadIntAny(item, "sessions", "sessionCount"), 1)
+                });
+            }
+
+            rows = rows
+                .Where(r => !string.IsNullOrWhiteSpace(r.UserEmail) || r.UserId.HasValue)
+                .ToList();
+            return rows;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "TSS portal daily-summary probe failed");
+            return new List<DailySummaryRow>();
+        }
+    }
+
+    private async Task<List<DailySummaryRow>> BuildSummaryFromMongoSessionsAsync(DateTime dayStart, DateTime dayEnd, bool isToday)
+    {
+        try
+        {
+            var sessions = await _mongo.GetUserSessionsAsync(null, dayStart, dayEnd, 5000);
+            if (sessions.Count == 0) return new List<DailySummaryRow>();
+
+            var rows = sessions
+                .GroupBy(s => (s.UserEmail ?? string.Empty).Trim().ToLowerInvariant())
+                .Select(g =>
+                {
+                    var first = g.OrderBy(s => s.LoginTime).First();
+                    var last = g.OrderByDescending(s => s.LogoutTime ?? s.LoginTime).First();
+                    var totalSeconds = g.Sum(s =>
+                    {
+                        if (s.DurationMinutes.HasValue && s.DurationMinutes.Value > 0)
+                            return (int)Math.Round(s.DurationMinutes.Value * 60);
+                        if (s.LogoutTime.HasValue && s.LogoutTime.Value > s.LoginTime)
+                            return (int)Math.Round((s.LogoutTime.Value - s.LoginTime).TotalSeconds);
+                        return 0;
+                    });
+                    var hasOpenSession = g.Any(s => !s.LogoutTime.HasValue);
+                    return new DailySummaryRow
+                    {
+                        UserEmail = first.UserEmail,
+                        UserName = first.UserName,
+                        UserId = first.UserId,
+                        FirstLogin = first.LoginTime,
+                        LastLogout = hasOpenSession ? null : last.LogoutTime,
+                        LastHeartbeat = hasOpenSession ? DateTime.UtcNow : last.LogoutTime,
+                        ActiveSeconds = totalSeconds,
+                        IdleSeconds = 0,
+                        TotalSeconds = totalSeconds,
+                        Status = isToday && hasOpenSession ? "active" : "offline",
+                        Sessions = g.Count()
+                    };
+                })
+                .Where(r => !string.IsNullOrWhiteSpace(r.UserEmail) || r.UserId.HasValue)
+                .OrderBy(r => r.FirstLogin)
+                .ToList();
+
+            return rows;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Mongo user-session fallback failed");
+            return new List<DailySummaryRow>();
+        }
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = prop.Value;
+                return true;
+            }
+        }
+        value = default;
+        return false;
+    }
+
+    private static string? ReadStringAny(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!TryGetPropertyIgnoreCase(element, name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.String) return value.GetString();
+            if (value.ValueKind == JsonValueKind.Number) return value.GetRawText();
+        }
+        return null;
+    }
+
+    private static int ReadIntAny(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!TryGetPropertyIgnoreCase(element, name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var i)) return i;
+            if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var parsed)) return parsed;
+        }
+        return 0;
+    }
+
+    private static int? ReadNullableIntAny(JsonElement element, params string[] names)
+    {
+        var value = ReadIntAny(element, names);
+        return value > 0 ? value : null;
+    }
+
+    private static double ReadDoubleAny(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!TryGetPropertyIgnoreCase(element, name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var d)) return d;
+            if (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), out var parsed)) return parsed;
+        }
+        return 0;
+    }
+
+    private static DateTime? ReadNullableDateTimeAny(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!TryGetPropertyIgnoreCase(element, name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.String && DateTime.TryParse(value.GetString(), out var dt))
+                return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        }
+        return null;
     }
 
     /// <summary>
@@ -354,3 +610,18 @@ public class TimeclockController : ControllerBase
 
 public record HeartbeatRequest(int SessionId, bool IsActive);
 public record TimeclockEndRequest(int SessionId);
+
+internal sealed class DailySummaryRow
+{
+    public string? UserEmail { get; set; }
+    public string? UserName { get; set; }
+    public int? UserId { get; set; }
+    public DateTime? FirstLogin { get; set; }
+    public DateTime? LastLogout { get; set; }
+    public DateTime? LastHeartbeat { get; set; }
+    public int ActiveSeconds { get; set; }
+    public int IdleSeconds { get; set; }
+    public int TotalSeconds { get; set; }
+    public string Status { get; set; } = "offline";
+    public int Sessions { get; set; }
+}
