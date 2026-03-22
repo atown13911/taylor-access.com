@@ -20,6 +20,7 @@ public class PerformanceReviewsController : ControllerBase
     private readonly CurrentUserService _currentUserService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly IJwtService _jwtService;
     private readonly ILogger<PerformanceReviewsController> _logger;
 
     public PerformanceReviewsController(
@@ -27,12 +28,14 @@ public class PerformanceReviewsController : ControllerBase
         CurrentUserService currentUserService,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
+        IJwtService jwtService,
         ILogger<PerformanceReviewsController> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _jwtService = jwtService;
         _logger = logger;
     }
 
@@ -231,7 +234,12 @@ public class PerformanceReviewsController : ControllerBase
 
         var incomingAuth = Request.Headers.Authorization.ToString();
         var client = _httpClientFactory.CreateClient();
-        if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var serviceToken = _jwtService.GenerateToken(user);
+        if (!string.IsNullOrWhiteSpace(serviceToken))
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
         }
@@ -259,7 +267,8 @@ public class PerformanceReviewsController : ControllerBase
                     year = targetYear,
                     month = targetMonth,
                     source = "ttac-gateway->taylor-crm/zoom",
-                    error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}"
+                    error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}",
+                    authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt" : "incoming-bearer"
                 }
             });
         }
@@ -469,7 +478,12 @@ public class PerformanceReviewsController : ControllerBase
         {
             var incomingAuth = Request.Headers.Authorization.ToString();
             var client = _httpClientFactory.CreateClient();
-            if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            var serviceToken = _jwtService.GenerateToken(user);
+            if (!string.IsNullOrWhiteSpace(serviceToken))
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
+            }
+            else if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
             }
