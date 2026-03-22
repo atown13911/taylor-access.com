@@ -472,7 +472,7 @@ public class PerformanceReviewsController : ControllerBase
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
             ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
             ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
-        var zoomUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom/metrics/users?days=1";
+        var zoomUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom/status";
         var googleUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail/status";
 
         var serviceToken = _jwtService.GenerateToken(user);
@@ -514,9 +514,18 @@ public class PerformanceReviewsController : ControllerBase
 
             using var response = await client.GetAsync(zoomUrl);
             zoomStatus = (int)response.StatusCode;
-            zoomConnected = response.IsSuccessStatusCode || zoomStatus == 400 || zoomStatus == 401 || zoomStatus == 403 || zoomStatus == 404 || zoomStatus == 405;
-
-            if (!zoomConnected)
+            if (response.IsSuccessStatusCode)
+            {
+                var zoomBody = await response.Content.ReadAsStringAsync();
+                using var zoomDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(zoomBody) ? "{}" : zoomBody);
+                zoomConnected = TryGetPropertyIgnoreCase(zoomDoc.RootElement, "connected", out var zoomConnectedProp)
+                    && zoomConnectedProp.ValueKind == JsonValueKind.True;
+                if (!zoomConnected && TryGetPropertyIgnoreCase(zoomDoc.RootElement, "message", out var zoomMessageProp))
+                {
+                    zoomError = zoomMessageProp.GetString();
+                }
+            }
+            else
             {
                 zoomError = $"Zoom gateway probe returned HTTP {zoomStatus}";
             }
