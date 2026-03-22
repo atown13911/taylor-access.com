@@ -696,14 +696,16 @@ export class PerformanceReviewsComponent implements OnInit {
       const liveRevenue = this.getAttributedRevenue(review.employeeId);
       const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
 
-      const callVolume = hasSnapshot ? Number(review.callVolume || 0) : liveCallVolume;
-      const textVolume = hasSnapshot ? Number(review.textVolume || 0) : liveTextVolume;
-      const totalHours = hasSnapshot ? Number(review.clockedHours || 0) : liveTime.totalHours;
-      const activeHours = hasSnapshot ? Number(review.workHours || 0) : liveTime.activeHours;
+      const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
+      const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
+      const callVolume = Math.max(snapshotCallVolume, liveCallVolume);
+      const textVolume = Math.max(snapshotTextVolume, liveTextVolume);
+      const totalHours = hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours;
+      const activeHours = hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours;
       const idleHours = hasSnapshot ? Math.max(0, totalHours - activeHours) : liveTime.idleHours;
-      const activityRate = hasSnapshot ? Number(review.activityRate || 0) : liveTime.activityRate;
-      const invoicedRevenue = hasSnapshot ? Number(review.invoicedRevenue || 0) : liveRevenue;
-      const score = hasSnapshot ? Number(review.score || 0) : liveScore;
+      const activityRate = hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate;
+      const invoicedRevenue = hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue;
+      const score = hasSnapshot ? Math.max(Number(review.score || 0), liveScore) : liveScore;
 
       return {
         ...review,
@@ -799,14 +801,27 @@ export class PerformanceReviewsComponent implements OnInit {
         .toPromise();
       const map: Record<number, ZoomMetricRow> = {};
       const emailMap: Record<string, ZoomMetricRow> = {};
-      const rows = Array.isArray(res?.data) ? res.data : [];
+      const rows = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.metrics)
+          ? res.data.metrics
+          : Array.isArray(res?.metrics)
+            ? res.metrics
+            : [];
       for (const row of rows) {
-        const employeeId = Number(row?.employeeId);
-        const email = String(row?.email || row?.userEmail || row?.zoomEmail || '').trim().toLowerCase();
+        const employeeId = this.readNumeric(row, ['employeeId', 'userId', 'staffId', 'driverId', 'id']);
+        const email = String(
+          row?.email ||
+          row?.userEmail ||
+          row?.zoomEmail ||
+          row?.employeeEmail ||
+          row?.workEmail ||
+          ''
+        ).trim().toLowerCase();
         const metric: ZoomMetricRow = {
           employeeId: Number.isFinite(employeeId) ? employeeId : 0,
-          callVolume: Number(row?.callVolume || 0),
-          textVolume: Number(row?.textVolume || 0),
+          callVolume: this.readNumeric(row, ['callVolume', 'totalCalls', 'calls', 'callCount', 'phoneCalls']),
+          textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
           email: email || undefined
         };
         if (employeeId) {
@@ -1015,6 +1030,7 @@ export class PerformanceReviewsComponent implements OnInit {
     const emp = this.employees().find(e => Number(e.id) === Number(employeeId));
     const candidateEmails = [
       String(emp?.email || '').trim().toLowerCase(),
+      String(emp?.workEmail || '').trim().toLowerCase(),
       String(emp?.personalEmail || '').trim().toLowerCase(),
       String(emp?.zoomEmail || '').trim().toLowerCase()
     ].filter(Boolean);
@@ -1031,6 +1047,14 @@ export class PerformanceReviewsComponent implements OnInit {
       callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0))
     };
+  }
+
+  private readNumeric(source: Record<string, any>, keys: string[]): number {
+    for (const key of keys) {
+      const value = Number(source?.[key]);
+      if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
   }
 
   private extractEmployeeTitle(emp: RosterEmployee): string {
