@@ -1165,11 +1165,17 @@ export class PerformanceReviewsComponent implements OnInit {
     );
     if (!hasAnySignal) return;
 
-    const { year, month, fromKey, toKey } = this.parseMonthKey(this.selectedReviewMonth());
+    const periodInfo = this.parseMonthKey(this.selectedReviewMonth());
+    const { year, month, fromKey, toKey, to } = periodInfo;
+    const now = new Date();
+    const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const finalizeMonthly = this.periodMode() === 'monthly' && to.getTime() < currentMonthStart.getTime();
     const payload = {
       year,
       month,
       period: `${fromKey}_${toKey}`,
+      periodMode: this.periodMode(),
+      finalizeMonthly: finalizeMonthly,
       rows: rows.map((row) => ({
         employeeId: Number(row.employeeId),
         employeeName: row.employeeName || '',

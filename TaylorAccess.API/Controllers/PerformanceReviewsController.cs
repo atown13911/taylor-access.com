@@ -816,6 +816,10 @@ public class PerformanceReviewsController : ControllerBase
             return BadRequest(new { message = "organizationId is required" });
 
         var period = $"{year:D4}-{month:D2}";
+        var normalizedPeriodMode = string.Equals(request.PeriodMode, "monthly", StringComparison.OrdinalIgnoreCase)
+            ? "monthly"
+            : "weekly";
+        var finalizeMonthly = normalizedPeriodMode == "monthly" && request.FinalizeMonthly;
         var byEmployee = request.Rows
             .Where(r => r != null && r.EmployeeId > 0)
             .GroupBy(r => r.EmployeeId)
@@ -854,12 +858,12 @@ public class PerformanceReviewsController : ControllerBase
                     EmployeeName = FirstNonEmpty(metric.EmployeeName, userNames.GetValueOrDefault(employeeId), $"Employee #{employeeId}"),
                     ReviewerId = user.Id,
                     ReviewerName = user.Name,
-                    ReviewType = "monthly",
+                    ReviewType = normalizedPeriodMode,
                     Year = year,
                     Month = month,
                     Period = period,
                     OverallRating = 3,
-                    Status = "pending",
+                    Status = finalizeMonthly ? "completed" : "pending",
                     CreatedAt = now
                 };
                 _context.PerformanceReviews.Add(review);
@@ -873,6 +877,9 @@ public class PerformanceReviewsController : ControllerBase
             }
 
             review.Period = period;
+            review.ReviewType = normalizedPeriodMode;
+            if (finalizeMonthly)
+                review.Status = "completed";
             review.CallVolume = Math.Max(metric.CallVolume, 0);
             review.TextVolume = Math.Max(metric.TextVolume, 0);
             review.ClockedHours = ToMoney(metric.ClockedHours);
@@ -893,6 +900,8 @@ public class PerformanceReviewsController : ControllerBase
                 year,
                 month,
                 period,
+                periodMode = normalizedPeriodMode,
+                finalizeMonthly,
                 inserted,
                 updated,
                 total = byEmployee.Count
@@ -1034,6 +1043,8 @@ public class BulkMonthlyPerformanceMetricsSnapshotRequest
     public int? Year { get; set; }
     public int? Month { get; set; }
     public string? Period { get; set; }
+    public string? PeriodMode { get; set; }
+    public bool FinalizeMonthly { get; set; }
     public List<MonthlyPerformanceMetricSnapshotRow> Rows { get; set; } = new();
 }
 
