@@ -106,14 +106,20 @@ type RosterEmployee = Record<string, any>;
 
       <!-- Sub-Tabs -->
       <div class="review-controls">
-        <div class="tabs">
-          <button class="tab" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">Pending</button>
-          <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
+        <div class="review-tab-stack">
+          <div class="tabs">
+            <button class="tab" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">Pending</button>
+            <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
+          </div>
+          <div class="tabs period-mode-tabs">
+            <button class="tab" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Weekly</button>
+            <button class="tab" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Monthly</button>
+          </div>
         </div>
         <div class="month-filter">
           <label>Review Period</label>
           <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
-            @for (opt of reviewPeriodOptions; track opt.value) {
+            @for (opt of reviewPeriodOptions(); track opt.value) {
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
@@ -482,6 +488,8 @@ type RosterEmployee = Record<string, any>;
     .page-tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
     .page-tab:hover { color: #ccc; }
     .review-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .review-tab-stack { display: flex; flex-direction: column; gap: 2px; }
+    .period-mode-tabs { margin-bottom: 0; }
     .month-filter { display: flex; align-items: center; gap: 8px; }
     .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
@@ -547,6 +555,7 @@ export class PerformanceReviewsComponent implements OnInit {
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
   selectedReviewMonth = signal('current');
+  periodMode = signal<'weekly' | 'monthly'>('weekly');
 
   // Call Metrics
   callLogs = signal<any[]>([]);
@@ -700,9 +709,20 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.reviews().reduce((sum: number, review: any) => sum + Number(review?.invoicedRevenue ?? 0), 0);
   });
 
-  reviewPeriodOptions = (() => {
+  reviewPeriodOptions = computed(() => {
     const opts: { value: string; label: string }[] = [];
     const now = new Date();
+    if (this.periodMode() === 'monthly') {
+      opts.push({ value: 'current', label: 'Current Month' });
+      for (let i = 1; i <= 18; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        opts.push({ value, label });
+      }
+      return opts;
+    }
+
     opts.push({ value: 'current', label: 'Current Week' });
     for (let i = 1; i <= 12; i++) {
       const start = new Date(now);
@@ -714,11 +734,11 @@ export class PerformanceReviewsComponent implements OnInit {
       opts.push({ value, label });
     }
     return opts;
-  })();
+  });
 
   selectedReviewMonthLabel = computed(() => {
     const selected = this.selectedReviewMonth();
-    const found = this.reviewPeriodOptions.find(o => o.value === selected);
+    const found = this.reviewPeriodOptions().find(o => o.value === selected);
     if (found) return found.label;
     const parsed = this.parseMonthKey(selected);
     return `${this.formatShortDate(parsed.from)} - ${this.formatShortDate(parsed.to)}`;
@@ -876,6 +896,20 @@ export class PerformanceReviewsComponent implements OnInit {
     await Promise.all([
       this.loadReviews(),
       this.loadZoomMetrics()
+    ]);
+    await this.persistMonthlyMetricsSnapshot();
+    this.loadingReviews.set(false);
+  }
+
+  async onPeriodModeChange(mode: 'weekly' | 'monthly') {
+    if (this.periodMode() === mode) return;
+    this.periodMode.set(mode);
+    this.selectedReviewMonth.set('current');
+    this.loadingReviews.set(true);
+    await Promise.all([
+      this.loadReviews(),
+      this.loadZoomMetrics(),
+      this.loadTimeclockSummary()
     ]);
     await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
@@ -1240,8 +1274,13 @@ export class PerformanceReviewsComponent implements OnInit {
     let to: Date;
 
     if (!value || value === 'current') {
-      to = toUtcDate(now);
-      from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+      if (this.periodMode() === 'monthly') {
+        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), 1));
+        to = toUtcDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      } else {
+        to = toUtcDate(now);
+        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+      }
     } else if (value.includes('_')) {
       const [fromRaw, toRaw] = value.split('_');
       const fromParsed = new Date(fromRaw);
@@ -1254,13 +1293,24 @@ export class PerformanceReviewsComponent implements OnInit {
         from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
       }
     } else {
-      const parsed = new Date(value);
-      if (!Number.isNaN(parsed.getTime())) {
-        to = toUtcDate(parsed);
-        from = toUtcDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() - 6));
+      const monthlyMatch = /^(\d{4})-(\d{2})$/.exec(value);
+      if (monthlyMatch) {
+        const year = Number(monthlyMatch[1]);
+        const month = Number(monthlyMatch[2]);
+        from = toUtcDate(new Date(year, month - 1, 1));
+        to = toUtcDate(new Date(year, month, 0));
       } else {
-        to = toUtcDate(now);
-        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+          to = toUtcDate(parsed);
+          from = toUtcDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() - 6));
+        } else if (this.periodMode() === 'monthly') {
+          from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), 1));
+          to = toUtcDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+        } else {
+          to = toUtcDate(now);
+          from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+        }
       }
     }
 
