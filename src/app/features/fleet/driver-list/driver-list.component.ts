@@ -157,6 +157,18 @@ export class DriverListComponent implements OnInit {
     this.loadOrganizations();
   }
 
+  private asArray(input: any): any[] {
+    if (Array.isArray(input)) return input;
+    if (Array.isArray(input?.data)) return input.data;
+    if (Array.isArray(input?.items)) return input.items;
+    if (Array.isArray(input?.rows)) return input.rows;
+    if (Array.isArray(input?.drivers)) return input.drivers;
+    if (Array.isArray(input?.data?.items)) return input.data.items;
+    if (Array.isArray(input?.data?.rows)) return input.data.rows;
+    if (Array.isArray(input?.data?.drivers)) return input.data.drivers;
+    return [];
+  }
+
   setActiveTab(tab: 'active' | 'inactive' | 'archived'): void {
     this.activeTab.set(tab);
     if (tab === 'archived' && this.tabCounts().archived === 0) {
@@ -166,14 +178,14 @@ export class DriverListComponent implements OnInit {
 
   loadOrganizations(): void {
     this.api.getOrganizations().subscribe({
-      next: (res: any) => this.availableOrganizations.set(res?.data || res || []),
+      next: (res: any) => this.availableOrganizations.set(this.asArray(res)),
       error: () => this.availableOrganizations.set([])
     });
   }
 
   loadFleets(): void {
     this.api.getFleets().subscribe({
-      next: (res: any) => this.availableFleets.set(res?.data || res || []),
+      next: (res: any) => this.availableFleets.set(this.asArray(res)),
       error: () => this.availableFleets.set([])
     });
   }
@@ -184,7 +196,7 @@ export class DriverListComponent implements OnInit {
     // Load drivers -- the backend already filters by the user's org/entity access
     this.api.getDrivers({ limit: 2000 }).subscribe({
       next: (res) => {
-        const data = res?.data || res || [];
+        const data = this.asArray(res);
         const mapped: DriverRow[] = data.map((d: any) => ({
           id: d.id,
           name: d.name || '',

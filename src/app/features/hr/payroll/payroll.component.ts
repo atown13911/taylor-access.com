@@ -227,7 +227,8 @@ export class PayrollComponent implements OnInit {
   loadData() {
     this.http.get<any>(`${this.apiUrl}/api/v1/users?limit=500&status=active`).subscribe({
       next: (res) => {
-        const users = (res?.data || []).map((u: any) => ({
+        const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const users = rows.map((u: any) => ({
           ...u,
           payType: u.payType || 'salary',
           payRate: u.payRate || 0,

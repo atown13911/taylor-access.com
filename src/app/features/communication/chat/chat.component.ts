@@ -22,6 +22,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   private router = inject(Router);
   private http = inject(HttpClient);
 
+  private asArray(input: any): any[] {
+    if (Array.isArray(input)) return input;
+    if (Array.isArray(input?.data)) return input.data;
+    if (Array.isArray(input?.items)) return input.items;
+    if (Array.isArray(input?.rows)) return input.rows;
+    if (Array.isArray(input?.data?.items)) return input.data.items;
+    if (Array.isArray(input?.data?.rows)) return input.data.rows;
+    return [];
+  }
+
   // Auth state
   isLoggedIn = computed(() => !!localStorage.getItem('vantac_token'));
 
@@ -680,7 +690,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     this.http.get<any>(url).subscribe({
       next: (res) => {
-        this.shipments.set(res.data || res || []);
+        this.shipments.set(this.asArray(res));
         this.shipmentsLoading.set(false);
       },
       error: () => { this.shipmentsLoading.set(false); }
@@ -837,7 +847,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Load VanTac users as contacts
     this.http.get<any>(`${environment.apiUrl}/api/v1/users?pageSize=500`).subscribe({
       next: (res) => {
-        const users = (res.data || res || []).map((u: any) => ({
+        const users = this.asArray(res).map((u: any) => ({
           name: u.name,
           email: u.email
         })).filter((u: any) => u.email);

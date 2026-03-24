@@ -610,7 +610,8 @@ export class InsuranceFinancialComponent implements OnInit {
     // Load enabled methods from API (stored as DriverPayment records with no driver)
     this.api.getDriverPayments().subscribe({
       next: (res: any) => {
-        const methods = (res?.data || []).map((p: any) => p.paymentMethod);
+        const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const methods = rows.map((p: any) => p.paymentMethod);
         this.enabledMethods.set(new Set(methods));
         this.loadingPayments.set(false);
       },

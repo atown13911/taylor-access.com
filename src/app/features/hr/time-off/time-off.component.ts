@@ -195,7 +195,8 @@ export class TimeOffComponent implements OnInit {
   async loadPending() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/time-off/requests?status=pending`).toPromise();
-      const requests = (res?.data || []).map((r: any) => ({
+      const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const requests = rows.map((r: any) => ({
         ...r,
         employeeName: r.employee?.name || `Employee #${r.employeeId}`,
         approvedByName: r.approvedBy?.name
@@ -207,7 +208,8 @@ export class TimeOffComponent implements OnInit {
   async loadAllRequests() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/time-off/requests?limit=200`).toPromise();
-      const requests = (res?.data || []).map((r: any) => ({
+      const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const requests = rows.map((r: any) => ({
         ...r,
         employeeName: r.employee?.name || `Employee #${r.employeeId}`,
         approvedByName: r.approvedBy?.name
