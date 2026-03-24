@@ -297,6 +297,18 @@ export class DriversComponent implements OnInit {
     this.loadAllData();
   }
 
+  private asArray(input: any): any[] {
+    if (Array.isArray(input)) return input;
+    if (Array.isArray(input?.data)) return input.data;
+    if (Array.isArray(input?.items)) return input.items;
+    if (Array.isArray(input?.rows)) return input.rows;
+    if (Array.isArray(input?.drivers)) return input.drivers;
+    if (Array.isArray(input?.data?.items)) return input.data.items;
+    if (Array.isArray(input?.data?.rows)) return input.data.rows;
+    if (Array.isArray(input?.data?.drivers)) return input.data.drivers;
+    return [];
+  }
+
   loadAllData(): void {
     this.loadDrivers();
     this.loadCarriers();
@@ -327,7 +339,7 @@ export class DriversComponent implements OnInit {
     this.isLoading.set(true);
     this.api.getDrivers({ limit: 100 }).subscribe({
       next: (res) => {
-        const driversData = (res?.data || res || []).map((d: any) => ({
+        const driversData = this.asArray(res).map((d: any) => ({
           id: d.id,
           name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
           unit: d.vehicleNumber || '',
@@ -356,7 +368,7 @@ export class DriversComponent implements OnInit {
   loadCarriers(): void {
     this.api.getContacts({ type: 'carrier', limit: 100 }).subscribe({
       next: (res) => {
-        const carriersData = (res?.data || res || []).map((c: any) => ({
+        const carriersData = this.asArray(res).map((c: any) => ({
           id: c.id,
           code: c.code || c.scacCode || `CAR-${c.id}`,
           name: c.companyName || c.name,
@@ -384,7 +396,7 @@ export class DriversComponent implements OnInit {
   loadEquipment(): void {
     this.api.getVehicles({ limit: 100 }).subscribe({
       next: (res) => {
-        const equipmentData = (res?.data || res || []).map((v: any) => ({
+        const equipmentData = this.asArray(res).map((v: any) => ({
           id: v.id,
           unit: v.name || v.vehicleNumber || `Unit-${v.id}`,
           type: v.vehicleType || 'Tractor',

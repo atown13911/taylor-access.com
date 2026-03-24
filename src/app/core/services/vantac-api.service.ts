@@ -11,6 +11,24 @@ export class VanTacApiService {
   private http = inject(HttpClient);
   private baseUrl = environment.apiUrl;
 
+  private normalizeListResponse(res: any): { data: any[]; meta?: any } {
+    const top = res ?? {};
+    const data = top?.data;
+    if (Array.isArray(data)) return { data, meta: top?.meta };
+    if (Array.isArray(top)) return { data: top };
+    if (Array.isArray(data?.items)) return { data: data.items, meta: top?.meta ?? data?.meta };
+    if (Array.isArray(data?.rows)) return { data: data.rows, meta: top?.meta ?? data?.meta };
+    if (Array.isArray(data?.drivers)) return { data: data.drivers, meta: top?.meta ?? data?.meta };
+    if (Array.isArray(data?.vehicles)) return { data: data.vehicles, meta: top?.meta ?? data?.meta };
+    if (Array.isArray(data?.contacts)) return { data: data.contacts, meta: top?.meta ?? data?.meta };
+    if (Array.isArray(top?.items)) return { data: top.items, meta: top?.meta };
+    if (Array.isArray(top?.rows)) return { data: top.rows, meta: top?.meta };
+    if (Array.isArray(top?.drivers)) return { data: top.drivers, meta: top?.meta };
+    if (Array.isArray(top?.vehicles)) return { data: top.vehicles, meta: top?.meta };
+    if (Array.isArray(top?.contacts)) return { data: top.contacts, meta: top?.meta };
+    return { data: [] };
+  }
+
   // Organizations
   getOrganizations(): Observable<any> {
     return this.http.get(`${this.baseUrl}${environment.api.organizations}`);
@@ -159,12 +177,16 @@ export class VanTacApiService {
 
   // Vehicles
   getVehicles(params?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/vehicles`, { params });
+    return this.http.get(`${this.baseUrl}/api/v1/vehicles`, { params }).pipe(
+      map((res: any) => this.normalizeListResponse(res))
+    );
   }
 
   // Drivers
   getDrivers(params?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/drivers`, { params });
+    return this.http.get(`${this.baseUrl}/api/v1/drivers`, { params }).pipe(
+      map((res: any) => this.normalizeListResponse(res))
+    );
   }
 
   getDriver(id: any): Observable<any> {
@@ -217,7 +239,9 @@ export class VanTacApiService {
 
   // Contacts/Carriers
   getContacts(params?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/contacts`, { params });
+    return this.http.get(`${this.baseUrl}/api/v1/contacts`, { params }).pipe(
+      map((res: any) => this.normalizeListResponse(res))
+    );
   }
 
   createCarrier(data: any): Observable<any> {
