@@ -35,16 +35,17 @@ public class MotivController : ControllerBase
     }
 
     [HttpGet("config")]
-    public IActionResult GetConfig()
+    public async Task<IActionResult> GetConfig()
     {
-        var apiKey = _config["MOTIV_API_KEY"] ?? Environment.GetEnvironmentVariable("MOTIV_API_KEY");
-        var baseUrl = _config["MOTIV_API_BASE_URL"] ?? Environment.GetEnvironmentVariable("MOTIV_API_BASE_URL");
+        var creds = await ResolveMotivCredentials();
 
         return Ok(new
         {
             headerName = "x-api-key",
-            hasApiKey = !string.IsNullOrWhiteSpace(apiKey),
-            hasBaseUrl = !string.IsNullOrWhiteSpace(baseUrl)
+            hasApiKey = !string.IsNullOrWhiteSpace(creds.ApiKey),
+            hasBaseUrl = !string.IsNullOrWhiteSpace(creds.BaseUrl),
+            organizationId = creds.OrganizationId,
+            usingOrgOverride = creds.UsingOrgOverride
         });
     }
 
@@ -794,13 +795,14 @@ public class MotivController : ControllerBase
         HttpMethod method,
         bool includeIncomingQuery)
     {
-        var apiKey = _config["MOTIV_API_KEY"] ?? Environment.GetEnvironmentVariable("MOTIV_API_KEY");
-        var baseUrl = _config["MOTIV_API_BASE_URL"] ?? Environment.GetEnvironmentVariable("MOTIV_API_BASE_URL");
+        var creds = await ResolveMotivCredentials();
+        var apiKey = creds.ApiKey;
+        var baseUrl = creds.BaseUrl;
 
         if (string.IsNullOrWhiteSpace(baseUrl))
-            return (false, 400, "MOTIV_API_BASE_URL is not configured.", default);
+            return (false, 400, $"MOTIV_API_BASE_URL is not configured (org={creds.OrganizationId}).", default);
         if (string.IsNullOrWhiteSpace(apiKey))
-            return (false, 400, "MOTIV_API_KEY is not configured.", default);
+            return (false, 400, $"MOTIV_API_KEY is not configured (org={creds.OrganizationId}).", default);
 
         var queryString = includeIncomingQuery ? Request.QueryString.Value : null;
         var requestUri = BuildUri(baseUrl, path, queryString);
@@ -847,6 +849,47 @@ public class MotivController : ControllerBase
         var normalizedPath = path.StartsWith('/') ? path : $"/{path}";
         var qs = string.IsNullOrWhiteSpace(queryString) ? "" : queryString;
         return $"{normalizedBase}{normalizedPath}{qs}";
+    }
+
+    private async Task<(string? ApiKey, string? BaseUrl, int OrganizationId, bool UsingOrgOverride)> ResolveMotivCredentials()
+    {
+        var orgId = await ResolveOrganizationId();
+
+        var orgApiKey = orgId > 0
+            ? FirstNonEmpty(
+                _config[$"MOTIV_API_KEY_ORG_{orgId}"],
+                Environment.GetEnvironmentVariable($"MOTIV_API_KEY_ORG_{orgId}"))
+            : null;
+
+        var orgBaseUrl = orgId > 0
+            ? FirstNonEmpty(
+                _config[$"MOTIV_API_BASE_URL_ORG_{orgId}"],
+                Environment.GetEnvironmentVariable($"MOTIV_API_BASE_URL_ORG_{orgId}"))
+            : null;
+
+        var globalApiKey = FirstNonEmpty(
+            _config["MOTIV_API_KEY"],
+            Environment.GetEnvironmentVariable("MOTIV_API_KEY"));
+
+        var globalBaseUrl = FirstNonEmpty(
+            _config["MOTIV_API_BASE_URL"],
+            Environment.GetEnvironmentVariable("MOTIV_API_BASE_URL"));
+
+        var apiKey = FirstNonEmpty(orgApiKey, globalApiKey);
+        var baseUrl = FirstNonEmpty(orgBaseUrl, globalBaseUrl);
+        var usingOrgOverride = !string.IsNullOrWhiteSpace(orgApiKey) || !string.IsNullOrWhiteSpace(orgBaseUrl);
+
+        return (apiKey, baseUrl, orgId, usingOrgOverride);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+        return null;
     }
 
     private async Task<int> ResolveOrganizationId()
