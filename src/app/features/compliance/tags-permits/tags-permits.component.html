@@ -6,7 +6,7 @@
     </div>
     <div class="tp-header-actions">
       @if (activeTab() !== 'fuel-cards') {
-        <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : 'Add Permit' }}</button>
+        <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : (activeTab() === 'trailer' ? 'Add Trailer Tag' : 'Add Permit') }}</button>
       }
       <button class="tp-btn" (click)="loadData()"><i class="bx bx-refresh"></i> Refresh</button>
     </div>
@@ -54,6 +54,9 @@
     </button>
     <button class="tp-tab" [class.active]="activeTab() === 'fuel-cards'" (click)="activeTab.set('fuel-cards')">
       <i class="bx bx-credit-card"></i> Fuel Cards
+    </button>
+    <button class="tp-tab" [class.active]="activeTab() === 'trailer'" (click)="activeTab.set('trailer')">
+      <i class="bx bx-package"></i> Trailer
     </button>
   </div>
 
@@ -236,6 +239,78 @@
     </div>
   }
 
+  <!-- Trailer Tab -->
+  @if (activeTab() === 'trailer' && !loading()) {
+    <div class="tp-table-wrap">
+      <table class="tp-table">
+        <thead>
+          <tr>
+            <th>Permit #</th>
+            <th>Type</th>
+            <th>State</th>
+            <th>Assigned Driver</th>
+            <th>Truck #</th>
+            <th>Issued</th>
+            <th>Expires</th>
+            <th>Cost</th>
+            <th>Document</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of filteredTrailerPermits(); track p.id) {
+            <tr>
+              <td class="tp-mono">{{ p.permitNumber }}</td>
+              <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
+              <td>{{ p.state || '—' }}</td>
+              <td>
+                @if (p.assignedDriverName) {
+                  <span class="tp-driver-link">{{ p.assignedDriverName }}</span>
+                } @else {
+                  <span class="tp-muted">Unassigned</span>
+                }
+              </td>
+              <td class="tp-mono">{{ p.assignedTruckNumber || '—' }}</td>
+              <td>{{ formatDate(p.issueDate) }}</td>
+              <td>
+                @if (p.expiryDate) {
+                  <span class="tp-expiry" [class]="getExpiryClass(p.expiryDate)">{{ formatDate(p.expiryDate) }}</span>
+                } @else {
+                  <span class="tp-muted">—</span>
+                }
+              </td>
+              <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
+              <td class="tp-doc-cell">
+                @if (p.hasFile || p.fileName) {
+                  <button class="tp-icon-btn" title="View document" (click)="viewPermitDoc(p)"><i class="bx bx-show"></i></button>
+                  <button class="tp-icon-btn" title="Download" (click)="downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
+                  <button class="tp-icon-btn danger" title="Remove document" (click)="deletePermitDoc(p)"><i class="bx bx-x"></i></button>
+                } @else {
+                  <button class="tp-icon-btn upload" title="Upload document" (click)="openUploadDoc(p)"
+                    [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id">
+                    @if (uploadingDoc() && uploadTarget()?.id === p.id) {
+                      <i class="bx bx-loader-alt bx-spin"></i>
+                    } @else {
+                      <i class="bx bx-upload"></i>
+                    }
+                  </button>
+                }
+              </td>
+              <td><span class="tp-status" [class]="getPermitStatus(p)">{{ getPermitStatus(p) }}</span></td>
+              <td class="tp-actions">
+                <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
+                <button class="tp-icon-btn danger" title="Delete" (click)="deletePermit(p)"><i class="bx bx-trash"></i></button>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="11" class="tp-empty">No trailer tags found. Click "Add Trailer Tag" to create one.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
   <!-- Fuel Cards Tab -->
   @if (activeTab() === 'fuel-cards' && !loading()) {
     <div class="tp-table-wrap">
@@ -309,6 +384,8 @@
                   <option value="irp">IRP Registration</option>
                   <option value="ifta">IFTA</option>
                   <option value="cab_card">Cab Card</option>
+                  <option value="trailer">Trailer Tag</option>
+                  <option value="trailer_registration">Trailer Registration</option>
                 </optgroup>
               </select>
             </div>

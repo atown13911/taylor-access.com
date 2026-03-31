@@ -17,7 +17,7 @@ export class TagsPermitsComponent implements OnInit {
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
 
-  activeTab = signal<'permits' | 'irp' | 'fuel-cards'>('permits');
+  activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
   drivers = signal<any[]>([]);
   motivFuelCards = signal<any[]>([]);
@@ -59,6 +59,23 @@ export class TagsPermitsComponent implements OnInit {
 
   filteredIrpPermits = computed(() => {
     let list = this.permits().filter(p => this.irpTypes.includes(p.permitType));
+    const search = this.searchTerm().toLowerCase();
+    const status = this.statusFilter();
+
+    if (search) {
+      list = list.filter(p =>
+        (p.permitNumber || '').toLowerCase().includes(search) ||
+        (p.assignedDriverName || '').toLowerCase().includes(search) ||
+        (p.assignedTruckNumber || '').toLowerCase().includes(search) ||
+        (p.state || '').toLowerCase().includes(search)
+      );
+    }
+    if (status) list = list.filter(p => this.getPermitStatus(p) === status);
+    return list;
+  });
+
+  filteredTrailerPermits = computed(() => {
+    let list = this.permits().filter(p => this.isTrailerPermitType(p?.permitType));
     const search = this.searchTerm().toLowerCase();
     const status = this.statusFilter();
 
@@ -158,7 +175,10 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   openAddModal() {
-    const defaultType = this.activeTab() === 'irp' ? 'irp' : 'overweight';
+    const tab = this.activeTab();
+    const defaultType = tab === 'irp'
+      ? 'irp'
+      : (tab === 'trailer' ? 'trailer' : 'overweight');
     this.permitForm = { permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
     this.editingPermit.set(null);
     this.showAddModal.set(true);
@@ -390,6 +410,16 @@ export class TagsPermitsComponent implements OnInit {
       if (nameKey) map.set(`name:${nameKey}`, assignment);
     }
     return map;
+  }
+
+  private isTrailerPermitType(rawType: any): boolean {
+    const type = String(rawType ?? '').trim().toLowerCase();
+    if (!type) return false;
+    return type === 'trailer'
+      || type === 'trailer_tag'
+      || type === 'trailer_registration'
+      || type === 'trailer-permit'
+      || type.includes('trailer');
   }
 
   async copyAssignedFuelCard(value: string): Promise<void> {
