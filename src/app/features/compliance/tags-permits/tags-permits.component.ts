@@ -141,6 +141,7 @@ export class TagsPermitsComponent implements OnInit {
   activePermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'active').length);
   expiringPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expiring').length);
   expiredPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expired').length);
+  trailerPermitsCount = computed(() => this.filteredTrailerPermits().length);
 
   ngOnInit() {
     this.loadData();
@@ -246,6 +247,32 @@ export class TagsPermitsComponent implements OnInit {
     if (days < 0) return 'expired';
     if (days <= 30) return 'expiring';
     return 'valid';
+  }
+
+  isTrailerTab(): boolean {
+    return this.activeTab() === 'trailer';
+  }
+
+  pageTitle(): string {
+    return this.isTrailerTab() ? 'Trailer Assignments' : 'Company Tags & Permits';
+  }
+
+  pageSubtitle(): string {
+    return this.isTrailerTab()
+      ? 'Add trailer tags and assign drivers to active trailers'
+      : 'Manage company-owned overweight/oversize permits and IRP registrations';
+  }
+
+  totalCardLabel(): string {
+    return this.isTrailerTab() ? 'Total Trailers' : 'Total Permits';
+  }
+
+  totalCardValue(): number {
+    return this.isTrailerTab() ? this.trailerPermitsCount() : this.permits().length;
+  }
+
+  searchPlaceholder(): string {
+    return this.isTrailerTab() ? 'Search trailer tags...' : 'Search permits...';
   }
 
   // ── Document handling ──────────────────────────────────────────────────

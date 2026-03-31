@@ -1,8 +1,8 @@
 <div class="tp-page">
   <div class="tp-header">
     <div>
-      <h1><i class="bx bx-badge-check"></i> Company Tags & Permits</h1>
-      <p class="tp-sub">Manage company-owned overweight/oversize permits and IRP registrations</p>
+      <h1><i class="bx bx-badge-check"></i> {{ pageTitle() }}</h1>
+      <p class="tp-sub">{{ pageSubtitle() }}</p>
     </div>
     <div class="tp-header-actions">
       @if (activeTab() !== 'fuel-cards') {
@@ -17,8 +17,8 @@
     <div class="tp-stat">
       <i class="bx bx-file"></i>
       <div class="tp-stat-info">
-        <span class="tp-stat-val">{{ permits().length }}</span>
-        <span class="tp-stat-lbl">Total Permits</span>
+        <span class="tp-stat-val">{{ totalCardValue() }}</span>
+        <span class="tp-stat-lbl">{{ totalCardLabel() }}</span>
       </div>
     </div>
     <div class="tp-stat">
@@ -64,7 +64,7 @@
   <div class="tp-filters">
     <div class="tp-search">
       <i class="bx bx-search"></i>
-      <input type="text" placeholder="Search permits..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+      <input type="text" [placeholder]="searchPlaceholder()" [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
     </div>
     @if (activeTab() !== 'fuel-cards') {
       <select class="tp-filter-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
@@ -101,11 +101,11 @@
       <table class="tp-table">
         <thead>
           <tr>
-            <th>Permit #</th>
+            <th>Trailer Tag #</th>
             <th>Type</th>
             <th>State</th>
             <th>Assigned Driver</th>
-            <th>Truck #</th>
+            <th>Trailer #</th>
             <th>Issued</th>
             <th>Expires</th>
             <th>Cost</th>
@@ -360,14 +360,14 @@
     <div class="tp-modal-overlay" (click)="closeModal()">
       <div class="tp-modal" (click)="$event.stopPropagation()">
         <div class="tp-modal-header">
-          <h2>{{ editingPermit() ? 'Edit' : 'Add' }} Permit</h2>
+          <h2>{{ editingPermit() ? 'Edit' : 'Add' }} {{ activeTab() === 'trailer' ? 'Trailer Tag' : 'Permit' }}</h2>
           <button class="tp-close" (click)="closeModal()">&times;</button>
         </div>
         <div class="tp-modal-body">
           <div class="tp-form-row">
             <div class="tp-form-group">
-              <label>Permit Number</label>
-              <input type="text" [(ngModel)]="permitForm.permitNumber" placeholder="e.g., OW-2026-12345">
+              <label>{{ activeTab() === 'trailer' ? 'Trailer Tag Number' : 'Permit Number' }}</label>
+              <input type="text" [(ngModel)]="permitForm.permitNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-2026-12345' : 'e.g., OW-2026-12345'">
             </div>
             <div class="tp-form-group">
               <label>Type</label>
@@ -421,8 +421,8 @@
               </select>
             </div>
             <div class="tp-form-group">
-              <label>Truck #</label>
-              <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., 1210">
+              <label>{{ activeTab() === 'trailer' ? 'Trailer #' : 'Truck #' }}</label>
+              <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-4102' : 'e.g., 1210'">
             </div>
           </div>
           <div class="tp-form-group">
