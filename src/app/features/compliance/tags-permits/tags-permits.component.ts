@@ -2,6 +2,7 @@ import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 
@@ -19,6 +20,7 @@ export class TagsPermitsComponent implements OnInit {
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
+  trailers = signal<any[]>([]);
   drivers = signal<any[]>([]);
   motivFuelCards = signal<any[]>([]);
   searchTerm = signal('');
@@ -75,18 +77,21 @@ export class TagsPermitsComponent implements OnInit {
   });
 
   filteredTrailerPermits = computed(() => {
-    let list = this.permits().filter(p => this.isTrailerPermitType(p?.permitType));
+    let list = this.trailers().map((t: any) => this.mapTrailerRow(t));
     const search = this.searchTerm().toLowerCase();
     const status = this.statusFilter();
+    const type = this.typeFilter();
 
     if (search) {
       list = list.filter(p =>
         (p.permitNumber || '').toLowerCase().includes(search) ||
+        (p.notes || '').toLowerCase().includes(search) ||
         (p.assignedDriverName || '').toLowerCase().includes(search) ||
         (p.assignedTruckNumber || '').toLowerCase().includes(search) ||
         (p.state || '').toLowerCase().includes(search)
       );
     }
+    if (type) list = list.filter(p => (p.permitType || '') === type);
     if (status) list = list.filter(p => this.getPermitStatus(p) === status);
     return list;
   });
@@ -157,6 +162,10 @@ export class TagsPermitsComponent implements OnInit {
       next: (res) => { this.drivers.set(res?.data || []); this.loading.set(false); },
       error: () => { this.drivers.set([]); this.loading.set(false); }
     });
+    this.http.get<any>(`${this.apiUrl}/api/v1/trailers?pageSize=1000`).subscribe({
+      next: (res) => this.trailers.set(Array.isArray(res?.data) ? res.data : []),
+      error: () => this.trailers.set([])
+    });
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/fuel-cards`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -204,6 +213,10 @@ export class TagsPermitsComponent implements OnInit {
 
   savePermit() {
     if (!this.permitForm.permitNumber.trim()) { this.toast.error('Permit number is required', 'Error'); return; }
+    if (this.activeTab() === 'trailer') {
+      void this.saveTrailer();
+      return;
+    }
     this.saving.set(true);
     const editing = this.editingPermit();
     const body = { ...this.permitForm };
@@ -229,6 +242,10 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   deletePermit(p: any) {
+    if (this.activeTab() === 'trailer') {
+      this.deleteTrailer(p);
+      return;
+    }
     if (!confirm(`Delete permit #${p.permitNumber}?`)) return;
     this.http.delete(`${this.apiUrl}/api/v1/company-permits/${p.id}`).subscribe({
       next: () => { this.loadData(); this.toast.champagne('Permit deleted', 'Deleted'); },
@@ -447,6 +464,102 @@ export class TagsPermitsComponent implements OnInit {
       || type === 'trailer_registration'
       || type === 'trailer-permit'
       || type.includes('trailer');
+  }
+
+  private mapTrailerRow(t: any): any {
+    const assignments = Array.isArray(t?.driverAssignments) ? t.driverAssignments : [];
+    const activeAssignment = assignments.find((a: any) => String(a?.status || '').toLowerCase() === 'active')
+      || assignments[0]
+      || null;
+    const assignedDriverId = activeAssignment?.driverId ?? t?.assignedDriverId ?? null;
+    const assignedDriverName =
+      activeAssignment?.driverName
+      || this.drivers().find((d: any) => `${d?.id}` === `${assignedDriverId}`)?.name
+      || '';
+
+    return {
+      id: t?.id,
+      permitNumber: t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || '',
+      permitType: t?.type || 'trailer',
+      state: t?.state || '',
+      issueDate: t?.issueDate || t?.createdAt || null,
+      expiryDate: t?.expiryDate || null,
+      cost: t?.cost ?? null,
+      assignedDriverId,
+      assignedDriverName,
+      assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
+      status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
+      notes: t?.notes || '',
+      hasFile: false,
+      fileName: null
+    };
+  }
+
+  private async saveTrailer(): Promise<void> {
+    this.saving.set(true);
+    const editing = this.editingPermit();
+    const trailerBody: any = {
+      number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
+      trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
+      tagNumber: this.permitForm.permitNumber,
+      permitNumber: this.permitForm.permitNumber,
+      type: this.permitForm.permitType || 'trailer',
+      state: this.permitForm.state || null,
+      issueDate: this.permitForm.issueDate ? new Date(this.permitForm.issueDate).toISOString() : null,
+      expiryDate: this.permitForm.expiryDate ? new Date(this.permitForm.expiryDate).toISOString() : null,
+      cost: this.permitForm.cost ?? null,
+      status: 'active',
+      notes: this.permitForm.notes || null
+    };
+
+    try {
+      let trailerId = editing?.id;
+      if (editing?.id) {
+        await firstValueFrom(this.http.put<any>(`${this.apiUrl}/api/v1/trailers/${editing.id}`, trailerBody));
+      } else {
+        const created: any = await firstValueFrom(this.http.post<any>(`${this.apiUrl}/api/v1/trailers`, trailerBody));
+        trailerId = created?.data?.id ?? created?.id ?? trailerId;
+      }
+
+      if (trailerId && this.permitForm.assignedDriverId) {
+        await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId);
+      }
+
+      this.saving.set(false);
+      this.closeModal();
+      this.loadData();
+      this.toast.champagne(editing ? 'Trailer assignment updated' : 'Trailer assignment created', 'Success');
+    } catch (err: any) {
+      this.saving.set(false);
+      this.toast.error(err?.error?.error || 'Failed to save trailer assignment', 'Error');
+    }
+  }
+
+  private async assignDriverToTrailer(trailerId: any, driverId: any): Promise<void> {
+    const id = `${trailerId}`;
+    const payloads = [
+      () => firstValueFrom(this.http.post(`${this.apiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId })),
+      () => firstValueFrom(this.http.post(`${this.apiUrl}/api/v1/trailers/${id}/assignments`, { driverId, status: 'active' })),
+      () => firstValueFrom(this.http.patch(`${this.apiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId })),
+      () => firstValueFrom(this.http.put(`${this.apiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId }))
+    ];
+
+    for (const request of payloads) {
+      try {
+        await request();
+        return;
+      } catch {
+        // Try next assignment strategy.
+      }
+    }
+  }
+
+  private deleteTrailer(row: any): void {
+    if (!confirm(`Delete trailer assignment #${row?.permitNumber || row?.assignedTruckNumber || row?.id}?`)) return;
+    this.http.delete(`${this.apiUrl}/api/v1/trailers/${row.id}`).subscribe({
+      next: () => { this.loadData(); this.toast.champagne('Trailer assignment deleted', 'Deleted'); },
+      error: () => this.toast.error('Failed to delete trailer assignment', 'Error')
+    });
   }
 
   async copyAssignedFuelCard(value: string): Promise<void> {
