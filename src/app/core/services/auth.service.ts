@@ -108,10 +108,25 @@ export class AuthService {
     if (!token) return [];
     try {
       const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      const perms = typeof payload.permissions === 'string'
-        ? JSON.parse(payload.permissions)
-        : payload.permissions;
-      return Array.isArray(perms) ? perms : [];
+      const out = new Set<string>();
+      const collect = (raw: any) => {
+        if (!raw) return;
+        try {
+          const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (Array.isArray(value)) {
+            for (const p of value) {
+              const token = String(p ?? '').trim();
+              if (token) out.add(token);
+            }
+          }
+        } catch {
+          // Ignore malformed claim and continue with other claim sources.
+        }
+      };
+
+      collect(payload?.permissions);
+      collect(payload?.app_permissions);
+      return Array.from(out);
     } catch {
       return [];
     }

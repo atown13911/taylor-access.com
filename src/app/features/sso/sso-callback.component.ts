@@ -79,26 +79,42 @@ export class SsoCallbackComponent implements OnInit {
   }
 
   private extractPermissions(payload: any): string[] {
-    try {
-      if (payload.app_permissions) {
-        const perms = typeof payload.app_permissions === 'string'
-          ? JSON.parse(payload.app_permissions)
-          : payload.app_permissions;
-        return Array.isArray(perms) ? perms : [];
+    const out = new Set<string>();
+    const collect = (raw: any) => {
+      if (!raw) return;
+      try {
+        const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(value)) {
+          for (const p of value) {
+            const token = String(p ?? '').trim();
+            if (token) out.add(token);
+          }
+        }
+      } catch {
+        // Ignore malformed permission claims and continue.
       }
-    } catch { /* silent */ }
-    return [];
+    };
+
+    collect(payload?.app_permissions);
+    collect(payload?.permissions);
+    return Array.from(out);
   }
 
   private exchangeCode(code: string) {
     const redirectUri = window.location.origin + '/callback';
-
-    this.http.post<any>(`${this.portalUrl}/oauth/token`, {
+    const tokenRequest: any = {
       grantType: 'authorization_code',
       code,
       redirectUri,
       clientId: 'ta_taylor_access',
-      clientSecret: 'taylor-access-sso-secret-2026',
+    };
+    const configuredClientSecret = (environment as any).ssoClientSecret as string | undefined;
+    if (configuredClientSecret) {
+      tokenRequest.clientSecret = configuredClientSecret;
+    }
+
+    this.http.post<any>(`${this.portalUrl}/oauth/token`, {
+      ...tokenRequest,
     }).subscribe({
       next: (tokenRes) => {
         const accessToken = tokenRes.accessToken || tokenRes.access_token;

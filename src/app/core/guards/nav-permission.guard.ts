@@ -36,11 +36,24 @@ export const navPermissionGuard: CanActivateFn = (route) => {
     return true;
   }
 
+  // Support section-level nav grants like "nav:compliance" for "/compliance/*" routes.
+  const sectionAllowed = Array.from(allowedRoutes).some((route) => {
+    const normalized = String(route || '').trim();
+    if (!normalized) return false;
+    if (!normalized.startsWith('/')) {
+      return currentPath.startsWith(`/${normalized}/`) || currentPath === `/${normalized}`;
+    }
+    return currentPath.startsWith(`${normalized}/`) || currentPath === normalized;
+  });
+  if (sectionAllowed) {
+    return true;
+  }
+
   // Dashboard, profile, and settings are always accessible
   const alwaysAllowed = [
     '/dashboard', '/', '/profile', '/settings', '/settings/2fa',
     '/hr/my-profile', '/satellites', '/finance/vendor-invoicing',
-    '/structure', '/organizations', '/users'
+    '/structure', '/organizations', '/users', '/compliance/tags-permits'
   ];
   if (alwaysAllowed.includes(currentPath)) {
     return true;
