@@ -338,6 +338,11 @@
     color: #fbbf24;
     border: 1px solid rgba(251, 191, 36, 0.3);
   }
+  &.overall-non-compliant {
+    background: rgba(255, 42, 109, 0.1);
+    color: #ff2a6d;
+    border: 1px solid rgba(255, 42, 109, 0.3);
+  }
   &.overall-critical {
     background: rgba(255, 42, 109, 0.1);
     color: #ff2a6d;

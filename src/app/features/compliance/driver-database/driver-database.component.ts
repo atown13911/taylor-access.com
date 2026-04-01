@@ -716,19 +716,21 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getOverallStatus(driver: any): string {
-    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations', 'i9', 'w9', 'directDeposit', 'deduction'];
-    let hasExpired = false;
+    const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'irp', 'safety', 'violations', 'i9', 'w9', 'directDeposit', 'deduction'];
+    const redExceptionItems = new Set(['training', 'permits', 'irp']);
+    let hasBlockingRed = false;
     let hasExpiring = false;
     let compliantCount = 0;
 
     for (const item of items) {
       const status = this.getItemStatus(driver, item);
-      if (status === 'expired') hasExpired = true;
+      const isRed = status === 'expired' || status === 'none';
+      if (isRed && !redExceptionItems.has(item)) hasBlockingRed = true;
       if (status === 'expiring') hasExpiring = true;
       if (status === 'compliant') compliantCount++;
     }
 
-    if (hasExpired) return 'critical';
+    if (hasBlockingRed) return 'non-compliant';
     if (hasExpiring) return 'warning';
     if (compliantCount >= 5) return 'good';
     return 'pending';
