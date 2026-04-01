@@ -741,7 +741,7 @@ export class DriverDatabaseComponent implements OnInit {
     if (this.getOverallStatus(driver) === 'non-compliant') {
       return 'inactive';
     }
-    return driver?.status || 'active';
+    return this.isActiveStatus(driver?.status) ? 'active' : 'inactive';
   }
 
   editCompDoc(item: any): void {
