@@ -529,7 +529,9 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   canArchiveDriver(driver: any): boolean {
-    return !this.isArchivedStatus(driver?.status);
+    return this.activeStatusTab() === 'inactive' &&
+      this.isInactiveStatus(driver?.status) &&
+      !this.isArchivedStatus(driver?.status);
   }
 
   private normalizeStatus(status: any): string {
