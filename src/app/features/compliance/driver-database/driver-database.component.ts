@@ -55,13 +55,14 @@ export class DriverDatabaseComponent implements OnInit {
   searchTerm = '';
   statusFilter = 'all';
   complianceFilter = 'all';
-  activeStatusTab = signal<'active' | 'inactive' | 'archived'>('active');
+  activeStatusTab = signal<'current' | 'onboarding' | 'closeout' | 'archived'>('current');
 
   filteredDrivers = computed(() => {
     let list = this.drivers();
     const tab = this.activeStatusTab();
-    if (tab === 'active') list = list.filter((d: any) => this.isActiveStatus(d.status));
-    else if (tab === 'inactive') list = list.filter((d: any) => this.isInactiveStatus(d.status));
+    if (tab === 'current') list = list.filter((d: any) => this.isCurrentStatus(d.status));
+    else if (tab === 'onboarding') list = list.filter((d: any) => this.isOnboardingStatus(d.status));
+    else if (tab === 'closeout') list = list.filter((d: any) => this.isCloseoutStatus(d.status));
     else if (tab === 'archived') list = list.filter((d: any) => this.isArchivedStatus(d.status));
 
     if (this.searchTerm) {
@@ -105,8 +106,9 @@ export class DriverDatabaseComponent implements OnInit {
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
-      active: all.filter((d: any) => this.isActiveStatus(d.status)).length,
-      inactive: all.filter((d: any) => this.isInactiveStatus(d.status)).length,
+      current: all.filter((d: any) => this.isCurrentStatus(d.status)).length,
+      onboarding: all.filter((d: any) => this.isOnboardingStatus(d.status)).length,
+      closeout: all.filter((d: any) => this.isCloseoutStatus(d.status)).length,
       archived: all.filter((d: any) => this.isArchivedStatus(d.status)).length
     };
   });
@@ -529,8 +531,8 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   canArchiveDriver(driver: any): boolean {
-    return this.activeStatusTab() === 'inactive' &&
-      this.isInactiveStatus(driver?.status) &&
+    return this.activeStatusTab() === 'closeout' &&
+      this.isCloseoutStatus(driver?.status) &&
       !this.isArchivedStatus(driver?.status);
   }
 
@@ -547,7 +549,22 @@ export class DriverDatabaseComponent implements OnInit {
     return this.normalizeStatus(status) === 'archived';
   }
 
-  private isInactiveStatus(status: any): boolean {
+  private isOnboardingStatus(status: any): boolean {
+    const normalized = this.normalizeStatus(status);
+    return normalized === 'onboarding' ||
+      normalized === 'pending' ||
+      normalized === 'invited' ||
+      normalized === 'application' ||
+      normalized === 'applicant' ||
+      normalized === 'orientation' ||
+      normalized === 'recruiting' ||
+      normalized === 'pre-hire' ||
+      normalized === 'prehire' ||
+      normalized === 'background-check' ||
+      normalized === 'training';
+  }
+
+  private isCloseoutStatus(status: any): boolean {
     const normalized = this.normalizeStatus(status);
     return normalized === 'inactive' ||
       normalized === 'on-leave' ||
@@ -559,7 +576,7 @@ export class DriverDatabaseComponent implements OnInit {
       normalized === 'disabled';
   }
 
-  private isActiveStatus(status: any): boolean {
+  private isCurrentStatus(status: any): boolean {
     const normalized = this.normalizeStatus(status);
     return normalized === 'active' ||
       normalized === 'available' ||
@@ -567,6 +584,14 @@ export class DriverDatabaseComponent implements OnInit {
       normalized === 'dispatched' ||
       normalized === 'en-route' ||
       normalized === 'at-location';
+  }
+
+  private isActiveStatus(status: any): boolean {
+    return this.isCurrentStatus(status);
+  }
+
+  private isInactiveStatus(status: any): boolean {
+    return this.isCloseoutStatus(status);
   }
 
   getComplianceClass(driver: any, item: string): string {

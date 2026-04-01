@@ -11,11 +11,14 @@
 
   <!-- Status Tabs -->
   <div class="status-tabs">
-    <button class="status-tab" [class.active]="activeStatusTab() === 'active'" (click)="activeStatusTab.set('active')">
-      <i class='bx bx-check-circle'></i> Active <span class="tab-count">{{ tabCounts().active }}</span>
+    <button class="status-tab" [class.active]="activeStatusTab() === 'current'" (click)="activeStatusTab.set('current')">
+      <i class='bx bx-check-circle'></i> Current <span class="tab-count">{{ tabCounts().current }}</span>
     </button>
-    <button class="status-tab" [class.active]="activeStatusTab() === 'inactive'" (click)="activeStatusTab.set('inactive')">
-      <i class='bx bx-pause-circle'></i> Inactive <span class="tab-count">{{ tabCounts().inactive }}</span>
+    <button class="status-tab" [class.active]="activeStatusTab() === 'onboarding'" (click)="activeStatusTab.set('onboarding')">
+      <i class='bx bx-user-plus'></i> Onboarding <span class="tab-count">{{ tabCounts().onboarding }}</span>
+    </button>
+    <button class="status-tab" [class.active]="activeStatusTab() === 'closeout'" (click)="activeStatusTab.set('closeout')">
+      <i class='bx bx-user-x'></i> Closeout <span class="tab-count">{{ tabCounts().closeout }}</span>
     </button>
     <button class="status-tab" [class.active]="activeStatusTab() === 'archived'" (click)="activeStatusTab.set('archived')">
       <i class='bx bx-archive'></i> Archived <span class="tab-count">{{ tabCounts().archived }}</span>
