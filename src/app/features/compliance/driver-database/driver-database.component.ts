@@ -60,9 +60,9 @@ export class DriverDatabaseComponent implements OnInit {
   filteredDrivers = computed(() => {
     let list = this.drivers();
     const tab = this.activeStatusTab();
-    if (tab === 'active') list = list.filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched');
-    else if (tab === 'inactive') list = list.filter((d: any) => d.status === 'inactive' || d.status === 'on-leave' || d.status === 'suspended');
-    else if (tab === 'archived') list = list.filter((d: any) => d.status === 'archived' || d.status === 'terminated');
+    if (tab === 'active') list = list.filter((d: any) => this.isActiveStatus(d.status));
+    else if (tab === 'inactive') list = list.filter((d: any) => this.isInactiveStatus(d.status));
+    else if (tab === 'archived') list = list.filter((d: any) => this.isArchivedStatus(d.status));
 
     if (this.searchTerm) {
       const s = this.searchTerm.toLowerCase();
@@ -77,7 +77,7 @@ export class DriverDatabaseComponent implements OnInit {
   });
 
   complianceStats = computed(() => {
-    const drivers = this.drivers().filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched');
+    const drivers = this.drivers().filter((d: any) => this.isActiveStatus(d.status));
     const docs = this.allDocs();
     const requiredItems = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
     const totalSlots = drivers.length * requiredItems.length;
@@ -105,9 +105,9 @@ export class DriverDatabaseComponent implements OnInit {
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
-      active: all.filter((d: any) => d.status === 'active' || d.status === 'available' || d.status === 'dispatched').length,
-      inactive: all.filter((d: any) => d.status === 'inactive' || d.status === 'on-leave' || d.status === 'suspended').length,
-      archived: all.filter((d: any) => d.status === 'archived' || d.status === 'terminated').length
+      active: all.filter((d: any) => this.isActiveStatus(d.status)).length,
+      inactive: all.filter((d: any) => this.isInactiveStatus(d.status)).length,
+      archived: all.filter((d: any) => this.isArchivedStatus(d.status)).length
     };
   });
   
@@ -165,7 +165,8 @@ export class DriverDatabaseComponent implements OnInit {
     this.loading.set(true);
     try {
       const response: any = await this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=1000`).toPromise();
-      this.drivers.set(response?.data || []);
+      const rawDrivers = response?.data || [];
+      this.drivers.set(this.deduplicateDrivers(rawDrivers));
     } catch (err) {
       console.error('Failed to load drivers:', err);
       this.drivers.set([]);
@@ -512,12 +513,52 @@ export class DriverDatabaseComponent implements OnInit {
     });
   }
 
+  canSuspendDriver(driver: any): boolean {
+    return this.isActiveStatus(driver?.status);
+  }
+
+  private normalizeStatus(status: any): string {
+    const normalized = String(status ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/_/g, '-');
+    return normalized || 'active';
+  }
+
+  private isArchivedStatus(status: any): boolean {
+    return this.normalizeStatus(status) === 'archived';
+  }
+
+  private isInactiveStatus(status: any): boolean {
+    const normalized = this.normalizeStatus(status);
+    return normalized === 'inactive' ||
+      normalized === 'on-leave' ||
+      normalized === 'off-duty' ||
+      normalized === 'sleeper' ||
+      normalized === 'suspended' ||
+      normalized === 'terminated' ||
+      normalized === 'deactivated' ||
+      normalized === 'disabled';
+  }
+
+  private isActiveStatus(status: any): boolean {
+    const normalized = this.normalizeStatus(status);
+    return normalized === 'active' ||
+      normalized === 'available' ||
+      normalized === 'online' ||
+      normalized === 'dispatched' ||
+      normalized === 'en-route' ||
+      normalized === 'at-location';
+  }
+
   getComplianceClass(driver: any, item: string): string {
     const status = this.getItemStatus(driver, item);
     if (status === 'compliant') return 'dot dot-green';
     if (status === 'expiring')  return 'dot dot-yellow';
     if (status === 'expired')   return 'dot dot-red';
-    return 'dot dot-gray';
+    // Missing/not-on-file documents should be visually critical in this grid.
+    return 'dot dot-red';
   }
 
   async attachDocsToDrivers(): Promise<void> {
@@ -795,5 +836,65 @@ export class DriverDatabaseComponent implements OnInit {
         error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
       });
     }
+  }
+
+  private deduplicateDrivers(drivers: any[]): any[] {
+    const identityMap = new Map<string, any>();
+    const unique: any[] = [];
+
+    for (const driver of drivers || []) {
+      const keys = this.buildDriverIdentityKeys(driver);
+      if (keys.length === 0) {
+        unique.push(driver);
+        continue;
+      }
+
+      let winner = keys.map(k => identityMap.get(k)).find(Boolean) || null;
+      if (!winner) {
+        winner = driver;
+        unique.push(winner);
+      } else {
+        // Keep the most recently updated record for duplicate identities.
+        const currentTs = this.getRecordTimestamp(driver);
+        const winnerTs = this.getRecordTimestamp(winner);
+        if (currentTs > winnerTs) {
+          const idx = unique.indexOf(winner);
+          if (idx >= 0) unique[idx] = driver;
+          winner = driver;
+        }
+      }
+
+      for (const key of keys) identityMap.set(key, winner);
+    }
+
+    return unique;
+  }
+
+  private buildDriverIdentityKeys(driver: any): string[] {
+    const keys: string[] = [];
+    const email = String(driver?.email ?? '').trim().toLowerCase();
+    const phoneDigits = String(driver?.phone ?? '').replace(/\D+/g, '');
+    const name = String(driver?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const phoneLast7 = phoneDigits.length >= 7 ? phoneDigits.slice(-7) : '';
+
+    if (email) keys.push(`email:${email}`);
+    if (phoneDigits) keys.push(`phone:${phoneDigits}`);
+    if (phoneLast7) keys.push(`phone-last7:${phoneLast7}`);
+    if (name && phoneDigits) keys.push(`name-phone:${name}|${phoneDigits}`);
+    if (name && phoneLast7) keys.push(`name-phone-last7:${name}|${phoneLast7}`);
+    if (name && email) keys.push(`name-email:${name}|${email}`);
+    // Include name-only as a final fallback to collapse obvious visual duplicates.
+    if (name) keys.push(`name-only:${name}`);
+
+    const id = String(driver?.id ?? '').trim();
+    if (id) keys.push(`id:${id}`);
+
+    return keys;
+  }
+
+  private getRecordTimestamp(driver: any): number {
+    const updated = driver?.updatedAt ? new Date(driver.updatedAt).getTime() : 0;
+    const created = driver?.createdAt ? new Date(driver.createdAt).getTime() : 0;
+    return Math.max(updated || 0, created || 0);
   }
 }

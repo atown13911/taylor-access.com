@@ -136,7 +136,7 @@
                 <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallStatus(driver) }}</span>
               </td>
               <td class="col-actions" (click)="$event.stopPropagation()">
-                @if (driver.status === 'active' || driver.status === 'available') {
+                @if (canSuspendDriver(driver)) {
                   <button class="action-btn suspend" title="Suspend Driver" (click)="suspendDriver(driver)">
                     <i class='bx bx-pause-circle'></i>
                   </button>
@@ -293,6 +293,6 @@
     <span class="legend-item"><span class="dot dot-green"></span> Compliant</span>
     <span class="legend-item"><span class="dot dot-yellow"></span> Expiring Soon</span>
     <span class="legend-item"><span class="dot dot-red"></span> Non-Compliant</span>
-    <span class="legend-item"><span class="dot dot-gray"></span> Not on File</span>
+    <span class="legend-item"><span class="dot dot-red"></span> Not on File</span>
   </div>
 </div>
