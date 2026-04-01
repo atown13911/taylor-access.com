@@ -6,7 +6,7 @@
     </div>
     <div class="tp-header-actions">
       @if (activeTab() !== 'fuel-cards') {
-        <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : (activeTab() === 'trailer' ? 'Add Trailer Tag' : 'Add Permit') }}</button>
+        <button class="tp-btn primary" (click)="openAddModal()"><i class="bx bx-plus"></i> {{ activeTab() === 'irp' ? 'Add IRP Tag' : (activeTab() === 'trailer' ? 'Add Trailer' : 'Add Permit') }}</button>
       }
       <button class="tp-btn" (click)="loadData()"><i class="bx bx-refresh"></i> Refresh</button>
     </div>
@@ -304,7 +304,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="11" class="tp-empty">No trailer tags found. Click "Add Trailer Tag" to create one.</td></tr>
+            <tr><td colspan="11" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
           }
         </tbody>
       </table>
@@ -360,7 +360,7 @@
     <div class="tp-modal-overlay" (click)="closeModal()">
       <div class="tp-modal" (click)="$event.stopPropagation()">
         <div class="tp-modal-header">
-          <h2>{{ editingPermit() ? 'Edit' : 'Add' }} {{ activeTab() === 'trailer' ? 'Trailer Tag' : 'Permit' }}</h2>
+          <h2>{{ editingPermit() ? 'Edit' : 'Add' }} {{ activeTab() === 'trailer' ? 'Trailer' : 'Permit' }}</h2>
           <button class="tp-close" (click)="closeModal()">&times;</button>
         </div>
         <div class="tp-modal-body">
