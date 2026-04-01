@@ -365,6 +365,17 @@
         </div>
         <div class="tp-modal-body">
           <div class="tp-form-row">
+            @if (activeTab() === 'trailer') {
+              <div class="tp-form-group">
+                <label>Trailer</label>
+                <select [(ngModel)]="permitForm.trailerId" (ngModelChange)="onTrailerSelectionChange($event)">
+                  <option [ngValue]="null">Select trailer (optional)</option>
+                  @for (t of trailerOptions(); track t.id) {
+                    <option [ngValue]="t.id">{{ (t.number || ('Trailer #' + t.id)) + (t.tag ? (' - ' + t.tag) : '') }}</option>
+                  }
+                </select>
+              </div>
+            }
             <div class="tp-form-group">
               <label>{{ activeTab() === 'trailer' ? 'Trailer Tag Number' : 'Permit Number' }}</label>
               <input type="text" [(ngModel)]="permitForm.permitNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-2026-12345' : 'e.g., OW-2026-12345'">

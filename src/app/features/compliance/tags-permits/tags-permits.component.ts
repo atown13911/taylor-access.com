@@ -36,7 +36,7 @@ export class TagsPermitsComponent implements OnInit {
   uploadTarget = signal<any>(null);   // permit being uploaded to
   permitDocFile: File | null = null;
 
-  permitForm: any = { permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
 
   filteredPermits = computed(() => {
     let list = this.permits().filter(p => !this.irpTypes.includes(p.permitType));
@@ -147,6 +147,17 @@ export class TagsPermitsComponent implements OnInit {
   expiringPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expiring').length);
   expiredPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expired').length);
   trailerPermitsCount = computed(() => this.filteredTrailerPermits().length);
+  trailerOptions = computed(() => {
+    return this.trailers()
+      .map((t: any) => ({
+        id: t?.id,
+        number: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
+        tag: t?.tagNumber || t?.permitNumber || '',
+        type: t?.type || 'trailer'
+      }))
+      .filter((t: any) => t.id != null)
+      .sort((a: any, b: any) => String(a.number || a.tag || a.id).localeCompare(String(b.number || b.tag || b.id)));
+  });
 
   ngOnInit() {
     this.loadData();
@@ -189,7 +200,7 @@ export class TagsPermitsComponent implements OnInit {
     const defaultType = tab === 'irp'
       ? 'irp'
       : (tab === 'trailer' ? 'trailer' : 'overweight');
-    this.permitForm = { permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
     this.editingPermit.set(null);
     this.showAddModal.set(true);
   }
@@ -197,6 +208,7 @@ export class TagsPermitsComponent implements OnInit {
   editPermit(p: any) {
     this.editingPermit.set(p);
     this.permitForm = {
+      trailerId: p.id ?? null,
       permitNumber: p.permitNumber, permitType: p.permitType, state: p.state || '',
       issueDate: p.issueDate ? new Date(p.issueDate).toISOString().split('T')[0] : '',
       expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split('T')[0] : '',
@@ -208,7 +220,30 @@ export class TagsPermitsComponent implements OnInit {
   closeModal() {
     this.showAddModal.set(false);
     this.editingPermit.set(null);
-    this.permitForm = { permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+  }
+
+  onTrailerSelectionChange(trailerId: any): void {
+    if (this.activeTab() !== 'trailer') return;
+    const id = String(trailerId ?? '').trim();
+    if (!id) return;
+    const trailer = this.trailers().find((t: any) => `${t?.id}` === id);
+    if (!trailer) return;
+
+    const row = this.mapTrailerRow(trailer);
+    this.permitForm = {
+      ...this.permitForm,
+      trailerId: trailer?.id ?? null,
+      permitNumber: row.permitNumber || this.permitForm.permitNumber,
+      permitType: row.permitType || this.permitForm.permitType || 'trailer',
+      state: row.state || this.permitForm.state || '',
+      issueDate: row.issueDate ? new Date(row.issueDate).toISOString().split('T')[0] : (this.permitForm.issueDate || ''),
+      expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().split('T')[0] : (this.permitForm.expiryDate || ''),
+      cost: row.cost ?? this.permitForm.cost ?? null,
+      assignedDriverId: row.assignedDriverId ?? this.permitForm.assignedDriverId ?? null,
+      assignedTruckNumber: row.assignedTruckNumber || this.permitForm.assignedTruckNumber || '',
+      notes: row.notes || this.permitForm.notes || ''
+    };
   }
 
   savePermit() {
@@ -498,6 +533,7 @@ export class TagsPermitsComponent implements OnInit {
   private async saveTrailer(): Promise<void> {
     this.saving.set(true);
     const editing = this.editingPermit();
+    const selectedTrailerId = this.permitForm.trailerId ? `${this.permitForm.trailerId}` : '';
     const trailerBody: any = {
       number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
       trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
@@ -513,9 +549,9 @@ export class TagsPermitsComponent implements OnInit {
     };
 
     try {
-      let trailerId = editing?.id;
-      if (editing?.id) {
-        await firstValueFrom(this.http.put<any>(`${this.apiUrl}/api/v1/trailers/${editing.id}`, trailerBody));
+      let trailerId = selectedTrailerId || editing?.id;
+      if (trailerId) {
+        await firstValueFrom(this.http.put<any>(`${this.apiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
       } else {
         const created: any = await firstValueFrom(this.http.post<any>(`${this.apiUrl}/api/v1/trailers`, trailerBody));
         trailerId = created?.data?.id ?? created?.id ?? trailerId;
