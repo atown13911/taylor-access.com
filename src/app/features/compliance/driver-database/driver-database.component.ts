@@ -513,8 +513,19 @@ export class DriverDatabaseComponent implements OnInit {
     });
   }
 
+  archiveDriver(driver: any) {
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { ...driver, status: 'archived' }).subscribe({
+      next: () => { driver.status = 'archived'; this.drivers.set([...this.drivers()]); },
+      error: () => {}
+    });
+  }
+
   canSuspendDriver(driver: any): boolean {
     return this.isActiveStatus(driver?.status);
+  }
+
+  canArchiveDriver(driver: any): boolean {
+    return !this.isArchivedStatus(driver?.status);
   }
 
   private normalizeStatus(status: any): string {

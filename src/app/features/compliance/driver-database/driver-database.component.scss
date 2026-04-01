@@ -389,7 +389,7 @@
 }
 
 // Actions column
-.col-actions { width: 60px; }
+.col-actions { width: 96px; }
 
 .action-btn {
   width: 30px;
@@ -412,6 +412,11 @@
     background: rgba(0, 255, 136, 0.1);
     color: #00ff88;
     &:hover { background: rgba(0, 255, 136, 0.2); box-shadow: 0 0 10px rgba(0, 255, 136, 0.3); }
+  }
+  &.archive {
+    background: rgba(100, 149, 237, 0.12);
+    color: #8bb8ff;
+    &:hover { background: rgba(100, 149, 237, 0.22); box-shadow: 0 0 10px rgba(100, 149, 237, 0.3); }
   }
 }
 

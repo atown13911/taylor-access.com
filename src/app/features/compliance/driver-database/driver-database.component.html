@@ -138,6 +138,11 @@
                     <i class='bx bx-play-circle'></i>
                   </button>
                 }
+                @if (canArchiveDriver(driver)) {
+                  <button class="action-btn archive" title="Archive Driver" (click)="archiveDriver(driver)">
+                    <i class='bx bx-archive'></i>
+                  </button>
+                }
               </td>
             </tr>
           }
