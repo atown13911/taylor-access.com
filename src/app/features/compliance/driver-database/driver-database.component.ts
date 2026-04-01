@@ -751,6 +751,12 @@ export class DriverDatabaseComponent implements OnInit {
     return 'pending';
   }
 
+  getOverallLabel(driver: any): string {
+    const status = this.getOverallStatus(driver);
+    if (status === 'non-compliant') return 'non';
+    return status;
+  }
+
   getDisplayStatus(driver: any): string {
     // Compliance override for matrix status badge display.
     if (this.getOverallStatus(driver) === 'non-compliant') {
