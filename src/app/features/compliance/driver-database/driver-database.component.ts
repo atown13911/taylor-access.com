@@ -138,26 +138,30 @@ export class DriverDatabaseComponent implements OnInit {
   docsReady = signal(false);
 
   ngOnInit() {
-    // Load both in parallel, then attach and refresh
+    // Load both in parallel, then attach docs to rows.
+    this.refreshComplianceData();
+    // Check for driverId query param to auto-open profile
+    this.route.queryParams.subscribe(params => {
+      const driverId = params['driverId'];
+      if (driverId) {
+        const driver = this.drivers().find((d: any) => d.id?.toString() === driverId.toString());
+        if (driver) {
+          this.viewDriverDetails(driver);
+        } else {
+          this.http.get(`${environment.apiUrl}/api/v1/drivers/${driverId}`).subscribe({
+            next: (res: any) => { const d = res?.data || res; if (d) this.viewDriverDetails(d); }
+          });
+        }
+      }
+    });
+  }
+
+  refreshComplianceData(): void {
     Promise.all([
       this.loadDrivers(),
       this.loadAllDocsAsync()
     ]).then(() => {
       this.attachDocsToDrivers();
-      // Check for driverId query param to auto-open profile
-      this.route.queryParams.subscribe(params => {
-        const driverId = params['driverId'];
-        if (driverId) {
-          const driver = this.drivers().find((d: any) => d.id?.toString() === driverId.toString());
-          if (driver) {
-            this.viewDriverDetails(driver);
-          } else {
-            this.http.get(`${environment.apiUrl}/api/v1/drivers/${driverId}`).subscribe({
-              next: (res: any) => { const d = res?.data || res; if (d) this.viewDriverDetails(d); }
-            });
-          }
-        }
-      });
     });
   }
   
