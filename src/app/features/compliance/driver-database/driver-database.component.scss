@@ -389,7 +389,14 @@
 }
 
 // Actions column
-.col-actions { width: 96px; }
+.col-actions {
+  width: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
 
 .action-btn {
   width: 30px;
@@ -397,7 +404,7 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
