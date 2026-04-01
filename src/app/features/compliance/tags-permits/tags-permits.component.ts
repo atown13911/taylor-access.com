@@ -147,20 +147,34 @@ export class TagsPermitsComponent implements OnInit {
   expiringPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expiring').length);
   expiredPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expired').length);
   trailerPermitsCount = computed(() => this.filteredTrailerPermits().length);
+  private readonly baseTrailerTypeOptions: Array<{ value: string; label: string }> = [
+    { value: 'standard_equipment', label: 'Standard Equipment' },
+    { value: 'dry_van', label: 'Dry Van' },
+    { value: 'reefer', label: 'Reefer' },
+    { value: 'flatbed', label: 'Flatbed' },
+    { value: 'step_deck', label: 'Step Deck' },
+    { value: 'conestoga', label: 'Conestoga' },
+    { value: 'lowboy', label: 'Lowboy' },
+    { value: 'tanker', label: 'Tanker' },
+    { value: 'chassis', label: 'Chassis' },
+    { value: 'dump', label: 'Dump' },
+    { value: 'power_only', label: 'Power Only' },
+    { value: 'other', label: 'Other' }
+  ];
   trailerTypeOptions = computed(() => {
-    const seed = ['trailer', 'trailer_registration'];
+    const options = [...this.baseTrailerTypeOptions];
+    const known = new Set(options.map(o => o.value.toLowerCase()));
     const fromData = this.trailers()
-      .map((t: any) => String(t?.type ?? '').trim())
+      .map((t: any) => String(t?.type ?? '').trim().toLowerCase())
       .filter((v: string) => !!v);
-    const out: string[] = [];
-    const seen = new Set<string>();
-    for (const value of [...seed, ...fromData]) {
-      const key = value.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(value);
+
+    for (const value of fromData) {
+      if (known.has(value)) continue;
+      known.add(value);
+      options.push({ value, label: this.formatTypeLabel(value) });
     }
-    return out;
+
+    return options;
   });
   trailerOptions = computed(() => {
     return this.trailers()
@@ -214,7 +228,7 @@ export class TagsPermitsComponent implements OnInit {
     const tab = this.activeTab();
     const defaultType = tab === 'irp'
       ? 'irp'
-      : (tab === 'trailer' ? 'trailer' : 'overweight');
+      : (tab === 'trailer' ? 'standard_equipment' : 'overweight');
     this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
     this.editingPermit.set(null);
     this.showAddModal.set(true);
@@ -530,7 +544,7 @@ export class TagsPermitsComponent implements OnInit {
     return {
       id: t?.id,
       permitNumber: t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || '',
-      permitType: t?.type || 'trailer',
+      permitType: t?.type || 'standard_equipment',
       state: t?.state || '',
       issueDate: t?.issueDate || t?.createdAt || null,
       expiryDate: t?.expiryDate || null,
@@ -622,5 +636,15 @@ export class TagsPermitsComponent implements OnInit {
     } catch {
       this.toast.error('Unable to copy fuel card', 'Error');
     }
+  }
+
+  private formatTypeLabel(raw: string): string {
+    return String(raw || '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 }

@@ -70,8 +70,8 @@
       <select class="tp-filter-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All Types</option>
         @if (activeTab() === 'trailer') {
-          @for (tt of trailerTypeOptions(); track tt) {
-            <option [value]="tt">{{ tt }}</option>
+          @for (tt of trailerTypeOptions(); track tt.value) {
+            <option [value]="tt.value">{{ tt.label }}</option>
           }
         } @else {
           <option value="overweight">Overweight</option>
@@ -390,8 +390,8 @@
               <label>{{ activeTab() === 'trailer' ? 'Trailer Type' : 'Type' }}</label>
               <select [(ngModel)]="permitForm.permitType">
                 @if (activeTab() === 'trailer') {
-                  @for (tt of trailerTypeOptions(); track tt) {
-                    <option [value]="tt">{{ tt }}</option>
+                  @for (tt of trailerTypeOptions(); track tt.value) {
+                    <option [value]="tt.value">{{ tt.label }}</option>
                   }
                 } @else {
                   <optgroup label="Permits">
