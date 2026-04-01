@@ -442,7 +442,7 @@ export class DriverDatabaseComponent implements OnInit {
     { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
     { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
     { key: 'ifta', label: 'IFTA' }, { key: 'irp', label: 'IRP' },
-    { key: 'safety', label: 'Safety Awards' },
+    { key: 'safety', label: 'Safety' },
     { key: 'violations', label: 'Violations' }, { key: 'contract', label: 'Contract' },
     { key: 'i9', label: 'I-9' }, { key: 'w9', label: 'W-9' },
     { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' }
@@ -665,7 +665,7 @@ export class DriverDatabaseComponent implements OnInit {
       cdl: 'CDL / License', medical: 'Medical Certificate', mvr: 'Motor Vehicle Record',
       drug: 'Drug & Alcohol Test', dqf: 'Driver Qualification File', employment: 'Employment Verification',
       training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
-      permits: 'Permits', ifta: 'IFTA', safety: 'Safety Awards', violations: 'Violations',
+      permits: 'Permits', ifta: 'IFTA', safety: 'Safety', violations: 'Violations',
       contract: 'Contract', irp: 'IRP / Cab Card',
       i9: 'I-9', w9: 'W-9', directDeposit: 'Direct Deposit', deduction: 'Deduction'
     };
