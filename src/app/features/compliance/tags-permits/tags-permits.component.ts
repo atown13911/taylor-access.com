@@ -147,6 +147,21 @@ export class TagsPermitsComponent implements OnInit {
   expiringPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expiring').length);
   expiredPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expired').length);
   trailerPermitsCount = computed(() => this.filteredTrailerPermits().length);
+  trailerTypeOptions = computed(() => {
+    const seed = ['trailer', 'trailer_registration'];
+    const fromData = this.trailers()
+      .map((t: any) => String(t?.type ?? '').trim())
+      .filter((v: string) => !!v);
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const value of [...seed, ...fromData]) {
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(value);
+    }
+    return out;
+  });
   trailerOptions = computed(() => {
     return this.trailers()
       .map((t: any) => ({

@@ -69,13 +69,19 @@
     @if (activeTab() !== 'fuel-cards') {
       <select class="tp-filter-select" [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
         <option value="">All Types</option>
-        <option value="overweight">Overweight</option>
-        <option value="oversize">Oversize</option>
-        <option value="trip">Trip Permit</option>
-        <option value="fuel">Fuel Permit</option>
-        <option value="irp">IRP</option>
-        <option value="ifta">IFTA</option>
-        <option value="other">Other</option>
+        @if (activeTab() === 'trailer') {
+          @for (tt of trailerTypeOptions(); track tt) {
+            <option [value]="tt">{{ tt }}</option>
+          }
+        } @else {
+          <option value="overweight">Overweight</option>
+          <option value="oversize">Oversize</option>
+          <option value="trip">Trip Permit</option>
+          <option value="fuel">Fuel Permit</option>
+          <option value="irp">IRP</option>
+          <option value="ifta">IFTA</option>
+          <option value="other">Other</option>
+        }
       </select>
       <select class="tp-filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
         <option value="">All Statuses</option>
@@ -381,23 +387,29 @@
               <input type="text" [(ngModel)]="permitForm.permitNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-2026-12345' : 'e.g., OW-2026-12345'">
             </div>
             <div class="tp-form-group">
-              <label>Type</label>
+              <label>{{ activeTab() === 'trailer' ? 'Trailer Type' : 'Type' }}</label>
               <select [(ngModel)]="permitForm.permitType">
-                <optgroup label="Permits">
-                  <option value="overweight">Overweight</option>
-                  <option value="oversize">Oversize</option>
-                  <option value="trip">Trip Permit</option>
-                  <option value="fuel">Fuel Permit</option>
-                  <option value="hazmat">Hazmat</option>
-                  <option value="other">Other</option>
-                </optgroup>
-                <optgroup label="IRP / Tags">
-                  <option value="irp">IRP Registration</option>
-                  <option value="ifta">IFTA</option>
-                  <option value="cab_card">Cab Card</option>
-                  <option value="trailer">Trailer Tag</option>
-                  <option value="trailer_registration">Trailer Registration</option>
-                </optgroup>
+                @if (activeTab() === 'trailer') {
+                  @for (tt of trailerTypeOptions(); track tt) {
+                    <option [value]="tt">{{ tt }}</option>
+                  }
+                } @else {
+                  <optgroup label="Permits">
+                    <option value="overweight">Overweight</option>
+                    <option value="oversize">Oversize</option>
+                    <option value="trip">Trip Permit</option>
+                    <option value="fuel">Fuel Permit</option>
+                    <option value="hazmat">Hazmat</option>
+                    <option value="other">Other</option>
+                  </optgroup>
+                  <optgroup label="IRP / Tags">
+                    <option value="irp">IRP Registration</option>
+                    <option value="ifta">IFTA</option>
+                    <option value="cab_card">Cab Card</option>
+                    <option value="trailer">Trailer Tag</option>
+                    <option value="trailer_registration">Trailer Registration</option>
+                  </optgroup>
+                }
               </select>
             </div>
           </div>
