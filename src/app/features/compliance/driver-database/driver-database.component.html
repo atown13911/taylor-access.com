@@ -115,7 +115,7 @@
                 </div>
               </td>
               <td class="col-status">
-                <span class="status-badge" [class]="'status-' + (driver.status || 'active')">{{ driver.status || 'active' }}</span>
+                <span class="status-badge" [class]="'status-' + getDisplayStatus(driver)">{{ getDisplayStatus(driver) }}</span>
               </td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'cdl')" [title]="getComplianceTooltip(driver, 'cdl')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'medical')" [title]="getComplianceTooltip(driver, 'medical')"></span></td>

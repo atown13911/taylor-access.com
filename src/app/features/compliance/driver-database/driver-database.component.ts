@@ -736,6 +736,14 @@ export class DriverDatabaseComponent implements OnInit {
     return 'pending';
   }
 
+  getDisplayStatus(driver: any): string {
+    // Compliance override for matrix status badge display.
+    if (this.getOverallStatus(driver) === 'non-compliant') {
+      return 'inactive';
+    }
+    return driver?.status || 'active';
+  }
+
   editCompDoc(item: any): void {
     const doc = this.getCompDoc(this.selectedDriver(), item.key);
     if (!doc) return;
