@@ -205,7 +205,7 @@ export class TagsPermitsComponent implements OnInit {
       next: (res) => { this.drivers.set(res?.data || []); this.loading.set(false); },
       error: () => { this.drivers.set([]); this.loading.set(false); }
     });
-    this.http.get<any>(`${this.trailerApiUrl}/api/v1/trailers?pageSize=1000`).subscribe({
+    this.http.get<any>(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`).subscribe({
       next: (res) => this.trailers.set(Array.isArray(res?.data) ? res.data : []),
       error: () => this.trailers.set([])
     });
@@ -581,6 +581,8 @@ export class TagsPermitsComponent implements OnInit {
     this.saving.set(true);
     const editing = this.editingPermit();
     const selectedTrailerId = this.permitForm.trailerId ? `${this.permitForm.trailerId}` : '';
+    const selectedDriver = this.drivers().find((d: any) => `${d?.id}` === `${this.permitForm?.assignedDriverId ?? ''}`);
+    const assignedDriverName = String(selectedDriver?.name || '').trim() || null;
     const trailerBody: any = {
       number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
       trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
@@ -591,8 +593,9 @@ export class TagsPermitsComponent implements OnInit {
       issueDate: this.permitForm.issueDate ? new Date(this.permitForm.issueDate).toISOString() : null,
       expiryDate: this.permitForm.expiryDate ? new Date(this.permitForm.expiryDate).toISOString() : null,
       cost: this.permitForm.cost ?? null,
-      status: 'active',
-      notes: this.permitForm.notes || null
+      status: this.permitForm.assignedDriverId ? 'rented' : 'available',
+      notes: this.permitForm.notes || null,
+      assignedDriverName
     };
 
     try {
@@ -605,7 +608,7 @@ export class TagsPermitsComponent implements OnInit {
       }
 
       if (trailerId && this.permitForm.assignedDriverId) {
-        await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId);
+        await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId, assignedDriverName);
       }
 
       this.saving.set(false);
@@ -618,13 +621,14 @@ export class TagsPermitsComponent implements OnInit {
     }
   }
 
-  private async assignDriverToTrailer(trailerId: any, driverId: any): Promise<void> {
+  private async assignDriverToTrailer(trailerId: any, driverId: any, driverName?: string | null): Promise<void> {
     const id = `${trailerId}`;
+    const resolvedDriverName = String(driverName || '').trim();
     const payloads = [
-      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId })),
-      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assignments`, { driverId, status: 'active' })),
-      () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId })),
-      () => firstValueFrom(this.http.put(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId }))
+      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId, driverName: resolvedDriverName })),
+      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assignments`, { driverId, driverName: resolvedDriverName, status: 'rented' })),
+      () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' })),
+      () => firstValueFrom(this.http.put(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' }))
     ];
 
     for (const request of payloads) {
