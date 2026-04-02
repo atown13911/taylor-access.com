@@ -279,11 +279,26 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   savePermit() {
-    if (!this.permitForm.permitNumber.trim()) { this.toast.error('Permit number is required', 'Error'); return; }
     if (this.activeTab() === 'trailer') {
+      const selectedTrailer = this.trailers().find((t: any) => `${t?.id}` === `${this.permitForm?.trailerId ?? ''}`);
+      const derivedTrailerTag = String(
+        this.permitForm?.permitNumber ||
+        this.permitForm?.assignedTruckNumber ||
+        selectedTrailer?.tagNumber ||
+        selectedTrailer?.permitNumber ||
+        selectedTrailer?.number ||
+        selectedTrailer?.trailerNumber ||
+        ''
+      ).trim();
+      if (!derivedTrailerTag) {
+        this.toast.error('Trailer tag number or trailer # is required', 'Error');
+        return;
+      }
+      this.permitForm = { ...this.permitForm, permitNumber: derivedTrailerTag };
       void this.saveTrailer();
       return;
     }
+    if (!this.permitForm.permitNumber.trim()) { this.toast.error('Permit number is required', 'Error'); return; }
     this.saving.set(true);
     const editing = this.editingPermit();
     const body = { ...this.permitForm };
