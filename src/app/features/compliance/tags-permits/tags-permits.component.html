@@ -373,13 +373,8 @@
           <div class="tp-form-row">
             @if (activeTab() === 'trailer') {
               <div class="tp-form-group">
-                <label>Trailer</label>
-                <select [(ngModel)]="permitForm.trailerId" (ngModelChange)="onTrailerSelectionChange($event)">
-                  <option [ngValue]="null">Select trailer (optional)</option>
-                  @for (t of trailerOptions(); track t.id) {
-                    <option [ngValue]="t.id">{{ (t.number || ('Trailer #' + t.id)) + (t.tag ? (' - ' + t.tag) : '') }}</option>
-                  }
-                </select>
+                <label>Trailer Number</label>
+                <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., TR-4102">
               </div>
             }
             <div class="tp-form-group">
