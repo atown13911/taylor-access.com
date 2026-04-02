@@ -17,6 +17,9 @@ export class TagsPermitsComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
+  private trailerApiUrl = this.apiUrl.includes('/open/taylor-access')
+    ? this.apiUrl.replace('/open/taylor-access', '/open/taylor-assets')
+    : this.apiUrl;
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
@@ -202,7 +205,7 @@ export class TagsPermitsComponent implements OnInit {
       next: (res) => { this.drivers.set(res?.data || []); this.loading.set(false); },
       error: () => { this.drivers.set([]); this.loading.set(false); }
     });
-    this.http.get<any>(`${this.apiUrl}/api/v1/trailers?pageSize=1000`).subscribe({
+    this.http.get<any>(`${this.trailerApiUrl}/api/v1/trailers?pageSize=1000`).subscribe({
       next: (res) => this.trailers.set(Array.isArray(res?.data) ? res.data : []),
       error: () => this.trailers.set([])
     });
@@ -580,9 +583,9 @@ export class TagsPermitsComponent implements OnInit {
     try {
       let trailerId = selectedTrailerId || editing?.id;
       if (trailerId) {
-        await firstValueFrom(this.http.put<any>(`${this.apiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
+        await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
       } else {
-        const created: any = await firstValueFrom(this.http.post<any>(`${this.apiUrl}/api/v1/trailers`, trailerBody));
+        const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/trailers`, trailerBody));
         trailerId = created?.data?.id ?? created?.id ?? trailerId;
       }
 
@@ -603,10 +606,10 @@ export class TagsPermitsComponent implements OnInit {
   private async assignDriverToTrailer(trailerId: any, driverId: any): Promise<void> {
     const id = `${trailerId}`;
     const payloads = [
-      () => firstValueFrom(this.http.post(`${this.apiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId })),
-      () => firstValueFrom(this.http.post(`${this.apiUrl}/api/v1/trailers/${id}/assignments`, { driverId, status: 'active' })),
-      () => firstValueFrom(this.http.patch(`${this.apiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId })),
-      () => firstValueFrom(this.http.put(`${this.apiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId }))
+      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId })),
+      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assignments`, { driverId, status: 'active' })),
+      () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId })),
+      () => firstValueFrom(this.http.put(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId }))
     ];
 
     for (const request of payloads) {
@@ -621,7 +624,7 @@ export class TagsPermitsComponent implements OnInit {
 
   private deleteTrailer(row: any): void {
     if (!confirm(`Delete trailer assignment #${row?.permitNumber || row?.assignedTruckNumber || row?.id}?`)) return;
-    this.http.delete(`${this.apiUrl}/api/v1/trailers/${row.id}`).subscribe({
+    this.http.delete(`${this.trailerApiUrl}/api/v1/trailers/${row.id}`).subscribe({
       next: () => { this.loadData(); this.toast.champagne('Trailer assignment deleted', 'Deleted'); },
       error: () => this.toast.error('Failed to delete trailer assignment', 'Error')
     });

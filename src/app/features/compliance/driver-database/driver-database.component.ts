@@ -19,6 +19,9 @@ export class DriverDatabaseComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private api = inject(VanTacApiService);
   private toast = inject(ToastService);
+  private trailerApiUrl = environment.apiUrl.includes('/open/taylor-access')
+    ? environment.apiUrl.replace('/open/taylor-access', '/open/taylor-assets')
+    : environment.apiUrl;
 
   compUploadOpen = signal(false);
   compUploadItem = signal<any>(null);
@@ -235,7 +238,7 @@ export class DriverDatabaseComponent implements OnInit {
     const driver = this.selectedDriver();
     if (!driver) return;
     try {
-      const response: any = await this.http.get(`${environment.apiUrl}/api/v1/trailers?pageSize=1000`).toPromise();
+      const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/trailers?pageSize=1000`).toPromise();
       const allTrailers = response?.data || [];
       const assigned = allTrailers.filter((t: any) =>
         t.driverAssignments?.some((a: any) => a.driverId === driver.id && a.status === 'active')
