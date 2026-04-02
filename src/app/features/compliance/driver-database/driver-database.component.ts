@@ -238,14 +238,29 @@ export class DriverDatabaseComponent implements OnInit {
     const driver = this.selectedDriver();
     if (!driver) return;
     try {
-      const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`).toPromise();
+      const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`).toPromise();
       const allTrailers = response?.data || [];
-      const assigned = allTrailers.filter((t: any) =>
-        t.driverAssignments?.some((a: any) => a.driverId === driver.id && a.status === 'active')
-      );
+      const assigned = allTrailers.filter((t: any) => {
+        const ownerName = String(t?.ownerName || '').trim().toLowerCase();
+        const driverName = String(driver?.name || '').trim().toLowerCase();
+        return !!driverName && ownerName === driverName;
+      });
       this.driverTrailers.set(assigned);
-    } catch {
-      this.driverTrailers.set([]);
+    } catch (err: any) {
+      if (![400, 404].includes(Number(err?.status || 0))) {
+        this.driverTrailers.set([]);
+        return;
+      }
+      try {
+        const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`).toPromise();
+        const allTrailers = response?.data || [];
+        const assigned = allTrailers.filter((t: any) =>
+          t.driverAssignments?.some((a: any) => a.driverId === driver.id && a.status === 'active')
+        );
+        this.driverTrailers.set(assigned);
+      } catch {
+        this.driverTrailers.set([]);
+      }
     }
   }
 

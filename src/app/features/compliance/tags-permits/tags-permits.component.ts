@@ -205,10 +205,7 @@ export class TagsPermitsComponent implements OnInit {
       next: (res) => { this.drivers.set(res?.data || []); this.loading.set(false); },
       error: () => { this.drivers.set([]); this.loading.set(false); }
     });
-    this.http.get<any>(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`).subscribe({
-      next: (res) => this.trailers.set(Array.isArray(res?.data) ? res.data : []),
-      error: () => this.trailers.set([])
-    });
+    void this.loadTrailersWithFallback();
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/fuel-cards`).subscribe({
       next: (res) => {
         const payload = res?.data ?? res;
@@ -561,14 +558,14 @@ export class TagsPermitsComponent implements OnInit {
 
     return {
       id: t?.id,
-      permitNumber: t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || '',
-      permitType: t?.type || 'standard_equipment',
-      state: t?.state || '',
-      issueDate: t?.issueDate || t?.createdAt || null,
-      expiryDate: t?.expiryDate || null,
-      cost: t?.cost ?? null,
+      permitNumber: t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
+      permitType: t?.type || t?.subtype || 'standard_equipment',
+      state: t?.state || t?.currentLocation || '',
+      issueDate: t?.issueDate || t?.registrationStartDate || t?.createdAt || null,
+      expiryDate: t?.expiryDate || t?.registrationExpiry || null,
+      cost: t?.cost ?? t?.purchasePrice ?? null,
       assignedDriverId,
-      assignedDriverName,
+      assignedDriverName: assignedDriverName || t?.assignedDriverName || t?.ownerName || '',
       assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
       notes: t?.notes || '',
@@ -597,14 +594,37 @@ export class TagsPermitsComponent implements OnInit {
       notes: this.permitForm.notes || null,
       assignedDriverName
     };
+    const equipmentBody: any = {
+      unitNumber: trailerBody.number,
+      equipmentTypeName: 'trailer',
+      subtype: trailerBody.type,
+      currentLocation: trailerBody.state,
+      registrationStartDate: trailerBody.issueDate,
+      registrationExpiry: trailerBody.expiryDate,
+      purchasePrice: trailerBody.cost,
+      status: this.permitForm.assignedDriverId ? 'in_use' : 'available',
+      ownerName: assignedDriverName,
+      notes: trailerBody.notes
+    };
 
     try {
       let trailerId = selectedTrailerId || editing?.id;
       if (trailerId) {
-        await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
+        try {
+          await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/equipment/${trailerId}`, equipmentBody));
+        } catch (err: any) {
+          if (!this.shouldFallbackToEquipment(err)) throw err;
+          await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
+        }
       } else {
-        const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/trailers`, trailerBody));
-        trailerId = created?.data?.id ?? created?.id ?? trailerId;
+        try {
+          const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/equipment`, equipmentBody));
+          trailerId = created?.data?.id ?? created?.id ?? trailerId;
+        } catch (err: any) {
+          if (!this.shouldFallbackToEquipment(err)) throw err;
+          const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/trailers`, trailerBody));
+          trailerId = created?.data?.id ?? created?.id ?? trailerId;
+        }
       }
 
       if (trailerId && this.permitForm.assignedDriverId) {
@@ -625,6 +645,8 @@ export class TagsPermitsComponent implements OnInit {
     const id = `${trailerId}`;
     const resolvedDriverName = String(driverName || '').trim();
     const payloads = [
+      () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/equipment/${id}`, { ownerName: resolvedDriverName, status: 'in_use' })),
+      () => firstValueFrom(this.http.put(`${this.trailerApiUrl}/api/v1/equipment/${id}`, { ownerName: resolvedDriverName, status: 'in_use' })),
       () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId, driverName: resolvedDriverName })),
       () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assignments`, { driverId, driverName: resolvedDriverName, status: 'rented' })),
       () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' })),
@@ -643,9 +665,18 @@ export class TagsPermitsComponent implements OnInit {
 
   private deleteTrailer(row: any): void {
     if (!confirm(`Delete trailer assignment #${row?.permitNumber || row?.assignedTruckNumber || row?.id}?`)) return;
-    this.http.delete(`${this.trailerApiUrl}/api/v1/trailers/${row.id}`).subscribe({
+    this.http.delete(`${this.trailerApiUrl}/api/v1/equipment/${row.id}`).subscribe({
       next: () => { this.loadData(); this.toast.champagne('Trailer assignment deleted', 'Deleted'); },
-      error: () => this.toast.error('Failed to delete trailer assignment', 'Error')
+      error: (err: any) => {
+        if (!this.shouldFallbackToEquipment(err)) {
+          this.toast.error('Failed to delete trailer assignment', 'Error');
+          return;
+        }
+        this.http.delete(`${this.trailerApiUrl}/api/v1/trailers/${row.id}`).subscribe({
+          next: () => { this.loadData(); this.toast.champagne('Trailer assignment deleted', 'Deleted'); },
+          error: () => this.toast.error('Failed to delete trailer assignment', 'Error')
+        });
+      }
     });
   }
 
@@ -668,5 +699,30 @@ export class TagsPermitsComponent implements OnInit {
       .split(' ')
       .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
+  }
+
+  private shouldFallbackToEquipment(err: any): boolean {
+    const status = Number(err?.status || 0);
+    return status === 400 || status === 404;
+  }
+
+  private async loadTrailersWithFallback(): Promise<void> {
+    try {
+      const res: any = await firstValueFrom(
+        this.http.get<any>(`${this.trailerApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`)
+      );
+      this.trailers.set(Array.isArray(res?.data) ? res.data : []);
+    } catch (err: any) {
+      if (!this.shouldFallbackToEquipment(err)) {
+        this.trailers.set([]);
+        return;
+      }
+      try {
+        const res: any = await firstValueFrom(this.http.get<any>(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`));
+        this.trailers.set(Array.isArray(res?.data) ? res.data : []);
+      } catch {
+        this.trailers.set([]);
+      }
+    }
   }
 }
