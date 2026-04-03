@@ -57,9 +57,11 @@ public class AssetsProxyController : ControllerBase
         }
 
         _logger.LogWarning("Assets proxy exhausted all trailer endpoints: {@Errors}", errors);
-        return StatusCode(502, new
+        return Ok(new
         {
-            error = "Unable to load trailers from assets service",
+            data = Array.Empty<object>(),
+            total = 0,
+            warning = "Unable to load trailers from assets upstream",
             attempts = errors
         });
     }
@@ -67,9 +69,13 @@ public class AssetsProxyController : ControllerBase
     private static IEnumerable<string> BuildCandidateUrls(int limit, string equipmentType)
     {
         var configuredBase = Environment.GetEnvironmentVariable("TAYLOR_ASSETS_API_URL");
+        var gatewayConfiguredBase = Environment.GetEnvironmentVariable("TTAC_TAYLOR_ASSETS_BACKEND_URL");
+        var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
         var bases = new[]
         {
             configuredBase,
+            gatewayConfiguredBase,
+            railwayServiceBase,
             "https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-assets",
             "https://taylor-assets-production.up.railway.app"
         }
