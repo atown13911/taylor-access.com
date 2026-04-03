@@ -438,10 +438,12 @@
                 }
               </select>
             </div>
-            <div class="tp-form-group">
-              <label>{{ activeTab() === 'trailer' ? 'Trailer #' : 'Truck #' }}</label>
-              <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-4102' : 'e.g., 1210'">
-            </div>
+            @if (activeTab() !== 'trailer') {
+              <div class="tp-form-group">
+                <label>Truck #</label>
+                <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., 1210">
+              </div>
+            }
           </div>
           <div class="tp-form-group">
             <label>Notes</label>

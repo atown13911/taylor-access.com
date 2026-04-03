@@ -325,8 +325,7 @@ public class DriversController : ControllerBase
         sourceApiUrls.AddRange(new[]
         {
             "https://taylor-tms.net",
-            "https://van-tac-v2-production.up.railway.app",
-            "https://vantac-production.up.railway.app"
+            "https://ttac-gateway-production.up.railway.app/api/v1/open/vantac"
         });
 
         var sourceBearer = _config["DrayTac:BearerToken"]

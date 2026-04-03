@@ -578,6 +578,7 @@ export class TagsPermitsComponent implements OnInit {
     this.saving.set(true);
     const editing = this.editingPermit();
     const selectedTrailerId = this.permitForm.trailerId ? `${this.permitForm.trailerId}` : '';
+    const organizationId = this.getOrganizationId();
     const selectedDriver = this.drivers().find((d: any) => `${d?.id}` === `${this.permitForm?.assignedDriverId ?? ''}`);
     const assignedDriverName = String(selectedDriver?.name || '').trim() || null;
     const trailerBody: any = {
@@ -592,7 +593,8 @@ export class TagsPermitsComponent implements OnInit {
       cost: this.permitForm.cost ?? null,
       status: this.permitForm.assignedDriverId ? 'rented' : 'available',
       notes: this.permitForm.notes || null,
-      assignedDriverName
+      assignedDriverName,
+      organizationId
     };
     const equipmentBody: any = {
       unitNumber: trailerBody.number,
@@ -604,7 +606,8 @@ export class TagsPermitsComponent implements OnInit {
       purchasePrice: trailerBody.cost,
       status: this.permitForm.assignedDriverId ? 'in_use' : 'available',
       ownerName: assignedDriverName,
-      notes: trailerBody.notes
+      notes: trailerBody.notes,
+      organizationId
     };
 
     try {
@@ -612,16 +615,14 @@ export class TagsPermitsComponent implements OnInit {
       if (trailerId) {
         try {
           await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/equipment/${trailerId}`, equipmentBody));
-        } catch (err: any) {
-          if (!this.shouldFallbackToEquipment(err)) throw err;
+        } catch {
           await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
         }
       } else {
         try {
           const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/equipment`, equipmentBody));
           trailerId = created?.data?.id ?? created?.id ?? trailerId;
-        } catch (err: any) {
-          if (!this.shouldFallbackToEquipment(err)) throw err;
+        } catch {
           const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/trailers`, trailerBody));
           trailerId = created?.data?.id ?? created?.id ?? trailerId;
         }
@@ -637,7 +638,7 @@ export class TagsPermitsComponent implements OnInit {
       this.toast.champagne(editing ? 'Trailer assignment updated' : 'Trailer assignment created', 'Success');
     } catch (err: any) {
       this.saving.set(false);
-      this.toast.error(err?.error?.error || 'Failed to save trailer assignment', 'Error');
+      this.toast.error(this.extractErrorMessage(err, 'Failed to save trailer assignment'), 'Error');
     }
   }
 
@@ -699,6 +700,29 @@ export class TagsPermitsComponent implements OnInit {
       .split(' ')
       .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
+  }
+
+  private getOrganizationId(): number | null {
+    try {
+      const userRaw = localStorage.getItem('vantac_user');
+      const orgRaw = localStorage.getItem('vantac_org');
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      const org = orgRaw ? JSON.parse(orgRaw) : null;
+      const value = user?.organizationId ?? org?.id ?? null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private extractErrorMessage(err: any, fallback: string): string {
+    const body = err?.error;
+    if (typeof body === 'string' && body.trim()) return body.trim();
+    if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim();
+    if (typeof body?.message === 'string' && body.message.trim()) return body.message.trim();
+    if (typeof err?.message === 'string' && err.message.trim()) return err.message.trim();
+    return fallback;
   }
 
   private shouldFallbackToEquipment(err: any): boolean {

@@ -165,7 +165,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "Portal token is required" });
 
         var portalApiUrl = Environment.GetEnvironmentVariable("PORTAL_API_URL")
-                           ?? "https://tss-portalcom-production.up.railway.app";
+                           ?? "https://ttac-gateway-production.up.railway.app/api/v1/open/tss-portal";
 
         try
         {

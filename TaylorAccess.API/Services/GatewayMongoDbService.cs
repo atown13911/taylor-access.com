@@ -24,7 +24,9 @@ public class GatewayMongoDbService : IMongoDbService
             ?? configuration["GatewayInternalUrl"]
             ?? "http://inspiring-victory.railway.internal:8080";
 
-        var apiKey = Environment.GetEnvironmentVariable("INTERNAL_API_KEY") ?? "ta-internal-2026";
+        var apiKey = Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("INTERNAL_API_KEY is required for GatewayMongoDbService.");
 
         _dbName = Environment.GetEnvironmentVariable("MONGO_DB_NAME") ?? "taylor_access";
 
