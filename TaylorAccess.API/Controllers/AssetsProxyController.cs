@@ -144,6 +144,8 @@ public class AssetsProxyController : ControllerBase
         var gatewayPublicOpenBase = BuildGatewayOpenBase(
             Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
             ?? Environment.GetEnvironmentVariable("TTAC_GATEWAY_OPEN_BASE"));
+        var portalDerivedOpenBase = BuildOpenTargetBaseFromServiceUrl(Environment.GetEnvironmentVariable("PORTAL_API_URL"));
+        var accessDerivedOpenBase = BuildOpenTargetBaseFromServiceUrl(Environment.GetEnvironmentVariable("TAYLOR_ACCESS_API_URL"));
         var configuredBase = Environment.GetEnvironmentVariable("TAYLOR_ASSETS_API_URL");
         var gatewayConfiguredBase = Environment.GetEnvironmentVariable("TTAC_TAYLOR_ASSETS_BACKEND_URL");
         var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
@@ -151,6 +153,8 @@ public class AssetsProxyController : ControllerBase
         {
             gatewayInternalOpenBase,
             gatewayPublicOpenBase,
+            portalDerivedOpenBase,
+            accessDerivedOpenBase,
             configuredBase,
             gatewayConfiguredBase,
             railwayServiceBase,
@@ -184,6 +188,8 @@ public class AssetsProxyController : ControllerBase
         var gatewayPublicOpenBase = BuildGatewayOpenBase(
             Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
             ?? Environment.GetEnvironmentVariable("TTAC_GATEWAY_OPEN_BASE"));
+        var portalDerivedOpenBase = BuildOpenTargetBaseFromServiceUrl(Environment.GetEnvironmentVariable("PORTAL_API_URL"));
+        var accessDerivedOpenBase = BuildOpenTargetBaseFromServiceUrl(Environment.GetEnvironmentVariable("TAYLOR_ACCESS_API_URL"));
         var configuredBase = Environment.GetEnvironmentVariable("TAYLOR_ASSETS_API_URL");
         var gatewayConfiguredBase = Environment.GetEnvironmentVariable("TTAC_TAYLOR_ASSETS_BACKEND_URL");
         var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
@@ -191,6 +197,8 @@ public class AssetsProxyController : ControllerBase
         {
             gatewayInternalOpenBase,
             gatewayPublicOpenBase,
+            portalDerivedOpenBase,
+            accessDerivedOpenBase,
             configuredBase,
             gatewayConfiguredBase,
             railwayServiceBase,
@@ -225,5 +233,20 @@ public class AssetsProxyController : ControllerBase
         if (normalized.EndsWith("/api/v1", StringComparison.OrdinalIgnoreCase))
             return $"{normalized}/open/taylor-assets";
         return $"{normalized}/api/v1/open/taylor-assets";
+    }
+
+    private static string? BuildOpenTargetBaseFromServiceUrl(string? serviceUrl)
+    {
+        if (string.IsNullOrWhiteSpace(serviceUrl))
+            return null;
+
+        var normalized = serviceUrl.Trim().TrimEnd('/');
+        var marker = "/api/v1/open/";
+        var idx = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return null;
+
+        var root = normalized.Substring(0, idx + marker.Length);
+        return $"{root}taylor-assets";
     }
 }
