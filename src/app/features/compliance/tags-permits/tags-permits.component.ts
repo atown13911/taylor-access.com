@@ -21,6 +21,7 @@ export class TagsPermitsComponent implements OnInit {
     ? this.apiUrl.replace('/open/taylor-access', '/open/taylor-assets')
     : this.apiUrl;
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
+  private trailerBaseCandidates = this.buildTrailerBaseCandidates();
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
@@ -738,11 +739,15 @@ export class TagsPermitsComponent implements OnInit {
 
   private trailerPathCandidates(path: string): string[] {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const withApiPrefix = `${this.trailerApiRoot}/api/v1${normalizedPath}`;
-    const withoutApiPrefix = `${this.trailerApiRoot}${normalizedPath}`;
-    return withApiPrefix === withoutApiPrefix
-      ? [withApiPrefix]
-      : [withApiPrefix, withoutApiPrefix];
+    const candidates: string[] = [];
+    for (const base of this.trailerBaseCandidates) {
+      const withApiPrefix = `${base}/api/v1${normalizedPath}`;
+      candidates.push(withApiPrefix);
+      if (base.includes('/open/')) {
+        candidates.push(`${base}${normalizedPath}`);
+      }
+    }
+    return Array.from(new Set(candidates));
   }
 
   private async trailerGetWithPathFallback(path: string): Promise<any> {
@@ -757,6 +762,18 @@ export class TagsPermitsComponent implements OnInit {
       }
     }
     throw lastError;
+  }
+
+  private buildTrailerBaseCandidates(): string[] {
+    const configuredAssetsApiUrl = String((environment as any)?.assetsApiUrl || '').trim();
+    const candidates = [
+      this.trailerApiRoot,
+      configuredAssetsApiUrl,
+      'https://taylor-assets-production.up.railway.app'
+    ]
+      .map((base) => String(base || '').trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+    return Array.from(new Set(candidates));
   }
 
   private async loadTrailersWithFallback(): Promise<void> {

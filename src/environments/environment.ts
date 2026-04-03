@@ -1,6 +1,7 @@
 export const environment = {
   production: false,
   apiUrl: 'https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-access',
+  assetsApiUrl: 'https://taylor-assets-production.up.railway.app',
   portalUrl: 'https://tss-portal.com',
   portalApiUrl: 'https://ttac-gateway-production.up.railway.app/api/v1/open/tss-portal',
   oauthClientId: 'ta_taylor_access',
