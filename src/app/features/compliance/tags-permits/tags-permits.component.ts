@@ -783,8 +783,14 @@ export class TagsPermitsComponent implements OnInit {
       );
       this.trailers.set(Array.isArray(proxyRes?.data) ? proxyRes.data : []);
       return;
-    } catch {
-      // Fall back to direct/gateway calls if proxy is unavailable.
+    } catch (err: any) {
+      // If proxy endpoint exists but upstream failed, avoid browser-side direct fallback
+      // that triggers CORS errors and noisy console logs.
+      if (Number(err?.status || 0) !== 404) {
+        this.trailers.set([]);
+        return;
+      }
+      // Proxy not deployed yet (404): use legacy direct/gateway fallback.
     }
 
     try {

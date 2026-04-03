@@ -249,8 +249,14 @@ export class DriverDatabaseComponent implements OnInit {
       });
       this.driverTrailers.set(assigned);
       return;
-    } catch {
-      // Continue with legacy direct/gateway trailer loading fallback.
+    } catch (err: any) {
+      // If proxy exists but upstream failed, avoid browser-side direct fallback
+      // that triggers CORS errors and noisy console logs.
+      if (Number(err?.status || 0) !== 404) {
+        this.driverTrailers.set([]);
+        return;
+      }
+      // Proxy not deployed yet (404): continue with legacy fallback.
     }
     try {
       const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`).toPromise();
