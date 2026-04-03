@@ -20,6 +20,7 @@ export class TagsPermitsComponent implements OnInit {
   private trailerApiUrl = this.apiUrl.includes('/open/taylor-access')
     ? this.apiUrl.replace('/open/taylor-access', '/open/taylor-assets')
     : this.apiUrl;
+  private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
@@ -614,16 +615,16 @@ export class TagsPermitsComponent implements OnInit {
       let trailerId = selectedTrailerId || editing?.id;
       if (trailerId) {
         try {
-          await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/equipment/${trailerId}`, equipmentBody));
+          await firstValueFrom(this.http.put<any>(this.trailerPath(`/equipment/${trailerId}`), equipmentBody));
         } catch {
-          await firstValueFrom(this.http.put<any>(`${this.trailerApiUrl}/api/v1/trailers/${trailerId}`, trailerBody));
+          await firstValueFrom(this.http.put<any>(this.trailerPath(`/trailers/${trailerId}`), trailerBody));
         }
       } else {
         try {
-          const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/equipment`, equipmentBody));
+          const created: any = await firstValueFrom(this.http.post<any>(this.trailerPath('/equipment'), equipmentBody));
           trailerId = created?.data?.id ?? created?.id ?? trailerId;
         } catch {
-          const created: any = await firstValueFrom(this.http.post<any>(`${this.trailerApiUrl}/api/v1/trailers`, trailerBody));
+          const created: any = await firstValueFrom(this.http.post<any>(this.trailerPath('/trailers'), trailerBody));
           trailerId = created?.data?.id ?? created?.id ?? trailerId;
         }
       }
@@ -646,12 +647,12 @@ export class TagsPermitsComponent implements OnInit {
     const id = `${trailerId}`;
     const resolvedDriverName = String(driverName || '').trim();
     const payloads = [
-      () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/equipment/${id}`, { ownerName: resolvedDriverName, status: 'in_use' })),
-      () => firstValueFrom(this.http.put(`${this.trailerApiUrl}/api/v1/equipment/${id}`, { ownerName: resolvedDriverName, status: 'in_use' })),
-      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assign-driver`, { driverId, driverName: resolvedDriverName })),
-      () => firstValueFrom(this.http.post(`${this.trailerApiUrl}/api/v1/trailers/${id}/assignments`, { driverId, driverName: resolvedDriverName, status: 'rented' })),
-      () => firstValueFrom(this.http.patch(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' })),
-      () => firstValueFrom(this.http.put(`${this.trailerApiUrl}/api/v1/trailers/${id}`, { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' }))
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${id}`), { ownerName: resolvedDriverName, status: 'in_use' })),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${id}`), { ownerName: resolvedDriverName, status: 'in_use' })),
+      () => firstValueFrom(this.http.post(this.trailerPath(`/trailers/${id}/assign-driver`), { driverId, driverName: resolvedDriverName })),
+      () => firstValueFrom(this.http.post(this.trailerPath(`/trailers/${id}/assignments`), { driverId, driverName: resolvedDriverName, status: 'rented' })),
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/trailers/${id}`), { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' })),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/trailers/${id}`), { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' }))
     ];
 
     for (const request of payloads) {
@@ -666,14 +667,14 @@ export class TagsPermitsComponent implements OnInit {
 
   private deleteTrailer(row: any): void {
     if (!confirm(`Delete trailer assignment #${row?.permitNumber || row?.assignedTruckNumber || row?.id}?`)) return;
-    this.http.delete(`${this.trailerApiUrl}/api/v1/equipment/${row.id}`).subscribe({
+    this.http.delete(this.trailerPath(`/equipment/${row.id}`)).subscribe({
       next: () => { this.loadData(); this.toast.champagne('Trailer assignment deleted', 'Deleted'); },
       error: (err: any) => {
         if (!this.shouldFallbackToEquipment(err)) {
           this.toast.error('Failed to delete trailer assignment', 'Error');
           return;
         }
-        this.http.delete(`${this.trailerApiUrl}/api/v1/trailers/${row.id}`).subscribe({
+        this.http.delete(this.trailerPath(`/trailers/${row.id}`)).subscribe({
           next: () => { this.loadData(); this.toast.champagne('Trailer assignment deleted', 'Deleted'); },
           error: () => this.toast.error('Failed to delete trailer assignment', 'Error')
         });
@@ -730,10 +731,18 @@ export class TagsPermitsComponent implements OnInit {
     return status === 400 || status === 404;
   }
 
+  private trailerPath(path: string): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    if (this.trailerApiRoot.includes('/open/')) {
+      return `${this.trailerApiRoot}${normalizedPath}`;
+    }
+    return `${this.trailerApiRoot}/api/v1${normalizedPath}`;
+  }
+
   private async loadTrailersWithFallback(): Promise<void> {
     try {
       const res: any = await firstValueFrom(
-        this.http.get<any>(`${this.trailerApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`)
+        this.http.get<any>(this.trailerPath('/equipment?equipmentType=trailer&limit=1000'))
       );
       this.trailers.set(Array.isArray(res?.data) ? res.data : []);
     } catch (err: any) {
@@ -742,7 +751,7 @@ export class TagsPermitsComponent implements OnInit {
         return;
       }
       try {
-        const res: any = await firstValueFrom(this.http.get<any>(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`));
+        const res: any = await firstValueFrom(this.http.get<any>(this.trailerPath('/trailers?limit=1000')));
         this.trailers.set(Array.isArray(res?.data) ? res.data : []);
       } catch {
         this.trailers.set([]);
