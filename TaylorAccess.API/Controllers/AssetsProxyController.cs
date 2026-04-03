@@ -9,7 +9,8 @@ namespace TaylorAccess.API.Controllers;
 [Authorize]
 public class AssetsProxyController : ControllerBase
 {
-    private static readonly int[] RetryableStatuses = { 400, 404, 502, 503 };
+    private static readonly int[] RetryableGetStatuses = { 400, 404, 502, 503 };
+    private static readonly int[] RetryableWriteStatuses = { 404, 502, 503 };
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AssetsProxyController> _logger;
 
@@ -44,7 +45,7 @@ public class AssetsProxyController : ControllerBase
 
                 var status = (int)response.StatusCode;
                 errors.Add(new { url, status });
-                if (!RetryableStatuses.Contains(status))
+                if (!RetryableGetStatuses.Contains(status))
                 {
                     _logger.LogWarning("Assets proxy non-retryable response {Status} from {Url}", status, url);
                     return StatusCode(status, new { error = "Assets upstream request failed", source = url, status });
@@ -117,7 +118,14 @@ public class AssetsProxyController : ControllerBase
                     return Content(responseBody, contentType);
 
                 errors.Add(new { url, status });
-                if (!RetryableStatuses.Contains(status))
+                var retryableStatuses = method == HttpMethod.Get ? RetryableGetStatuses : RetryableWriteStatuses;
+                var looksLikeGatewayHostnameError =
+                    status == 400 &&
+                    contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase) &&
+                    responseBody.Contains("Invalid Hostname", StringComparison.OrdinalIgnoreCase);
+
+                var shouldRetry = retryableStatuses.Contains(status) || looksLikeGatewayHostnameError;
+                if (!shouldRetry)
                     return StatusCode(status, responseBody);
             }
             catch (Exception ex)
