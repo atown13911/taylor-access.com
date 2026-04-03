@@ -733,17 +733,35 @@ export class TagsPermitsComponent implements OnInit {
 
   private trailerPath(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    if (this.trailerApiRoot.includes('/open/')) {
-      return `${this.trailerApiRoot}${normalizedPath}`;
-    }
     return `${this.trailerApiRoot}/api/v1${normalizedPath}`;
+  }
+
+  private trailerPathCandidates(path: string): string[] {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const withApiPrefix = `${this.trailerApiRoot}/api/v1${normalizedPath}`;
+    const withoutApiPrefix = `${this.trailerApiRoot}${normalizedPath}`;
+    return withApiPrefix === withoutApiPrefix
+      ? [withApiPrefix]
+      : [withApiPrefix, withoutApiPrefix];
+  }
+
+  private async trailerGetWithPathFallback(path: string): Promise<any> {
+    let lastError: any = null;
+    for (const candidate of this.trailerPathCandidates(path)) {
+      try {
+        return await firstValueFrom(this.http.get<any>(candidate));
+      } catch (err: any) {
+        lastError = err;
+        const status = Number(err?.status || 0);
+        if (![0, 400, 404, 502, 503].includes(status)) break;
+      }
+    }
+    throw lastError;
   }
 
   private async loadTrailersWithFallback(): Promise<void> {
     try {
-      const res: any = await firstValueFrom(
-        this.http.get<any>(this.trailerPath('/equipment?equipmentType=trailer&limit=1000'))
-      );
+      const res: any = await this.trailerGetWithPathFallback('/equipment?equipmentType=trailer&limit=1000');
       this.trailers.set(Array.isArray(res?.data) ? res.data : []);
     } catch (err: any) {
       if (!this.shouldFallbackToEquipment(err)) {
@@ -751,7 +769,7 @@ export class TagsPermitsComponent implements OnInit {
         return;
       }
       try {
-        const res: any = await firstValueFrom(this.http.get<any>(this.trailerPath('/trailers?limit=1000')));
+        const res: any = await this.trailerGetWithPathFallback('/trailers?limit=1000');
         this.trailers.set(Array.isArray(res?.data) ? res.data : []);
       } catch {
         this.trailers.set([]);
