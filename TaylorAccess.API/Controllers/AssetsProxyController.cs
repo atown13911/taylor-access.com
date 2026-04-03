@@ -140,11 +140,17 @@ public class AssetsProxyController : ControllerBase
 
     private static IEnumerable<string> BuildCandidateUrls(int limit, string equipmentType)
     {
+        var gatewayInternalOpenBase = BuildGatewayOpenBase(Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL"));
+        var gatewayPublicOpenBase = BuildGatewayOpenBase(
+            Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
+            ?? Environment.GetEnvironmentVariable("TTAC_GATEWAY_OPEN_BASE"));
         var configuredBase = Environment.GetEnvironmentVariable("TAYLOR_ASSETS_API_URL");
         var gatewayConfiguredBase = Environment.GetEnvironmentVariable("TTAC_TAYLOR_ASSETS_BACKEND_URL");
         var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
         var bases = new[]
         {
+            gatewayInternalOpenBase,
+            gatewayPublicOpenBase,
             configuredBase,
             gatewayConfiguredBase,
             railwayServiceBase,
@@ -174,11 +180,17 @@ public class AssetsProxyController : ControllerBase
 
     private static IEnumerable<string> BuildCandidateUrlsForPath(string relativePath, string queryString)
     {
+        var gatewayInternalOpenBase = BuildGatewayOpenBase(Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL"));
+        var gatewayPublicOpenBase = BuildGatewayOpenBase(
+            Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
+            ?? Environment.GetEnvironmentVariable("TTAC_GATEWAY_OPEN_BASE"));
         var configuredBase = Environment.GetEnvironmentVariable("TAYLOR_ASSETS_API_URL");
         var gatewayConfiguredBase = Environment.GetEnvironmentVariable("TTAC_TAYLOR_ASSETS_BACKEND_URL");
         var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
         var bases = new[]
         {
+            gatewayInternalOpenBase,
+            gatewayPublicOpenBase,
             configuredBase,
             gatewayConfiguredBase,
             railwayServiceBase,
@@ -198,5 +210,20 @@ public class AssetsProxyController : ControllerBase
             if (b.Contains("/open/"))
                 yield return $"{b}/{safePath}{query}";
         }
+    }
+
+    private static string? BuildGatewayOpenBase(string? gatewayBase)
+    {
+        if (string.IsNullOrWhiteSpace(gatewayBase))
+            return null;
+
+        var normalized = gatewayBase.Trim().TrimEnd('/');
+        if (normalized.EndsWith("/api/v1/open", StringComparison.OrdinalIgnoreCase))
+            return $"{normalized}/taylor-assets";
+        if (normalized.EndsWith("/api/v1/open/taylor-assets", StringComparison.OrdinalIgnoreCase))
+            return normalized;
+        if (normalized.EndsWith("/api/v1", StringComparison.OrdinalIgnoreCase))
+            return $"{normalized}/open/taylor-assets";
+        return $"{normalized}/api/v1/open/taylor-assets";
     }
 }
