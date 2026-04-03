@@ -238,6 +238,21 @@ export class DriverDatabaseComponent implements OnInit {
     const driver = this.selectedDriver();
     if (!driver) return;
     try {
+      const proxied: any = await this.http.get(`${environment.apiUrl}/api/v1/assets-proxy/trailers?limit=1000`).toPromise();
+      const allTrailers = proxied?.data || [];
+      const assigned = allTrailers.filter((t: any) => {
+        const ownerName = String(t?.ownerName || '').trim().toLowerCase();
+        const driverName = String(driver?.name || '').trim().toLowerCase();
+        const hasDriverAssignment = Array.isArray(t?.driverAssignments)
+          && t.driverAssignments.some((a: any) => `${a?.driverId ?? ''}` === `${driver?.id ?? ''}` && String(a?.status || '').toLowerCase() === 'active');
+        return (!!driverName && ownerName === driverName) || hasDriverAssignment;
+      });
+      this.driverTrailers.set(assigned);
+      return;
+    } catch {
+      // Continue with legacy direct/gateway trailer loading fallback.
+    }
+    try {
       const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`).toPromise();
       const allTrailers = response?.data || [];
       const assigned = allTrailers.filter((t: any) => {

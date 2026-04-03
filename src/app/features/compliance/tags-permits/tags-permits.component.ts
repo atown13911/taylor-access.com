@@ -778,6 +778,16 @@ export class TagsPermitsComponent implements OnInit {
 
   private async loadTrailersWithFallback(): Promise<void> {
     try {
+      const proxyRes: any = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/api/v1/assets-proxy/trailers?limit=1000`)
+      );
+      this.trailers.set(Array.isArray(proxyRes?.data) ? proxyRes.data : []);
+      return;
+    } catch {
+      // Fall back to direct/gateway calls if proxy is unavailable.
+    }
+
+    try {
       const res: any = await this.trailerGetWithPathFallback('/equipment?equipmentType=trailer&limit=1000');
       this.trailers.set(Array.isArray(res?.data) ? res.data : []);
     } catch (err: any) {
