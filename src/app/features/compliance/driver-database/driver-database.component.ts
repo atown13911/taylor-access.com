@@ -19,9 +19,7 @@ export class DriverDatabaseComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private api = inject(VanTacApiService);
   private toast = inject(ToastService);
-  private trailerApiUrl = environment.apiUrl.includes('/open/taylor-access')
-    ? environment.apiUrl.replace('/open/taylor-access', '/open/taylor-assets')
-    : environment.apiUrl;
+  private trailerApiUrl = `${environment.apiUrl}/api/v1/assets-proxy`;
 
   compUploadOpen = signal(false);
   compUploadItem = signal<any>(null);
@@ -259,7 +257,7 @@ export class DriverDatabaseComponent implements OnInit {
       // Proxy not deployed yet (404): continue with legacy fallback.
     }
     try {
-      const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`).toPromise();
+      const response: any = await this.http.get(`${this.trailerApiUrl}/equipment?equipmentType=trailer&limit=1000`).toPromise();
       const allTrailers = response?.data || [];
       const assigned = allTrailers.filter((t: any) => {
         const ownerName = String(t?.ownerName || '').trim().toLowerCase();
@@ -273,7 +271,7 @@ export class DriverDatabaseComponent implements OnInit {
         return;
       }
       try {
-        const response: any = await this.http.get(`${this.trailerApiUrl}/api/v1/trailers?limit=1000`).toPromise();
+        const response: any = await this.http.get(`${this.trailerApiUrl}/trailers?limit=1000`).toPromise();
         const allTrailers = response?.data || [];
         const assigned = allTrailers.filter((t: any) =>
           t.driverAssignments?.some((a: any) => a.driverId === driver.id && a.status === 'active')

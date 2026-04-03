@@ -17,11 +17,8 @@ export class TagsPermitsComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
-  private trailerApiUrl = this.apiUrl.includes('/open/taylor-access')
-    ? this.apiUrl.replace('/open/taylor-access', '/open/taylor-assets')
-    : this.apiUrl;
+  private trailerApiUrl = `${this.apiUrl}/api/v1/assets-proxy`;
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
-  private trailerBaseCandidates = this.buildTrailerBaseCandidates();
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
@@ -734,46 +731,11 @@ export class TagsPermitsComponent implements OnInit {
 
   private trailerPath(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${this.trailerApiRoot}/api/v1${normalizedPath}`;
-  }
-
-  private trailerPathCandidates(path: string): string[] {
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const candidates: string[] = [];
-    for (const base of this.trailerBaseCandidates) {
-      const withApiPrefix = `${base}/api/v1${normalizedPath}`;
-      candidates.push(withApiPrefix);
-      if (base.includes('/open/')) {
-        candidates.push(`${base}${normalizedPath}`);
-      }
-    }
-    return Array.from(new Set(candidates));
+    return `${this.trailerApiRoot}${normalizedPath}`;
   }
 
   private async trailerGetWithPathFallback(path: string): Promise<any> {
-    let lastError: any = null;
-    for (const candidate of this.trailerPathCandidates(path)) {
-      try {
-        return await firstValueFrom(this.http.get<any>(candidate));
-      } catch (err: any) {
-        lastError = err;
-        const status = Number(err?.status || 0);
-        if (![0, 400, 404, 502, 503].includes(status)) break;
-      }
-    }
-    throw lastError;
-  }
-
-  private buildTrailerBaseCandidates(): string[] {
-    const configuredAssetsApiUrl = String((environment as any)?.assetsApiUrl || '').trim();
-    const candidates = [
-      this.trailerApiRoot,
-      configuredAssetsApiUrl,
-      'https://taylor-assets-production.up.railway.app'
-    ]
-      .map((base) => String(base || '').trim().replace(/\/+$/, ''))
-      .filter(Boolean);
-    return Array.from(new Set(candidates));
+    return await firstValueFrom(this.http.get<any>(this.trailerPath(path)));
   }
 
   private async loadTrailersWithFallback(): Promise<void> {
