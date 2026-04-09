@@ -59,123 +59,221 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
         >
           Inactive
         </button>
-      </div>
-
-      <div class="position-tabs-wrap">
-        <div class="position-tabs">
-          @for (position of positionTabs(); track position) {
-            <button
-              class="position-tab"
-              [class.active]="selectedPosition() === position"
-              (click)="selectPosition(position)"
-            >
-              <span>{{ position === 'all' ? 'All Positions' : position }}</span>
-              @if (position !== 'all') {
-                <i
-                  class="bx bx-cog position-settings-icon"
-                  (click)="openPositionSettings(position, $event)"
-                  title="Position settings"
-                ></i>
-              }
-            </button>
-          }
-        </div>
-        <button class="btn-secondary add-position-btn" (click)="openAddPosition()">
-          <i class='bx bx-plus'></i> Position
+        <button
+          class="state-tab"
+          [class.active]="positionStateFilter() === 'report'"
+          (click)="setPositionStateFilter('report')"
+        >
+          Report
         </button>
       </div>
 
-      <div class="filters">
-        <input
-          type="text"
-          placeholder="Search applicants..."
-          [ngModel]="search()"
-          (ngModelChange)="search.set($event)"
-        />
-        <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
-          <option value="all">All statuses</option>
-          <option value="new">New</option>
-          <option value="screening">Screening</option>
-          <option value="interview">Interview</option>
-          <option value="offer">Offer</option>
-          <option value="hired">Hired</option>
-          <option value="no response">No Response</option>
-          <option value="no show">No Show</option>
-          <option value="rejected">Rejected</option>
-        </select>
-      </div>
-      @if (applicantsSyncError()) {
-        <div class="sync-error">{{ applicantsSyncError() }}</div>
-      }
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Gender</th>
-              <th>Age</th>
-              <th>Position</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Applied</th>
-              <th>CV</th>
-              <th>Notes</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of filteredRows(); track row.id) {
-              <tr
-                class="applicant-row"
-                [class.selected]="selectedApplicantId() === row.id"
-                (click)="selectApplicant(row.id)"
-              >
-                <td><strong>{{ row.fullName }}</strong></td>
-                <td>{{ row.gender || '—' }}</td>
-                <td>{{ row.age ?? '—' }}</td>
-                <td>{{ row.position || '—' }}</td>
-                <td>{{ row.source || '—' }}</td>
-                <td>
-                  <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
-                    <option value="new">New</option>
-                    <option value="screening">Screening</option>
-                    <option value="interview">Interview</option>
-                    <option value="offer">Offer</option>
-                    <option value="hired">Hired</option>
-                    <option value="no response">No Response</option>
-                    <option value="no show">No Show</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </td>
-                <td>{{ row.appliedDate || '—' }}</td>
-                <td>
-                  @if (row.cvDataUrl) {
-                    <button class="cv-link-btn" (click)="$event.stopPropagation(); viewCv(row)">View</button>
-                  } @else {
-                    —
-                  }
-                </td>
-                <td>{{ row.notes || '—' }}</td>
-                <td>
-                  <div class="action-icons">
-                    <button class="icon-btn" title="Edit applicant" (click)="$event.stopPropagation(); openEdit(row)">
-                      <i class='bx bx-edit'></i>
-                    </button>
-                    <button class="icon-btn danger" title="Delete applicant" (click)="$event.stopPropagation(); deleteApplicant(row.id)">
-                      <i class='bx bx-trash'></i>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="10" class="empty">No applicants yet.</td>
-              </tr>
+      @if (positionStateFilter() === 'report') {
+        <section class="report-view">
+          <div class="report-toolbar">
+            <label for="report-range">Range</label>
+            <select
+              id="report-range"
+              [ngModel]="reportRange()"
+              (ngModelChange)="reportRange.set($event)"
+            >
+              <option value="all">All time</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="custom">Custom range</option>
+            </select>
+            @if (reportRange() === 'custom') {
+              <div class="report-date-range">
+                <input
+                  type="date"
+                  [ngModel]="reportDateFrom()"
+                  (ngModelChange)="reportDateFrom.set($event)"
+                  aria-label="Report from date"
+                />
+                <span>to</span>
+                <input
+                  type="date"
+                  [ngModel]="reportDateTo()"
+                  (ngModelChange)="reportDateTo.set($event)"
+                  aria-label="Report to date"
+                />
+              </div>
             }
-          </tbody>
-        </table>
-      </div>
+          </div>
+          <div class="report-cards">
+            <article class="report-card">
+              <span>Total Applicants</span>
+              <strong>{{ reportRows().length }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Active Positions</span>
+              <strong>{{ activePositionsCount() }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Inactive Positions</span>
+              <strong>{{ inactivePositionsCount() }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Hired</span>
+              <strong>{{ hiredCount() }}</strong>
+            </article>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-panel">
+              <h3>Status Breakdown</h3>
+              <table>
+                <tbody>
+                  @for (item of statusBreakdown(); track item.status) {
+                    <tr>
+                      <td>{{ statusLabel(item.status) }}</td>
+                      <td class="count-cell">{{ item.count }}</td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="2" class="empty">No applicants yet.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="report-panel">
+              <h3>Position Breakdown</h3>
+              <table>
+                <tbody>
+                  @for (item of positionBreakdown(); track item.position) {
+                    <tr>
+                      <td>{{ item.position }}</td>
+                      <td class="count-cell">{{ item.count }}</td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="2" class="empty">No applicants yet.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      } @else {
+        <div class="position-tabs-wrap">
+          <div class="position-tabs">
+            @for (position of positionTabs(); track position) {
+              <button
+                class="position-tab"
+                [class.active]="selectedPosition() === position"
+                (click)="selectPosition(position)"
+              >
+                <span>{{ position === 'all' ? 'All Positions' : position }}</span>
+                @if (position !== 'all') {
+                  <i
+                    class="bx bx-cog position-settings-icon"
+                    (click)="openPositionSettings(position, $event)"
+                    title="Position settings"
+                  ></i>
+                }
+              </button>
+            }
+          </div>
+          <button class="btn-secondary add-position-btn" (click)="openAddPosition()">
+            <i class='bx bx-plus'></i> Position
+          </button>
+        </div>
+
+        <div class="filters">
+          <input
+            type="text"
+            placeholder="Search applicants..."
+            [ngModel]="search()"
+            (ngModelChange)="search.set($event)"
+          />
+          <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+            <option value="all">All statuses</option>
+            <option value="new">New</option>
+            <option value="screening">Screening</option>
+            <option value="interview">Interview</option>
+            <option value="offer">Offer</option>
+            <option value="hired">Hired</option>
+            <option value="no response">No Response</option>
+            <option value="no show">No Show</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        @if (applicantsSyncError()) {
+          <div class="sync-error">{{ applicantsSyncError() }}</div>
+        }
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Gender</th>
+                <th>Age</th>
+                <th>Position</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Applied</th>
+                <th>CV</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of filteredRows(); track row.id) {
+                <tr
+                  class="applicant-row"
+                  [class.selected]="selectedApplicantId() === row.id"
+                  (click)="selectApplicant(row.id)"
+                >
+                  <td><strong>{{ row.fullName }}</strong></td>
+                  <td>{{ row.gender || '—' }}</td>
+                  <td>{{ row.age ?? '—' }}</td>
+                  <td>{{ row.position || '—' }}</td>
+                  <td>{{ row.source || '—' }}</td>
+                  <td>
+                    <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
+                      <option value="new">New</option>
+                      <option value="screening">Screening</option>
+                      <option value="interview">Interview</option>
+                      <option value="offer">Offer</option>
+                      <option value="hired">Hired</option>
+                      <option value="no response">No Response</option>
+                      <option value="no show">No Show</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </td>
+                  <td>{{ row.appliedDate || '—' }}</td>
+                  <td>
+                    @if (row.cvDataUrl) {
+                      <button class="cv-link-btn" (click)="$event.stopPropagation(); viewCv(row)">View</button>
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td>{{ row.notes || '—' }}</td>
+                  <td>
+                    <div class="action-icons">
+                      <button class="icon-btn" title="Edit applicant" (click)="$event.stopPropagation(); openEdit(row)">
+                        <i class='bx bx-edit'></i>
+                      </button>
+                      <button class="icon-btn danger" title="Delete applicant" (click)="$event.stopPropagation(); deleteApplicant(row.id)">
+                        <i class='bx bx-trash'></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="10" class="empty">No applicants yet.</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
 
       @if (showCreate()) {
         <div class="modal-overlay" (click)="showCreate.set(false)">
@@ -377,6 +475,21 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
     .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
+    .report-view { margin-top: 6px; }
+    .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .report-toolbar label { color: #8aa0b8; font-size: 0.8rem; }
+    .report-toolbar select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 10px; min-width: 140px; }
+    .report-date-range { display: inline-flex; align-items: center; gap: 8px; }
+    .report-date-range input { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
+    .report-date-range span { color: #8aa0b8; font-size: 0.8rem; }
+    .report-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .report-card { background: #10192c; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .report-card span { color: #8aa0b8; font-size: 0.8rem; }
+    .report-card strong { color: #e0f2fe; font-size: 1.2rem; }
+    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .report-panel { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
+    .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
+    .count-cell { text-align: right; font-weight: 700; color: #e2e8f0; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
     td { padding: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
@@ -406,7 +519,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   rows = signal<ApplicantRow[]>([]);
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
-  positionStateFilter = signal<'active' | 'inactive'>('active');
+  positionStateFilter = signal<'active' | 'inactive' | 'report'>('active');
+  reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
+  reportDateFrom = signal('');
+  reportDateTo = signal('');
   search = signal('');
   statusFilter = signal<'all' | ApplicantStatus>('all');
   showCreate = signal(false);
@@ -452,6 +568,63 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   });
 
   positionOptionsForForm = computed(() => this.allPositions().filter((p) => p.isActive).map((p) => p.name));
+
+  reportRows = computed(() => {
+    const range = this.reportRange();
+    if (range === 'all') return this.rows();
+
+    if (range === 'custom') {
+      const from = this.parseDateOnly(this.reportDateFrom());
+      const to = this.parseDateOnly(this.reportDateTo());
+
+      if (!from && !to) return this.rows();
+
+      const fromBound = from ? new Date(from.getFullYear(), from.getMonth(), from.getDate()) : null;
+      const toBound = to ? new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999) : null;
+
+      return this.rows().filter((row) => {
+        const parsed = this.parseDateOnly(row.appliedDate);
+        if (!parsed) return false;
+        if (fromBound && parsed < fromBound) return false;
+        if (toBound && parsed > toBound) return false;
+        return true;
+      });
+    }
+
+    const days = range === '7d' ? 7 : 30;
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
+
+    return this.rows().filter((row) => {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      return !!parsed && parsed >= cutoff;
+    });
+  });
+
+  activePositionsCount = computed(() => this.allPositions().filter((p) => p.isActive).length);
+  inactivePositionsCount = computed(() => this.allPositions().filter((p) => !p.isActive).length);
+  hiredCount = computed(() => this.reportRows().filter((r) => r.status === 'hired').length);
+
+  statusBreakdown = computed(() => {
+    const order: ApplicantStatus[] = ['new', 'screening', 'interview', 'offer', 'hired', 'no response', 'no show', 'rejected'];
+    return order
+      .map((status) => ({
+        status,
+        count: this.reportRows().filter((r) => r.status === status).length
+      }))
+      .filter((item) => item.count > 0);
+  });
+
+  positionBreakdown = computed(() => {
+    const map = new Map<string, number>();
+    for (const row of this.reportRows()) {
+      const position = this.normalizePositionName(row.position) || 'Unassigned';
+      map.set(position, (map.get(position) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([position, count]) => ({ position, count }))
+      .sort((a, b) => b.count - a.count || a.position.localeCompare(b.position));
+  });
 
   filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -622,9 +795,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.selectedPosition.set(position);
   }
 
-  setPositionStateFilter(mode: 'active' | 'inactive'): void {
+  setPositionStateFilter(mode: 'active' | 'inactive' | 'report'): void {
     this.positionStateFilter.set(mode);
     this.selectedPosition.set('all');
+  }
+
+  statusLabel(status: ApplicantStatus): string {
+    if (status === 'no response') return 'No Response';
+    if (status === 'no show') return 'No Show';
+    return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
   openAddPosition(): void {
@@ -767,9 +946,61 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   viewCv(row: ApplicantRow): void {
     if (!row.cvDataUrl) return;
-    const w = window.open(row.cvDataUrl, '_blank', 'noopener,noreferrer');
+    const w = window.open('', '_blank', 'noopener,noreferrer');
     if (!w) {
       this.applicantsSyncError.set('Popup blocked. Please allow popups to view CV files.');
+      return;
+    }
+
+    const objectUrl = this.toObjectUrl(row.cvDataUrl);
+    if (!objectUrl) {
+      w.close();
+      this.applicantsSyncError.set('Unable to open CV. Invalid or unsupported file data.');
+      return;
+    }
+
+    // Important: never navigate a top-level tab directly to a data: URL.
+    // Converting to blob: avoids browser security blocks for PDF data URLs.
+    try {
+      w.location.replace(objectUrl);
+      this.applicantsSyncError.set('');
+    } catch {
+      w.close();
+      this.applicantsSyncError.set('Unable to open CV in a new tab.');
+    }
+  }
+
+  private toObjectUrl(dataUrl: string): string | null {
+    const blob = this.dataUrlToBlob(dataUrl);
+    if (!blob) return null;
+    return URL.createObjectURL(blob);
+  }
+
+  private dataUrlToBlob(dataUrl: string): Blob | null {
+    try {
+      const raw = String(dataUrl || '').trim();
+      if (!raw.toLowerCase().startsWith('data:')) return null;
+
+      const commaIndex = raw.indexOf(',');
+      if (commaIndex <= 5) return null;
+
+      const metadata = raw.slice(5, commaIndex);
+      const payload = raw.slice(commaIndex + 1);
+      const metadataParts = metadata.split(';').map((x) => x.trim()).filter(Boolean);
+      const mimeType = metadataParts.length > 0 ? metadataParts[0] : 'application/octet-stream';
+      const isBase64 = metadataParts.some((part) => part.toLowerCase() === 'base64');
+
+      if (isBase64) {
+        const bin = atob(payload);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new Blob([bytes], { type: mimeType });
+      }
+
+      const textPayload = decodeURIComponent(payload);
+      return new Blob([textPayload], { type: mimeType });
+    } catch {
+      return null;
     }
   }
 
@@ -1005,6 +1236,17 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       if (normalized === 'false') return false;
     }
     return fallback;
+  }
+
+  private parseDateOnly(value: string): Date | null {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const date = new Date(`${raw}T00:00:00`);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+    const fallback = new Date(raw);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
   }
 }
 
