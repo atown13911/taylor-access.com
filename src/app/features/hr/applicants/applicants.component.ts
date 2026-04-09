@@ -147,7 +147,7 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
                 <td>{{ row.appliedDate || '—' }}</td>
                 <td>
                   @if (row.cvDataUrl) {
-                    <button class="cv-link-btn" (click)="$event.stopPropagation(); downloadCv(row)">Download</button>
+                    <button class="cv-link-btn" (click)="$event.stopPropagation(); viewCv(row)">View</button>
                   } @else {
                     —
                   }
@@ -759,12 +759,12 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     reader.readAsDataURL(file);
   }
 
-  downloadCv(row: ApplicantRow): void {
+  viewCv(row: ApplicantRow): void {
     if (!row.cvDataUrl) return;
-    const a = document.createElement('a');
-    a.href = row.cvDataUrl;
-    a.download = row.cvFileName || 'applicant-cv';
-    a.click();
+    const w = window.open(row.cvDataUrl, '_blank', 'noopener,noreferrer');
+    if (!w) {
+      this.applicantsSyncError.set('Popup blocked. Please allow popups to view CV files.');
+    }
   }
 
   private async addCustomPosition(position: string, isActive = true, syncToApi = false): Promise<void> {
