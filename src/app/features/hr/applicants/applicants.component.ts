@@ -17,6 +17,11 @@ interface ApplicantRow {
   notes: string;
 }
 
+interface ApplicantPosition {
+  name: string;
+  isActive: boolean;
+}
+
 @Component({
   selector: 'app-applicants',
   standalone: true,
@@ -33,6 +38,23 @@ interface ApplicantRow {
         </button>
       </header>
 
+      <div class="position-state-tabs">
+        <button
+          class="state-tab"
+          [class.active]="positionStateFilter() === 'active'"
+          (click)="setPositionStateFilter('active')"
+        >
+          Active
+        </button>
+        <button
+          class="state-tab"
+          [class.active]="positionStateFilter() === 'inactive'"
+          (click)="setPositionStateFilter('inactive')"
+        >
+          Inactive
+        </button>
+      </div>
+
       <div class="position-tabs-wrap">
         <div class="position-tabs">
           @for (position of positionTabs(); track position) {
@@ -41,7 +63,14 @@ interface ApplicantRow {
               [class.active]="selectedPosition() === position"
               (click)="selectPosition(position)"
             >
-              {{ position === 'all' ? 'All Positions' : position }}
+              <span>{{ position === 'all' ? 'All Positions' : position }}</span>
+              @if (position !== 'all') {
+                <i
+                  class="bx bx-cog position-settings-icon"
+                  (click)="openPositionSettings(position, $event)"
+                  title="Position settings"
+                ></i>
+              }
             </button>
           }
         </div>
@@ -165,6 +194,29 @@ interface ApplicantRow {
           </div>
         </div>
       }
+
+      @if (showPositionSettings()) {
+        <div class="modal-overlay" (click)="showPositionSettings.set(false)">
+          <div class="modal modal-small" (click)="$event.stopPropagation()">
+            <h3>Position Settings</h3>
+            <div class="form-row">
+              <label>Position</label>
+              <input type="text" [value]="positionSettingsTargetName()" disabled />
+            </div>
+            <div class="form-row">
+              <label>Status</label>
+              <select [ngModel]="positionSettingsTargetActive() ? 'active' : 'inactive'" (ngModelChange)="positionSettingsTargetActive.set($event === 'active')">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="actions">
+              <button class="btn-secondary" (click)="showPositionSettings.set(false)">Cancel</button>
+              <button class="btn-primary" (click)="savePositionSettings()">Save</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -172,10 +224,15 @@ interface ApplicantRow {
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; } } p { margin: 4px 0 0; color: #8aa0b8; } }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); border: none; color: #0a0a14; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
     .btn-secondary { background: #253049; border: none; color: #dbeafe; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .position-state-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+    .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
+    .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .position-tabs-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
     .position-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-    .position-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.84rem; }
+    .position-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 0.84rem; display: inline-flex; align-items: center; gap: 6px; }
     .position-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .position-settings-icon { font-size: 0.9rem; color: #8aa0b8; border-radius: 999px; padding: 1px; }
+    .position-settings-icon:hover { color: #d9f6ff; background: rgba(255,255,255,0.08); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
@@ -197,30 +254,46 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
   private readonly apiUrl = environment.apiUrl;
   rows = signal<ApplicantRow[]>([]);
-  customPositions = signal<string[]>([]);
+  customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
+  positionStateFilter = signal<'active' | 'inactive'>('active');
   search = signal('');
   statusFilter = signal<'all' | ApplicantStatus>('all');
   showCreate = signal(false);
   showAddPosition = signal(false);
+  showPositionSettings = signal(false);
   newPositionName = signal('');
+  positionSettingsTargetName = signal('');
+  positionSettingsTargetActive = signal(true);
   private positionsRefreshTimer: any;
   draft: Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus } = this.emptyDraft();
 
-  positionTabs = computed(() => {
-    const merged = new Set<string>();
+  allPositions = computed(() => {
+    const map = new Map<string, ApplicantPosition>();
     for (const p of this.customPositions()) {
-      const normalized = String(p || '').trim();
-      if (normalized) merged.add(normalized);
+      const normalized = this.normalizePositionName(p?.name);
+      if (!normalized) continue;
+      map.set(normalized.toLowerCase(), { name: normalized, isActive: !!p.isActive });
     }
     for (const row of this.rows()) {
-      const normalized = String(row.position || '').trim();
-      if (normalized) merged.add(normalized);
+      const normalized = this.normalizePositionName(row.position);
+      if (!normalized) continue;
+      if (!map.has(normalized.toLowerCase())) {
+        map.set(normalized.toLowerCase(), { name: normalized, isActive: true });
+      }
     }
-    return ['all', ...Array.from(merged).sort((a, b) => a.localeCompare(b))];
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   });
 
-  positionOptionsForForm = computed(() => this.positionTabs().filter((p) => p !== 'all'));
+  positionTabs = computed(() => {
+    const mode = this.positionStateFilter();
+    const list = this.allPositions()
+      .filter((p) => mode === 'active' ? p.isActive : !p.isActive)
+      .map((p) => p.name);
+    return ['all', ...list];
+  });
+
+  positionOptionsForForm = computed(() => this.allPositions().filter((p) => p.isActive).map((p) => p.name));
 
   filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -250,14 +323,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     try {
       const raw = localStorage.getItem(this.localFallbackPositionsStorageKey);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          this.customPositions.set(
-            parsed
-              .map((p: unknown) => String(p || '').trim())
-              .filter((p: string) => !!p)
-          );
-        }
+        this.customPositions.set(this.parsePositionPayload(JSON.parse(raw)));
       }
     } catch {
       // no-op
@@ -292,7 +358,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       notes: String(this.draft.notes || '').trim()
     };
     this.rows.update((list) => [next, ...list]);
-    if (position) await this.addCustomPosition(position, true);
+    if (position) await this.addCustomPosition(position, true, true);
     this.persist();
     this.showCreate.set(false);
   }
@@ -306,6 +372,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.selectedPosition.set(position);
   }
 
+  setPositionStateFilter(mode: 'active' | 'inactive'): void {
+    this.positionStateFilter.set(mode);
+    this.selectedPosition.set('all');
+  }
+
   openAddPosition(): void {
     this.newPositionName.set('');
     this.showAddPosition.set(true);
@@ -314,10 +385,50 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   async addPosition(): Promise<void> {
     const value = String(this.newPositionName() || '').trim();
     if (!value) return;
-    await this.addCustomPosition(value, true);
+    await this.addCustomPosition(value, true, true);
+    this.positionStateFilter.set('active');
     this.selectedPosition.set(value);
     this.newPositionName.set('');
     this.showAddPosition.set(false);
+  }
+
+  openPositionSettings(position: string, event: MouseEvent): void {
+    event.stopPropagation();
+    const target = this.allPositions().find((p) => p.name.toLowerCase() === position.toLowerCase());
+    this.positionSettingsTargetName.set(position);
+    this.positionSettingsTargetActive.set(target?.isActive ?? true);
+    this.showPositionSettings.set(true);
+  }
+
+  async savePositionSettings(): Promise<void> {
+    const name = this.normalizePositionName(this.positionSettingsTargetName());
+    if (!name) return;
+    const isActive = this.positionSettingsTargetActive();
+
+    this.customPositions.update((list) => list.map((p) => (
+      p.name.toLowerCase() === name.toLowerCase()
+        ? { ...p, isActive }
+        : p
+    )));
+    this.persistLocalPositions();
+
+    try {
+      const res = await firstValueFrom(
+        this.http.put<{ data?: unknown[] }>(
+          `${this.apiUrl}/api/v1/applicants/positions/status`,
+          { name, isActive }
+        )
+      );
+      this.customPositions.set(this.parsePositionPayload(res?.data));
+      this.persistLocalPositions();
+    } catch {
+      // keep local state if API is temporarily unavailable
+    }
+
+    if (!isActive && this.selectedPosition().toLowerCase() === name.toLowerCase()) {
+      this.selectedPosition.set('all');
+    }
+    this.showPositionSettings.set(false);
   }
 
   private persist(): void {
@@ -338,38 +449,29 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     };
   }
 
-  private async addCustomPosition(position: string, syncToApi = false): Promise<void> {
-    const normalized = String(position || '').trim();
+  private async addCustomPosition(position: string, isActive = true, syncToApi = false): Promise<void> {
+    const normalized = this.normalizePositionName(position);
     if (!normalized) return;
     this.customPositions.update((list) => {
-      const exists = list.some((p) => p.toLowerCase() === normalized.toLowerCase());
-      if (exists) return list;
-      const next = [...list, normalized].sort((a, b) => a.localeCompare(b));
-      try {
-        localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(next));
-      } catch {
-        // no-op
+      const idx = list.findIndex((p) => p.name.toLowerCase() === normalized.toLowerCase());
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], isActive };
+        return next;
       }
-      return next;
+      return [...list, { name: normalized, isActive }]
+        .sort((a, b) => a.name.localeCompare(b.name));
     });
+    this.persistLocalPositions();
 
     if (!syncToApi) return;
 
     try {
       const res = await firstValueFrom(
-        this.http.post<{ data?: string[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized })
+        this.http.post<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized })
       );
-      const shared = Array.isArray(res?.data) ? res.data : [];
-      this.customPositions.set(
-        shared
-          .map((p) => String(p || '').trim())
-          .filter((p) => !!p)
-      );
-      try {
-        localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(this.customPositions()));
-      } catch {
-        // no-op
-      }
+      this.customPositions.set(this.parsePositionPayload(res?.data));
+      this.persistLocalPositions();
     } catch {
       // keep local fallback list when API is temporarily unavailable
     }
@@ -378,19 +480,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private async loadSharedPositions(): Promise<void> {
     try {
       const res = await firstValueFrom(
-        this.http.get<{ data?: string[] }>(`${this.apiUrl}/api/v1/applicants/positions`)
+        this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`)
       );
-      const shared = Array.isArray(res?.data) ? res.data : [];
-      this.customPositions.set(
-        shared
-          .map((p) => String(p || '').trim())
-          .filter((p) => !!p)
-      );
-      try {
-        localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(this.customPositions()));
-      } catch {
-        // no-op
-      }
+      this.customPositions.set(this.parsePositionPayload(res?.data));
+      this.persistLocalPositions();
+      this.ensureSelectedPositionValid();
     } catch {
       // If API fails, keep local fallback positions loaded in ngOnInit.
     }
@@ -401,5 +495,58 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       void this.loadSharedPositions();
     }
   };
+
+  private persistLocalPositions(): void {
+    try {
+      localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(this.customPositions()));
+    } catch {
+      // no-op
+    }
+  }
+
+  private parsePositionPayload(payload: unknown): ApplicantPosition[] {
+    if (!Array.isArray(payload)) return [];
+
+    const map = new Map<string, ApplicantPosition>();
+    for (const item of payload) {
+      if (typeof item === 'string') {
+        const name = this.normalizePositionName(item);
+        if (!name) continue;
+        map.set(name.toLowerCase(), { name, isActive: true });
+        continue;
+      }
+
+      if (item && typeof item === 'object') {
+        const row = item as Record<string, unknown>;
+        const name = this.normalizePositionName(row['name'] ?? row['Name']);
+        if (!name) continue;
+        const isActive = this.toBoolean(row['isActive'] ?? row['IsActive'], true);
+        map.set(name.toLowerCase(), { name, isActive });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  private ensureSelectedPositionValid(): void {
+    const selected = this.selectedPosition();
+    if (selected === 'all') return;
+    const valid = this.positionTabs().some((tab) => tab.toLowerCase() === selected.toLowerCase());
+    if (!valid) this.selectedPosition.set('all');
+  }
+
+  private normalizePositionName(value: unknown): string {
+    return String(value ?? '').trim();
+  }
+
+  private toBoolean(value: unknown, fallback: boolean): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true') return true;
+      if (normalized === 'false') return false;
+    }
+    return fallback;
+  }
 }
 

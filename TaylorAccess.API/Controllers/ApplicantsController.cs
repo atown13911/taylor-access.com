@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaylorAccess.API.Data;
-using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 
 namespace TaylorAccess.API.Controllers;
@@ -39,12 +38,10 @@ public class ApplicantsController : ControllerBase
             return NotFound(new { error = "No organizations found" });
 
         var positions = organizations
-            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
+        var merged = MergePositions(positions);
 
-        return Ok(new { data = positions });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
     }
 
     [HttpPost("positions")]
@@ -65,26 +62,66 @@ public class ApplicantsController : ControllerBase
             return BadRequest(new { error = "Position name is required" });
 
         var positions = organizations
-            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (!positions.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase))) positions.Add(name);
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
+        var merged = MergePositions(positions);
 
-        positions = positions
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        if (!merged.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            merged.Add(new ApplicantPositionItem(name, true));
+        merged = MergePositions(merged);
+
+        var node = BuildPositionsNode(merged);
 
         foreach (var org in organizations)
         {
             var settings = ParseSettings(org.Settings);
-            settings[PositionsSettingsKey] = JsonSerializer.SerializeToNode(positions);
+            settings[PositionsSettingsKey] = node.DeepClone();
             org.Settings = settings.ToJsonString();
             org.UpdatedAt = DateTime.UtcNow;
         }
         await _context.SaveChangesAsync();
 
-        return Ok(new { data = positions });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+    }
+
+    [HttpPut("positions/status")]
+    public async Task<ActionResult> UpdatePositionStatus([FromBody] UpdateApplicantPositionStatusRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var organizations = await _context.Organizations
+            .AsTracking()
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+        if (organizations.Count == 0)
+            return NotFound(new { error = "No organizations found" });
+
+        var name = string.IsNullOrWhiteSpace(request.Name) ? string.Empty : request.Name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { error = "Position name is required" });
+
+        var positions = organizations
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
+        var merged = MergePositions(positions);
+
+        var idx = merged.FindIndex(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0)
+            merged[idx] = new ApplicantPositionItem(merged[idx].Name, request.IsActive);
+        else
+            merged.Add(new ApplicantPositionItem(name, request.IsActive));
+        merged = MergePositions(merged);
+
+        var node = BuildPositionsNode(merged);
+        foreach (var org in organizations)
+        {
+            var settings = ParseSettings(org.Settings);
+            settings[PositionsSettingsKey] = node.DeepClone();
+            org.Settings = settings.ToJsonString();
+            org.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
     }
 
     private static JsonObject ParseSettings(string? rawSettings)
@@ -103,19 +140,78 @@ public class ApplicantsController : ControllerBase
         }
     }
 
-    private static List<string> ExtractPositions(JsonObject settings)
+    private static List<ApplicantPositionItem> ExtractPositions(JsonObject settings)
     {
-        if (settings[PositionsSettingsKey] is not JsonArray array) return new List<string>();
+        if (settings[PositionsSettingsKey] is not JsonArray array) return new List<ApplicantPositionItem>();
 
-        return array
-            .Select(item => item?.GetValue<string>()?.Trim())
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Select(item => item!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+        var list = new List<ApplicantPositionItem>();
+        foreach (var item in array)
+        {
+            if (item is null) continue;
+
+            if (item is JsonValue)
+            {
+                var raw = item.ToString();
+                var name = string.IsNullOrWhiteSpace(raw) ? string.Empty : raw.Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                    list.Add(new ApplicantPositionItem(name, true));
+                continue;
+            }
+
+            if (item is JsonObject obj)
+            {
+                var nameRaw = obj["name"]?.ToString() ?? obj["Name"]?.ToString();
+                var name = string.IsNullOrWhiteSpace(nameRaw) ? string.Empty : nameRaw.Trim();
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                var isActive = true;
+                var activeNode = obj["isActive"] ?? obj["IsActive"];
+                if (activeNode is not null && bool.TryParse(activeNode.ToString(), out var parsed))
+                    isActive = parsed;
+
+                list.Add(new ApplicantPositionItem(name, isActive));
+            }
+        }
+
+        return MergePositions(list);
+    }
+
+    private static List<ApplicantPositionItem> MergePositions(IEnumerable<ApplicantPositionItem> source)
+    {
+        var map = new Dictionary<string, ApplicantPositionItem>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in source)
+        {
+            var name = string.IsNullOrWhiteSpace(item.Name) ? string.Empty : item.Name.Trim();
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            if (map.TryGetValue(name, out var existing))
+                map[name] = new ApplicantPositionItem(name, existing.IsActive || item.IsActive);
+            else
+                map[name] = new ApplicantPositionItem(name, item.IsActive);
+        }
+
+        return map.Values
+            .OrderByDescending(p => p.IsActive)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static JsonArray BuildPositionsNode(IEnumerable<ApplicantPositionItem> positions)
+    {
+        var array = new JsonArray();
+        foreach (var item in positions)
+        {
+            array.Add(new JsonObject
+            {
+                ["name"] = item.Name,
+                ["isActive"] = item.IsActive
+            });
+        }
+        return array;
     }
 }
 
 public record AddApplicantPositionRequest(string Name);
+public record UpdateApplicantPositionStatusRequest(string Name, bool IsActive);
+public record ApplicantPositionItem(string Name, bool IsActive);
 
