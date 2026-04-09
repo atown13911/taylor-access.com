@@ -122,6 +122,68 @@ public class ApplicantsController : ControllerBase
         return Ok(new { updated = true, status = row.Status });
     }
 
+    [HttpPut("records/{id:int}")]
+    public async Task<ActionResult> UpdateApplicant(int id, [FromBody] UpdateApplicantRecordRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var row = await _context.ApplicantRecords.FirstOrDefaultAsync(a => a.Id == id);
+        if (row == null) return NotFound(new { error = "Applicant not found" });
+
+        var fullName = string.IsNullOrWhiteSpace(request.FullName) ? string.Empty : request.FullName.Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+            return BadRequest(new { error = "Name is required" });
+
+        row.FullName = fullName;
+        row.Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim();
+        row.Age = request.Age is >= 16 and <= 100 ? request.Age : null;
+        row.Position = string.IsNullOrWhiteSpace(request.Position) ? null : request.Position.Trim();
+        row.Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim();
+        row.Status = NormalizeStatus(request.Status);
+        row.AppliedDate = request.AppliedDate;
+        row.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+        row.CvFileName = string.IsNullOrWhiteSpace(request.CvFileName) ? null : request.CvFileName.Trim();
+        row.CvDataUrl = string.IsNullOrWhiteSpace(request.CvDataUrl) ? null : request.CvDataUrl;
+        row.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                row.Id,
+                row.FullName,
+                row.Gender,
+                row.Age,
+                row.Position,
+                row.Source,
+                row.Status,
+                appliedDate = row.AppliedDate,
+                row.Notes,
+                row.CvFileName,
+                row.CvDataUrl,
+                row.CreatedAt,
+                row.UpdatedAt
+            }
+        });
+    }
+
+    [HttpDelete("records/{id:int}")]
+    public async Task<ActionResult> DeleteApplicant(int id)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var row = await _context.ApplicantRecords.FirstOrDefaultAsync(a => a.Id == id);
+        if (row == null) return NotFound(new { error = "Applicant not found" });
+
+        _context.ApplicantRecords.Remove(row);
+        await _context.SaveChangesAsync();
+        return Ok(new { deleted = true, id });
+    }
+
     [HttpGet("positions")]
     public async Task<ActionResult> GetPositions()
     {
@@ -268,6 +330,57 @@ public class ApplicantsController : ControllerBase
         return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
     }
 
+    [HttpDelete("positions/{name}")]
+    public async Task<ActionResult> DeletePosition(string name)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var target = string.IsNullOrWhiteSpace(name) ? string.Empty : Uri.UnescapeDataString(name).Trim();
+        if (string.IsNullOrWhiteSpace(target))
+            return BadRequest(new { error = "Position name is required" });
+
+        var organizations = await _context.Organizations
+            .AsTracking()
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+        if (organizations.Count == 0)
+            return NotFound(new { error = "No organizations found" });
+
+        var positions = organizations
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
+        var merged = MergePositions(positions);
+
+        var next = merged
+            .Where(p => !p.Name.Equals(target, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (next.Count == merged.Count)
+            return NotFound(new { error = "Position not found" });
+
+        var node = BuildPositionsNode(next);
+        foreach (var org in organizations)
+        {
+            var settings = ParseSettings(org.Settings);
+            settings[PositionsSettingsKey] = node.DeepClone();
+            org.Settings = settings.ToJsonString();
+            org.UpdatedAt = DateTime.UtcNow;
+        }
+
+        // Clear the deleted position from applicant records so the tab doesn't reappear from row-derived positions.
+        var rows = await _context.ApplicantRecords
+            .Where(a => a.Position != null && a.Position.ToLower() == target.ToLower())
+            .ToListAsync();
+        foreach (var row in rows)
+        {
+            row.Position = null;
+            row.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { data = next.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+    }
+
     private static JsonObject ParseSettings(string? rawSettings)
     {
         if (string.IsNullOrWhiteSpace(rawSettings))
@@ -387,4 +500,16 @@ public record CreateApplicantRecordRequest(
     string? CvDataUrl
 );
 public record UpdateApplicantRecordStatusRequest(string Status);
+public record UpdateApplicantRecordRequest(
+    string FullName,
+    string? Gender,
+    int? Age,
+    string? Position,
+    string? Source,
+    string? Status,
+    DateTime? AppliedDate,
+    string? Notes,
+    string? CvFileName,
+    string? CvDataUrl
+);
 

@@ -26,6 +26,8 @@ interface ApplicantPosition {
   isActive: boolean;
 }
 
+type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
+
 @Component({
   selector: 'app-applicants',
   standalone: true,
@@ -117,6 +119,7 @@ interface ApplicantPosition {
               <th>Applied</th>
               <th>CV</th>
               <th>Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -150,10 +153,20 @@ interface ApplicantPosition {
                   }
                 </td>
                 <td>{{ row.notes || '—' }}</td>
+                <td>
+                  <div class="action-icons">
+                    <button class="icon-btn" title="Edit applicant" (click)="$event.stopPropagation(); openEdit(row)">
+                      <i class='bx bx-edit'></i>
+                    </button>
+                    <button class="icon-btn danger" title="Delete applicant" (click)="$event.stopPropagation(); deleteApplicant(row.id)">
+                      <i class='bx bx-trash'></i>
+                    </button>
+                  </div>
+                </td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="9" class="empty">No applicants yet.</td>
+                <td colspan="10" class="empty">No applicants yet.</td>
               </tr>
             }
           </tbody>
@@ -222,6 +235,77 @@ interface ApplicantPosition {
         </div>
       }
 
+      @if (showEdit()) {
+        <div class="modal-overlay" (click)="showEdit.set(false)">
+          <div class="modal" (click)="$event.stopPropagation()">
+            <h3>Edit Applicant</h3>
+            <div class="form-row">
+              <label>Name</label>
+              <input type="text" [(ngModel)]="editDraft.fullName" />
+            </div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label>Gender</label>
+                <select [(ngModel)]="editDraft.gender">
+                  <option value="">Select gender</option>
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>Age</label>
+                <input type="number" min="16" max="100" [(ngModel)]="editDraft.age" />
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Position</label>
+              <select [(ngModel)]="editDraft.position">
+                <option value="">Select position</option>
+                @for (position of positionOptionsForForm(); track position) {
+                  <option [value]="position">{{ position }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Source</label>
+              <input type="text" [(ngModel)]="editDraft.source" />
+            </div>
+            <div class="form-row">
+              <label>Applied Date</label>
+              <input type="date" [(ngModel)]="editDraft.appliedDate" />
+            </div>
+            <div class="form-row">
+              <label>Notes</label>
+              <textarea rows="3" [(ngModel)]="editDraft.notes"></textarea>
+            </div>
+            <div class="form-row">
+              <label>Status</label>
+              <select [(ngModel)]="editDraft.status">
+                <option value="new">New</option>
+                <option value="screening">Screening</option>
+                <option value="interview">Interview</option>
+                <option value="offer">Offer</option>
+                <option value="hired">Hired</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>CV Upload</label>
+              <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" (change)="onEditCvSelected($event)" />
+              @if (editDraft.cvFileName) {
+                <small class="hint">Selected: {{ editDraft.cvFileName }}</small>
+              }
+            </div>
+            <div class="actions">
+              <button class="btn-secondary" (click)="showEdit.set(false)">Cancel</button>
+              <button class="btn-primary" (click)="saveEdit()">Save</button>
+            </div>
+          </div>
+        </div>
+      }
+
       @if (showAddPosition()) {
         <div class="modal-overlay" (click)="showAddPosition.set(false)">
           <div class="modal modal-small" (click)="$event.stopPropagation()">
@@ -259,6 +343,7 @@ interface ApplicantPosition {
               </select>
             </div>
             <div class="actions">
+              <button class="btn-danger" (click)="deletePositionTab()">Delete Position</button>
               <button class="btn-secondary" (click)="showPositionSettings.set(false)">Cancel</button>
               <button class="btn-primary" (click)="savePositionSettings()">Save</button>
             </div>
@@ -272,6 +357,7 @@ interface ApplicantPosition {
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; } } p { margin: 4px 0 0; color: #8aa0b8; } }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); border: none; color: #0a0a14; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
     .btn-secondary { background: #253049; border: none; color: #dbeafe; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .btn-danger { background: #3b1118; border: 1px solid #7f1d1d; color: #fecaca; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; margin-right: auto; }
     .position-state-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
     .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
     .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
@@ -291,6 +377,10 @@ interface ApplicantPosition {
     .applicant-row { cursor: pointer; }
     .applicant-row.selected td { background: rgba(0, 212, 255, 0.08); }
     td select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
+    .action-icons { display: flex; gap: 6px; }
+    .icon-btn { border: 1px solid #2a2a4e; background: #111827; color: #cbd5e1; border-radius: 6px; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .icon-btn:hover { border-color: #4b5c84; color: #fff; }
+    .icon-btn.danger:hover { border-color: #ef4444; color: #fecaca; }
     .cv-link-btn { background: transparent; color: #7dd3fc; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.86rem; }
     .empty { text-align: center; color: #8aa0b8; padding: 20px; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -314,6 +404,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   search = signal('');
   statusFilter = signal<'all' | ApplicantStatus>('all');
   showCreate = signal(false);
+  showEdit = signal(false);
   showAddPosition = signal(false);
   showPositionSettings = signal(false);
   newPositionName = signal('');
@@ -325,7 +416,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private positionsRefreshTimer: any;
   private applicantsRefreshTimer: any;
   private attemptedLegacyImport = false;
-  draft: Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus } = this.emptyDraft();
+  editTargetId = signal<number | null>(null);
+  draft: ApplicantDraft = this.emptyDraft();
+  editDraft: ApplicantDraft = this.emptyDraft();
 
   allPositions = computed(() => {
     const map = new Map<string, ApplicantPosition>();
@@ -396,6 +489,23 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.showCreate.set(true);
   }
 
+  openEdit(row: ApplicantRow): void {
+    this.editTargetId.set(row.id);
+    this.editDraft = {
+      fullName: row.fullName,
+      gender: row.gender,
+      age: row.age,
+      position: row.position,
+      source: row.source,
+      status: row.status,
+      appliedDate: row.appliedDate,
+      notes: row.notes,
+      cvFileName: row.cvFileName,
+      cvDataUrl: row.cvDataUrl
+    };
+    this.showEdit.set(true);
+  }
+
   async saveDraft(): Promise<void> {
     const fullName = String(this.draft.fullName || '').trim();
     if (!fullName) return;
@@ -443,6 +553,57 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     } catch {
       // If API update fails, pull latest DB state.
       this.applicantsSyncError.set('Unable to update applicant status in database.');
+      await this.loadSharedApplicants();
+    }
+  }
+
+  async saveEdit(): Promise<void> {
+    const id = this.editTargetId();
+    if (!id) return;
+
+    const fullName = String(this.editDraft.fullName || '').trim();
+    if (!fullName) return;
+
+    const payload = {
+      fullName,
+      gender: this.normalizePositionName(this.editDraft.gender) || null,
+      age: this.normalizeAge(this.editDraft.age),
+      position: this.normalizePositionName(this.editDraft.position) || null,
+      source: this.normalizePositionName(this.editDraft.source) || null,
+      status: this.normalizeStatus(this.editDraft.status),
+      appliedDate: this.toIsoDateOnly(this.editDraft.appliedDate) || null,
+      notes: this.normalizePositionName(this.editDraft.notes) || null,
+      cvFileName: this.normalizePositionName(this.editDraft.cvFileName) || null,
+      cvDataUrl: this.normalizePositionName(this.editDraft.cvDataUrl) || null
+    };
+
+    try {
+      await firstValueFrom(
+        this.http.put(`${this.apiUrl}/api/v1/applicants/records/${id}`, payload)
+      );
+      await this.loadSharedApplicants();
+      this.showEdit.set(false);
+      this.applicantsSyncError.set('');
+    } catch {
+      this.applicantsSyncError.set('Unable to save applicant changes to database.');
+    }
+  }
+
+  async deleteApplicant(id: number): Promise<void> {
+    const ok = typeof window !== 'undefined'
+      ? window.confirm('Delete this applicant?')
+      : true;
+    if (!ok) return;
+
+    try {
+      await firstValueFrom(
+        this.http.delete(`${this.apiUrl}/api/v1/applicants/records/${id}`)
+      );
+      this.rows.update((list) => list.filter((r) => r.id !== id));
+      this.ensureSelectedApplicantValid();
+      this.applicantsSyncError.set('');
+    } catch {
+      this.applicantsSyncError.set('Unable to delete applicant from database.');
       await this.loadSharedApplicants();
     }
   }
@@ -522,6 +683,33 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.showPositionSettings.set(false);
   }
 
+  async deletePositionTab(): Promise<void> {
+    const name = this.normalizePositionName(this.positionSettingsOriginalName() || this.positionSettingsTargetName());
+    if (!name) return;
+
+    const ok = typeof window !== 'undefined'
+      ? window.confirm(`Delete position "${name}"? This will remove it from tabs and clear it from applicants.`)
+      : true;
+    if (!ok) return;
+
+    try {
+      const encoded = encodeURIComponent(name);
+      const res = await firstValueFrom(
+        this.http.delete<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions/${encoded}`)
+      );
+      this.customPositions.set(this.parsePositionPayload(res?.data));
+      this.persistLocalPositions();
+      if (this.selectedPosition().toLowerCase() === name.toLowerCase()) {
+        this.selectedPosition.set('all');
+      }
+      await this.loadSharedApplicants();
+      this.showPositionSettings.set(false);
+      this.applicantsSyncError.set('');
+    } catch {
+      this.applicantsSyncError.set('Unable to delete position tab from database.');
+    }
+  }
+
   private emptyDraft() {
     return {
       fullName: '',
@@ -551,6 +739,22 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     reader.onload = () => {
       this.draft.cvFileName = file.name;
       this.draft.cvDataUrl = typeof reader.result === 'string' ? reader.result : '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  onEditCvSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.editDraft.cvFileName = file.name;
+      this.editDraft.cvDataUrl = typeof reader.result === 'string' ? reader.result : '';
     };
     reader.readAsDataURL(file);
   }
