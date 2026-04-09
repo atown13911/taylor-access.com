@@ -118,14 +118,18 @@ interface ApplicantPosition {
           </thead>
           <tbody>
             @for (row of filteredRows(); track row.id) {
-              <tr>
+              <tr
+                class="applicant-row"
+                [class.selected]="selectedApplicantId() === row.id"
+                (click)="selectApplicant(row.id)"
+              >
                 <td><strong>{{ row.fullName }}</strong></td>
                 <td>{{ row.gender || '—' }}</td>
                 <td>{{ row.age ?? '—' }}</td>
                 <td>{{ row.position || '—' }}</td>
                 <td>{{ row.source || '—' }}</td>
                 <td>
-                  <select [ngModel]="row.status" (ngModelChange)="setStatus(row.id, $event)">
+                  <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
                     <option value="new">New</option>
                     <option value="screening">Screening</option>
                     <option value="interview">Interview</option>
@@ -137,7 +141,7 @@ interface ApplicantPosition {
                 <td>{{ row.appliedDate || '—' }}</td>
                 <td>
                   @if (row.cvDataUrl) {
-                    <button class="cv-link-btn" (click)="downloadCv(row)">Download</button>
+                    <button class="cv-link-btn" (click)="$event.stopPropagation(); downloadCv(row)">Download</button>
                   } @else {
                     —
                   }
@@ -280,6 +284,8 @@ interface ApplicantPosition {
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
     td { padding: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+    .applicant-row { cursor: pointer; }
+    .applicant-row.selected td { background: rgba(0, 212, 255, 0.08); }
     td select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
     .cv-link-btn { background: transparent; color: #7dd3fc; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.86rem; }
     .empty { text-align: center; color: #8aa0b8; padding: 20px; }
@@ -309,6 +315,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionSettingsOriginalName = signal('');
   positionSettingsTargetName = signal('');
   positionSettingsTargetActive = signal(true);
+  selectedApplicantId = signal<number | null>(null);
   private positionsRefreshTimer: any;
   private applicantsRefreshTimer: any;
   draft: Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus } = this.emptyDraft();
@@ -427,6 +434,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       // If API update fails, pull latest DB state.
       await this.loadSharedApplicants();
     }
+  }
+
+  selectApplicant(id: number): void {
+    this.selectedApplicantId.set(id);
   }
 
   selectPosition(position: string): void {
@@ -588,6 +599,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records`)
       );
       this.rows.set(this.parseApplicantPayload(res?.data));
+      this.ensureSelectedApplicantValid();
     } catch {
       // Keep current rows if API is temporarily unavailable.
     }
@@ -665,6 +677,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     if (selected === 'all') return;
     const valid = this.positionTabs().some((tab) => tab.toLowerCase() === selected.toLowerCase());
     if (!valid) this.selectedPosition.set('all');
+  }
+
+  private ensureSelectedApplicantValid(): void {
+    const selected = this.selectedApplicantId();
+    if (selected === null) return;
+    const exists = this.rows().some((r) => r.id === selected);
+    if (!exists) this.selectedApplicantId.set(null);
   }
 
   private normalizePositionName(value: unknown): string {
