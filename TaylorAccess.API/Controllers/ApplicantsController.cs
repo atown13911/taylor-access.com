@@ -75,6 +75,15 @@ public class ApplicantsController : ControllerBase
         if (user.OrganizationId.HasValue)
             return await _context.Organizations.FirstOrDefaultAsync(o => o.Id == user.OrganizationId.Value);
 
+        var assignedOrgId = await _context.UserOrganizations
+            .Where(uo => uo.UserId == user.Id)
+            .OrderByDescending(uo => uo.IsPrimary)
+            .ThenBy(uo => uo.Id)
+            .Select(uo => (int?)uo.OrganizationId)
+            .FirstOrDefaultAsync();
+        if (assignedOrgId.HasValue)
+            return await _context.Organizations.FirstOrDefaultAsync(o => o.Id == assignedOrgId.Value);
+
         if (user.Role == "product_owner" || user.Role == "superadmin" || user.Role == "development")
             return await _context.Organizations.OrderBy(o => o.Id).FirstOrDefaultAsync();
 

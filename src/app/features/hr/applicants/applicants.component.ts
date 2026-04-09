@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
@@ -191,7 +191,7 @@ interface ApplicantRow {
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   `]
 })
-export class ApplicantsComponent implements OnInit {
+export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly storageKey = 'ta.hr.applicants.v1';
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
@@ -204,6 +204,7 @@ export class ApplicantsComponent implements OnInit {
   showCreate = signal(false);
   showAddPosition = signal(false);
   newPositionName = signal('');
+  private positionsRefreshTimer: any;
   draft: Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus } = this.emptyDraft();
 
   positionTabs = computed(() => {
@@ -263,6 +264,13 @@ export class ApplicantsComponent implements OnInit {
     }
 
     void this.loadSharedPositions();
+    this.positionsRefreshTimer = setInterval(() => void this.loadSharedPositions(), 15000);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+  }
+
+  ngOnDestroy(): void {
+    if (this.positionsRefreshTimer) clearInterval(this.positionsRefreshTimer);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   openCreate(): void {
@@ -387,5 +395,11 @@ export class ApplicantsComponent implements OnInit {
       // If API fails, keep local fallback positions loaded in ngOnInit.
     }
   }
+
+  private handleVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible') {
+      void this.loadSharedPositions();
+    }
+  };
 }
 
