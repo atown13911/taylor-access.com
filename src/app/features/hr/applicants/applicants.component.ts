@@ -10,11 +10,15 @@ type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | '
 interface ApplicantRow {
   id: number;
   fullName: string;
+  gender: string;
+  age: number | null;
   position: string;
   source: string;
   status: ApplicantStatus;
   appliedDate: string;
   notes: string;
+  cvFileName: string;
+  cvDataUrl: string;
 }
 
 interface ApplicantPosition {
@@ -102,10 +106,13 @@ interface ApplicantPosition {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Gender</th>
+              <th>Age</th>
               <th>Position</th>
               <th>Source</th>
               <th>Status</th>
               <th>Applied</th>
+              <th>CV</th>
               <th>Notes</th>
             </tr>
           </thead>
@@ -113,6 +120,8 @@ interface ApplicantPosition {
             @for (row of filteredRows(); track row.id) {
               <tr>
                 <td><strong>{{ row.fullName }}</strong></td>
+                <td>{{ row.gender || '—' }}</td>
+                <td>{{ row.age ?? '—' }}</td>
                 <td>{{ row.position || '—' }}</td>
                 <td>{{ row.source || '—' }}</td>
                 <td>
@@ -126,11 +135,18 @@ interface ApplicantPosition {
                   </select>
                 </td>
                 <td>{{ row.appliedDate || '—' }}</td>
+                <td>
+                  @if (row.cvDataUrl) {
+                    <button class="cv-link-btn" (click)="downloadCv(row)">Download</button>
+                  } @else {
+                    —
+                  }
+                </td>
                 <td>{{ row.notes || '—' }}</td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="6" class="empty">No applicants yet.</td>
+                <td colspan="9" class="empty">No applicants yet.</td>
               </tr>
             }
           </tbody>
@@ -144,6 +160,22 @@ interface ApplicantPosition {
             <div class="form-row">
               <label>Name</label>
               <input type="text" [(ngModel)]="draft.fullName" />
+            </div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label>Gender</label>
+                <select [(ngModel)]="draft.gender">
+                  <option value="">Select gender</option>
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Non-binary">Non-binary</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>Age</label>
+                <input type="number" min="16" max="100" [(ngModel)]="draft.age" />
+              </div>
             </div>
             <div class="form-row">
               <label>Position</label>
@@ -165,6 +197,15 @@ interface ApplicantPosition {
             <div class="form-row">
               <label>Notes</label>
               <textarea rows="3" [(ngModel)]="draft.notes"></textarea>
+            </div>
+            <div class="form-row">
+              <label>CV Upload</label>
+              <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" (change)="onCvSelected($event)" />
+              @if (draft.cvFileName) {
+                <small class="hint">Selected: {{ draft.cvFileName }}</small>
+              } @else {
+                <small class="hint">Optional. Max 5MB.</small>
+              }
             </div>
             <div class="actions">
               <button class="btn-secondary" (click)="showCreate.set(false)">Cancel</button>
@@ -240,11 +281,14 @@ interface ApplicantPosition {
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
     td { padding: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
     td select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
+    .cv-link-btn { background: transparent; color: #7dd3fc; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.86rem; }
     .empty { text-align: center; color: #8aa0b8; padding: 20px; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { width: 100%; max-width: 520px; background: #161a2a; border: 1px solid #2a2a4e; border-radius: 12px; padding: 16px; h3 { margin-top: 0; color: #fff; } }
     .modal-small { max-width: 420px; }
     .form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; label { color: #8aa0b8; font-size: 0.8rem; } input, textarea, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hint { color: #8aa0b8; font-size: 0.78rem; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   `]
 })
@@ -352,11 +396,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const next: ApplicantRow = {
       id: Date.now(),
       fullName,
+      gender: this.normalizePositionName(this.draft.gender),
+      age: this.normalizeAge(this.draft.age),
       position,
       source: String(this.draft.source || '').trim(),
       status: this.draft.status || 'new',
       appliedDate: this.draft.appliedDate || new Date().toISOString().slice(0, 10),
-      notes: String(this.draft.notes || '').trim()
+      notes: String(this.draft.notes || '').trim(),
+      cvFileName: String(this.draft.cvFileName || '').trim(),
+      cvDataUrl: String(this.draft.cvDataUrl || '').trim()
     };
     this.rows.update((list) => [next, ...list]);
     if (position) await this.addCustomPosition(position, true, true);
@@ -451,11 +499,42 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private emptyDraft() {
     return {
       fullName: '',
+      gender: '',
+      age: null as number | null,
       position: '',
       source: '',
       appliedDate: new Date().toISOString().slice(0, 10),
-      notes: ''
+      notes: '',
+      cvFileName: '',
+      cvDataUrl: ''
     };
+  }
+
+  onCvSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Keep local storage payload manageable for this prototype.
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.draft.cvFileName = file.name;
+      this.draft.cvDataUrl = typeof reader.result === 'string' ? reader.result : '';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  downloadCv(row: ApplicantRow): void {
+    if (!row.cvDataUrl) return;
+    const a = document.createElement('a');
+    a.href = row.cvDataUrl;
+    a.download = row.cvFileName || 'applicant-cv';
+    a.click();
   }
 
   private async addCustomPosition(position: string, isActive = true, syncToApi = false): Promise<void> {
@@ -546,6 +625,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   private normalizePositionName(value: unknown): string {
     return String(value ?? '').trim();
+  }
+
+  private normalizeAge(value: unknown): number | null {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    const rounded = Math.round(n);
+    if (rounded < 16 || rounded > 100) return null;
+    return rounded;
   }
 
   private toBoolean(value: unknown, fallback: boolean): boolean {
