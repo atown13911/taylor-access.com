@@ -100,6 +100,9 @@ interface ApplicantPosition {
           <option value="rejected">Rejected</option>
         </select>
       </div>
+      @if (applicantsSyncError()) {
+        <div class="sync-error">{{ applicantsSyncError() }}</div>
+      }
 
       <div class="table-wrap">
         <table>
@@ -280,6 +283,7 @@ interface ApplicantPosition {
     .position-settings-icon:hover { color: #d9f6ff; background: rgba(255,255,255,0.08); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
+    .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
@@ -300,6 +304,7 @@ interface ApplicantPosition {
 })
 export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
+  private readonly legacyApplicantsStorageKey = 'ta.hr.applicants.v1';
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
   private readonly apiUrl = environment.apiUrl;
   rows = signal<ApplicantRow[]>([]);
@@ -316,8 +321,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionSettingsTargetName = signal('');
   positionSettingsTargetActive = signal(true);
   selectedApplicantId = signal<number | null>(null);
+  applicantsSyncError = signal('');
   private positionsRefreshTimer: any;
   private applicantsRefreshTimer: any;
+  private attemptedLegacyImport = false;
   draft: Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus } = this.emptyDraft();
 
   allPositions = computed(() => {
@@ -416,7 +423,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       } else {
         await this.loadSharedApplicants();
       }
+      this.applicantsSyncError.set('');
     } catch {
+      this.applicantsSyncError.set('Unable to save applicant to shared database right now.');
       return;
     }
 
@@ -430,8 +439,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       await firstValueFrom(
         this.http.put(`${this.apiUrl}/api/v1/applicants/records/${id}/status`, { status })
       );
+      this.applicantsSyncError.set('');
     } catch {
       // If API update fails, pull latest DB state.
+      this.applicantsSyncError.set('Unable to update applicant status in database.');
       await this.loadSharedApplicants();
     }
   }
@@ -598,10 +609,63 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const res = await firstValueFrom(
         this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records`)
       );
-      this.rows.set(this.parseApplicantPayload(res?.data));
+      const parsed = this.parseApplicantPayload(res?.data);
+      this.rows.set(parsed);
       this.ensureSelectedApplicantValid();
+      this.applicantsSyncError.set('');
+
+      // One-time bridge for older local-only applicant entries.
+      if (parsed.length === 0 && !this.attemptedLegacyImport) {
+        this.attemptedLegacyImport = true;
+        await this.importLegacyApplicantsToDb();
+      }
     } catch {
       // Keep current rows if API is temporarily unavailable.
+      this.applicantsSyncError.set('Unable to load shared applicants from database.');
+    }
+  }
+
+  private async importLegacyApplicantsToDb(): Promise<void> {
+    let legacyRows: ApplicantRow[] = [];
+    try {
+      const raw = localStorage.getItem(this.legacyApplicantsStorageKey);
+      if (!raw) return;
+      legacyRows = this.parseApplicantPayload(JSON.parse(raw));
+    } catch {
+      return;
+    }
+    if (legacyRows.length === 0) return;
+
+    let imported = 0;
+    for (const row of legacyRows) {
+      try {
+        await firstValueFrom(
+          this.http.post(`${this.apiUrl}/api/v1/applicants/records`, {
+            fullName: row.fullName,
+            gender: row.gender || null,
+            age: row.age,
+            position: row.position || null,
+            source: row.source || null,
+            status: row.status,
+            appliedDate: this.toIsoDateOnly(row.appliedDate) || null,
+            notes: row.notes || null,
+            cvFileName: row.cvFileName || null,
+            cvDataUrl: row.cvDataUrl || null
+          })
+        );
+        imported++;
+      } catch {
+        // continue best-effort import
+      }
+    }
+
+    if (imported > 0) {
+      try {
+        localStorage.removeItem(this.legacyApplicantsStorageKey);
+      } catch {
+        // no-op
+      }
+      await this.loadSharedApplicants();
     }
   }
 
