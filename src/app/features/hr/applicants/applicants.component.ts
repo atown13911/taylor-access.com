@@ -1,6 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 
 type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 
@@ -189,8 +192,10 @@ interface ApplicantRow {
   `]
 })
 export class ApplicantsComponent implements OnInit {
+  private readonly http = inject(HttpClient);
   private readonly storageKey = 'ta.hr.applicants.v1';
-  private readonly positionsStorageKey = 'ta.hr.applicant-positions.v1';
+  private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
+  private readonly apiUrl = environment.apiUrl;
   rows = signal<ApplicantRow[]>([]);
   customPositions = signal<string[]>([]);
   selectedPosition = signal<string>('all');
@@ -233,27 +238,31 @@ export class ApplicantsComponent implements OnInit {
   ngOnInit(): void {
     try {
       const raw = localStorage.getItem(this.storageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) this.rows.set(parsed as ApplicantRow[]);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) this.rows.set(parsed as ApplicantRow[]);
+      }
     } catch {
       // no-op
     }
 
     try {
-      const raw = localStorage.getItem(this.positionsStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        this.customPositions.set(
-          parsed
-            .map((p: unknown) => String(p || '').trim())
-            .filter((p: string) => !!p)
-        );
+      const raw = localStorage.getItem(this.localFallbackPositionsStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this.customPositions.set(
+            parsed
+              .map((p: unknown) => String(p || '').trim())
+              .filter((p: string) => !!p)
+          );
+        }
       }
     } catch {
       // no-op
     }
+
+    void this.loadSharedPositions();
   }
 
   openCreate(): void {
@@ -261,7 +270,7 @@ export class ApplicantsComponent implements OnInit {
     this.showCreate.set(true);
   }
 
-  saveDraft(): void {
+  async saveDraft(): Promise<void> {
     const fullName = String(this.draft.fullName || '').trim();
     if (!fullName) return;
     const position = String(this.draft.position || '').trim();
@@ -275,7 +284,7 @@ export class ApplicantsComponent implements OnInit {
       notes: String(this.draft.notes || '').trim()
     };
     this.rows.update((list) => [next, ...list]);
-    if (position) this.addCustomPosition(position);
+    if (position) await this.addCustomPosition(position, true);
     this.persist();
     this.showCreate.set(false);
   }
@@ -294,10 +303,10 @@ export class ApplicantsComponent implements OnInit {
     this.showAddPosition.set(true);
   }
 
-  addPosition(): void {
+  async addPosition(): Promise<void> {
     const value = String(this.newPositionName() || '').trim();
     if (!value) return;
-    this.addCustomPosition(value);
+    await this.addCustomPosition(value, true);
     this.selectedPosition.set(value);
     this.newPositionName.set('');
     this.showAddPosition.set(false);
@@ -321,7 +330,7 @@ export class ApplicantsComponent implements OnInit {
     };
   }
 
-  private addCustomPosition(position: string): void {
+  private async addCustomPosition(position: string, syncToApi = false): Promise<void> {
     const normalized = String(position || '').trim();
     if (!normalized) return;
     this.customPositions.update((list) => {
@@ -329,12 +338,54 @@ export class ApplicantsComponent implements OnInit {
       if (exists) return list;
       const next = [...list, normalized].sort((a, b) => a.localeCompare(b));
       try {
-        localStorage.setItem(this.positionsStorageKey, JSON.stringify(next));
+        localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(next));
       } catch {
         // no-op
       }
       return next;
     });
+
+    if (!syncToApi) return;
+
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data?: string[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized })
+      );
+      const shared = Array.isArray(res?.data) ? res.data : [];
+      this.customPositions.set(
+        shared
+          .map((p) => String(p || '').trim())
+          .filter((p) => !!p)
+      );
+      try {
+        localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(this.customPositions()));
+      } catch {
+        // no-op
+      }
+    } catch {
+      // keep local fallback list when API is temporarily unavailable
+    }
+  }
+
+  private async loadSharedPositions(): Promise<void> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: string[] }>(`${this.apiUrl}/api/v1/applicants/positions`)
+      );
+      const shared = Array.isArray(res?.data) ? res.data : [];
+      this.customPositions.set(
+        shared
+          .map((p) => String(p || '').trim())
+          .filter((p) => !!p)
+      );
+      try {
+        localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(this.customPositions()));
+      } catch {
+        // no-op
+      }
+    } catch {
+      // If API fails, keep local fallback positions loaded in ngOnInit.
+    }
   }
 }
 
