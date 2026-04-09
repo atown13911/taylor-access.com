@@ -31,11 +31,19 @@ public class ApplicantsController : ControllerBase
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized();
 
-        var org = await ResolveOrganizationAsync(user);
-        if (org == null) return NotFound(new { error = "Organization not found for current user" });
+        var organizations = await _context.Organizations
+            .AsTracking()
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+        if (organizations.Count == 0)
+            return NotFound(new { error = "No organizations found" });
 
-        var settings = ParseSettings(org.Settings);
-        var positions = ExtractPositions(settings);
+        var positions = organizations
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         return Ok(new { data = positions });
     }
 
@@ -45,49 +53,38 @@ public class ApplicantsController : ControllerBase
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized();
 
-        var org = await ResolveOrganizationAsync(user);
-        if (org == null) return NotFound(new { error = "Organization not found for current user" });
+        var organizations = await _context.Organizations
+            .AsTracking()
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+        if (organizations.Count == 0)
+            return NotFound(new { error = "No organizations found" });
 
         var name = string.IsNullOrWhiteSpace(request.Name) ? string.Empty : request.Name.Trim();
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(new { error = "Position name is required" });
 
-        var settings = ParseSettings(org.Settings);
-        var positions = ExtractPositions(settings);
-        if (!positions.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            positions.Add(name);
+        var positions = organizations
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (!positions.Any(p => p.Equals(name, StringComparison.OrdinalIgnoreCase))) positions.Add(name);
 
         positions = positions
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        settings[PositionsSettingsKey] = JsonSerializer.SerializeToNode(positions);
-        org.Settings = settings.ToJsonString();
-        org.UpdatedAt = DateTime.UtcNow;
+        foreach (var org in organizations)
+        {
+            var settings = ParseSettings(org.Settings);
+            settings[PositionsSettingsKey] = JsonSerializer.SerializeToNode(positions);
+            org.Settings = settings.ToJsonString();
+            org.UpdatedAt = DateTime.UtcNow;
+        }
         await _context.SaveChangesAsync();
 
         return Ok(new { data = positions });
-    }
-
-    private async Task<Organization?> ResolveOrganizationAsync(User user)
-    {
-        if (user.OrganizationId.HasValue)
-            return await _context.Organizations.FirstOrDefaultAsync(o => o.Id == user.OrganizationId.Value);
-
-        var assignedOrgId = await _context.UserOrganizations
-            .Where(uo => uo.UserId == user.Id)
-            .OrderByDescending(uo => uo.IsPrimary)
-            .ThenBy(uo => uo.Id)
-            .Select(uo => (int?)uo.OrganizationId)
-            .FirstOrDefaultAsync();
-        if (assignedOrgId.HasValue)
-            return await _context.Organizations.FirstOrDefaultAsync(o => o.Id == assignedOrgId.Value);
-
-        if (user.Role == "product_owner" || user.Role == "superadmin" || user.Role == "development")
-            return await _context.Organizations.OrderBy(o => o.Id).FirstOrDefaultAsync();
-
-        return null;
     }
 
     private static JsonObject ParseSettings(string? rawSettings)
