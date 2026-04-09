@@ -124,6 +124,52 @@ public class ApplicantsController : ControllerBase
         return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
     }
 
+    [HttpPut("positions")]
+    public async Task<ActionResult> UpdatePosition([FromBody] UpdateApplicantPositionRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var organizations = await _context.Organizations
+            .AsTracking()
+            .OrderBy(o => o.Id)
+            .ToListAsync();
+        if (organizations.Count == 0)
+            return NotFound(new { error = "No organizations found" });
+
+        var currentName = string.IsNullOrWhiteSpace(request.CurrentName) ? string.Empty : request.CurrentName.Trim();
+        var newName = string.IsNullOrWhiteSpace(request.NewName) ? string.Empty : request.NewName.Trim();
+        if (string.IsNullOrWhiteSpace(currentName) || string.IsNullOrWhiteSpace(newName))
+            return BadRequest(new { error = "Current name and new name are required" });
+
+        var positions = organizations
+            .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
+        var merged = MergePositions(positions);
+
+        var idx = merged.FindIndex(p => p.Name.Equals(currentName, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0)
+            return NotFound(new { error = "Position not found" });
+
+        var duplicateIdx = merged.FindIndex(p => p.Name.Equals(newName, StringComparison.OrdinalIgnoreCase));
+        if (duplicateIdx >= 0 && duplicateIdx != idx)
+            return BadRequest(new { error = "A position with that name already exists" });
+
+        merged[idx] = new ApplicantPositionItem(newName, request.IsActive);
+        merged = MergePositions(merged);
+
+        var node = BuildPositionsNode(merged);
+        foreach (var org in organizations)
+        {
+            var settings = ParseSettings(org.Settings);
+            settings[PositionsSettingsKey] = node.DeepClone();
+            org.Settings = settings.ToJsonString();
+            org.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+    }
+
     private static JsonObject ParseSettings(string? rawSettings)
     {
         if (string.IsNullOrWhiteSpace(rawSettings))
@@ -213,5 +259,6 @@ public class ApplicantsController : ControllerBase
 
 public record AddApplicantPositionRequest(string Name);
 public record UpdateApplicantPositionStatusRequest(string Name, bool IsActive);
+public record UpdateApplicantPositionRequest(string CurrentName, string NewName, bool IsActive);
 public record ApplicantPositionItem(string Name, bool IsActive);
 

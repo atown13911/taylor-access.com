@@ -201,7 +201,7 @@ interface ApplicantPosition {
             <h3>Position Settings</h3>
             <div class="form-row">
               <label>Position</label>
-              <input type="text" [value]="positionSettingsTargetName()" disabled />
+              <input type="text" [ngModel]="positionSettingsTargetName()" (ngModelChange)="positionSettingsTargetName.set($event)" />
             </div>
             <div class="form-row">
               <label>Status</label>
@@ -263,6 +263,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   showAddPosition = signal(false);
   showPositionSettings = signal(false);
   newPositionName = signal('');
+  positionSettingsOriginalName = signal('');
   positionSettingsTargetName = signal('');
   positionSettingsTargetActive = signal(true);
   private positionsRefreshTimer: any;
@@ -395,28 +396,33 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   openPositionSettings(position: string, event: MouseEvent): void {
     event.stopPropagation();
     const target = this.allPositions().find((p) => p.name.toLowerCase() === position.toLowerCase());
+    this.positionSettingsOriginalName.set(position);
     this.positionSettingsTargetName.set(position);
     this.positionSettingsTargetActive.set(target?.isActive ?? true);
     this.showPositionSettings.set(true);
   }
 
   async savePositionSettings(): Promise<void> {
-    const name = this.normalizePositionName(this.positionSettingsTargetName());
-    if (!name) return;
+    const newName = this.normalizePositionName(this.positionSettingsTargetName());
+    if (!newName) return;
+    const currentName = this.normalizePositionName(this.positionSettingsOriginalName());
+    if (!currentName) return;
     const isActive = this.positionSettingsTargetActive();
 
-    this.customPositions.update((list) => list.map((p) => (
-      p.name.toLowerCase() === name.toLowerCase()
-        ? { ...p, isActive }
-        : p
-    )));
+    this.customPositions.update((list) => {
+      const idx = list.findIndex((p) => p.name.toLowerCase() === currentName.toLowerCase());
+      if (idx < 0) return list;
+      const next = [...list];
+      next[idx] = { ...next[idx], name: newName, isActive };
+      return next;
+    });
     this.persistLocalPositions();
 
     try {
       const res = await firstValueFrom(
         this.http.put<{ data?: unknown[] }>(
-          `${this.apiUrl}/api/v1/applicants/positions/status`,
-          { name, isActive }
+          `${this.apiUrl}/api/v1/applicants/positions`,
+          { currentName, newName, isActive }
         )
       );
       this.customPositions.set(this.parsePositionPayload(res?.data));
@@ -425,7 +431,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       // keep local state if API is temporarily unavailable
     }
 
-    if (!isActive && this.selectedPosition().toLowerCase() === name.toLowerCase()) {
+    if (this.selectedPosition().toLowerCase() === currentName.toLowerCase()) {
+      this.selectedPosition.set(!isActive ? 'all' : newName);
+    }
+    if (!isActive && this.selectedPosition().toLowerCase() === newName.toLowerCase()) {
       this.selectedPosition.set('all');
     }
     this.showPositionSettings.set(false);
