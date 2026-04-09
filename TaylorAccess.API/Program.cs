@@ -384,6 +384,27 @@ using (var scope = app.Services.CreateScope())
             ON ""PerformanceReviews"" (""OrganizationId"", ""Year"", ""Month"");
     ");
 
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""ApplicantRecords"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""FullName"" VARCHAR(200) NOT NULL,
+            ""Gender"" VARCHAR(50) NULL,
+            ""Age"" INTEGER NULL,
+            ""Position"" VARCHAR(200) NULL,
+            ""Source"" VARCHAR(200) NULL,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'new',
+            ""AppliedDate"" TIMESTAMP NULL,
+            ""Notes"" text NULL,
+            ""CvFileName"" VARCHAR(300) NULL,
+            ""CvDataUrl"" text NULL,
+            ""CreatedByUserId"" INTEGER NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_ApplicantRecords_CreatedAt""
+            ON ""ApplicantRecords"" (""CreatedAt"");
+    ");
+
     await roleService.SeedDefaultRolesAsync();
 
     if (!context.Users.Any())

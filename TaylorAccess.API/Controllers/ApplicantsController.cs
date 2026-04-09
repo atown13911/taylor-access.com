@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaylorAccess.API.Data;
+using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 
 namespace TaylorAccess.API.Controllers;
@@ -22,6 +23,103 @@ public class ApplicantsController : ControllerBase
     {
         _context = context;
         _currentUserService = currentUserService;
+    }
+
+    [HttpGet("records")]
+    public async Task<ActionResult> GetApplicants()
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var rows = await _context.ApplicantRecords
+            .AsNoTracking()
+            .OrderByDescending(a => a.CreatedAt)
+            .Select(a => new
+            {
+                a.Id,
+                a.FullName,
+                a.Gender,
+                a.Age,
+                a.Position,
+                a.Source,
+                a.Status,
+                appliedDate = a.AppliedDate,
+                a.Notes,
+                a.CvFileName,
+                a.CvDataUrl,
+                a.CreatedAt,
+                a.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { data = rows });
+    }
+
+    [HttpPost("records")]
+    public async Task<ActionResult> CreateApplicant([FromBody] CreateApplicantRecordRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var fullName = string.IsNullOrWhiteSpace(request.FullName) ? string.Empty : request.FullName.Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+            return BadRequest(new { error = "Name is required" });
+
+        var row = new ApplicantRecord
+        {
+            FullName = fullName,
+            Gender = string.IsNullOrWhiteSpace(request.Gender) ? null : request.Gender.Trim(),
+            Age = request.Age is >= 16 and <= 100 ? request.Age : null,
+            Position = string.IsNullOrWhiteSpace(request.Position) ? null : request.Position.Trim(),
+            Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim(),
+            Status = NormalizeStatus(request.Status),
+            AppliedDate = request.AppliedDate,
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+            CvFileName = string.IsNullOrWhiteSpace(request.CvFileName) ? null : request.CvFileName.Trim(),
+            CvDataUrl = string.IsNullOrWhiteSpace(request.CvDataUrl) ? null : request.CvDataUrl,
+            CreatedByUserId = user.Id,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.ApplicantRecords.Add(row);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                row.Id,
+                row.FullName,
+                row.Gender,
+                row.Age,
+                row.Position,
+                row.Source,
+                row.Status,
+                appliedDate = row.AppliedDate,
+                row.Notes,
+                row.CvFileName,
+                row.CvDataUrl,
+                row.CreatedAt,
+                row.UpdatedAt
+            }
+        });
+    }
+
+    [HttpPut("records/{id:int}/status")]
+    public async Task<ActionResult> UpdateApplicantStatus(int id, [FromBody] UpdateApplicantRecordStatusRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var row = await _context.ApplicantRecords.FirstOrDefaultAsync(a => a.Id == id);
+        if (row == null) return NotFound(new { error = "Applicant not found" });
+
+        row.Status = NormalizeStatus(request.Status);
+        row.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { updated = true, status = row.Status });
     }
 
     [HttpGet("positions")]
@@ -255,10 +353,38 @@ public class ApplicantsController : ControllerBase
         }
         return array;
     }
+
+    private static string NormalizeStatus(string? raw)
+    {
+        var value = string.IsNullOrWhiteSpace(raw) ? "new" : raw.Trim().ToLowerInvariant();
+        return value switch
+        {
+            "new" => "new",
+            "screening" => "screening",
+            "interview" => "interview",
+            "offer" => "offer",
+            "hired" => "hired",
+            "rejected" => "rejected",
+            _ => "new"
+        };
+    }
 }
 
 public record AddApplicantPositionRequest(string Name);
 public record UpdateApplicantPositionStatusRequest(string Name, bool IsActive);
 public record UpdateApplicantPositionRequest(string CurrentName, string NewName, bool IsActive);
 public record ApplicantPositionItem(string Name, bool IsActive);
+public record CreateApplicantRecordRequest(
+    string FullName,
+    string? Gender,
+    int? Age,
+    string? Position,
+    string? Source,
+    string? Status,
+    DateTime? AppliedDate,
+    string? Notes,
+    string? CvFileName,
+    string? CvDataUrl
+);
+public record UpdateApplicantRecordStatusRequest(string Status);
 

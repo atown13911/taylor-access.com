@@ -294,7 +294,6 @@ interface ApplicantPosition {
 })
 export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
-  private readonly storageKey = 'ta.hr.applicants.v1';
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
   private readonly apiUrl = environment.apiUrl;
   rows = signal<ApplicantRow[]>([]);
@@ -311,6 +310,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionSettingsTargetName = signal('');
   positionSettingsTargetActive = signal(true);
   private positionsRefreshTimer: any;
+  private applicantsRefreshTimer: any;
   draft: Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus } = this.emptyDraft();
 
   allPositions = computed(() => {
@@ -356,16 +356,6 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     try {
-      const raw = localStorage.getItem(this.storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) this.rows.set(parsed as ApplicantRow[]);
-      }
-    } catch {
-      // no-op
-    }
-
-    try {
       const raw = localStorage.getItem(this.localFallbackPositionsStorageKey);
       if (raw) {
         this.customPositions.set(this.parsePositionPayload(JSON.parse(raw)));
@@ -374,12 +364,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       // no-op
     }
 
+    void this.loadSharedApplicants();
     void this.loadSharedPositions();
+    this.applicantsRefreshTimer = setInterval(() => void this.loadSharedApplicants(), 15000);
     this.positionsRefreshTimer = setInterval(() => void this.loadSharedPositions(), 15000);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   ngOnDestroy(): void {
+    if (this.applicantsRefreshTimer) clearInterval(this.applicantsRefreshTimer);
     if (this.positionsRefreshTimer) clearInterval(this.positionsRefreshTimer);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   }
@@ -393,28 +386,47 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const fullName = String(this.draft.fullName || '').trim();
     if (!fullName) return;
     const position = String(this.draft.position || '').trim();
-    const next: ApplicantRow = {
-      id: Date.now(),
+    const payload = {
       fullName,
-      gender: this.normalizePositionName(this.draft.gender),
+      gender: this.normalizePositionName(this.draft.gender) || null,
       age: this.normalizeAge(this.draft.age),
-      position,
-      source: String(this.draft.source || '').trim(),
+      position: position || null,
+      source: String(this.draft.source || '').trim() || null,
       status: this.draft.status || 'new',
-      appliedDate: this.draft.appliedDate || new Date().toISOString().slice(0, 10),
-      notes: String(this.draft.notes || '').trim(),
-      cvFileName: String(this.draft.cvFileName || '').trim(),
-      cvDataUrl: String(this.draft.cvDataUrl || '').trim()
+      appliedDate: this.toIsoDateOnly(this.draft.appliedDate) || null,
+      notes: String(this.draft.notes || '').trim() || null,
+      cvFileName: String(this.draft.cvFileName || '').trim() || null,
+      cvDataUrl: String(this.draft.cvDataUrl || '').trim() || null
     };
-    this.rows.update((list) => [next, ...list]);
+
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data?: unknown }>(`${this.apiUrl}/api/v1/applicants/records`, payload)
+      );
+      const created = this.parseApplicantPayload(res?.data ? [res.data] : []);
+      if (created.length > 0) {
+        this.rows.update((list) => [created[0], ...list.filter((r) => r.id !== created[0].id)]);
+      } else {
+        await this.loadSharedApplicants();
+      }
+    } catch {
+      return;
+    }
+
     if (position) await this.addCustomPosition(position, true, true);
-    this.persist();
     this.showCreate.set(false);
   }
 
-  setStatus(id: number, status: ApplicantStatus): void {
+  async setStatus(id: number, status: ApplicantStatus): Promise<void> {
     this.rows.update((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
-    this.persist();
+    try {
+      await firstValueFrom(
+        this.http.put(`${this.apiUrl}/api/v1/applicants/records/${id}/status`, { status })
+      );
+    } catch {
+      // If API update fails, pull latest DB state.
+      await this.loadSharedApplicants();
+    }
   }
 
   selectPosition(position: string): void {
@@ -486,14 +498,6 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       this.selectedPosition.set('all');
     }
     this.showPositionSettings.set(false);
-  }
-
-  private persist(): void {
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.rows()));
-    } catch {
-      // no-op
-    }
   }
 
   private emptyDraft() {
@@ -578,8 +582,20 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
   }
 
+  private async loadSharedApplicants(): Promise<void> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records`)
+      );
+      this.rows.set(this.parseApplicantPayload(res?.data));
+    } catch {
+      // Keep current rows if API is temporarily unavailable.
+    }
+  }
+
   private handleVisibilityChange = (): void => {
     if (document.visibilityState === 'visible') {
+      void this.loadSharedApplicants();
       void this.loadSharedPositions();
     }
   };
@@ -616,6 +632,34 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  private parseApplicantPayload(payload: unknown): ApplicantRow[] {
+    if (!Array.isArray(payload)) return [];
+
+    return payload
+      .map((item) => {
+        const row = (item && typeof item === 'object') ? item as Record<string, unknown> : null;
+        if (!row) return null;
+
+        const id = Number(row['id'] ?? 0);
+        if (!Number.isFinite(id) || id <= 0) return null;
+
+        return {
+          id,
+          fullName: this.normalizePositionName(row['fullName'] ?? row['FullName']),
+          gender: this.normalizePositionName(row['gender'] ?? row['Gender']),
+          age: this.normalizeAge(row['age'] ?? row['Age']),
+          position: this.normalizePositionName(row['position'] ?? row['Position']),
+          source: this.normalizePositionName(row['source'] ?? row['Source']),
+          status: this.normalizeStatus(row['status'] ?? row['Status']),
+          appliedDate: this.toIsoDateOnly(row['appliedDate'] ?? row['AppliedDate']),
+          notes: this.normalizePositionName(row['notes'] ?? row['Notes']),
+          cvFileName: this.normalizePositionName(row['cvFileName'] ?? row['CvFileName']),
+          cvDataUrl: this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl'])
+        } as ApplicantRow;
+      })
+      .filter((row): row is ApplicantRow => !!row);
+  }
+
   private ensureSelectedPositionValid(): void {
     const selected = this.selectedPosition();
     if (selected === 'all') return;
@@ -633,6 +677,23 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const rounded = Math.round(n);
     if (rounded < 16 || rounded > 100) return null;
     return rounded;
+  }
+
+  private normalizeStatus(value: unknown): ApplicantStatus {
+    const v = String(value ?? '').trim().toLowerCase();
+    if (v === 'screening' || v === 'interview' || v === 'offer' || v === 'hired' || v === 'rejected') {
+      return v;
+    }
+    return 'new';
+  }
+
+  private toIsoDateOnly(value: unknown): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const dt = new Date(raw);
+    if (Number.isNaN(dt.getTime())) return '';
+    return dt.toISOString().slice(0, 10);
   }
 
   private toBoolean(value: unknown, fallback: boolean): boolean {
