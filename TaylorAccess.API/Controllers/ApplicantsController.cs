@@ -369,10 +369,12 @@ public class ApplicantsController : ControllerBase
 
         // Clear the deleted position from applicant records so the tab doesn't reappear from row-derived positions.
         var rows = await _context.ApplicantRecords
-            .Where(a => a.Position != null && a.Position.ToLower() == target.ToLower())
+            .Where(a => a.Position != null)
             .ToListAsync();
         foreach (var row in rows)
         {
+            var normalized = string.IsNullOrWhiteSpace(row.Position) ? string.Empty : row.Position.Trim();
+            if (!normalized.Equals(target, StringComparison.OrdinalIgnoreCase)) continue;
             row.Position = null;
             row.UpdatedAt = DateTime.UtcNow;
         }
