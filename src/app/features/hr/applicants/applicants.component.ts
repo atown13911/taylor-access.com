@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
-type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
+type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'no response' | 'no show';
 
 interface ApplicantRow {
   id: number;
@@ -99,6 +99,8 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
           <option value="interview">Interview</option>
           <option value="offer">Offer</option>
           <option value="hired">Hired</option>
+          <option value="no response">No Response</option>
+          <option value="no show">No Show</option>
           <option value="rejected">Rejected</option>
         </select>
       </div>
@@ -141,6 +143,8 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
                     <option value="interview">Interview</option>
                     <option value="offer">Offer</option>
                     <option value="hired">Hired</option>
+                    <option value="no response">No Response</option>
+                    <option value="no show">No Show</option>
                     <option value="rejected">Rejected</option>
                   </select>
                 </td>
@@ -288,6 +292,8 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
                 <option value="interview">Interview</option>
                 <option value="offer">Offer</option>
                 <option value="hired">Hired</option>
+                <option value="no response">No Response</option>
+                <option value="no show">No Show</option>
                 <option value="rejected">Rejected</option>
               </select>
             </div>
@@ -968,7 +974,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   private normalizeStatus(value: unknown): ApplicantStatus {
     const v = String(value ?? '').trim().toLowerCase();
-    if (v === 'screening' || v === 'interview' || v === 'offer' || v === 'hired' || v === 'rejected') {
+    if (
+      v === 'screening' ||
+      v === 'interview' ||
+      v === 'offer' ||
+      v === 'hired' ||
+      v === 'rejected' ||
+      v === 'no response' ||
+      v === 'no show'
+    ) {
       return v;
     }
     return 'new';

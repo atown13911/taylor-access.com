@@ -479,6 +479,8 @@ public class ApplicantsController : ControllerBase
             "interview" => "interview",
             "offer" => "offer",
             "hired" => "hired",
+            "no response" => "no response",
+            "no show" => "no show",
             "rejected" => "rejected",
             _ => "new"
         };
