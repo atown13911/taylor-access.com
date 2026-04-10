@@ -19,6 +19,7 @@ interface ApplicantRow {
   notes: string;
   cvFileName: string;
   cvDataUrl: string;
+  hasCv: boolean;
 }
 
 interface ApplicantPosition {
@@ -247,7 +248,7 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
                   </td>
                   <td>{{ row.appliedDate || '—' }}</td>
                   <td>
-                    @if (row.cvDataUrl) {
+                    @if (row.hasCv || row.cvDataUrl) {
                       <button class="cv-link-btn" (click)="$event.stopPropagation(); viewCv(row)">View</button>
                     } @else {
                       —
@@ -680,7 +681,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       appliedDate: row.appliedDate,
       notes: row.notes,
       cvFileName: row.cvFileName,
-      cvDataUrl: row.cvDataUrl
+      cvDataUrl: row.cvDataUrl,
+      hasCv: row.hasCv
     };
     this.showEdit.set(true);
   }
@@ -905,7 +907,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       appliedDate: new Date().toISOString().slice(0, 10),
       notes: '',
       cvFileName: '',
-      cvDataUrl: ''
+      cvDataUrl: '',
+      hasCv: false
     };
   }
 
@@ -924,6 +927,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     reader.onload = () => {
       this.draft.cvFileName = file.name;
       this.draft.cvDataUrl = typeof reader.result === 'string' ? reader.result : '';
+      this.draft.hasCv = !!this.draft.cvDataUrl;
     };
     reader.readAsDataURL(file);
   }
@@ -940,43 +944,121 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     reader.onload = () => {
       this.editDraft.cvFileName = file.name;
       this.editDraft.cvDataUrl = typeof reader.result === 'string' ? reader.result : '';
+      this.editDraft.hasCv = !!this.editDraft.cvDataUrl;
     };
     reader.readAsDataURL(file);
   }
 
-  viewCv(row: ApplicantRow): void {
-    if (!row.cvDataUrl) return;
-    const w = window.open('', '_blank', 'noopener,noreferrer');
-    if (!w) {
-      this.applicantsSyncError.set('Popup blocked. Please allow popups to view CV files.');
+  async viewCv(row: ApplicantRow): Promise<void> {
+    let cvDataUrl = row.cvDataUrl;
+    let cvFileName = row.cvFileName;
+
+    if (!cvDataUrl && row.hasCv) {
+      const loaded = await this.fetchApplicantCv(row.id);
+      if (!loaded) {
+        this.applicantsSyncError.set('Unable to load CV file for this applicant.');
+        return;
+      }
+      cvDataUrl = loaded.cvDataUrl;
+      cvFileName = loaded.cvFileName || cvFileName;
+    }
+
+    if (!cvDataUrl) {
+      this.applicantsSyncError.set('No CV is available for this applicant.');
       return;
     }
 
-    const objectUrl = this.toObjectUrl(row.cvDataUrl);
-    if (!objectUrl) {
-      w.close();
+    const parsed = this.parseDataUrlMetadata(cvDataUrl);
+    const objectUrl = this.toObjectUrl(cvDataUrl, parsed?.mimeType);
+    if (!objectUrl || !parsed) {
       this.applicantsSyncError.set('Unable to open CV. Invalid or unsupported file data.');
       return;
     }
 
-    // Important: never navigate a top-level tab directly to a data: URL.
-    // Converting to blob: avoids browser security blocks for PDF data URLs.
+    const title = this.escapeHtml(cvFileName || 'CV');
+    const safeName = this.escapeHtml(cvFileName || 'cv-file');
+    const mime = parsed.mimeType.toLowerCase();
+
+    // Render a lightweight viewer page first, then embed/open the blob URL.
+    // This avoids top-frame data: navigation and provides download fallback.
     try {
-      w.location.replace(objectUrl);
+      const w = window.open('', '_blank');
+      if (!w) {
+        URL.revokeObjectURL(objectUrl);
+        this.applicantsSyncError.set('Popup blocked. Please allow popups to view CV files.');
+        return;
+      }
+
+      const canPreviewInline =
+        mime.startsWith('application/pdf') ||
+        mime.startsWith('image/') ||
+        mime.startsWith('text/');
+
+      w.document.open();
+      w.document.write(`
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>${title}</title>
+            <style>
+              html, body { margin: 0; height: 100%; background: #0b1020; color: #e5e7eb; font-family: Arial, sans-serif; }
+              .bar { height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid #243049; background: #0f172a; }
+              .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: #cbd5e1; }
+              .btn { text-decoration: none; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; padding: 6px 10px; border-radius: 8px; font-size: 12px; }
+              .btn.primary { background: #0ea5e9; border-color: #0284c7; color: #00111a; font-weight: 700; }
+              .viewer { height: calc(100% - 47px); }
+              iframe, object, img { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+              img { object-fit: contain; background: #0b1020; }
+              .fallback { padding: 24px; color: #cbd5e1; }
+            </style>
+          </head>
+          <body>
+            <div class="bar">
+              <div class="name">${title}</div>
+              <a class="btn primary" href="${objectUrl}" target="_self">Open File</a>
+              <a class="btn" href="${objectUrl}" download="${safeName}">Download</a>
+            </div>
+            <div class="viewer">
+              ${canPreviewInline
+                ? (mime.startsWith('image/')
+                  ? `<img src="${objectUrl}" alt="${title}" />`
+                  : `<iframe src="${objectUrl}" title="${title}"></iframe>`)
+                : `<div class="fallback">Preview is unavailable for this file type. Use <strong>Open File</strong> or <strong>Download</strong>.</div>`}
+            </div>
+          </body>
+        </html>
+      `);
+      w.document.close();
       this.applicantsSyncError.set('');
+
+      // Keep URL alive long enough for built-in viewers to finish loading.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5 * 60_000);
     } catch {
-      w.close();
+      URL.revokeObjectURL(objectUrl);
       this.applicantsSyncError.set('Unable to open CV in a new tab.');
     }
   }
 
-  private toObjectUrl(dataUrl: string): string | null {
-    const blob = this.dataUrlToBlob(dataUrl);
+  private toObjectUrl(dataUrl: string, mimeType?: string): string | null {
+    const blob = this.dataUrlToBlob(dataUrl, mimeType);
     if (!blob) return null;
     return URL.createObjectURL(blob);
   }
 
-  private dataUrlToBlob(dataUrl: string): Blob | null {
+  private parseDataUrlMetadata(dataUrl: string): { mimeType: string; isBase64: boolean } | null {
+    const raw = String(dataUrl || '').trim();
+    if (!raw.toLowerCase().startsWith('data:')) return null;
+    const commaIndex = raw.indexOf(',');
+    if (commaIndex <= 5) return null;
+    const metadata = raw.slice(5, commaIndex);
+    const metadataParts = metadata.split(';').map((x) => x.trim()).filter(Boolean);
+    const mimeType = metadataParts.length > 0 ? metadataParts[0] : 'application/octet-stream';
+    const isBase64 = metadataParts.some((part) => part.toLowerCase() === 'base64');
+    return { mimeType, isBase64 };
+  }
+
+  private dataUrlToBlob(dataUrl: string, mimeTypeHint?: string): Blob | null {
     try {
       const raw = String(dataUrl || '').trim();
       if (!raw.toLowerCase().startsWith('data:')) return null;
@@ -984,11 +1066,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const commaIndex = raw.indexOf(',');
       if (commaIndex <= 5) return null;
 
-      const metadata = raw.slice(5, commaIndex);
       const payload = raw.slice(commaIndex + 1);
-      const metadataParts = metadata.split(';').map((x) => x.trim()).filter(Boolean);
-      const mimeType = metadataParts.length > 0 ? metadataParts[0] : 'application/octet-stream';
-      const isBase64 = metadataParts.some((part) => part.toLowerCase() === 'base64');
+      const metadata = this.parseDataUrlMetadata(raw);
+      const mimeType = mimeTypeHint || metadata?.mimeType || 'application/octet-stream';
+      const isBase64 = !!metadata?.isBase64;
 
       if (isBase64) {
         const bin = atob(payload);
@@ -1048,7 +1129,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private async loadSharedApplicants(): Promise<void> {
     try {
       const res = await firstValueFrom(
-        this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records`)
+        this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records?includeCv=false`)
       );
       const parsed = this.parseApplicantPayload(res?.data);
       this.rows.set(parsed);
@@ -1171,10 +1252,38 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
           appliedDate: this.toIsoDateOnly(row['appliedDate'] ?? row['AppliedDate']),
           notes: this.normalizePositionName(row['notes'] ?? row['Notes']),
           cvFileName: this.normalizePositionName(row['cvFileName'] ?? row['CvFileName']),
-          cvDataUrl: this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl'])
+          cvDataUrl: this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl']),
+          hasCv: this.toBoolean(row['hasCv'] ?? row['HasCv'], !!this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl']))
         } as ApplicantRow;
       })
       .filter((row): row is ApplicantRow => !!row);
+  }
+
+  private async fetchApplicantCv(id: number): Promise<{ cvDataUrl: string; cvFileName: string } | null> {
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data?: unknown }>(`${this.apiUrl}/api/v1/applicants/records/${id}/cv`)
+      );
+      const row = res?.data && typeof res.data === 'object' ? res.data as Record<string, unknown> : null;
+      if (!row) return null;
+
+      const cvDataUrl = this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl']);
+      if (!cvDataUrl) return null;
+      const cvFileName = this.normalizePositionName(row['cvFileName'] ?? row['CvFileName']);
+
+      // Cache loaded CV in-memory for this session.
+      this.rows.update((list) =>
+        list.map((item) =>
+          item.id === id
+            ? { ...item, cvDataUrl, cvFileName: cvFileName || item.cvFileName, hasCv: true }
+            : item
+        )
+      );
+
+      return { cvDataUrl, cvFileName };
+    } catch {
+      return null;
+    }
   }
 
   private ensureSelectedPositionValid(): void {
@@ -1192,6 +1301,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   private normalizePositionName(value: unknown): string {
+    if (value && typeof value === 'object') {
+      const row = value as Record<string, unknown>;
+      const nested = row['name'] ?? row['Name'] ?? row['value'] ?? row['Value'] ?? row['label'] ?? row['Label'];
+      if (nested !== undefined && nested !== null) {
+        return this.normalizePositionName(nested);
+      }
+      return '';
+    }
     return String(value ?? '').trim();
   }
 
@@ -1247,6 +1364,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
     const fallback = new Date(raw);
     return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+
+  private escapeHtml(value: string): string {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 }
 

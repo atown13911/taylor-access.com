@@ -26,7 +26,7 @@ public class ApplicantsController : ControllerBase
     }
 
     [HttpGet("records")]
-    public async Task<ActionResult> GetApplicants()
+    public async Task<ActionResult> GetApplicants([FromQuery] bool includeCv = false)
     {
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized();
@@ -46,7 +46,8 @@ public class ApplicantsController : ControllerBase
                 appliedDate = a.AppliedDate,
                 a.Notes,
                 a.CvFileName,
-                a.CvDataUrl,
+                CvDataUrl = includeCv ? a.CvDataUrl : null,
+                hasCv = !string.IsNullOrWhiteSpace(a.CvDataUrl),
                 a.CreatedAt,
                 a.UpdatedAt
             })
@@ -100,6 +101,7 @@ public class ApplicantsController : ControllerBase
                 row.Notes,
                 row.CvFileName,
                 row.CvDataUrl,
+                hasCv = !string.IsNullOrWhiteSpace(row.CvDataUrl),
                 row.CreatedAt,
                 row.UpdatedAt
             }
@@ -164,8 +166,41 @@ public class ApplicantsController : ControllerBase
                 row.Notes,
                 row.CvFileName,
                 row.CvDataUrl,
+                hasCv = !string.IsNullOrWhiteSpace(row.CvDataUrl),
                 row.CreatedAt,
                 row.UpdatedAt
+            }
+        });
+    }
+
+    [HttpGet("records/{id:int}/cv")]
+    public async Task<ActionResult> GetApplicantCv(int id)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized();
+
+        var row = await _context.ApplicantRecords
+            .AsNoTracking()
+            .Where(a => a.Id == id)
+            .Select(a => new
+            {
+                a.Id,
+                a.CvFileName,
+                a.CvDataUrl
+            })
+            .FirstOrDefaultAsync();
+
+        if (row == null) return NotFound(new { error = "Applicant not found" });
+        if (string.IsNullOrWhiteSpace(row.CvDataUrl))
+            return NotFound(new { error = "CV not found for this applicant" });
+
+        return Ok(new
+        {
+            data = new
+            {
+                row.Id,
+                row.CvFileName,
+                row.CvDataUrl
             }
         });
     }
