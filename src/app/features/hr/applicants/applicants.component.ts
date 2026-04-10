@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
 type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'no response' | 'no show';
@@ -1407,21 +1407,29 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   private async loadSharedPositions(): Promise<void> {
     try {
-      const res = await firstValueFrom(
-        this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`)
+      const res = await this.requestWith502Retry(
+        () => this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`),
+        2,
+        700
       );
       this.customPositions.set(this.parsePositionPayload(res?.data));
       this.persistLocalPositions();
       this.ensureSelectedPositionValid();
-    } catch {
+    } catch (err) {
+      const httpErr = err as HttpErrorResponse | undefined;
+      if (httpErr?.status === 502) {
+        this.applicantsSyncError.set('Gateway is temporarily unavailable. Retrying shortly may resolve it.');
+      }
       // If API fails, keep local fallback positions loaded in ngOnInit.
     }
   }
 
   private async loadSharedApplicants(): Promise<void> {
     try {
-      const res = await firstValueFrom(
-        this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records?includeCv=false`)
+      const res = await this.requestWith502Retry(
+        () => this.http.get<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/records?includeCv=false`),
+        2,
+        700
       );
       const parsed = this.parseApplicantPayload(res?.data);
       this.rows.set(parsed);
@@ -1558,8 +1566,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   private async fetchApplicantCv(id: number): Promise<{ cvDataUrl: string; cvFileName: string } | null> {
     try {
-      const res = await firstValueFrom(
-        this.http.get<{ data?: unknown }>(`${this.apiUrl}/api/v1/applicants/records/${id}/cv`)
+      const res = await this.requestWith502Retry(
+        () => this.http.get<{ data?: unknown }>(`${this.apiUrl}/api/v1/applicants/records/${id}/cv`),
+        2,
+        500
       );
       const row = res?.data && typeof res.data === 'object' ? res.data as Record<string, unknown> : null;
       if (!row) return null;
@@ -1581,6 +1591,34 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     } catch {
       return null;
     }
+  }
+
+  private async requestWith502Retry<T>(
+    requestFactory: () => Observable<T>,
+    maxRetries = 2,
+    delayMs = 700
+  ): Promise<T> {
+    let attempt = 0;
+    let lastError: unknown = null;
+
+    while (attempt <= maxRetries) {
+      try {
+        return await firstValueFrom(requestFactory());
+      } catch (err) {
+        lastError = err;
+        const httpErr = err as HttpErrorResponse | undefined;
+        const isRetryable = httpErr?.status === 502;
+        if (!isRetryable || attempt === maxRetries) break;
+        await this.sleep(delayMs * (attempt + 1));
+      }
+      attempt++;
+    }
+
+    throw lastError;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private ensureSelectedPositionValid(): void {
