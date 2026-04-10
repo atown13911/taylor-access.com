@@ -184,6 +184,22 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
         </div>
 
         <div class="filters">
+          <div class="pipeline-tabs">
+            <button
+              class="pipeline-tab"
+              [class.active]="pipelineFilter() === 'working'"
+              (click)="setPipelineFilter('working')"
+            >
+              Working
+            </button>
+            <button
+              class="pipeline-tab"
+              [class.active]="pipelineFilter() === 'rejected'"
+              (click)="setPipelineFilter('rejected')"
+            >
+              Rejected
+            </button>
+          </div>
           <input
             type="text"
             placeholder="Search applicants..."
@@ -473,7 +489,10 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
     .position-settings-icon { font-size: 0.9rem; color: #8aa0b8; border-radius: 999px; padding: 1px; }
     .position-settings-icon:hover { color: #d9f6ff; background: rgba(255,255,255,0.08); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
-    .filters { display: flex; gap: 10px; margin: 10px 0 14px; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
+    .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
+    .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
+    .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
+    .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-view { margin-top: 6px; }
@@ -521,6 +540,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
   positionStateFilter = signal<'active' | 'inactive' | 'report'>('active');
+  pipelineFilter = signal<'working' | 'rejected'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportDateFrom = signal('');
   reportDateTo = signal('');
@@ -631,7 +651,12 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const term = this.search().trim().toLowerCase();
     const status = this.statusFilter();
     const selectedPosition = this.selectedPosition();
+    const pipeline = this.pipelineFilter();
     return this.rows().filter((r) => {
+      const pipelinePass = pipeline === 'working'
+        ? r.status !== 'rejected'
+        : r.status === 'rejected';
+      if (!pipelinePass) return false;
       const statusPass = status === 'all' || r.status === status;
       if (!statusPass) return false;
       const positionPass = selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition;
@@ -800,6 +825,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   setPositionStateFilter(mode: 'active' | 'inactive' | 'report'): void {
     this.positionStateFilter.set(mode);
     this.selectedPosition.set('all');
+  }
+
+  setPipelineFilter(mode: 'working' | 'rejected'): void {
+    this.pipelineFilter.set(mode);
+    this.selectedApplicantId.set(null);
   }
 
   statusLabel(status: ApplicantStatus): string {
