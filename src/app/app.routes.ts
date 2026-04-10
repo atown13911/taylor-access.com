@@ -38,6 +38,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/hr/applicants/applicants.component').then(m => m.ApplicantsComponent)
       },
       {
+        path: 'applicants',
+        loadComponent: () => import('./features/hr/applicants/applicants.component').then(m => m.ApplicantsComponent)
+      },
+      {
         path: 'structure',
         loadComponent: () => import('./features/admin-security/structure/structure.component').then(m => m.StructureComponent)
       },
