@@ -264,6 +264,31 @@ public class AuthController : ControllerBase
             }
         }
 
+        if (user == null && User?.Identity?.IsAuthenticated == true)
+        {
+            var roleClaim = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                ?? User.FindFirst("role")?.Value;
+            var orgClaim = User.FindFirst("orgId")?.Value
+                ?? User.FindFirst("organizationId")?.Value;
+            int? orgId = int.TryParse(orgClaim, out var parsedOrg) ? parsedOrg : null;
+            var fallbackUserIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value;
+            int fallbackUserId = int.TryParse(fallbackUserIdClaim, out var parsedId) ? parsedId : 0;
+
+            user = new User
+            {
+                Id = fallbackUserId,
+                Name = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                    ?? User.FindFirst("name")?.Value
+                    ?? "Authenticated User",
+                Email = emailClaim
+                    ?? $"claim-user-{Guid.NewGuid():N}@local",
+                Role = string.IsNullOrWhiteSpace(roleClaim) ? "user" : roleClaim.Trim().ToLowerInvariant(),
+                Status = "active",
+                OrganizationId = orgId
+            };
+        }
+
         if (user == null)
             return NotFound();
 
