@@ -114,7 +114,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               </div>
             }
           </div>
-          <div class="report-cards">
+          <div class="report-cards report-cards-primary">
             <article class="report-card">
               <span>Total Applicants</span>
               <strong>{{ reportRows().length }}</strong>
@@ -130,6 +130,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <article class="report-card">
               <span>Hired</span>
               <strong>{{ hiredCount() }}</strong>
+            </article>
+            <article class="report-card">
+              <div class="report-card-head">
+                <span>Applicants / Day</span>
+                <select
+                  class="report-card-select"
+                  [ngModel]="reportWeekSelection()"
+                  (ngModelChange)="reportWeekSelection.set($event)"
+                  aria-label="Applicants per day week selection"
+                >
+                  <option value="thisWeek">This week</option>
+                  <option value="lastWeek">Last week</option>
+                </select>
+              </div>
+              <strong>{{ applicantsPerDayLabel() }}</strong>
+              <small>{{ applicantsPerDayTotal() }} applicants</small>
             </article>
           </div>
 
@@ -617,10 +633,14 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .report-date-range input { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
     .report-date-range span { color: #8aa0b8; font-size: 0.8rem; }
     .report-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .report-cards-primary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
     .report-cards-demographics { margin-top: -2px; }
     .report-card { background: #10192c; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
     .report-card span { color: #8aa0b8; font-size: 0.8rem; }
     .report-card strong { color: #e0f2fe; font-size: 1.2rem; }
+    .report-card small { color: #7f94ad; font-size: 0.72rem; }
+    .report-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .report-card-select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; min-width: 90px; }
     .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .report-panel { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
@@ -665,6 +685,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
+  reportWeekSelection = signal<'thisWeek' | 'lastWeek'>('thisWeek');
   reportDateFrom = signal('');
   reportDateTo = signal('');
   search = signal('');
@@ -755,6 +776,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   activePositionsCount = computed(() => this.allPositions().filter((p) => p.isActive).length);
   inactivePositionsCount = computed(() => this.allPositions().filter((p) => !p.isActive).length);
   hiredCount = computed(() => this.reportRows().filter((r) => r.status === 'hired').length);
+  applicantsPerDayTotal = computed(() => this.weekScopedRows().length);
+  applicantsPerDayLabel = computed(() => (this.weekScopedRows().length / 7).toFixed(1));
 
   statusBreakdown = computed(() => {
     const order: ApplicantStatus[] = ['new', 'screening', 'interview', 'offer', 'hired', 'no response', 'no show', 'rejected'];
@@ -857,6 +880,23 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       }));
     if (series.length === 0) return [];
     return [{ name: 'Applicants', series }];
+  });
+
+  weekScopedRows = computed(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const thisWeekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const lastWeekStart = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
+    const selection = this.reportWeekSelection();
+    const start = selection === 'lastWeek' ? lastWeekStart : thisWeekStart;
+    const end = selection === 'lastWeek' ? lastWeekEnd : tomorrow;
+
+    return this.reportRows().filter((row) => {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      return !!parsed && parsed >= start && parsed < end;
+    });
   });
 
   reportChartView = signal<[number, number]>([500, 260]);
