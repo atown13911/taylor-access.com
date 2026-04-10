@@ -310,6 +310,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.sidebarCollapsed.update(v => !v);
   }
 
+  navigateTo(route: string, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    void this.router.navigateByUrl(route).catch(() => {
+      if (typeof window !== 'undefined') {
+        window.location.href = route;
+      }
+    });
+  }
+
   toggleVisualMode(): void {
     const next = this.visualMode() === 'soft' ? 'hard' : 'soft';
     this.visualMode.set(next);
