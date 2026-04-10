@@ -240,6 +240,24 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <div class="chart-empty">No age data yet.</div>
               }
             </div>
+
+            <div class="report-panel report-panel-wide">
+              <h3>Applicant Source Breakdown</h3>
+              @if (sourceChartData().length > 0) {
+                <ngx-charts-bar-horizontal
+                  [results]="sourceChartData()"
+                  [view]="reportWideChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showDataLabel]="true"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
+              } @else {
+                <div class="chart-empty">No source data yet.</div>
+              }
+            </div>
           </div>
         </section>
       } @else {
@@ -643,6 +661,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .report-card-select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 6px; padding: 3px 6px; font-size: 0.72rem; min-width: 90px; }
     .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .report-panel { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
+    .report-panel-wide { grid-column: 1 / -1; min-height: 320px; }
     .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     .count-cell { text-align: right; font-weight: 700; color: #e2e8f0; }
     .chart-empty { text-align: center; color: #8aa0b8; padding: 24px; }
@@ -882,6 +901,21 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     return [{ name: 'Applicants', series }];
   });
 
+  sourceBreakdown = computed(() => {
+    const map = new Map<string, number>();
+    for (const row of this.reportRows()) {
+      const source = this.normalizePositionName(row.source) || 'Unspecified';
+      map.set(source, (map.get(source) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source));
+  });
+
+  sourceChartData = computed<ChartPoint[]>(() =>
+    this.sourceBreakdown().slice(0, 12).map((item) => ({ name: item.source, value: item.count }))
+  );
+
   weekScopedRows = computed(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -900,6 +934,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   });
 
   reportChartView = signal<[number, number]>([500, 260]);
+  reportWideChartView = computed<[number, number]>(() => {
+    const [w] = this.reportChartView();
+    return [Math.max(w * 2 + 10, 760), 280];
+  });
   chartScheme: Color = {
     name: 'applicants-chart',
     selectable: true,
