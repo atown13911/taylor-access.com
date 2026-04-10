@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { ShellComponent } from './layout/shell.component';
 import { authGuard } from './core/guards/auth.guard';
+import { ApplicantsComponent } from './features/hr/applicants/applicants.component';
 
 export const routes: Routes = [
   {
@@ -35,11 +36,11 @@ export const routes: Routes = [
       },
       {
         path: 'hr/applicants',
-        loadComponent: () => import('./features/hr/applicants/applicants.component').then(m => m.ApplicantsComponent)
+        component: ApplicantsComponent
       },
       {
         path: 'applicants',
-        loadComponent: () => import('./features/hr/applicants/applicants.component').then(m => m.ApplicantsComponent)
+        component: ApplicantsComponent
       },
       {
         path: 'structure',
