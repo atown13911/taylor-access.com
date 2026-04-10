@@ -23,7 +23,8 @@ public class CurrentUserService
         get
         {
             var userIdClaim = _httpContextAccessor.HttpContext?.User
-                .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                .FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? _httpContextAccessor.HttpContext?.User.FindFirst("sub")?.Value;
             return int.TryParse(userIdClaim, out var userId) ? userId : null;
         }
     }
@@ -65,6 +66,29 @@ public class CurrentUserService
                     .AsNoTracking()
                     .FirstOrDefaultAsync(u => u.Id == userId.Value);
             }
+        }
+
+        // Fallback for authenticated users that are not yet synced into local Users table.
+        // This keeps read paths and org-filtered queries functional based on JWT claims.
+        if (_cachedUser == null && IsAuthenticated)
+        {
+            var role = Role?.Trim();
+            var orgClaim = _httpContextAccessor.HttpContext?.User.FindFirst("orgId")?.Value
+                ?? _httpContextAccessor.HttpContext?.User.FindFirst("organizationId")?.Value;
+            int? orgId = int.TryParse(orgClaim, out var parsedOrg) ? parsedOrg : null;
+            var userId = UserId;
+            var claimEmail = Email;
+            var claimName = Name;
+
+            _cachedUser = new User
+            {
+                Id = userId ?? 0,
+                Email = string.IsNullOrWhiteSpace(claimEmail) ? $"claim-user-{Guid.NewGuid():N}@local" : claimEmail.Trim(),
+                Name = string.IsNullOrWhiteSpace(claimName) ? "Authenticated User" : claimName.Trim(),
+                Role = string.IsNullOrWhiteSpace(role) ? "user" : role.ToLowerInvariant(),
+                Status = "active",
+                OrganizationId = orgId
+            };
         }
 
         _userLoaded = true;
