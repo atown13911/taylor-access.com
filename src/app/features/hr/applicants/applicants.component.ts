@@ -86,6 +86,16 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <option value="30d">Last 30 days</option>
               <option value="custom">Custom range</option>
             </select>
+            <label for="report-position">Position</label>
+            <select
+              id="report-position"
+              [ngModel]="reportPositionFilter()"
+              (ngModelChange)="reportPositionFilter.set($event)"
+            >
+              @for (position of reportPositionOptions(); track position) {
+                <option [value]="position">{{ position === 'all' ? 'All positions' : position }}</option>
+              }
+            </select>
             @if (reportRange() === 'custom') {
               <div class="report-date-range">
                 <input
@@ -654,6 +664,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionStateFilter = signal<'active' | 'inactive' | 'report'>('active');
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
+  reportPositionFilter = signal<string>('all');
   reportDateFrom = signal('');
   reportDateTo = signal('');
   search = signal('');
@@ -701,37 +712,44 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   });
 
   positionOptionsForForm = computed(() => this.allPositions().filter((p) => p.isActive).map((p) => p.name));
+  reportPositionOptions = computed(() => ['all', ...this.allPositions().map((p) => p.name)]);
 
   reportRows = computed(() => {
     const range = this.reportRange();
-    if (range === 'all') return this.rows();
+    let scopedRows = this.rows();
 
     if (range === 'custom') {
       const from = this.parseDateOnly(this.reportDateFrom());
       const to = this.parseDateOnly(this.reportDateTo());
 
-      if (!from && !to) return this.rows();
+      if (!from && !to) {
+        scopedRows = this.rows();
+      } else {
+        const fromBound = from ? new Date(from.getFullYear(), from.getMonth(), from.getDate()) : null;
+        const toBound = to ? new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999) : null;
 
-      const fromBound = from ? new Date(from.getFullYear(), from.getMonth(), from.getDate()) : null;
-      const toBound = to ? new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999) : null;
+        scopedRows = this.rows().filter((row) => {
+          const parsed = this.parseDateOnly(row.appliedDate);
+          if (!parsed) return false;
+          if (fromBound && parsed < fromBound) return false;
+          if (toBound && parsed > toBound) return false;
+          return true;
+        });
+      }
+    } else if (range !== 'all') {
+      const days = range === '7d' ? 7 : 30;
+      const now = new Date();
+      const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
 
-      return this.rows().filter((row) => {
+      scopedRows = this.rows().filter((row) => {
         const parsed = this.parseDateOnly(row.appliedDate);
-        if (!parsed) return false;
-        if (fromBound && parsed < fromBound) return false;
-        if (toBound && parsed > toBound) return false;
-        return true;
+        return !!parsed && parsed >= cutoff;
       });
     }
 
-    const days = range === '7d' ? 7 : 30;
-    const now = new Date();
-    const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1));
-
-    return this.rows().filter((row) => {
-      const parsed = this.parseDateOnly(row.appliedDate);
-      return !!parsed && parsed >= cutoff;
-    });
+    const position = String(this.reportPositionFilter() || 'all').trim();
+    if (!position || position === 'all') return scopedRows;
+    return scopedRows.filter((row) => String(row.position || '').trim().toLowerCase() === position.toLowerCase());
   });
 
   activePositionsCount = computed(() => this.allPositions().filter((p) => p.isActive).length);
