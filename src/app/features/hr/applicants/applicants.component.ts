@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
@@ -28,11 +29,13 @@ interface ApplicantPosition {
 }
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
+type ChartPoint = { name: string; value: number };
+type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
 
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NgxChartsModule],
   template: `
     <div class="applicants-page">
       <header class="page-header">
@@ -142,74 +145,74 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
           <div class="report-grid">
             <div class="report-panel">
               <h3>Status Breakdown</h3>
-              <table>
-                <tbody>
-                  @for (item of statusBreakdown(); track item.status) {
-                    <tr>
-                      <td>{{ statusLabel(item.status) }}</td>
-                      <td class="count-cell">{{ item.count }}</td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="2" class="empty">No applicants yet.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              @if (statusChartData().length > 0) {
+                <ngx-charts-bar-vertical
+                  [results]="statusChartData()"
+                  [view]="reportChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showDataLabel]="true"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-vertical>
+              } @else {
+                <div class="chart-empty">No applicants yet.</div>
+              }
             </div>
 
             <div class="report-panel">
               <h3>Position Breakdown</h3>
-              <table>
-                <tbody>
-                  @for (item of positionBreakdown(); track item.position) {
-                    <tr>
-                      <td>{{ item.position }}</td>
-                      <td class="count-cell">{{ item.count }}</td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="2" class="empty">No applicants yet.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              @if (positionChartData().length > 0) {
+                <ngx-charts-bar-horizontal
+                  [results]="positionChartData()"
+                  [view]="reportChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showDataLabel]="true"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
+              } @else {
+                <div class="chart-empty">No applicants yet.</div>
+              }
             </div>
 
             <div class="report-panel">
               <h3>Gender Breakdown</h3>
-              <table>
-                <tbody>
-                  @for (item of genderBreakdown(); track item.label) {
-                    <tr>
-                      <td>{{ item.label }}</td>
-                      <td class="count-cell">{{ item.count }}</td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="2" class="empty">No applicants yet.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              @if (genderChartData().length > 0) {
+                <ngx-charts-pie-chart
+                  [results]="genderChartData()"
+                  [view]="reportChartView()"
+                  [scheme]="pieChartScheme"
+                  [labels]="true"
+                  [doughnut]="true"
+                  [animations]="true">
+                </ngx-charts-pie-chart>
+              } @else {
+                <div class="chart-empty">No applicants yet.</div>
+              }
             </div>
 
             <div class="report-panel">
-              <h3>Age Breakdown</h3>
-              <table>
-                <tbody>
-                  @for (item of ageBreakdown(); track item.label) {
-                    <tr>
-                      <td>{{ item.label }}</td>
-                      <td class="count-cell">{{ item.count }}</td>
-                    </tr>
-                  } @empty {
-                    <tr>
-                      <td colspan="2" class="empty">No applicants yet.</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              <h3>Age Scatter</h3>
+              @if (ageScatterChartData().length > 0) {
+                <ngx-charts-bubble-chart
+                  [results]="ageScatterChartData()"
+                  [view]="reportChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [xAxisLabel]="'Applicant'"
+                  [yAxisLabel]="'Age'"
+                  [showXAxisLabel]="true"
+                  [showYAxisLabel]="true"
+                  [animations]="true">
+                </ngx-charts-bubble-chart>
+              } @else {
+                <div class="chart-empty">No age data yet.</div>
+              }
             </div>
           </div>
         </section>
@@ -612,6 +615,11 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
     .report-panel { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     .count-cell { text-align: right; font-weight: 700; color: #e2e8f0; }
+    .chart-empty { text-align: center; color: #8aa0b8; padding: 24px; }
+    ::ng-deep .ngx-charts { text { fill: #a5b4c8 !important; } .gridline-path { stroke: rgba(255,255,255,0.08) !important; } }
+    ::ng-deep .ngx-charts .tick text { fill: #8aa0b8 !important; font-size: 10px !important; }
+    ::ng-deep .ngx-charts .label { fill: #cbd5e1 !important; font-size: 11px !important; }
+    ::ng-deep ngx-charts-bar-vertical, ::ng-deep ngx-charts-bar-horizontal, ::ng-deep ngx-charts-pie-chart, ::ng-deep ngx-charts-bubble-chart { display: block; position: relative; z-index: 0; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
     td { padding: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
@@ -751,6 +759,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count || a.position.localeCompare(b.position));
   });
 
+  statusChartData = computed<ChartPoint[]>(() =>
+    this.statusBreakdown().map((item) => ({ name: this.statusLabel(item.status), value: item.count }))
+  );
+
+  positionChartData = computed<ChartPoint[]>(() =>
+    this.positionBreakdown().slice(0, 10).map((item) => ({ name: item.position, value: item.count }))
+  );
+
   averageAgeLabel = computed(() => {
     const ages = this.reportRows()
       .map((r) => r.age)
@@ -780,6 +796,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       .filter((item) => item.count > 0);
   });
 
+  genderChartData = computed<ChartPoint[]>(() =>
+    this.genderBreakdown().map((item) => ({ name: item.label, value: item.count }))
+  );
+
   ageBreakdown = computed(() => {
     const groups = [
       { label: 'Under 25', count: 0 },
@@ -806,6 +826,34 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
     return groups.filter((g) => g.count > 0);
   });
+
+  ageScatterChartData = computed(() => {
+    const series: BubbleSeriesPoint[] = this.reportRows()
+      .filter((row): row is ApplicantRow & { age: number } => typeof row.age === 'number' && Number.isFinite(row.age))
+      .slice(0, 80)
+      .map((row, idx) => ({
+        name: row.fullName || `Applicant ${idx + 1}`,
+        x: idx + 1,
+        y: row.age,
+        r: 5
+      }));
+    if (series.length === 0) return [];
+    return [{ name: 'Applicants', series }];
+  });
+
+  reportChartView = signal<[number, number]>([500, 260]);
+  chartScheme: Color = {
+    name: 'applicants-chart',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#00d4ff', '#22d3ee', '#38bdf8', '#60a5fa', '#818cf8']
+  };
+  pieChartScheme: Color = {
+    name: 'applicants-pie',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#00d4ff', '#22c55e', '#a855f7', '#f59e0b', '#64748b']
+  };
 
   tableScopeRows = computed(() => {
     const selectedPosition = this.selectedPosition();
