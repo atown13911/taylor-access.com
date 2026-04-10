@@ -217,6 +217,13 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
             >
               Rejected
             </button>
+            <button
+              class="pipeline-tab"
+              [class.active]="pipelineFilter() === 'hired'"
+              (click)="setPipelineFilter('hired')"
+            >
+              Hired
+            </button>
           </div>
           <input
             type="text"
@@ -291,6 +298,23 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
                   <td>{{ row.notes || '—' }}</td>
                   <td>
                     <div class="action-icons">
+                      @if (pipelineFilter() === 'working') {
+                        <button
+                          class="icon-btn warn"
+                          title="Send to Rejected"
+                          (click)="$event.stopPropagation(); sendToRejected(row.id)"
+                        >
+                          <i class='bx bx-x-circle'></i>
+                        </button>
+                      } @else if (pipelineFilter() === 'rejected') {
+                        <button
+                          class="icon-btn success"
+                          title="Return to Active"
+                          (click)="$event.stopPropagation(); returnToActive(row.id)"
+                        >
+                          <i class='bx bx-undo'></i>
+                        </button>
+                      }
                       <button class="icon-btn" title="Edit applicant" (click)="$event.stopPropagation(); openEdit(row)">
                         <i class='bx bx-edit'></i>
                       </button>
@@ -541,6 +565,8 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
     .action-icons { display: flex; gap: 6px; }
     .icon-btn { border: 1px solid #2a2a4e; background: #111827; color: #cbd5e1; border-radius: 6px; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .icon-btn:hover { border-color: #4b5c84; color: #fff; }
+    .icon-btn.warn:hover { border-color: #f59e0b; color: #fde68a; }
+    .icon-btn.success:hover { border-color: #22c55e; color: #86efac; }
     .icon-btn.danger:hover { border-color: #ef4444; color: #fecaca; }
     .cv-link-btn { background: transparent; color: #7dd3fc; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.86rem; }
     .empty { text-align: center; color: #8aa0b8; padding: 20px; }
@@ -562,7 +588,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
   positionStateFilter = signal<'active' | 'inactive' | 'report'>('active');
-  pipelineFilter = signal<'working' | 'rejected'>('working');
+  pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportDateFrom = signal('');
   reportDateTo = signal('');
@@ -686,8 +712,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const pipeline = this.pipelineFilter();
     return this.rows().filter((r) => {
       const pipelinePass = pipeline === 'working'
-        ? r.status !== 'rejected'
-        : r.status === 'rejected';
+        ? (r.status !== 'rejected' && r.status !== 'hired')
+        : pipeline === 'rejected'
+          ? r.status === 'rejected'
+          : r.status === 'hired';
       if (!pipelinePass) return false;
       const statusPass = status === 'all' || r.status === status;
       if (!statusPass) return false;
@@ -795,6 +823,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
   }
 
+  async sendToRejected(id: number): Promise<void> {
+    await this.setStatus(id, 'rejected');
+  }
+
+  async returnToActive(id: number): Promise<void> {
+    await this.setStatus(id, 'new');
+  }
+
   async saveEdit(): Promise<void> {
     const id = this.editTargetId();
     if (!id) return;
@@ -859,7 +895,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.selectedPosition.set('all');
   }
 
-  setPipelineFilter(mode: 'working' | 'rejected'): void {
+  setPipelineFilter(mode: 'working' | 'rejected' | 'hired'): void {
     this.pipelineFilter.set(mode);
     this.selectedApplicantId.set(null);
   }
