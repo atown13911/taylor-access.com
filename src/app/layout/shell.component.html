@@ -25,12 +25,17 @@
           <div class="nav-section-divider"></div>
         }
         @for (item of section.items; track item.route) {
-          <a [routerLink]="item.route" routerLinkActive="active" class="nav-item">
+          <button
+            type="button"
+            class="nav-item"
+            [class.active]="isActiveRoute(item.route)"
+            (click)="navigateTo(item.route)"
+          >
             <i [class]="item.icon"></i>
             @if (!sidebarCollapsed()) {
               <span>{{ item.label }}</span>
             }
-          </a>
+          </button>
         }
       }
     </nav>

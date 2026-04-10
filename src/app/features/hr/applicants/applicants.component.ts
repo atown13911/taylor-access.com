@@ -120,6 +120,25 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
             </article>
           </div>
 
+          <div class="report-cards report-cards-demographics">
+            <article class="report-card">
+              <span>Average Age</span>
+              <strong>{{ averageAgeLabel() }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Male</span>
+              <strong>{{ maleCount() }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Female</span>
+              <strong>{{ femaleCount() }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Non-binary</span>
+              <strong>{{ nonBinaryCount() }}</strong>
+            </article>
+          </div>
+
           <div class="report-grid">
             <div class="report-panel">
               <h3>Status Breakdown</h3>
@@ -146,6 +165,42 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
                   @for (item of positionBreakdown(); track item.position) {
                     <tr>
                       <td>{{ item.position }}</td>
+                      <td class="count-cell">{{ item.count }}</td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="2" class="empty">No applicants yet.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="report-panel">
+              <h3>Gender Breakdown</h3>
+              <table>
+                <tbody>
+                  @for (item of genderBreakdown(); track item.label) {
+                    <tr>
+                      <td>{{ item.label }}</td>
+                      <td class="count-cell">{{ item.count }}</td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="2" class="empty">No applicants yet.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="report-panel">
+              <h3>Age Breakdown</h3>
+              <table>
+                <tbody>
+                  @for (item of ageBreakdown(); track item.label) {
+                    <tr>
+                      <td>{{ item.label }}</td>
                       <td class="count-cell">{{ item.count }}</td>
                     </tr>
                   } @empty {
@@ -549,6 +604,7 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
     .report-date-range input { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
     .report-date-range span { color: #8aa0b8; font-size: 0.8rem; }
     .report-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .report-cards-demographics { margin-top: -2px; }
     .report-card { background: #10192c; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
     .report-card span { color: #8aa0b8; font-size: 0.8rem; }
     .report-card strong { color: #e0f2fe; font-size: 1.2rem; }
@@ -695,6 +751,62 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count || a.position.localeCompare(b.position));
   });
 
+  averageAgeLabel = computed(() => {
+    const ages = this.reportRows()
+      .map((r) => r.age)
+      .filter((age): age is number => typeof age === 'number' && Number.isFinite(age));
+    if (ages.length === 0) return '—';
+    const total = ages.reduce((sum, age) => sum + age, 0);
+    return (total / ages.length).toFixed(1);
+  });
+
+  maleCount = computed(() => this.reportRows().filter((r) => this.normalizeGenderBucket(r.gender) === 'male').length);
+  femaleCount = computed(() => this.reportRows().filter((r) => this.normalizeGenderBucket(r.gender) === 'female').length);
+  nonBinaryCount = computed(() => this.reportRows().filter((r) => this.normalizeGenderBucket(r.gender) === 'non-binary').length);
+
+  genderBreakdown = computed(() => {
+    const order: Array<{ key: string; label: string }> = [
+      { key: 'male', label: 'Male' },
+      { key: 'female', label: 'Female' },
+      { key: 'non-binary', label: 'Non-binary' },
+      { key: 'prefer not to say', label: 'Prefer not to say' },
+      { key: 'unspecified', label: 'Unspecified' }
+    ];
+    return order
+      .map((item) => ({
+        label: item.label,
+        count: this.reportRows().filter((r) => this.normalizeGenderBucket(r.gender) === item.key).length
+      }))
+      .filter((item) => item.count > 0);
+  });
+
+  ageBreakdown = computed(() => {
+    const groups = [
+      { label: 'Under 25', count: 0 },
+      { label: '25-34', count: 0 },
+      { label: '35-44', count: 0 },
+      { label: '45+', count: 0 },
+      { label: 'Unknown', count: 0 }
+    ];
+
+    for (const row of this.reportRows()) {
+      const age = row.age;
+      if (typeof age !== 'number' || !Number.isFinite(age)) {
+        groups[4].count++;
+      } else if (age < 25) {
+        groups[0].count++;
+      } else if (age < 35) {
+        groups[1].count++;
+      } else if (age < 45) {
+        groups[2].count++;
+      } else {
+        groups[3].count++;
+      }
+    }
+
+    return groups.filter((g) => g.count > 0);
+  });
+
   tableScopeRows = computed(() => {
     const selectedPosition = this.selectedPosition();
     return this.rows().filter((r) => selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition);
@@ -709,8 +821,24 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const term = this.search().trim().toLowerCase();
     const status = this.statusFilter();
     const selectedPosition = this.selectedPosition();
+    const mode = this.positionStateFilter();
+    const stateMap = new Map<string, boolean>();
+    for (const p of this.allPositions()) {
+      stateMap.set(p.name.toLowerCase(), !!p.isActive);
+    }
     const pipeline = this.pipelineFilter();
     return this.rows().filter((r) => {
+      const normalizedPosition = String(r.position || '').trim();
+      const key = normalizedPosition.toLowerCase();
+      const isActivePosition = normalizedPosition ? (stateMap.get(key) ?? true) : false;
+
+      // Apply Active/Inactive mode to the All Positions view.
+      // This ensures each tab shows only its related position data.
+      if (selectedPosition === 'all') {
+        const statePass = mode === 'active' ? isActivePosition : !isActivePosition;
+        if (!statePass) return false;
+      }
+
       const pipelinePass = pipeline === 'working'
         ? (r.status !== 'rejected' && r.status !== 'hired')
         : pipeline === 'rejected'
@@ -719,7 +847,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       if (!pipelinePass) return false;
       const statusPass = status === 'all' || r.status === status;
       if (!statusPass) return false;
-      const positionPass = selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition;
+      const positionPass = selectedPosition === 'all' || normalizedPosition === selectedPosition;
       if (!positionPass) return false;
       if (!term) return true;
       return [r.fullName, r.position, r.source, r.notes].some((v) => String(v || '').toLowerCase().includes(term));
@@ -1432,6 +1560,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       return v;
     }
     return 'new';
+  }
+
+  private normalizeGenderBucket(value: unknown): 'male' | 'female' | 'non-binary' | 'prefer not to say' | 'unspecified' {
+    const v = String(value ?? '').trim().toLowerCase();
+    if (v === 'male') return 'male';
+    if (v === 'female') return 'female';
+    if (v === 'non-binary' || v === 'non binary') return 'non-binary';
+    if (v === 'prefer not to say') return 'prefer not to say';
+    return 'unspecified';
   }
 
   private toIsoDateOnly(value: unknown): string {
