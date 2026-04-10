@@ -28,8 +28,7 @@ public class ApplicantsController : ControllerBase
     [HttpGet("records")]
     public async Task<ActionResult> GetApplicants([FromQuery] bool includeCv = false)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var rows = await _context.ApplicantRecords
             .AsNoTracking()
@@ -176,8 +175,7 @@ public class ApplicantsController : ControllerBase
     [HttpGet("records/{id:int}/cv")]
     public async Task<ActionResult> GetApplicantCv(int id)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var row = await _context.ApplicantRecords
             .AsNoTracking()
@@ -222,8 +220,7 @@ public class ApplicantsController : ControllerBase
     [HttpGet("positions")]
     public async Task<ActionResult> GetPositions()
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var organizations = await _context.Organizations
             .AsTracking()

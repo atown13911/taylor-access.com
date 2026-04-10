@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
@@ -1433,9 +1433,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         this.attemptedLegacyImport = true;
         await this.importLegacyApplicantsToDb();
       }
-    } catch {
+    } catch (err) {
       // Keep current rows if API is temporarily unavailable.
-      this.applicantsSyncError.set('Unable to load shared applicants from database.');
+      const httpErr = err as HttpErrorResponse | undefined;
+      if (httpErr?.status === 401 || httpErr?.status === 403) {
+        this.applicantsSyncError.set('Access denied loading shared applicants. Ask admin to sync your user access.');
+      } else {
+        this.applicantsSyncError.set('Unable to load shared applicants from database.');
+      }
     }
   }
 
