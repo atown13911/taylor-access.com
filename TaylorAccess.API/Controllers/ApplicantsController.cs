@@ -1,11 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
-using TaylorAccess.API.Services;
 
 namespace TaylorAccess.API.Controllers;
 
@@ -17,12 +17,10 @@ public class ApplicantsController : ControllerBase
     private const string PositionsSettingsKey = "applicantsPositions";
 
     private readonly TaylorAccessDbContext _context;
-    private readonly CurrentUserService _currentUserService;
 
-    public ApplicantsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public ApplicantsController(TaylorAccessDbContext context)
     {
         _context = context;
-        _currentUserService = currentUserService;
     }
 
     [HttpGet("records")]
@@ -58,8 +56,7 @@ public class ApplicantsController : ControllerBase
     [HttpPost("records")]
     public async Task<ActionResult> CreateApplicant([FromBody] CreateApplicantRecordRequest request)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var fullName = string.IsNullOrWhiteSpace(request.FullName) ? string.Empty : request.FullName.Trim();
         if (string.IsNullOrWhiteSpace(fullName))
@@ -77,7 +74,7 @@ public class ApplicantsController : ControllerBase
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
             CvFileName = string.IsNullOrWhiteSpace(request.CvFileName) ? null : request.CvFileName.Trim(),
             CvDataUrl = string.IsNullOrWhiteSpace(request.CvDataUrl) ? null : request.CvDataUrl,
-            CreatedByUserId = user.Id,
+            CreatedByUserId = TryGetRequestUserId(),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -110,8 +107,7 @@ public class ApplicantsController : ControllerBase
     [HttpPut("records/{id:int}/status")]
     public async Task<ActionResult> UpdateApplicantStatus(int id, [FromBody] UpdateApplicantRecordStatusRequest request)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var row = await _context.ApplicantRecords.FirstOrDefaultAsync(a => a.Id == id);
         if (row == null) return NotFound(new { error = "Applicant not found" });
@@ -126,8 +122,7 @@ public class ApplicantsController : ControllerBase
     [HttpPut("records/{id:int}")]
     public async Task<ActionResult> UpdateApplicant(int id, [FromBody] UpdateApplicantRecordRequest request)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var row = await _context.ApplicantRecords.FirstOrDefaultAsync(a => a.Id == id);
         if (row == null) return NotFound(new { error = "Applicant not found" });
@@ -206,8 +201,7 @@ public class ApplicantsController : ControllerBase
     [HttpDelete("records/{id:int}")]
     public async Task<ActionResult> DeleteApplicant(int id)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var row = await _context.ApplicantRecords.FirstOrDefaultAsync(a => a.Id == id);
         if (row == null) return NotFound(new { error = "Applicant not found" });
@@ -239,8 +233,7 @@ public class ApplicantsController : ControllerBase
     [HttpPost("positions")]
     public async Task<ActionResult> AddPosition([FromBody] AddApplicantPositionRequest request)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var organizations = await _context.Organizations
             .AsTracking()
@@ -278,8 +271,7 @@ public class ApplicantsController : ControllerBase
     [HttpPut("positions/status")]
     public async Task<ActionResult> UpdatePositionStatus([FromBody] UpdateApplicantPositionStatusRequest request)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var organizations = await _context.Organizations
             .AsTracking()
@@ -319,8 +311,7 @@ public class ApplicantsController : ControllerBase
     [HttpPut("positions")]
     public async Task<ActionResult> UpdatePosition([FromBody] UpdateApplicantPositionRequest request)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var organizations = await _context.Organizations
             .AsTracking()
@@ -365,8 +356,7 @@ public class ApplicantsController : ControllerBase
     [HttpDelete("positions/{name}")]
     public async Task<ActionResult> DeletePosition(string name)
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null) return Unauthorized();
+        if (User?.Identity?.IsAuthenticated != true) return Unauthorized();
 
         var target = string.IsNullOrWhiteSpace(name) ? string.Empty : Uri.UnescapeDataString(name).Trim();
         if (string.IsNullOrWhiteSpace(target))
@@ -516,6 +506,13 @@ public class ApplicantsController : ControllerBase
             "rejected" => "rejected",
             _ => "new"
         };
+    }
+
+    private int? TryGetRequestUserId()
+    {
+        var idValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+        return int.TryParse(idValue, out var parsedId) && parsedId > 0 ? parsedId : null;
     }
 }
 
