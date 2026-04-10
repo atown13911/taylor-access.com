@@ -184,6 +184,24 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
         </div>
 
         <div class="filters">
+          <div class="pipeline-tiles">
+            <article class="pipeline-tile">
+              <span>Total</span>
+              <strong>{{ tableTotalCount() }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Working</span>
+              <strong>{{ tableWorkingCount() }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Rejected</span>
+              <strong>{{ tableRejectedCount() }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Hired</span>
+              <strong>{{ tableHiredCount() }}</strong>
+            </article>
+          </div>
           <div class="pipeline-tabs">
             <button
               class="pipeline-tab"
@@ -490,6 +508,10 @@ type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: Applicant
     .position-settings-icon:hover { color: #d9f6ff; background: rgba(255,255,255,0.08); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
+    .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 2px; }
+    .pipeline-tile { border: 1px solid #2a2a4e; border-radius: 10px; padding: 8px 10px; background: #10192c; display: flex; justify-content: space-between; align-items: baseline; }
+    .pipeline-tile span { color: #8aa0b8; font-size: 0.78rem; }
+    .pipeline-tile strong { color: #e0f2fe; font-size: 1rem; }
     .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
@@ -646,6 +668,16 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       .map(([position, count]) => ({ position, count }))
       .sort((a, b) => b.count - a.count || a.position.localeCompare(b.position));
   });
+
+  tableScopeRows = computed(() => {
+    const selectedPosition = this.selectedPosition();
+    return this.rows().filter((r) => selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition);
+  });
+
+  tableTotalCount = computed(() => this.tableScopeRows().length);
+  tableWorkingCount = computed(() => this.tableScopeRows().filter((r) => r.status !== 'rejected').length);
+  tableRejectedCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'rejected').length);
+  tableHiredCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'hired').length);
 
   filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
