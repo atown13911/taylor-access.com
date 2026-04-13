@@ -58,11 +58,11 @@ import { environment } from '../../../../environments/environment';
       </div>
 
       <div class="payroll-org-tabs">
-        @for (item of structureTabs(); track item) {
+        @for (item of organizationTabs(); track item) {
           <button
             class="payroll-org-tab"
-            [class.active]="selectedStructureTab() === item"
-            (click)="selectedStructureTab.set(item)"
+            [class.active]="selectedOrganization() === item"
+            (click)="setOrganization(item)"
           >
             {{ item }}
           </button>
@@ -78,6 +78,18 @@ import { environment } from '../../../../environments/environment';
             (click)="setStructureType(type.value)"
           >
             {{ type.label }}
+          </button>
+        }
+      </div>
+
+      <div class="payroll-org-tabs">
+        @for (item of structureTabs(); track item) {
+          <button
+            class="payroll-org-tab"
+            [class.active]="selectedStructureTab() === item"
+            (click)="selectedStructureTab.set(item)"
+          >
+            {{ item }}
           </button>
         }
       </div>
@@ -237,11 +249,11 @@ export class PayrollComponent implements OnInit {
   employees = signal<any[]>([]);
   searchTerm = signal('');
   periodFilter = signal('current');
-  selectedStructureType = signal<StructureType>('organizations');
+  selectedOrganization = signal('All organizations');
+  selectedStructureType = signal<StructureType>('divisions');
   selectedStructureTab = signal('All');
 
   structureTypes: Array<{ value: StructureType; label: string }> = [
-    { value: 'organizations', label: 'Organizations' },
     { value: 'divisions', label: 'Divisions' },
     { value: 'departments', label: 'Departments' },
     { value: 'positions', label: 'Job Positions' },
@@ -265,10 +277,25 @@ export class PayrollComponent implements OnInit {
     return options;
   })();
 
+  organizationTabs = computed(() => {
+    const names = new Set<string>();
+    for (const emp of this.employees()) {
+      const org = this.getOrganizationLabel(emp);
+      if (org) names.add(org);
+    }
+    return ['All organizations', ...Array.from(names).sort((a, b) => a.localeCompare(b))];
+  });
+
+  organizationScopedEmployees = computed(() => {
+    const selectedOrg = this.selectedOrganization();
+    if (selectedOrg === 'All organizations') return this.employees();
+    return this.employees().filter((e) => this.getOrganizationLabel(e) === selectedOrg);
+  });
+
   structureTabs = computed(() => {
     const names = new Set<string>();
     const type = this.selectedStructureType();
-    for (const emp of this.employees()) {
+    for (const emp of this.organizationScopedEmployees()) {
       const label = this.getStructureLabel(emp, type);
       if (label) names.add(label);
     }
@@ -277,9 +304,9 @@ export class PayrollComponent implements OnInit {
 
   scopedEmployees = computed(() => {
     const selected = this.selectedStructureTab();
-    if (selected === 'All') return this.employees();
+    if (selected === 'All') return this.organizationScopedEmployees();
     const type = this.selectedStructureType();
-    return this.employees().filter((e) => {
+    return this.organizationScopedEmployees().filter((e) => {
       const label = this.getStructureLabel(e, type);
       return !!label && label === selected;
     });
@@ -305,6 +332,12 @@ export class PayrollComponent implements OnInit {
   setStructureType(type: StructureType): void {
     if (this.selectedStructureType() === type) return;
     this.selectedStructureType.set(type);
+    this.selectedStructureTab.set('All');
+  }
+
+  setOrganization(org: string): void {
+    if (this.selectedOrganization() === org) return;
+    this.selectedOrganization.set(org);
     this.selectedStructureTab.set('All');
   }
 
@@ -348,8 +381,6 @@ export class PayrollComponent implements OnInit {
     };
 
     switch (type) {
-      case 'organizations':
-        return pickText(emp.organizationName, emp.organization) ?? pickIdLabel('Organization', emp.organizationId);
       case 'divisions':
         return pickText(emp.divisionName, emp.division) ?? pickIdLabel('Division', emp.divisionId);
       case 'departments':
@@ -368,10 +399,18 @@ export class PayrollComponent implements OnInit {
         return null;
     }
   }
+
+  private getOrganizationLabel(emp: any): string | null {
+    if (!emp || typeof emp !== 'object') return null;
+    const byName = String(emp.organizationName ?? emp.organization ?? '').trim();
+    if (byName) return byName;
+    const byId = Number(emp.organizationId);
+    if (Number.isFinite(byId) && byId > 0) return `Organization ${byId}`;
+    return null;
+  }
 }
 
 type StructureType =
-  | 'organizations'
   | 'divisions'
   | 'departments'
   | 'positions'
