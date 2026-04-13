@@ -74,19 +74,30 @@ import { environment } from '../../../../environments/environment';
       <div class="payroll-search">
         <select
           class="payroll-search-field"
-          [ngModel]="selectedSearchField()"
-          (ngModelChange)="selectedSearchField.set($event)"
-          aria-label="Payroll search filter field"
+          [ngModel]="selectedStructureFilterField()"
+          (ngModelChange)="setStructureFilterField($event)"
+          aria-label="Payroll table filter field"
         >
-          @for (item of searchFieldOptions; track item.value) {
+          @for (item of structureFilterFieldOptions; track item.value) {
             <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+        <select
+          class="payroll-search-field"
+          [ngModel]="selectedStructureFilterValue()"
+          (ngModelChange)="selectedStructureFilterValue.set($event)"
+          [disabled]="selectedStructureFilterField() === 'all'"
+          aria-label="Payroll table filter value"
+        >
+          @for (item of structureFilterValueOptions(); track item) {
+            <option [value]="item">{{ item }}</option>
           }
         </select>
         <div class="payroll-search-input-wrap">
           <i class="bx bx-search"></i>
           <input
             type="text"
-            [placeholder]="searchPlaceholder()"
+            placeholder="Search filtered table..."
             [ngModel]="searchTerm()"
             (ngModelChange)="searchTerm.set($event)"
           >
@@ -242,23 +253,19 @@ export class PayrollComponent implements OnInit {
   employees = signal<any[]>([]);
   organizationNameById = signal<Record<number, string>>({});
   searchTerm = signal('');
-  selectedSearchField = signal<SearchField>('all');
+  selectedStructureFilterField = signal<StructureFilterField>('all');
+  selectedStructureFilterValue = signal('All');
   periodFilter = signal('current');
   selectedOrganization = signal('All organizations');
-  searchFieldOptions: Array<{ value: SearchField; label: string }> = [
-    { value: 'all', label: 'All fields' },
-    { value: 'name', label: 'Name' },
-    { value: 'email', label: 'Email' },
-    { value: 'payType', label: 'Pay Type' },
-    { value: 'status', label: 'Status' },
+  structureFilterFieldOptions: Array<{ value: StructureFilterField; label: string }> = [
+    { value: 'all', label: 'All structures' },
     { value: 'division', label: 'Division' },
     { value: 'department', label: 'Department' },
     { value: 'position', label: 'Position' },
     { value: 'jobTitle', label: 'Job Title' },
     { value: 'terminal', label: 'Terminal' },
     { value: 'satellite', label: 'Satellite' },
-    { value: 'agency', label: 'Agency' },
-    { value: 'organization', label: 'Organization' }
+    { value: 'agency', label: 'Agency' }
   ];
 
   periodOptions = (() => {
@@ -290,26 +297,29 @@ export class PayrollComponent implements OnInit {
     return this.employees().filter((e) => this.getOrganizationLabel(e) === selectedOrg);
   });
 
-  scopedEmployees = computed(() => this.organizationScopedEmployees());
-  searchPlaceholder = computed(() => {
-    const selected = this.selectedSearchField();
-    const option = this.searchFieldOptions.find((x) => x.value === selected);
-    return option && selected !== 'all'
-      ? `Search ${option.label.toLowerCase()}...`
-      : 'Search employees...';
+  structureFilterValueOptions = computed(() => {
+    const field = this.selectedStructureFilterField();
+    if (field === 'all') return ['All'];
+    const names = new Set<string>();
+    for (const emp of this.organizationScopedEmployees()) {
+      const value = this.getSearchFieldText(emp, field);
+      if (value) names.add(value);
+    }
+    return ['All', ...Array.from(names).sort((a, b) => a.localeCompare(b))];
+  });
+
+  scopedEmployees = computed(() => {
+    const field = this.selectedStructureFilterField();
+    const value = this.selectedStructureFilterValue();
+    if (field === 'all' || value === 'All') return this.organizationScopedEmployees();
+    return this.organizationScopedEmployees().filter((e) => this.getSearchFieldText(e, field) === value);
   });
 
   filteredEmployees = computed(() => {
     const search = this.searchTerm().toLowerCase();
-    const selectedField = this.selectedSearchField();
     let list = this.scopedEmployees();
     if (search) {
-      list = list.filter((e) => {
-        if (selectedField === 'all') {
-          return this.getAllSearchableText(e).includes(search);
-        }
-        return this.getSearchFieldText(e, selectedField).includes(search);
-      });
+      list = list.filter((e) => this.getAllSearchableText(e).includes(search));
     }
     return list;
   });
@@ -326,6 +336,13 @@ export class PayrollComponent implements OnInit {
   setOrganization(org: string): void {
     if (this.selectedOrganization() === org) return;
     this.selectedOrganization.set(org);
+    this.selectedStructureFilterValue.set('All');
+  }
+
+  setStructureFilterField(field: StructureFilterField): void {
+    if (this.selectedStructureFilterField() === field) return;
+    this.selectedStructureFilterField.set(field);
+    this.selectedStructureFilterValue.set('All');
   }
 
   loadData() {
@@ -373,35 +390,25 @@ export class PayrollComponent implements OnInit {
     return null;
   }
 
-  private getSearchFieldText(emp: any, field: SearchField): string {
+  private getSearchFieldText(emp: any, field: StructureFilterField): string {
     switch (field) {
-      case 'name':
-        return String(emp?.name ?? '').toLowerCase();
-      case 'email':
-        return String(emp?.email ?? '').toLowerCase();
-      case 'payType':
-        return String(emp?.payType ?? '').toLowerCase();
-      case 'status':
-        return String(emp?.payrollStatus ?? '').toLowerCase();
-      case 'organization':
-        return String(this.getOrganizationLabel(emp) ?? '').toLowerCase();
       case 'division':
-        return this.joinSearchValues(emp?.divisionName, emp?.division, this.withId('division', emp?.divisionId));
+        return this.firstNonEmpty(emp?.divisionName, emp?.division, this.withId('Division', emp?.divisionId));
       case 'department':
-        return this.joinSearchValues(emp?.departmentName, emp?.department, this.withId('department', emp?.departmentId));
+        return this.firstNonEmpty(emp?.departmentName, emp?.department, this.withId('Department', emp?.departmentId));
       case 'position':
-        return this.joinSearchValues(emp?.positionTitle, emp?.position, this.withId('position', emp?.positionId));
+        return this.firstNonEmpty(emp?.positionTitle, emp?.position, this.withId('Position', emp?.positionId));
       case 'jobTitle':
-        return this.joinSearchValues(emp?.jobTitle);
+        return this.firstNonEmpty(emp?.jobTitle);
       case 'terminal':
-        return this.joinSearchValues(emp?.terminalName, emp?.terminal, this.withId('terminal', emp?.terminalId));
+        return this.firstNonEmpty(emp?.terminalName, emp?.terminal, this.withId('Terminal', emp?.terminalId));
       case 'satellite':
-        return this.joinSearchValues(emp?.satelliteName, emp?.satellite, this.withId('satellite', emp?.satelliteId));
+        return this.firstNonEmpty(emp?.satelliteName, emp?.satellite, this.withId('Satellite', emp?.satelliteId));
       case 'agency':
-        return this.joinSearchValues(emp?.agencyName, emp?.agency, this.withId('agency', emp?.agencyId));
+        return this.firstNonEmpty(emp?.agencyName, emp?.agency, this.withId('Agency', emp?.agencyId));
       case 'all':
       default:
-        return this.getAllSearchableText(emp);
+        return '';
     }
   }
 
@@ -438,6 +445,14 @@ export class PayrollComponent implements OnInit {
     const id = Number(value);
     if (!Number.isFinite(id) || id <= 0) return '';
     return `${prefix} ${id}`;
+  }
+
+  private firstNonEmpty(...values: unknown[]): string {
+    for (const value of values) {
+      const text = String(value ?? '').trim();
+      if (text) return text;
+    }
+    return '';
   }
 
   private joinSearchValues(...values: unknown[]): string {
@@ -478,12 +493,7 @@ export class PayrollComponent implements OnInit {
   }
 }
 
-type SearchField =
-  | 'all'
-  | 'name'
-  | 'email'
-  | 'payType'
-  | 'status'
+type StructureFilterField =
   | 'division'
   | 'department'
   | 'position'
@@ -491,4 +501,4 @@ type SearchField =
   | 'terminal'
   | 'satellite'
   | 'agency'
-  | 'organization';
+  | 'all';
