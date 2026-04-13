@@ -2518,24 +2518,24 @@ import { AuthService } from '../../../core/services/auth.service';
     .modal-edit-employee {
       width: min(860px, calc(100vw - 48px));
       max-width: 860px;
-      max-height: calc(100vh - 36px);
+      max-height: calc(100vh - 110px);
       margin-top: 0;
     }
 
     .modal-edit-employee .modal-header {
-      padding: 18px 22px;
+      padding: 14px 18px;
     }
 
     .modal-edit-employee .edit-modal-tabs {
-      padding: 0 16px;
+      padding: 0 12px;
     }
 
     .modal-edit-employee .modal-body {
-      padding: 20px;
+      padding: 14px;
     }
 
     .modal-edit-employee .modal-footer {
-      padding: 16px 20px;
+      padding: 12px 14px;
     }
 
     @keyframes slideUp {
