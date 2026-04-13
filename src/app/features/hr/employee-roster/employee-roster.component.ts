@@ -2490,9 +2490,9 @@ import { AuthService } from '../../../core/services/auth.service';
       display: flex;
       align-items: flex-start;
       justify-content: center;
-      padding: 16px 20px 20px;
+      padding: 72px 20px 20px;
       overflow-y: auto;
-      z-index: 2000;
+      z-index: 110000;
       animation: fadeIn 0.2s ease;
     }
 
