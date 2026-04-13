@@ -1323,6 +1323,82 @@ import { AuthService } from '../../../core/services/auth.service';
                 </div>
               }
 
+              <div class="form-section pay-info-section">
+                <h3><i class="bx bx-calculator"></i> Pay Information</h3>
+                <div class="country-banner">
+                  <i class="bx bx-info-circle"></i>
+                  These values are used by Payroll as employee-level defaults for calculations.
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Pay Type</label>
+                    <select [(ngModel)]="editingEmployee.payType" class="form-select">
+                      <option value="salary">Salary</option>
+                      <option value="hourly">Hourly</option>
+                      <option value="commission">Commission</option>
+                      <option value="per_load">Per Load</option>
+                      <option value="per_mile">Per Mile</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Payroll Status</label>
+                    <select [(ngModel)]="editingEmployee.payrollStatus" class="form-select">
+                      <option value="pending">Pending</option>
+                      <option value="processed">Processed</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Pay Rate</label>
+                    <input type="number" [(ngModel)]="editingEmployee.payRate" min="0" step="0.01" placeholder="0.00" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Standard Hours / Week</label>
+                    <input type="number" [(ngModel)]="editingEmployee.standardHoursPerWeek" min="0" step="1" placeholder="40" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Overtime</label>
+                    <select
+                      [ngModel]="editingEmployee.overtimeEligible ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.overtimeEligible = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="yes">Eligible</option>
+                      <option value="no">Not eligible</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Overtime Multiplier</label>
+                    <input type="number" [(ngModel)]="editingEmployee.overtimeRateMultiplier" min="1" step="0.01" placeholder="1.50" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Default Deductions</label>
+                    <input type="number" [(ngModel)]="editingEmployee.defaultDeductions" min="0" step="0.01" placeholder="0.00" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Default Tax Withholding %</label>
+                    <input type="number" [(ngModel)]="editingEmployee.defaultTaxWithholdingPct" min="0" step="0.01" placeholder="0.00" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group full-width">
+                    <label>Payroll Notes</label>
+                    <textarea
+                      [(ngModel)]="editingEmployee.payrollNotes"
+                      rows="3"
+                      placeholder="Optional payroll notes for this employee..."
+                      class="form-input pay-info-notes"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
             } <!-- end financial tab -->
 
             <!-- ==================== INTEGRATIONS TAB ==================== -->
@@ -3172,6 +3248,21 @@ import { AuthService } from '../../../core/services/auth.service';
       justify-content: flex-end;
     }
 
+    .pay-info-section {
+      border-color: rgba(0, 242, 254, 0.25);
+    }
+
+    .pay-info-notes {
+      resize: vertical;
+      min-height: 86px;
+      font-family: inherit;
+      line-height: 1.45;
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
     .btn-add-account {
       display: flex;
       align-items: center;
@@ -4658,6 +4749,7 @@ export class EmployeeRosterComponent implements OnInit {
     this.showLandstarPw = false;
     this.showPowerdatPw = false;
     this.selectedEmployee.set(null); // Close details modal
+    const payrollDefaults = this.extractPayrollSettings(employee);
     
     // Determine entity type
     let entityType = 'corporate';
@@ -4710,7 +4802,17 @@ export class EmployeeRosterComponent implements OnInit {
       divisionId: (employee as any).divisionId ? Number((employee as any).divisionId) : null,
       departmentId: employee.departmentId ? Number(employee.departmentId) : null,
       positionId: employee.positionId ? Number(employee.positionId) : null,
-      timezone: employee.timezone || 'America/New_York'
+      timezone: employee.timezone || 'America/New_York',
+      preferences: employee.preferences ?? null,
+      payType: employee.payType || payrollDefaults.payType || 'salary',
+      payRate: this.toNumberOrDefault(employee.payRate, payrollDefaults.payRate, 0),
+      standardHoursPerWeek: this.toNumberOrDefault(payrollDefaults.standardHoursPerWeek, 40),
+      overtimeEligible: this.toBooleanOrDefault(payrollDefaults.overtimeEligible, true),
+      overtimeRateMultiplier: this.toNumberOrDefault(payrollDefaults.overtimeRateMultiplier, 1.5),
+      defaultDeductions: this.toNumberOrDefault(payrollDefaults.defaultDeductions, 0),
+      defaultTaxWithholdingPct: this.toNumberOrDefault(payrollDefaults.defaultTaxWithholdingPct, 0),
+      payrollStatus: employee.payrollStatus || payrollDefaults.payrollStatus || 'pending',
+      payrollNotes: payrollDefaults.payrollNotes || ''
     };
     this.editModalTab.set('personal');
     this.employeeAccounts.set([]);
@@ -4967,6 +5069,70 @@ export class EmployeeRosterComponent implements OnInit {
     return iban.slice(0, 4) + ' •••• •••• ' + iban.slice(-4);
   }
 
+  private extractPayrollSettings(employee: any): any {
+    const prefs = this.parsePreferences(employee?.preferences);
+    return prefs?.payroll && typeof prefs.payroll === 'object' ? prefs.payroll : {};
+  }
+
+  private parsePreferences(raw: unknown): any {
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw as any;
+    if (typeof raw !== 'string') return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  private mergePayrollPreferences(existingRaw: unknown, payroll: Record<string, unknown>): string {
+    const existing = this.parsePreferences(existingRaw);
+    const merged = { ...existing, payroll };
+    return JSON.stringify(merged);
+  }
+
+  private buildPayrollPreferencePayload(employee: any): Record<string, unknown> {
+    return {
+      payType: employee?.payType || 'salary',
+      payRate: this.toNumberOrDefault(employee?.payRate, 0),
+      standardHoursPerWeek: this.toNumberOrDefault(employee?.standardHoursPerWeek, 40),
+      overtimeEligible: this.toBooleanOrDefault(employee?.overtimeEligible, true),
+      overtimeRateMultiplier: this.toNumberOrDefault(employee?.overtimeRateMultiplier, 1.5),
+      defaultDeductions: this.toNumberOrDefault(employee?.defaultDeductions, 0),
+      defaultTaxWithholdingPct: this.toNumberOrDefault(employee?.defaultTaxWithholdingPct, 0),
+      payrollStatus: employee?.payrollStatus || 'pending',
+      payrollNotes: String(employee?.payrollNotes ?? '').trim()
+    };
+  }
+
+  private toNumberOrDefault(...values: unknown[]): number {
+    let fallback = 0;
+    if (values.length > 1) {
+      const last = Number(values[values.length - 1]);
+      if (Number.isFinite(last)) fallback = last;
+    }
+    for (let i = 0; i < values.length - 1; i++) {
+      const parsed = Number(values[i]);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    if (values.length === 1) {
+      const parsed = Number(values[0]);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return fallback;
+  }
+
+  private toBooleanOrDefault(value: unknown, fallback: boolean): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true' || normalized === 'yes' || normalized === '1') return true;
+      if (normalized === 'false' || normalized === 'no' || normalized === '0') return false;
+    }
+    if (typeof value === 'number') return value !== 0;
+    return fallback;
+  }
+
   async saveEmployee() {
     if (!this.editingEmployee.name || !this.editingEmployee.email || !this.editingEmployee.role) {
       alert('Please fill in all required fields (Name, Email, Role)');
@@ -4974,6 +5140,7 @@ export class EmployeeRosterComponent implements OnInit {
     }
 
     try {
+      const payrollPreferences = this.buildPayrollPreferencePayload(this.editingEmployee);
       const payload: any = {
         avatar: this.editingEmployee.avatarUrl,
         name: this.editingEmployee.name,
@@ -5012,7 +5179,8 @@ export class EmployeeRosterComponent implements OnInit {
         divisionId: this.editingEmployee.divisionId,
         departmentId: this.editingEmployee.departmentId,
         positionId: this.editingEmployee.positionId,
-        timezone: this.editingEmployee.timezone
+        timezone: this.editingEmployee.timezone,
+        preferences: this.mergePayrollPreferences(this.editingEmployee.preferences, payrollPreferences)
       };
 
       // Add entity assignments based on type (0 = clear, positive = set)

@@ -356,20 +356,53 @@ export class PayrollComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/users?limit=500&status=active`).subscribe({
       next: (res) => {
         const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        const users = rows.map((u: any) => ({
-          ...u,
-          payType: u.payType || 'salary',
-          payRate: u.payRate || 0,
-          hours: 0,
-          grossPay: 0,
-          deductions: 0,
-          netPay: 0,
-          payrollStatus: 'pending'
-        }));
+        const users = rows.map((u: any) => {
+          const prefs = this.parsePreferences(u?.preferences);
+          const payroll = prefs?.payroll && typeof prefs.payroll === 'object' ? prefs.payroll : {};
+          return {
+            ...u,
+            payType: u.payType || payroll.payType || 'salary',
+            payRate: this.toNumberOrDefault(u.payRate, payroll.payRate, 0),
+            hours: this.toNumberOrDefault(payroll.standardHoursPerWeek, 0),
+            grossPay: 0,
+            deductions: this.toNumberOrDefault(payroll.defaultDeductions, 0),
+            netPay: 0,
+            payrollStatus: u.payrollStatus || payroll.payrollStatus || 'pending'
+          };
+        });
         this.employees.set(users);
       },
       error: () => this.employees.set([])
     });
+  }
+
+  private parsePreferences(raw: unknown): Record<string, any> {
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw as Record<string, any>;
+    if (typeof raw !== 'string') return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private toNumberOrDefault(...values: unknown[]): number {
+    let fallback = 0;
+    if (values.length > 1) {
+      const last = Number(values[values.length - 1]);
+      if (Number.isFinite(last)) fallback = last;
+    }
+    for (let i = 0; i < values.length - 1; i++) {
+      const parsed = Number(values[i]);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    if (values.length === 1) {
+      const parsed = Number(values[0]);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return fallback;
   }
 
   private async loadStructureLookups(): Promise<void> {

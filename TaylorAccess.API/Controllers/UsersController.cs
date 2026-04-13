@@ -300,6 +300,7 @@ public class UsersController : ControllerBase
             user.Timezone = request.Timezone ?? user.Timezone;
             user.Country = request.Country ?? user.Country;
             user.Language = request.Language ?? user.Language;
+            user.Preferences = request.Preferences ?? user.Preferences;
             // Role, Status, Email, OrganizationId are protected - silently ignore
         }
         else
@@ -357,6 +358,7 @@ public class UsersController : ControllerBase
             user.Timezone = request.Timezone ?? user.Timezone;
             user.Country = request.Country ?? user.Country;
             user.Language = request.Language ?? user.Language;
+            user.Preferences = request.Preferences ?? user.Preferences;
             user.JobTitle = request.JobTitle ?? user.JobTitle;
             
             // Product owner can change user's organization
@@ -636,6 +638,7 @@ public record UpdateUserRequest(
     string? Timezone,
     string? Country,
     string? Language,
+    string? Preferences,
     int? OrganizationId,
     List<int>? OrganizationIds,
     int? SatelliteId,
