@@ -1340,14 +1340,6 @@ import { AuthService } from '../../../core/services/auth.service';
                       <option value="per_mile">Per Mile</option>
                     </select>
                   </div>
-                  <div class="form-group">
-                    <label>Payroll Status</label>
-                    <select [(ngModel)]="editingEmployee.payrollStatus" class="form-select">
-                      <option value="pending">Pending</option>
-                      <option value="processed">Processed</option>
-                      <option value="paid">Paid</option>
-                    </select>
-                  </div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -4811,7 +4803,6 @@ export class EmployeeRosterComponent implements OnInit {
       overtimeRateMultiplier: this.toNumberOrDefault(payrollDefaults.overtimeRateMultiplier, 1.5),
       defaultDeductions: this.toNumberOrDefault(payrollDefaults.defaultDeductions, 0),
       defaultTaxWithholdingPct: this.toNumberOrDefault(payrollDefaults.defaultTaxWithholdingPct, 0),
-      payrollStatus: employee.payrollStatus || payrollDefaults.payrollStatus || 'pending',
       payrollNotes: payrollDefaults.payrollNotes || ''
     };
     this.editModalTab.set('personal');
@@ -5100,7 +5091,6 @@ export class EmployeeRosterComponent implements OnInit {
       overtimeRateMultiplier: this.toNumberOrDefault(employee?.overtimeRateMultiplier, 1.5),
       defaultDeductions: this.toNumberOrDefault(employee?.defaultDeductions, 0),
       defaultTaxWithholdingPct: this.toNumberOrDefault(employee?.defaultTaxWithholdingPct, 0),
-      payrollStatus: employee?.payrollStatus || 'pending',
       payrollNotes: String(employee?.payrollNotes ?? '').trim()
     };
   }

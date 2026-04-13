@@ -368,7 +368,7 @@ export class PayrollComponent implements OnInit {
             grossPay: 0,
             deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
             netPay: 0,
-            payrollStatus: u.payrollStatus || payroll['payrollStatus'] || 'pending'
+            payrollStatus: u.payrollStatus || 'pending'
           };
         });
         this.employees.set(users);
