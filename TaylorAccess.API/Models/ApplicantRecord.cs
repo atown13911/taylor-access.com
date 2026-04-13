@@ -22,6 +22,9 @@ public class ApplicantRecord
     [MaxLength(200)]
     public string? Source { get; set; }
 
+    [MaxLength(200)]
+    public string? TrainingGroupAssignment { get; set; }
+
     [MaxLength(20)]
     public string Status { get; set; } = "new";
 

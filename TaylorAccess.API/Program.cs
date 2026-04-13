@@ -220,6 +220,9 @@ using (var scope = app.Services.CreateScope())
     }
 
     await context.Database.ExecuteSqlRawAsync(@"
+        ALTER TABLE IF EXISTS ""ApplicantRecords""
+        ADD COLUMN IF NOT EXISTS ""TrainingGroupAssignment"" VARCHAR(200);
+
         CREATE TABLE IF NOT EXISTS ""TimeOffRequests"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,

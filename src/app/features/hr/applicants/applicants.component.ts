@@ -15,6 +15,7 @@ interface ApplicantRow {
   age: number | null;
   position: string;
   source: string;
+  trainingGroupAssignment: string;
   status: ApplicantStatus;
   appliedDate: string;
   notes: string;
@@ -358,6 +359,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <th>Age</th>
                 <th>Position</th>
                 <th>Source</th>
+                <th>Training Group</th>
                 <th>Status</th>
                 <th>Applied</th>
                 <th>CV</th>
@@ -370,13 +372,14 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <tr
                   class="applicant-row"
                   [class.selected]="selectedApplicantId() === row.id"
-                  (click)="selectApplicant(row.id)"
+                  (click)="onApplicantRowClick(row)"
                 >
                   <td><strong>{{ row.fullName }}</strong></td>
                   <td>{{ row.gender || '—' }}</td>
                   <td>{{ row.age ?? '—' }}</td>
                   <td>{{ row.position || '—' }}</td>
                   <td>{{ row.source || '—' }}</td>
+                  <td>{{ row.trainingGroupAssignment || '—' }}</td>
                   <td>
                     <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
                       <option value="new">New</option>
@@ -428,7 +431,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="10" class="empty">No applicants yet.</td>
+                  <td colspan="11" class="empty">No applicants yet.</td>
                 </tr>
               }
             </tbody>
@@ -472,6 +475,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <div class="form-row">
               <label>Source</label>
               <input type="text" [(ngModel)]="draft.source" placeholder="Indeed, Referral, LinkedIn..." />
+            </div>
+            <div class="form-row">
+              <label>Training Group Assignment</label>
+              <input type="text" [(ngModel)]="draft.trainingGroupAssignment" placeholder="Group A, Week 1 Cohort..." />
             </div>
             <div class="form-row">
               <label>Applied Date</label>
@@ -536,6 +543,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <input type="text" [(ngModel)]="editDraft.source" />
             </div>
             <div class="form-row">
+              <label>Training Group Assignment</label>
+              <input type="text" [(ngModel)]="editDraft.trainingGroupAssignment" />
+            </div>
+            <div class="form-row">
               <label>Applied Date</label>
               <input type="date" [(ngModel)]="editDraft.appliedDate" />
             </div>
@@ -567,6 +578,39 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <button class="btn-secondary" (click)="showEdit.set(false)">Cancel</button>
               <button class="btn-primary" (click)="saveEdit()">Save</button>
             </div>
+          </div>
+        </div>
+      }
+
+      @if (showHiredDetails()) {
+        <div class="modal-overlay" (click)="showHiredDetails.set(false)">
+          <div class="modal modal-hired-details" (click)="$event.stopPropagation()">
+            <h3>Hired Applicant Details</h3>
+            @if (selectedHiredApplicant(); as row) {
+              <div class="hired-details-grid">
+                <div><span>Name</span><strong>{{ row.fullName || '—' }}</strong></div>
+                <div><span>Position</span><strong>{{ row.position || '—' }}</strong></div>
+                <div><span>Source</span><strong>{{ row.source || '—' }}</strong></div>
+                <div><span>Applied</span><strong>{{ row.appliedDate || '—' }}</strong></div>
+              </div>
+              <div class="form-row">
+                <label>Training Group Assignment</label>
+                <input
+                  type="text"
+                  [ngModel]="hiredDetailsTrainingGroupAssignment()"
+                  (ngModelChange)="hiredDetailsTrainingGroupAssignment.set($event)"
+                  placeholder="Group A, Week 1 Cohort..."
+                />
+              </div>
+              <div class="form-row">
+                <label>Notes</label>
+                <textarea rows="3" [value]="row.notes || ''" readonly></textarea>
+              </div>
+              <div class="actions">
+                <button class="btn-secondary" (click)="showHiredDetails.set(false)">Close</button>
+                <button class="btn-primary" (click)="saveHiredDetails()">Save Details</button>
+              </div>
+            }
           </div>
         </div>
       }
@@ -686,6 +730,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { width: 100%; max-width: 520px; background: #161a2a; border: 1px solid #2a2a4e; border-radius: 12px; padding: 16px; h3 { margin-top: 0; color: #fff; } }
     .modal-small { max-width: 420px; }
+    .modal-hired-details { max-width: 640px; }
+    .hired-details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .hired-details-grid div { border: 1px solid #2a2a4e; border-radius: 8px; padding: 10px; background: #111827; display: flex; flex-direction: column; gap: 4px; }
+    .hired-details-grid span { color: #8aa0b8; font-size: 0.75rem; }
+    .hired-details-grid strong { color: #e2e8f0; font-size: 0.9rem; }
     .form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; label { color: #8aa0b8; font-size: 0.8rem; } input, textarea, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .hint { color: #8aa0b8; font-size: 0.78rem; }
@@ -713,6 +762,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   showEdit = signal(false);
   showAddPosition = signal(false);
   showPositionSettings = signal(false);
+  showHiredDetails = signal(false);
+  hiredDetailsTrainingGroupAssignment = signal('');
   newPositionName = signal('');
   positionSettingsOriginalName = signal('');
   positionSettingsTargetName = signal('');
@@ -753,6 +804,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   positionOptionsForForm = computed(() => this.allPositions().filter((p) => p.isActive).map((p) => p.name));
   reportPositionOptions = computed(() => ['all', ...this.allPositions().map((p) => p.name)]);
+  selectedHiredApplicant = computed(() => {
+    const id = this.selectedApplicantId();
+    if (!id) return null;
+    return this.rows().find((row) => row.id === id) ?? null;
+  });
 
   reportRows = computed(() => {
     const range = this.reportRange();
@@ -1034,6 +1090,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: row.age,
       position: row.position,
       source: row.source,
+      trainingGroupAssignment: row.trainingGroupAssignment,
       status: row.status,
       appliedDate: row.appliedDate,
       notes: row.notes,
@@ -1054,6 +1111,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: this.normalizeAge(this.draft.age),
       position: position || null,
       source: String(this.draft.source || '').trim() || null,
+      trainingGroupAssignment: String(this.draft.trainingGroupAssignment || '').trim() || null,
       status: this.draft.status || 'new',
       appliedDate: this.toIsoDateOnly(this.draft.appliedDate) || null,
       notes: String(this.draft.notes || '').trim() || null,
@@ -1116,6 +1174,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: this.normalizeAge(this.editDraft.age),
       position: this.normalizePositionName(this.editDraft.position) || null,
       source: this.normalizePositionName(this.editDraft.source) || null,
+      trainingGroupAssignment: this.normalizePositionName(this.editDraft.trainingGroupAssignment) || null,
       status: this.normalizeStatus(this.editDraft.status),
       appliedDate: this.toIsoDateOnly(this.editDraft.appliedDate) || null,
       notes: this.normalizePositionName(this.editDraft.notes) || null,
@@ -1158,6 +1217,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.selectedApplicantId.set(id);
   }
 
+  onApplicantRowClick(row: ApplicantRow): void {
+    this.selectApplicant(row.id);
+    if (this.pipelineFilter() !== 'hired') return;
+    if (row.status !== 'hired') return;
+    this.hiredDetailsTrainingGroupAssignment.set(row.trainingGroupAssignment || '');
+    this.showHiredDetails.set(true);
+  }
+
   selectPosition(position: string): void {
     this.selectedPosition.set(position);
   }
@@ -1170,6 +1237,38 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   setPipelineFilter(mode: 'working' | 'rejected' | 'hired'): void {
     this.pipelineFilter.set(mode);
     this.selectedApplicantId.set(null);
+    this.showHiredDetails.set(false);
+  }
+
+  async saveHiredDetails(): Promise<void> {
+    const id = this.selectedApplicantId();
+    if (!id) return;
+    const row = this.rows().find((item) => item.id === id);
+    if (!row) return;
+    const trainingGroupAssignment = this.normalizePositionName(this.hiredDetailsTrainingGroupAssignment());
+    const payload = {
+      fullName: this.normalizePositionName(row.fullName) || '',
+      gender: this.normalizePositionName(row.gender) || null,
+      age: this.normalizeAge(row.age),
+      position: this.normalizePositionName(row.position) || null,
+      source: this.normalizePositionName(row.source) || null,
+      trainingGroupAssignment: trainingGroupAssignment || null,
+      status: this.normalizeStatus(row.status),
+      appliedDate: this.toIsoDateOnly(row.appliedDate) || null,
+      notes: this.normalizePositionName(row.notes) || null,
+      cvFileName: this.normalizePositionName(row.cvFileName) || null,
+      cvDataUrl: this.normalizePositionName(row.cvDataUrl) || null
+    };
+    try {
+      await firstValueFrom(this.http.put(`${this.apiUrl}/api/v1/applicants/records/${id}`, payload));
+      this.rows.update((list) =>
+        list.map((item) => (item.id === id ? { ...item, trainingGroupAssignment: trainingGroupAssignment || '' } : item))
+      );
+      this.showHiredDetails.set(false);
+      this.applicantsSyncError.set('');
+    } catch {
+      this.applicantsSyncError.set('Unable to save hired applicant details.');
+    }
   }
 
   statusLabel(status: ApplicantStatus): string {
@@ -1274,6 +1373,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: null as number | null,
       position: '',
       source: '',
+      trainingGroupAssignment: '',
       appliedDate: new Date().toISOString().slice(0, 10),
       notes: '',
       cvFileName: '',
@@ -1551,6 +1651,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
             age: row.age,
             position: row.position || null,
             source: row.source || null,
+            trainingGroupAssignment: row.trainingGroupAssignment || null,
             status: row.status,
             appliedDate: this.toIsoDateOnly(row.appliedDate) || null,
             notes: row.notes || null,
@@ -1631,6 +1732,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
           age: this.normalizeAge(row['age'] ?? row['Age']),
           position: this.normalizePositionName(row['position'] ?? row['Position']),
           source: this.normalizePositionName(row['source'] ?? row['Source']),
+          trainingGroupAssignment: this.normalizePositionName(row['trainingGroupAssignment'] ?? row['TrainingGroupAssignment']),
           status: this.normalizeStatus(row['status'] ?? row['Status']),
           appliedDate: this.toIsoDateOnly(row['appliedDate'] ?? row['AppliedDate']),
           notes: this.normalizePositionName(row['notes'] ?? row['Notes']),

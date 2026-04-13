@@ -39,6 +39,7 @@ public class ApplicantsController : ControllerBase
                 a.Age,
                 a.Position,
                 a.Source,
+                a.TrainingGroupAssignment,
                 a.Status,
                 appliedDate = a.AppliedDate,
                 a.Notes,
@@ -69,6 +70,7 @@ public class ApplicantsController : ControllerBase
             Age = request.Age is >= 16 and <= 100 ? request.Age : null,
             Position = string.IsNullOrWhiteSpace(request.Position) ? null : request.Position.Trim(),
             Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim(),
+            TrainingGroupAssignment = string.IsNullOrWhiteSpace(request.TrainingGroupAssignment) ? null : request.TrainingGroupAssignment.Trim(),
             Status = NormalizeStatus(request.Status),
             AppliedDate = request.AppliedDate,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
@@ -92,6 +94,7 @@ public class ApplicantsController : ControllerBase
                 row.Age,
                 row.Position,
                 row.Source,
+                row.TrainingGroupAssignment,
                 row.Status,
                 appliedDate = row.AppliedDate,
                 row.Notes,
@@ -136,6 +139,7 @@ public class ApplicantsController : ControllerBase
         row.Age = request.Age is >= 16 and <= 100 ? request.Age : null;
         row.Position = string.IsNullOrWhiteSpace(request.Position) ? null : request.Position.Trim();
         row.Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim();
+        row.TrainingGroupAssignment = string.IsNullOrWhiteSpace(request.TrainingGroupAssignment) ? null : request.TrainingGroupAssignment.Trim();
         row.Status = NormalizeStatus(request.Status);
         row.AppliedDate = request.AppliedDate;
         row.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
@@ -155,6 +159,7 @@ public class ApplicantsController : ControllerBase
                 row.Age,
                 row.Position,
                 row.Source,
+                row.TrainingGroupAssignment,
                 row.Status,
                 appliedDate = row.AppliedDate,
                 row.Notes,
@@ -526,6 +531,7 @@ public record CreateApplicantRecordRequest(
     int? Age,
     string? Position,
     string? Source,
+    string? TrainingGroupAssignment,
     string? Status,
     DateTime? AppliedDate,
     string? Notes,
@@ -539,6 +545,7 @@ public record UpdateApplicantRecordRequest(
     int? Age,
     string? Position,
     string? Source,
+    string? TrainingGroupAssignment,
     string? Status,
     DateTime? AppliedDate,
     string? Notes,

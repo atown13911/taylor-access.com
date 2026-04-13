@@ -358,16 +358,17 @@ export class PayrollComponent implements OnInit {
         const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         const users = rows.map((u: any) => {
           const prefs = this.parsePreferences(u?.preferences);
-          const payroll = prefs?.payroll && typeof prefs.payroll === 'object' ? prefs.payroll : {};
+          const rawPayroll = prefs?.['payroll'];
+          const payroll = rawPayroll && typeof rawPayroll === 'object' ? rawPayroll as Record<string, unknown> : {};
           return {
             ...u,
-            payType: u.payType || payroll.payType || 'salary',
-            payRate: this.toNumberOrDefault(u.payRate, payroll.payRate, 0),
-            hours: this.toNumberOrDefault(payroll.standardHoursPerWeek, 0),
+            payType: u.payType || payroll['payType'] || 'salary',
+            payRate: this.toNumberOrDefault(u.payRate, payroll['payRate'], 0),
+            hours: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 0),
             grossPay: 0,
-            deductions: this.toNumberOrDefault(payroll.defaultDeductions, 0),
+            deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
             netPay: 0,
-            payrollStatus: u.payrollStatus || payroll.payrollStatus || 'pending'
+            payrollStatus: u.payrollStatus || payroll['payrollStatus'] || 'pending'
           };
         });
         this.employees.set(users);
