@@ -252,6 +252,12 @@ export class PayrollComponent implements OnInit {
 
   employees = signal<any[]>([]);
   organizationNameById = signal<Record<number, string>>({});
+  divisionNameById = signal<Record<number, string>>({});
+  departmentNameById = signal<Record<number, string>>({});
+  positionNameById = signal<Record<number, string>>({});
+  terminalNameById = signal<Record<number, string>>({});
+  satelliteNameById = signal<Record<number, string>>({});
+  agencyNameById = signal<Record<number, string>>({});
   searchTerm = signal('');
   selectedStructureFilterField = signal<StructureFilterField>('all');
   selectedStructureFilterValue = signal('All');
@@ -367,12 +373,37 @@ export class PayrollComponent implements OnInit {
   }
 
   private async loadStructureLookups(): Promise<void> {
-    const orgs = await Promise.allSettled([
-      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/organizations?limit=500`))
-    ]);
+    const requests = [
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/organizations?limit=500`)),
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/divisions?limit=500`)),
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/departments?pageSize=500`)),
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/positions?pageSize=500`)),
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/terminals?pageSize=500`)),
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/satellites?pageSize=500`)),
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/agencies?pageSize=500`))
+    ];
+    const [orgs, divisions, departments, positions, terminals, satellites, agencies] = await Promise.allSettled(requests);
 
-    if (orgs[0].status === 'fulfilled') {
-      this.organizationNameById.set(this.buildIdNameMap(orgs[0].value?.data, ['id', 'Id'], ['name', 'Name']));
+    if (orgs.status === 'fulfilled') {
+      this.organizationNameById.set(this.buildIdNameMap(orgs.value?.data, ['id', 'Id'], ['name', 'Name']));
+    }
+    if (divisions.status === 'fulfilled') {
+      this.divisionNameById.set(this.buildIdNameMap(divisions.value?.data, ['id', 'Id'], ['name', 'Name']));
+    }
+    if (departments.status === 'fulfilled') {
+      this.departmentNameById.set(this.buildIdNameMap(departments.value?.data, ['id', 'Id'], ['name', 'Name']));
+    }
+    if (positions.status === 'fulfilled') {
+      this.positionNameById.set(this.buildIdNameMap(positions.value?.data, ['id', 'Id'], ['title', 'Title', 'name', 'Name']));
+    }
+    if (terminals.status === 'fulfilled') {
+      this.terminalNameById.set(this.buildIdNameMap(terminals.value?.data, ['id', 'Id'], ['name', 'Name']));
+    }
+    if (satellites.status === 'fulfilled') {
+      this.satelliteNameById.set(this.buildIdNameMap(satellites.value?.data, ['id', 'Id'], ['name', 'Name']));
+    }
+    if (agencies.status === 'fulfilled') {
+      this.agencyNameById.set(this.buildIdNameMap(agencies.value?.data, ['id', 'Id'], ['name', 'Name']));
     }
   }
 
@@ -391,21 +422,58 @@ export class PayrollComponent implements OnInit {
   }
 
   private getSearchFieldText(emp: any, field: StructureFilterField): string {
+    const divisionId = Number(emp?.divisionId) || 0;
+    const departmentId = Number(emp?.departmentId) || 0;
+    const positionId = Number(emp?.positionId) || 0;
+    const terminalId = Number(emp?.terminalId) || 0;
+    const satelliteId = Number(emp?.satelliteId) || 0;
+    const agencyId = Number(emp?.agencyId) || 0;
+
     switch (field) {
       case 'division':
-        return this.firstNonEmpty(emp?.divisionName, emp?.division, this.withId('Division', emp?.divisionId));
+        return this.firstNonEmpty(
+          emp?.divisionName,
+          emp?.division,
+          this.divisionNameById()[divisionId],
+          this.withId('Division', emp?.divisionId)
+        );
       case 'department':
-        return this.firstNonEmpty(emp?.departmentName, emp?.department, this.withId('Department', emp?.departmentId));
+        return this.firstNonEmpty(
+          emp?.departmentName,
+          emp?.department,
+          this.departmentNameById()[departmentId],
+          this.withId('Department', emp?.departmentId)
+        );
       case 'position':
-        return this.firstNonEmpty(emp?.positionTitle, emp?.position, this.withId('Position', emp?.positionId));
+        return this.firstNonEmpty(
+          emp?.positionTitle,
+          emp?.position,
+          this.positionNameById()[positionId],
+          this.withId('Position', emp?.positionId)
+        );
       case 'jobTitle':
         return this.firstNonEmpty(emp?.jobTitle);
       case 'terminal':
-        return this.firstNonEmpty(emp?.terminalName, emp?.terminal, this.withId('Terminal', emp?.terminalId));
+        return this.firstNonEmpty(
+          emp?.terminalName,
+          emp?.terminal,
+          this.terminalNameById()[terminalId],
+          this.withId('Terminal', emp?.terminalId)
+        );
       case 'satellite':
-        return this.firstNonEmpty(emp?.satelliteName, emp?.satellite, this.withId('Satellite', emp?.satelliteId));
+        return this.firstNonEmpty(
+          emp?.satelliteName,
+          emp?.satellite,
+          this.satelliteNameById()[satelliteId],
+          this.withId('Satellite', emp?.satelliteId)
+        );
       case 'agency':
-        return this.firstNonEmpty(emp?.agencyName, emp?.agency, this.withId('Agency', emp?.agencyId));
+        return this.firstNonEmpty(
+          emp?.agencyName,
+          emp?.agency,
+          this.agencyNameById()[agencyId],
+          this.withId('Agency', emp?.agencyId)
+        );
       case 'all':
       default:
         return '';
