@@ -2,6 +2,7 @@ import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
 @Component({
@@ -69,35 +70,27 @@ import { environment } from '../../../../environments/environment';
         }
       </div>
 
-      <!-- Structure Tabs -->
-      <div class="payroll-structure-types">
-        @for (type of structureTypes; track type.value) {
-          <button
-            class="payroll-structure-type-tab"
-            [class.active]="selectedStructureType() === type.value"
-            (click)="setStructureType(type.value)"
-          >
-            {{ type.label }}
-          </button>
-        }
-      </div>
-
-      <div class="payroll-org-tabs">
-        @for (item of structureTabs(); track item) {
-          <button
-            class="payroll-org-tab"
-            [class.active]="selectedStructureTab() === item"
-            (click)="selectedStructureTab.set(item)"
-          >
-            {{ item }}
-          </button>
-        }
-      </div>
-
       <!-- Search -->
       <div class="payroll-search">
-        <i class="bx bx-search"></i>
-        <input type="text" placeholder="Search employees..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)">
+        <select
+          class="payroll-search-field"
+          [ngModel]="selectedSearchField()"
+          (ngModelChange)="selectedSearchField.set($event)"
+          aria-label="Payroll search filter field"
+        >
+          @for (item of searchFieldOptions; track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+        <div class="payroll-search-input-wrap">
+          <i class="bx bx-search"></i>
+          <input
+            type="text"
+            [placeholder]="searchPlaceholder()"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+          >
+        </div>
       </div>
 
       <!-- Payroll Table -->
@@ -178,22 +171,22 @@ import { environment } from '../../../../environments/environment';
     .payroll-stat-val { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
     .payroll-stat-lbl { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
     .payroll-search {
-      position: relative; margin-bottom: 1rem; display: flex; align-items: center;
+      margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem;
+    }
+    .payroll-search-field {
+      min-width: 150px; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: var(--text-primary);
+      font-size: 0.82rem; outline: none;
+      &:focus { border-color: rgba(0,212,255,0.3); }
+      option { background: #0a0a0f; }
+    }
+    .payroll-search-input-wrap {
+      position: relative; flex: 1; display: flex; align-items: center;
       i { position: absolute; left: 12px; color: var(--text-secondary); font-size: 1rem; }
       input { width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem;
         &:focus { outline: none; border-color: rgba(0,212,255,0.3); }
         &::placeholder { color: var(--text-secondary); }
       }
-    }
-    .payroll-structure-types {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.9rem;
-    }
-    .payroll-structure-type-tab {
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
-      color: var(--text-secondary); border-radius: 8px; padding: 0.35rem 0.7rem;
-      font-size: 0.74rem; cursor: pointer; transition: all 0.2s;
-      &:hover { border-color: rgba(0,212,255,0.25); color: var(--text-primary); }
-      &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.08); }
     }
     .payroll-org-tabs {
       display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.55rem;
@@ -247,20 +240,25 @@ export class PayrollComponent implements OnInit {
   private apiUrl = environment.apiUrl;
 
   employees = signal<any[]>([]);
+  organizationNameById = signal<Record<number, string>>({});
   searchTerm = signal('');
+  selectedSearchField = signal<SearchField>('all');
   periodFilter = signal('current');
   selectedOrganization = signal('All organizations');
-  selectedStructureType = signal<StructureType>('divisions');
-  selectedStructureTab = signal('All');
-
-  structureTypes: Array<{ value: StructureType; label: string }> = [
-    { value: 'divisions', label: 'Divisions' },
-    { value: 'departments', label: 'Departments' },
-    { value: 'positions', label: 'Job Positions' },
-    { value: 'jobTitles', label: 'Job Titles' },
-    { value: 'terminals', label: 'Terminals' },
-    { value: 'satellites', label: 'Satellites' },
-    { value: 'agencies', label: 'Agencies' }
+  searchFieldOptions: Array<{ value: SearchField; label: string }> = [
+    { value: 'all', label: 'All fields' },
+    { value: 'name', label: 'Name' },
+    { value: 'email', label: 'Email' },
+    { value: 'payType', label: 'Pay Type' },
+    { value: 'status', label: 'Status' },
+    { value: 'division', label: 'Division' },
+    { value: 'department', label: 'Department' },
+    { value: 'position', label: 'Position' },
+    { value: 'jobTitle', label: 'Job Title' },
+    { value: 'terminal', label: 'Terminal' },
+    { value: 'satellite', label: 'Satellite' },
+    { value: 'agency', label: 'Agency' },
+    { value: 'organization', label: 'Organization' }
   ];
 
   periodOptions = (() => {
@@ -292,31 +290,26 @@ export class PayrollComponent implements OnInit {
     return this.employees().filter((e) => this.getOrganizationLabel(e) === selectedOrg);
   });
 
-  structureTabs = computed(() => {
-    const names = new Set<string>();
-    const type = this.selectedStructureType();
-    for (const emp of this.organizationScopedEmployees()) {
-      const label = this.getStructureLabel(emp, type);
-      if (label) names.add(label);
-    }
-    return ['All', ...Array.from(names).sort((a, b) => a.localeCompare(b))];
-  });
-
-  scopedEmployees = computed(() => {
-    const selected = this.selectedStructureTab();
-    if (selected === 'All') return this.organizationScopedEmployees();
-    const type = this.selectedStructureType();
-    return this.organizationScopedEmployees().filter((e) => {
-      const label = this.getStructureLabel(e, type);
-      return !!label && label === selected;
-    });
+  scopedEmployees = computed(() => this.organizationScopedEmployees());
+  searchPlaceholder = computed(() => {
+    const selected = this.selectedSearchField();
+    const option = this.searchFieldOptions.find((x) => x.value === selected);
+    return option && selected !== 'all'
+      ? `Search ${option.label.toLowerCase()}...`
+      : 'Search employees...';
   });
 
   filteredEmployees = computed(() => {
     const search = this.searchTerm().toLowerCase();
+    const selectedField = this.selectedSearchField();
     let list = this.scopedEmployees();
     if (search) {
-      list = list.filter(e => (e.name || '').toLowerCase().includes(search) || (e.email || '').toLowerCase().includes(search));
+      list = list.filter((e) => {
+        if (selectedField === 'all') {
+          return this.getAllSearchableText(e).includes(search);
+        }
+        return this.getSearchFieldText(e, selectedField).includes(search);
+      });
     }
     return list;
   });
@@ -327,21 +320,16 @@ export class PayrollComponent implements OnInit {
 
   ngOnInit() {
     this.loadData();
-  }
-
-  setStructureType(type: StructureType): void {
-    if (this.selectedStructureType() === type) return;
-    this.selectedStructureType.set(type);
-    this.selectedStructureTab.set('All');
+    void this.loadStructureLookups();
   }
 
   setOrganization(org: string): void {
     if (this.selectedOrganization() === org) return;
     this.selectedOrganization.set(org);
-    this.selectedStructureTab.set('All');
   }
 
   loadData() {
+    void this.loadStructureLookups();
     this.http.get<any>(`${this.apiUrl}/api/v1/users?limit=500&status=active`).subscribe({
       next: (res) => {
         const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
@@ -361,60 +349,146 @@ export class PayrollComponent implements OnInit {
     });
   }
 
-  private getStructureLabel(emp: any, type: StructureType): string | null {
-    if (!emp || typeof emp !== 'object') return null;
+  private async loadStructureLookups(): Promise<void> {
+    const orgs = await Promise.allSettled([
+      firstValueFrom(this.http.get<any>(`${this.apiUrl}/api/v1/organizations?limit=500`))
+    ]);
 
-    const pickText = (...values: unknown[]): string | null => {
-      for (const value of values) {
-        const text = String(value ?? '').trim();
-        if (text) return text;
-      }
-      return null;
-    };
-
-    const pickIdLabel = (prefix: string, ...values: unknown[]): string | null => {
-      for (const value of values) {
-        const num = Number(value);
-        if (Number.isFinite(num) && num > 0) return `${prefix} ${num}`;
-      }
-      return null;
-    };
-
-    switch (type) {
-      case 'divisions':
-        return pickText(emp.divisionName, emp.division) ?? pickIdLabel('Division', emp.divisionId);
-      case 'departments':
-        return pickText(emp.departmentName, emp.department) ?? pickIdLabel('Department', emp.departmentId);
-      case 'positions':
-        return pickText(emp.positionTitle, emp.position) ?? pickIdLabel('Position', emp.positionId);
-      case 'jobTitles':
-        return pickText(emp.jobTitle) ?? null;
-      case 'terminals':
-        return pickText(emp.terminalName, emp.terminal) ?? pickIdLabel('Terminal', emp.terminalId);
-      case 'satellites':
-        return pickText(emp.satelliteName, emp.satellite) ?? pickIdLabel('Satellite', emp.satelliteId);
-      case 'agencies':
-        return pickText(emp.agencyName, emp.agency) ?? pickIdLabel('Agency', emp.agencyId);
-      default:
-        return null;
+    if (orgs[0].status === 'fulfilled') {
+      this.organizationNameById.set(this.buildIdNameMap(orgs[0].value?.data, ['id', 'Id'], ['name', 'Name']));
     }
   }
 
   private getOrganizationLabel(emp: any): string | null {
     if (!emp || typeof emp !== 'object') return null;
-    const byName = String(emp.organizationName ?? emp.organization ?? '').trim();
+    const byName = String(
+      emp.organizationName
+      ?? emp.organization
+      ?? this.organizationNameById()[Number(emp.organizationId) || 0]
+      ?? ''
+    ).trim();
     if (byName) return byName;
     const byId = Number(emp.organizationId);
     if (Number.isFinite(byId) && byId > 0) return `Organization ${byId}`;
     return null;
   }
+
+  private getSearchFieldText(emp: any, field: SearchField): string {
+    switch (field) {
+      case 'name':
+        return String(emp?.name ?? '').toLowerCase();
+      case 'email':
+        return String(emp?.email ?? '').toLowerCase();
+      case 'payType':
+        return String(emp?.payType ?? '').toLowerCase();
+      case 'status':
+        return String(emp?.payrollStatus ?? '').toLowerCase();
+      case 'organization':
+        return String(this.getOrganizationLabel(emp) ?? '').toLowerCase();
+      case 'division':
+        return this.joinSearchValues(emp?.divisionName, emp?.division, this.withId('division', emp?.divisionId));
+      case 'department':
+        return this.joinSearchValues(emp?.departmentName, emp?.department, this.withId('department', emp?.departmentId));
+      case 'position':
+        return this.joinSearchValues(emp?.positionTitle, emp?.position, this.withId('position', emp?.positionId));
+      case 'jobTitle':
+        return this.joinSearchValues(emp?.jobTitle);
+      case 'terminal':
+        return this.joinSearchValues(emp?.terminalName, emp?.terminal, this.withId('terminal', emp?.terminalId));
+      case 'satellite':
+        return this.joinSearchValues(emp?.satelliteName, emp?.satellite, this.withId('satellite', emp?.satelliteId));
+      case 'agency':
+        return this.joinSearchValues(emp?.agencyName, emp?.agency, this.withId('agency', emp?.agencyId));
+      case 'all':
+      default:
+        return this.getAllSearchableText(emp);
+    }
+  }
+
+  private getAllSearchableText(emp: any): string {
+    return this.joinSearchValues(
+      emp?.name,
+      emp?.email,
+      emp?.payType,
+      emp?.payrollStatus,
+      this.getOrganizationLabel(emp),
+      emp?.divisionName,
+      emp?.division,
+      this.withId('division', emp?.divisionId),
+      emp?.departmentName,
+      emp?.department,
+      this.withId('department', emp?.departmentId),
+      emp?.positionTitle,
+      emp?.position,
+      this.withId('position', emp?.positionId),
+      emp?.jobTitle,
+      emp?.terminalName,
+      emp?.terminal,
+      this.withId('terminal', emp?.terminalId),
+      emp?.satelliteName,
+      emp?.satellite,
+      this.withId('satellite', emp?.satelliteId),
+      emp?.agencyName,
+      emp?.agency,
+      this.withId('agency', emp?.agencyId)
+    );
+  }
+
+  private withId(prefix: string, value: unknown): string {
+    const id = Number(value);
+    if (!Number.isFinite(id) || id <= 0) return '';
+    return `${prefix} ${id}`;
+  }
+
+  private joinSearchValues(...values: unknown[]): string {
+    return values
+      .map((v) => String(v ?? '').trim().toLowerCase())
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  private buildIdNameMap(
+    payload: unknown,
+    idKeys: string[],
+    nameKeys: string[]
+  ): Record<number, string> {
+    if (!Array.isArray(payload)) return {};
+    const map: Record<number, string> = {};
+    for (const item of payload) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      let id = 0;
+      for (const key of idKeys) {
+        const n = Number(row[key]);
+        if (Number.isFinite(n) && n > 0) {
+          id = n;
+          break;
+        }
+      }
+      if (!id) continue;
+      for (const key of nameKeys) {
+        const name = String(row[key] ?? '').trim();
+        if (name) {
+          map[id] = name;
+          break;
+        }
+      }
+    }
+    return map;
+  }
 }
 
-type StructureType =
-  | 'divisions'
-  | 'departments'
-  | 'positions'
-  | 'jobTitles'
-  | 'terminals'
-  | 'satellites'
-  | 'agencies';
+type SearchField =
+  | 'all'
+  | 'name'
+  | 'email'
+  | 'payType'
+  | 'status'
+  | 'division'
+  | 'department'
+  | 'position'
+  | 'jobTitle'
+  | 'terminal'
+  | 'satellite'
+  | 'agency'
+  | 'organization';
