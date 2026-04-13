@@ -30,7 +30,7 @@ import { environment } from '../../../../environments/environment';
         <div class="payroll-stat">
           <i class="bx bx-group"></i>
           <div class="payroll-stat-info">
-            <span class="payroll-stat-val">{{ employees().length }}</span>
+            <span class="payroll-stat-val">{{ scopedEmployees().length }}</span>
             <span class="payroll-stat-lbl">Employees</span>
           </div>
         </div>
@@ -55,6 +55,19 @@ import { environment } from '../../../../environments/environment';
             <span class="payroll-stat-lbl">Pending</span>
           </div>
         </div>
+      </div>
+
+      <!-- Organization Tabs -->
+      <div class="payroll-org-tabs">
+        @for (org of organizationTabs(); track org) {
+          <button
+            class="payroll-org-tab"
+            [class.active]="selectedOrganization() === org"
+            (click)="selectedOrganization.set(org)"
+          >
+            {{ org }}
+          </button>
+        }
       </div>
 
       <!-- Search -->
@@ -148,6 +161,16 @@ import { environment } from '../../../../environments/environment';
         &::placeholder { color: var(--text-secondary); }
       }
     }
+    .payroll-org-tabs {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.9rem;
+    }
+    .payroll-org-tab {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-secondary); border-radius: 999px; padding: 0.4rem 0.85rem;
+      font-size: 0.78rem; cursor: pointer; transition: all 0.2s;
+      &:hover { border-color: rgba(0,212,255,0.25); color: var(--text-primary); }
+      &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.12); }
+    }
     .payroll-table-wrap {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden;
     }
@@ -192,6 +215,7 @@ export class PayrollComponent implements OnInit {
   employees = signal<any[]>([]);
   searchTerm = signal('');
   periodFilter = signal('current');
+  selectedOrganization = signal('All organizations');
 
   periodOptions = (() => {
     const options = [{ value: 'current', label: 'Current Week' }];
@@ -207,18 +231,45 @@ export class PayrollComponent implements OnInit {
     return options;
   })();
 
+  organizationTabs = computed(() => {
+    const names = new Set<string>();
+    for (const emp of this.employees()) {
+      const byName = String(emp?.organizationName || '').trim();
+      if (byName) {
+        names.add(byName);
+        continue;
+      }
+      const byId = Number(emp?.organizationId);
+      if (Number.isFinite(byId) && byId > 0) {
+        names.add(`Organization ${byId}`);
+      }
+    }
+    return ['All organizations', ...Array.from(names).sort((a, b) => a.localeCompare(b))];
+  });
+
+  scopedEmployees = computed(() => {
+    const selected = this.selectedOrganization();
+    if (selected === 'All organizations') return this.employees();
+    return this.employees().filter((e) => {
+      const byName = String(e?.organizationName || '').trim();
+      if (byName) return byName === selected;
+      const byId = Number(e?.organizationId);
+      return Number.isFinite(byId) && selected === `Organization ${byId}`;
+    });
+  });
+
   filteredEmployees = computed(() => {
     const search = this.searchTerm().toLowerCase();
-    let list = this.employees();
+    let list = this.scopedEmployees();
     if (search) {
       list = list.filter(e => (e.name || '').toLowerCase().includes(search) || (e.email || '').toLowerCase().includes(search));
     }
     return list;
   });
 
-  totalPayroll = computed(() => this.employees().reduce((sum, e) => sum + (e.grossPay || 0), 0));
-  processedCount = computed(() => this.employees().filter(e => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length);
-  pendingCount = computed(() => this.employees().filter(e => !e.payrollStatus || e.payrollStatus === 'pending').length);
+  totalPayroll = computed(() => this.scopedEmployees().reduce((sum, e) => sum + (e.grossPay || 0), 0));
+  processedCount = computed(() => this.scopedEmployees().filter(e => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length);
+  pendingCount = computed(() => this.scopedEmployees().filter(e => !e.payrollStatus || e.payrollStatus === 'pending').length);
 
   ngOnInit() {
     this.loadData();
