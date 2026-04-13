@@ -57,6 +57,18 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
+      <div class="payroll-org-tabs">
+        @for (item of structureTabs(); track item) {
+          <button
+            class="payroll-org-tab"
+            [class.active]="selectedStructureTab() === item"
+            (click)="selectedStructureTab.set(item)"
+          >
+            {{ item }}
+          </button>
+        }
+      </div>
+
       <!-- Structure Tabs -->
       <div class="payroll-structure-types">
         @for (type of structureTypes; track type.value) {
@@ -66,18 +78,6 @@ import { environment } from '../../../../environments/environment';
             (click)="setStructureType(type.value)"
           >
             {{ type.label }}
-          </button>
-        }
-      </div>
-
-      <div class="payroll-org-tabs">
-        @for (item of structureTabs(); track item) {
-          <button
-            class="payroll-org-tab"
-            [class.active]="selectedStructureTab() === item"
-            (click)="selectedStructureTab.set(item)"
-          >
-            {{ item }}
           </button>
         }
       </div>
@@ -174,7 +174,7 @@ import { environment } from '../../../../environments/environment';
       }
     }
     .payroll-structure-types {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.55rem;
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.9rem;
     }
     .payroll-structure-type-tab {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07);
@@ -184,7 +184,7 @@ import { environment } from '../../../../environments/environment';
       &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.08); }
     }
     .payroll-org-tabs {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.9rem;
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.55rem;
     }
     .payroll-org-tab {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
