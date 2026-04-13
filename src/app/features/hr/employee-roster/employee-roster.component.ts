@@ -1054,7 +1054,7 @@ import { AuthService } from '../../../core/services/auth.service';
 
       <!-- Edit Employee Modal -->
       <div *ngIf="showEditModal" class="modal-overlay" (click)="showEditModal = false">
-        <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-content modal-edit-employee" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <h2><i class="bx bx-edit"></i> Edit Employee</h2>
             <button class="close-btn" (click)="showEditModal = false">
@@ -2513,6 +2513,28 @@ import { AuthService } from '../../../core/services/auth.service';
       animation: slideUp 0.3s ease;
       display: flex;
       flex-direction: column;
+    }
+
+    .modal-edit-employee {
+      width: min(860px, calc(100vw - 48px));
+      max-width: 860px;
+      max-height: calc(100vh - 56px);
+    }
+
+    .modal-edit-employee .modal-header {
+      padding: 18px 22px;
+    }
+
+    .modal-edit-employee .edit-modal-tabs {
+      padding: 0 16px;
+    }
+
+    .modal-edit-employee .modal-body {
+      padding: 20px;
+    }
+
+    .modal-edit-employee .modal-footer {
+      padding: 16px 20px;
     }
 
     @keyframes slideUp {
