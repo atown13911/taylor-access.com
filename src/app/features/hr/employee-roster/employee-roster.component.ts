@@ -2488,9 +2488,9 @@ import { AuthService } from '../../../core/services/auth.service';
       background: rgba(0, 0, 0, 0.85);
       backdrop-filter: blur(8px);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: 20px;
+      padding: 16px 20px 20px;
       overflow-y: auto;
       z-index: 2000;
       animation: fadeIn 0.2s ease;
@@ -2518,7 +2518,8 @@ import { AuthService } from '../../../core/services/auth.service';
     .modal-edit-employee {
       width: min(860px, calc(100vw - 48px));
       max-width: 860px;
-      max-height: calc(100vh - 56px);
+      max-height: calc(100vh - 36px);
+      margin-top: 0;
     }
 
     .modal-edit-employee .modal-header {
