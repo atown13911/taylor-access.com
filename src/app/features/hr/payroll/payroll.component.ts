@@ -357,12 +357,25 @@ export class PayrollComponent implements OnInit {
       next: (res) => {
         const rows = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
         const users = rows.map((u: any) => {
-          const prefs = this.parsePreferences(u?.preferences);
-          const rawPayroll = prefs?.['payroll'];
+          const prefs = this.parsePreferences(u?.preferences ?? u?.Preferences);
+          const rawPayroll = prefs?.['payroll'] ?? prefs?.['Payroll'];
           const payroll = rawPayroll && typeof rawPayroll === 'object' ? rawPayroll as Record<string, unknown> : {};
+          const payType = this.normalizePayType(
+            this.pickFirstText(
+              u?.payType,
+              u?.PayType,
+              u?.pay_type,
+              payroll['payType'],
+              payroll['PayType'],
+              payroll['type'],
+              prefs?.['payType'],
+              prefs?.['PayType'],
+              prefs?.['compensationType']
+            )
+          );
           return {
             ...u,
-            payType: u.payType || payroll['payType'] || 'salary',
+            payType,
             payRate: this.toNumberOrDefault(u.payRate, payroll['payRate'], 0),
             hours: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 0),
             grossPay: 0,
@@ -375,6 +388,25 @@ export class PayrollComponent implements OnInit {
       },
       error: () => this.employees.set([])
     });
+  }
+
+  private pickFirstText(...values: unknown[]): string {
+    for (const value of values) {
+      const text = String(value ?? '').trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
+  private normalizePayType(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return 'Salary';
+    return normalized
+      .replace(/[_-]+/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 
   private parsePreferences(raw: unknown): Record<string, any> {
