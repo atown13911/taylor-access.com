@@ -126,6 +126,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/compliance/tags-permits/tags-permits.component').then(m => m.TagsPermitsComponent)
       },
       {
+        path: 'compliance/asset-assignments',
+        redirectTo: 'compliance/tags-permits',
+        pathMatch: 'full'
+      },
+      {
+        path: 'compliance/assets-assignments',
+        redirectTo: 'compliance/tags-permits',
+        pathMatch: 'full'
+      },
+      {
         path: 'profile',
         loadComponent: () => import('./features/admin-security/profile/profile.component').then(m => m.ProfileComponent)
       },
