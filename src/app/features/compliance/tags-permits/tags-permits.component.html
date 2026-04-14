@@ -14,34 +14,15 @@
 
   <!-- Stats -->
   <div class="tp-stats">
-    <div class="tp-stat">
-      <i class="bx bx-file"></i>
-      <div class="tp-stat-info">
-        <span class="tp-stat-val">{{ totalCardValue() }}</span>
-        <span class="tp-stat-lbl">{{ totalCardLabel() }}</span>
+    @for (card of dashboardCards(); track card.label) {
+      <div class="tp-stat">
+        <i class="bx" [class]="card.icon"></i>
+        <div class="tp-stat-info">
+          <span class="tp-stat-val">{{ card.value }}</span>
+          <span class="tp-stat-lbl">{{ card.label }}</span>
+        </div>
       </div>
-    </div>
-    <div class="tp-stat">
-      <i class="bx bx-check-circle"></i>
-      <div class="tp-stat-info">
-        <span class="tp-stat-val">{{ activePermits() }}</span>
-        <span class="tp-stat-lbl">Active</span>
-      </div>
-    </div>
-    <div class="tp-stat">
-      <i class="bx bx-error"></i>
-      <div class="tp-stat-info">
-        <span class="tp-stat-val">{{ expiringPermits() }}</span>
-        <span class="tp-stat-lbl">Expiring Soon</span>
-      </div>
-    </div>
-    <div class="tp-stat">
-      <i class="bx bx-x-circle"></i>
-      <div class="tp-stat-info">
-        <span class="tp-stat-val">{{ expiredPermits() }}</span>
-        <span class="tp-stat-lbl">Expired</span>
-      </div>
-    </div>
+    }
   </div>
 
   <!-- Tabs -->

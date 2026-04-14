@@ -145,10 +145,55 @@ export class TagsPermitsComponent implements OnInit {
     return list.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
   });
 
-  activePermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'active').length);
-  expiringPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expiring').length);
-  expiredPermits = computed(() => this.permits().filter(p => this.getPermitStatus(p) === 'expired').length);
-  trailerPermitsCount = computed(() => this.filteredTrailerPermits().length);
+  dashboardCards = computed(() => {
+    const tab = this.activeTab();
+
+    if (tab === 'fuel-cards') {
+      const rows = this.filteredFuelCardDrivers();
+      const assigned = rows.filter((d: any) => String(d?.assignedFuelCard || '') !== 'Unassigned').length;
+      const unassigned = Math.max(rows.length - assigned, 0);
+      const uniqueAssignedCards = new Set(
+        rows
+          .map((d: any) => String(d?.assignedFuelCard || '').trim())
+          .filter((v: string) => !!v && v !== 'Unassigned')
+      ).size;
+
+      return [
+        { icon: 'bx-user-check', label: 'Active Drivers', value: rows.length },
+        { icon: 'bx-credit-card-front', label: 'Assigned Cards', value: assigned },
+        { icon: 'bx-user-x', label: 'Unassigned Drivers', value: unassigned },
+        { icon: 'bx-card', label: 'Unique Cards In Use', value: uniqueAssignedCards }
+      ];
+    }
+
+    if (tab === 'trailer') {
+      const rows = this.filteredTrailerPermits();
+      const assigned = rows.filter((p: any) => String(p?.assignedDriverName || '').trim().length > 0).length;
+      const unassigned = Math.max(rows.length - assigned, 0);
+      const expiring = rows.filter((p: any) => this.getPermitStatus(p) === 'expiring').length;
+
+      return [
+        { icon: 'bx-package', label: 'Total Trailers', value: rows.length },
+        { icon: 'bx-user-check', label: 'Assigned Drivers', value: assigned },
+        { icon: 'bx-user-x', label: 'Unassigned Trailers', value: unassigned },
+        { icon: 'bx-error', label: 'Expiring Soon', value: expiring }
+      ];
+    }
+
+    const rows = tab === 'irp' ? this.filteredIrpPermits() : this.filteredPermits();
+    const totalLabel = tab === 'irp' ? 'Total IRP Tags' : 'Total Permits';
+    const active = rows.filter((p: any) => this.getPermitStatus(p) === 'active').length;
+    const expiring = rows.filter((p: any) => this.getPermitStatus(p) === 'expiring').length;
+    const expired = rows.filter((p: any) => this.getPermitStatus(p) === 'expired').length;
+
+    return [
+      { icon: 'bx-file', label: totalLabel, value: rows.length },
+      { icon: 'bx-check-circle', label: 'Active', value: active },
+      { icon: 'bx-error', label: 'Expiring Soon', value: expiring },
+      { icon: 'bx-x-circle', label: 'Expired', value: expired }
+    ];
+  });
+
   private readonly baseTrailerTypeOptions: Array<{ value: string; label: string }> = [
     { value: 'standard_equipment', label: 'Standard Equipment' },
     { value: 'dry_van', label: 'Dry Van' },
@@ -356,14 +401,6 @@ export class TagsPermitsComponent implements OnInit {
     return this.isTrailerTab()
       ? 'Add trailer tags and assign drivers to active trailers'
       : 'Manage company-owned overweight/oversize permits and IRP registrations';
-  }
-
-  totalCardLabel(): string {
-    return this.isTrailerTab() ? 'Total Trailers' : 'Total Permits';
-  }
-
-  totalCardValue(): number {
-    return this.isTrailerTab() ? this.trailerPermitsCount() : this.permits().length;
   }
 
   searchPlaceholder(): string {
