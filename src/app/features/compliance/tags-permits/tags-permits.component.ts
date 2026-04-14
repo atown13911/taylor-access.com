@@ -279,10 +279,10 @@ export class TagsPermitsComponent implements OnInit {
 
   getTrailerAssignmentStatus(p: any): 'active' | 'inactive' | 'returned' | 'closed_out' {
     const rawStatus = String(
-      p?.status
-      ?? p?.assignmentStatus
+      p?.assignmentStatus
       ?? p?.trailerStatus
       ?? p?.driverAssignmentStatus
+      ?? p?.status
       ?? ''
     ).trim().toLowerCase();
 
