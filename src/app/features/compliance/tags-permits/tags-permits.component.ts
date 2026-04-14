@@ -281,10 +281,19 @@ export class TagsPermitsComponent implements OnInit {
     const rawStatus = String(
       p?.status
       ?? p?.assignmentStatus
+      ?? p?.trailerStatus
       ?? p?.driverAssignmentStatus
       ?? ''
     ).trim().toLowerCase();
 
+    if (
+      rawStatus === 'inactive'
+      || rawStatus === 'available'
+      || rawStatus === 'unassigned'
+      || rawStatus === 'idle'
+    ) {
+      return 'inactive';
+    }
     if (rawStatus === 'return' || rawStatus === 'returned') {
       return 'returned';
     }
@@ -803,6 +812,9 @@ export class TagsPermitsComponent implements OnInit {
     const selectedDriver = this.drivers().find((d: any) => `${d?.id}` === `${this.permitForm?.assignedDriverId ?? ''}`);
     const assignedDriverName = String(selectedDriver?.name || '').trim() || null;
     const selectedTrailerStatus = this.normalizeTrailerStatus(this.permitForm.trailerStatus);
+    const keepDriverAssignment = selectedTrailerStatus === 'active';
+    const persistedDriverId = keepDriverAssignment ? (this.permitForm.assignedDriverId ?? null) : null;
+    const persistedDriverName = keepDriverAssignment ? assignedDriverName : null;
     const trailerBody: any = {
       number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
       trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
@@ -823,9 +835,9 @@ export class TagsPermitsComponent implements OnInit {
       notes: this.permitForm.notes || null,
       photoUrl: this.permitForm.photoUrl || null,
       imageUrl: this.permitForm.photoUrl || null,
-      assignedDriverId: this.permitForm.assignedDriverId ?? null,
-      driverId: this.permitForm.assignedDriverId ?? null,
-      assignedDriverName,
+      assignedDriverId: persistedDriverId,
+      driverId: persistedDriverId,
+      assignedDriverName: persistedDriverName,
       organizationId
     };
     const equipmentBody: any = {
@@ -845,7 +857,7 @@ export class TagsPermitsComponent implements OnInit {
       assignmentStatus: selectedTrailerStatus,
       assignedDriverId: trailerBody.assignedDriverId,
       driverId: trailerBody.driverId,
-      ownerName: assignedDriverName,
+      ownerName: persistedDriverName,
       notes: trailerBody.notes,
       photoUrl: trailerBody.photoUrl,
       imageUrl: trailerBody.imageUrl,
@@ -870,7 +882,7 @@ export class TagsPermitsComponent implements OnInit {
         }
       }
 
-      if (trailerId && this.permitForm.assignedDriverId && selectedTrailerStatus === 'active') {
+      if (trailerId && persistedDriverId && selectedTrailerStatus === 'active') {
         await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId, assignedDriverName);
       }
 
