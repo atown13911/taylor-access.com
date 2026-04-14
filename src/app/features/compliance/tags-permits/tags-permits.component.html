@@ -69,6 +69,8 @@
         @if (activeTab() === 'trailer') {
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="returned">Returned</option>
+          <option value="closed_out">Closed Out</option>
         } @else {
           <option value="active">Active</option>
           <option value="expiring">Expiring</option>
@@ -148,7 +150,7 @@
                   </button>
                 }
               </td>
-              <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerAssignmentStatus(p) }}</span></td>
+              <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
                 <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
                 <button class="tp-icon-btn danger" title="Delete" (click)="deletePermit(p)"><i class="bx bx-trash"></i></button>
@@ -505,7 +507,17 @@
                   }
                 </select>
               </div>
-              @if (activeTab() !== 'trailer') {
+              @if (activeTab() === 'trailer') {
+                <div class="tp-form-group">
+                  <label>Status</label>
+                  <select [(ngModel)]="permitForm.trailerStatus">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="returned">Returned</option>
+                    <option value="closed_out">Closed Out</option>
+                  </select>
+                </div>
+              } @else {
                 <div class="tp-form-group">
                   <label>Truck #</label>
                   <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., 1210">

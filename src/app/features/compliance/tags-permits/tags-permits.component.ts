@@ -43,7 +43,7 @@ export class TagsPermitsComponent implements OnInit {
   trailerPhotoPreviewUrl = signal<string | null>(null);
   private trailerPhotoFile: File | null = null;
 
-  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
 
   filteredPermits = computed(() => {
     let list = this.permits().filter(p => !this.irpTypes.includes(p.permitType));
@@ -99,7 +99,7 @@ export class TagsPermitsComponent implements OnInit {
       );
     }
     if (type) list = list.filter(p => (p.permitType || '') === type);
-    if (status === 'active' || status === 'inactive') {
+    if (status === 'active' || status === 'inactive' || status === 'returned' || status === 'closed_out') {
       list = list.filter(p => this.getTrailerAssignmentStatus(p) === status);
     }
     return list;
@@ -275,13 +275,20 @@ export class TagsPermitsComponent implements OnInit {
     return 'active';
   }
 
-  getTrailerAssignmentStatus(p: any): 'active' | 'inactive' {
+  getTrailerAssignmentStatus(p: any): 'active' | 'inactive' | 'returned' | 'closed_out' {
     const rawStatus = String(
       p?.status
       ?? p?.assignmentStatus
       ?? p?.driverAssignmentStatus
       ?? ''
     ).trim().toLowerCase();
+
+    if (rawStatus === 'return' || rawStatus === 'returned') {
+      return 'returned';
+    }
+    if (rawStatus === 'closed out' || rawStatus === 'closed_out' || rawStatus === 'closedout' || rawStatus === 'closed-out') {
+      return 'closed_out';
+    }
 
     const isAssigned = !!(
       p?.assignedDriverId
@@ -296,18 +303,45 @@ export class TagsPermitsComponent implements OnInit {
     return isAssigned ? 'active' : 'inactive';
   }
 
+  getTrailerStatusLabel(p: any): string {
+    const code = this.getTrailerAssignmentStatus(p);
+    if (code === 'closed_out') return 'Closed Out';
+    if (code === 'returned') return 'Returned';
+    return code === 'active' ? 'Active' : 'Inactive';
+  }
+
+  private normalizeTrailerStatus(value: unknown): 'active' | 'inactive' | 'returned' | 'closed_out' {
+    const raw = String(value ?? '').trim().toLowerCase();
+    if (raw === 'returned' || raw === 'return') return 'returned';
+    if (raw === 'closed_out' || raw === 'closed out' || raw === 'closed-out' || raw === 'closedout') return 'closed_out';
+    if (raw === 'inactive') return 'inactive';
+    return 'active';
+  }
+
+  private mapTrailerBackendStatus(status: 'active' | 'inactive' | 'returned' | 'closed_out'): string {
+    if (status === 'active') return 'rented';
+    if (status === 'inactive') return 'available';
+    return status;
+  }
+
+  private mapEquipmentBackendStatus(status: 'active' | 'inactive' | 'returned' | 'closed_out'): string {
+    if (status === 'active') return 'in_use';
+    if (status === 'inactive') return 'available';
+    return status;
+  }
+
   selectMainTab(tab: 'permits' | 'irp' | 'trailer' | 'fuel-cards'): void {
     this.activeTab.set(tab);
 
     if (tab === 'trailer') {
       const value = this.statusFilter();
-      if (value && value !== 'active' && value !== 'inactive') {
+      if (value && value !== 'active' && value !== 'inactive' && value !== 'returned' && value !== 'closed_out') {
         this.statusFilter.set('');
       }
       return;
     }
 
-    if (this.statusFilter() === 'inactive') {
+    if (this.statusFilter() === 'inactive' || this.statusFilter() === 'returned' || this.statusFilter() === 'closed_out') {
       this.statusFilter.set('');
     }
   }
@@ -317,7 +351,7 @@ export class TagsPermitsComponent implements OnInit {
     const defaultType = tab === 'irp'
       ? 'irp'
       : (tab === 'trailer' ? 'standard_equipment' : 'overweight');
-    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
     this.editingPermit.set(null);
     this.trailerModalTab.set('details');
     this.resetTrailerPhotoState();
@@ -333,6 +367,7 @@ export class TagsPermitsComponent implements OnInit {
       expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split('T')[0] : '',
       cost: p.cost,
       chargeFrequency: p.chargeFrequency || p.billingFrequency || p.rateFrequency || p.frequency || 'monthly',
+      trailerStatus: p.trailerStatus || this.getTrailerAssignmentStatus(p),
       assignedDriverId: p.assignedDriverId, assignedTruckNumber: p.assignedTruckNumber || '', notes: p.notes || '',
       photoUrl: p.photoUrl || p.imageUrl || p.trailerPhotoUrl || p.avatarUrl || null
     };
@@ -346,7 +381,7 @@ export class TagsPermitsComponent implements OnInit {
     this.editingPermit.set(null);
     this.trailerModalTab.set('details');
     this.resetTrailerPhotoState();
-    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
   }
 
   onTrailerSelectionChange(trailerId: any): void {
@@ -367,6 +402,7 @@ export class TagsPermitsComponent implements OnInit {
       expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().split('T')[0] : (this.permitForm.expiryDate || ''),
       cost: row.cost ?? this.permitForm.cost ?? null,
       chargeFrequency: row.chargeFrequency || this.permitForm.chargeFrequency || 'monthly',
+      trailerStatus: row.trailerStatus || this.permitForm.trailerStatus || 'active',
       assignedDriverId: row.assignedDriverId ?? this.permitForm.assignedDriverId ?? null,
       assignedTruckNumber: row.assignedTruckNumber || this.permitForm.assignedTruckNumber || '',
       notes: row.notes || this.permitForm.notes || '',
@@ -724,6 +760,7 @@ export class TagsPermitsComponent implements OnInit {
       expiryDate: t?.expiryDate || t?.registrationExpiry || null,
       cost: t?.cost ?? t?.purchasePrice ?? null,
       chargeFrequency: t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
+      trailerStatus: this.getTrailerAssignmentStatus(t),
       assignedDriverId,
       assignedDriverName: assignedDriverName || '',
       assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
@@ -742,6 +779,7 @@ export class TagsPermitsComponent implements OnInit {
     const organizationId = this.getOrganizationId();
     const selectedDriver = this.drivers().find((d: any) => `${d?.id}` === `${this.permitForm?.assignedDriverId ?? ''}`);
     const assignedDriverName = String(selectedDriver?.name || '').trim() || null;
+    const selectedTrailerStatus = this.normalizeTrailerStatus(this.permitForm.trailerStatus);
     const trailerBody: any = {
       number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
       trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
@@ -754,7 +792,8 @@ export class TagsPermitsComponent implements OnInit {
       cost: this.permitForm.cost ?? null,
       chargeFrequency: this.permitForm.chargeFrequency || 'monthly',
       billingFrequency: this.permitForm.chargeFrequency || 'monthly',
-      status: this.permitForm.assignedDriverId ? 'rented' : 'available',
+      status: this.mapTrailerBackendStatus(selectedTrailerStatus),
+      assignmentStatus: selectedTrailerStatus,
       notes: this.permitForm.notes || null,
       photoUrl: this.permitForm.photoUrl || null,
       imageUrl: this.permitForm.photoUrl || null,
@@ -773,7 +812,8 @@ export class TagsPermitsComponent implements OnInit {
       purchasePrice: trailerBody.cost,
       chargeFrequency: trailerBody.chargeFrequency,
       billingFrequency: trailerBody.billingFrequency,
-      status: this.permitForm.assignedDriverId ? 'in_use' : 'available',
+      status: this.mapEquipmentBackendStatus(selectedTrailerStatus),
+      assignmentStatus: selectedTrailerStatus,
       assignedDriverId: trailerBody.assignedDriverId,
       driverId: trailerBody.driverId,
       ownerName: assignedDriverName,
@@ -801,7 +841,7 @@ export class TagsPermitsComponent implements OnInit {
         }
       }
 
-      if (trailerId && this.permitForm.assignedDriverId) {
+      if (trailerId && this.permitForm.assignedDriverId && selectedTrailerStatus === 'active') {
         await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId, assignedDriverName);
       }
 
