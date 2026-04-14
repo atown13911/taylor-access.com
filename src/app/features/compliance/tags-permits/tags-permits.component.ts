@@ -649,15 +649,32 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   private mapTrailerRow(t: any): any {
-    const assignments = Array.isArray(t?.driverAssignments) ? t.driverAssignments : [];
-    const activeAssignment = assignments.find((a: any) => String(a?.status || '').toLowerCase() === 'active')
+    const assignments = Array.isArray(t?.driverAssignments)
+      ? t.driverAssignments
+      : (Array.isArray(t?.assignments) ? t.assignments : []);
+    const preferredStatuses = new Set(['active', 'assigned', 'rented', 'in_use', 'in-use', 'current']);
+    const pickedAssignment = assignments.find((a: any) => preferredStatuses.has(String(a?.status || '').toLowerCase()))
       || assignments[0]
       || null;
-    const assignedDriverId = activeAssignment?.driverId ?? t?.assignedDriverId ?? null;
+
     const assignedDriverName =
-      activeAssignment?.driverName
-      || this.drivers().find((d: any) => `${d?.id}` === `${assignedDriverId}`)?.name
-      || '';
+      pickedAssignment?.driverName
+      || pickedAssignment?.name
+      || t?.assignedDriverName
+      || t?.driverName
+      || t?.ownerName
+      || null;
+
+    const rawAssignedDriverId =
+      pickedAssignment?.driverId
+      ?? pickedAssignment?.assignedDriverId
+      ?? pickedAssignment?.driver_id
+      ?? t?.assignedDriverId
+      ?? t?.driverId
+      ?? t?.assigned_driver_id
+      ?? t?.driver_id
+      ?? null;
+    const assignedDriverId = rawAssignedDriverId ?? this.findDriverIdByName(assignedDriverName);
 
     return {
       id: t?.id,
@@ -669,7 +686,7 @@ export class TagsPermitsComponent implements OnInit {
       cost: t?.cost ?? t?.purchasePrice ?? null,
       chargeFrequency: t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       assignedDriverId,
-      assignedDriverName: assignedDriverName || t?.assignedDriverName || t?.ownerName || '',
+      assignedDriverName: assignedDriverName || '',
       assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
       notes: t?.notes || '',
@@ -702,6 +719,8 @@ export class TagsPermitsComponent implements OnInit {
       notes: this.permitForm.notes || null,
       photoUrl: this.permitForm.photoUrl || null,
       imageUrl: this.permitForm.photoUrl || null,
+      assignedDriverId: this.permitForm.assignedDriverId ?? null,
+      driverId: this.permitForm.assignedDriverId ?? null,
       assignedDriverName,
       organizationId
     };
@@ -716,6 +735,8 @@ export class TagsPermitsComponent implements OnInit {
       chargeFrequency: trailerBody.chargeFrequency,
       billingFrequency: trailerBody.billingFrequency,
       status: this.permitForm.assignedDriverId ? 'in_use' : 'available',
+      assignedDriverId: trailerBody.assignedDriverId,
+      driverId: trailerBody.driverId,
       ownerName: assignedDriverName,
       notes: trailerBody.notes,
       photoUrl: trailerBody.photoUrl,
@@ -759,8 +780,8 @@ export class TagsPermitsComponent implements OnInit {
     const id = `${trailerId}`;
     const resolvedDriverName = String(driverName || '').trim();
     const payloads = [
-      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${id}`), { ownerName: resolvedDriverName, status: 'in_use' })),
-      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${id}`), { ownerName: resolvedDriverName, status: 'in_use' })),
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${id}`), { ownerName: resolvedDriverName, assignedDriverId: driverId, driverId, status: 'in_use' })),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${id}`), { ownerName: resolvedDriverName, assignedDriverId: driverId, driverId, status: 'in_use' })),
       () => firstValueFrom(this.http.post(this.trailerPath(`/trailers/${id}/assign-driver`), { driverId, driverName: resolvedDriverName })),
       () => firstValueFrom(this.http.post(this.trailerPath(`/trailers/${id}/assignments`), { driverId, driverName: resolvedDriverName, status: 'rented' })),
       () => firstValueFrom(this.http.patch(this.trailerPath(`/trailers/${id}`), { assignedDriverId: driverId, assignedDriverName: resolvedDriverName, status: 'rented' })),
@@ -813,6 +834,13 @@ export class TagsPermitsComponent implements OnInit {
       .split(' ')
       .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
+  }
+
+  private findDriverIdByName(name: unknown): any {
+    const normalizedTarget = this.normalizeNameKey(name);
+    if (!normalizedTarget) return null;
+    const match = this.drivers().find((d: any) => this.normalizeNameKey(d?.name || d?.driverName) === normalizedTarget);
+    return match?.id ?? null;
   }
 
   private getOrganizationId(): number | null {
