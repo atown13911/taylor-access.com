@@ -81,6 +81,9 @@
   <input type="file" id="permit-doc-input" style="display:none"
     accept=".pdf,.jpg,.jpeg,.png,.webp"
     (change)="onPermitDocSelected($event)">
+  <input type="file" id="trailer-photo-input" style="display:none"
+    accept="image/*"
+    (change)="onTrailerPhotoSelected($event)">
 
   <!-- Permits Tab -->
   @if (activeTab() === 'permits' && !loading()) {
@@ -350,86 +353,165 @@
           <h2>{{ editingPermit() ? 'Edit' : 'Add' }} {{ activeTab() === 'trailer' ? 'Trailer' : 'Permit' }}</h2>
           <button class="tp-close" (click)="closeModal()">&times;</button>
         </div>
+        @if (activeTab() === 'trailer') {
+          <div class="tp-modal-tabs">
+            <button
+              type="button"
+              class="tp-modal-tab"
+              [class.active]="trailerModalTab() === 'details'"
+              (click)="trailerModalTab.set('details')">
+              <i class="bx bx-detail"></i> Details
+            </button>
+            <button
+              type="button"
+              class="tp-modal-tab"
+              [class.active]="trailerModalTab() === 'photo'"
+              (click)="trailerModalTab.set('photo')">
+              <i class="bx bx-image-add"></i> Photo Upload
+            </button>
+          </div>
+        }
         <div class="tp-modal-body">
-          <div class="tp-form-row">
-            @if (activeTab() === 'trailer') {
-              <div class="tp-form-group">
-                <label>Trailer Number</label>
-                <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., TR-4102">
-              </div>
-            }
-            <div class="tp-form-group">
-              <label>{{ activeTab() === 'trailer' ? 'Trailer Tag Number' : 'Permit Number' }}</label>
-              <input type="text" [(ngModel)]="permitForm.permitNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-2026-12345' : 'e.g., OW-2026-12345'">
-            </div>
-            <div class="tp-form-group">
-              <label>{{ activeTab() === 'trailer' ? 'Trailer Type' : 'Type' }}</label>
-              <select [(ngModel)]="permitForm.permitType">
-                @if (activeTab() === 'trailer') {
-                  @for (tt of trailerTypeOptions(); track tt.value) {
-                    <option [value]="tt.value">{{ tt.label }}</option>
-                  }
+          @if (activeTab() === 'trailer' && trailerModalTab() === 'photo') {
+            <div class="tp-photo-tab">
+              <div class="tp-photo-preview">
+                @if (trailerPhotoPreviewUrl()) {
+                  <img [src]="trailerPhotoPreviewUrl()!" alt="Trailer photo preview">
                 } @else {
-                  <optgroup label="Permits">
-                    <option value="overweight">Overweight</option>
-                    <option value="oversize">Oversize</option>
-                    <option value="trip">Trip Permit</option>
-                    <option value="fuel">Fuel Permit</option>
-                    <option value="hazmat">Hazmat</option>
-                    <option value="other">Other</option>
-                  </optgroup>
-                  <optgroup label="IRP / Tags">
-                    <option value="irp">IRP Registration</option>
-                    <option value="ifta">IFTA</option>
-                    <option value="cab_card">Cab Card</option>
-                    <option value="trailer">Trailer Tag</option>
-                    <option value="trailer_registration">Trailer Registration</option>
-                  </optgroup>
+                  <div class="tp-photo-placeholder">
+                    <i class="bx bx-image"></i>
+                    <span>No photo selected</span>
+                  </div>
                 }
-              </select>
+              </div>
+              <div class="tp-photo-actions">
+                <button type="button" class="tp-btn" (click)="openTrailerPhotoPicker()">
+                  <i class="bx bx-upload"></i> Choose Photo
+                </button>
+                <button
+                  type="button"
+                  class="tp-btn"
+                  [disabled]="!trailerPhotoFileName() || trailerPhotoUploading()"
+                  (click)="clearTrailerPhotoSelection()">
+                  <i class="bx bx-x"></i> Clear
+                </button>
+                <button
+                  type="button"
+                  class="tp-btn primary"
+                  [disabled]="!trailerPhotoFileName() || trailerPhotoUploading()"
+                  (click)="uploadTrailerPhoto()">
+                  @if (trailerPhotoUploading()) {
+                    <i class="bx bx-loader-alt bx-spin"></i> Uploading...
+                  } @else {
+                    <i class="bx bx-cloud-upload"></i> Upload Photo
+                  }
+                </button>
+              </div>
+              @if (trailerPhotoFileName()) {
+                <div class="tp-photo-file">
+                  Selected: {{ trailerPhotoFileName() }}
+                </div>
+              }
+              <div class="tp-photo-help">
+                Save trailer details first if this is a brand-new trailer. Photo upload needs a trailer record ID.
+              </div>
             </div>
-          </div>
-          <div class="tp-form-row">
-            <div class="tp-form-group">
-              <label>State</label>
-              <input type="text" [(ngModel)]="permitForm.state" placeholder="e.g., FL" maxlength="5">
-            </div>
-            <div class="tp-form-group">
-              <label>Cost</label>
-              <input type="number" [(ngModel)]="permitForm.cost" placeholder="0.00" step="0.01">
-            </div>
-          </div>
-          <div class="tp-form-row">
-            <div class="tp-form-group">
-              <label>Issue Date</label>
-              <input type="date" [(ngModel)]="permitForm.issueDate">
-            </div>
-            <div class="tp-form-group">
-              <label>Expiry Date</label>
-              <input type="date" [(ngModel)]="permitForm.expiryDate">
-            </div>
-          </div>
-          <div class="tp-form-row">
-            <div class="tp-form-group">
-              <label>Assigned Driver</label>
-              <select [(ngModel)]="permitForm.assignedDriverId">
-                <option [ngValue]="null">Unassigned</option>
-                @for (d of drivers(); track d.id) {
-                  <option [ngValue]="d.id">{{ d.name }}</option>
-                }
-              </select>
-            </div>
-            @if (activeTab() !== 'trailer') {
+          } @else {
+            <div class="tp-form-row">
+              @if (activeTab() === 'trailer') {
+                <div class="tp-form-group">
+                  <label>Trailer Number</label>
+                  <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., TR-4102">
+                </div>
+              }
               <div class="tp-form-group">
-                <label>Truck #</label>
-                <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., 1210">
+                <label>{{ activeTab() === 'trailer' ? 'Trailer Tag Number' : 'Permit Number' }}</label>
+                <input type="text" [(ngModel)]="permitForm.permitNumber" [placeholder]="activeTab() === 'trailer' ? 'e.g., TR-2026-12345' : 'e.g., OW-2026-12345'">
+              </div>
+              <div class="tp-form-group">
+                <label>{{ activeTab() === 'trailer' ? 'Trailer Type' : 'Type' }}</label>
+                <select [(ngModel)]="permitForm.permitType">
+                  @if (activeTab() === 'trailer') {
+                    @for (tt of trailerTypeOptions(); track tt.value) {
+                      <option [value]="tt.value">{{ tt.label }}</option>
+                    }
+                  } @else {
+                    <optgroup label="Permits">
+                      <option value="overweight">Overweight</option>
+                      <option value="oversize">Oversize</option>
+                      <option value="trip">Trip Permit</option>
+                      <option value="fuel">Fuel Permit</option>
+                      <option value="hazmat">Hazmat</option>
+                      <option value="other">Other</option>
+                    </optgroup>
+                    <optgroup label="IRP / Tags">
+                      <option value="irp">IRP Registration</option>
+                      <option value="ifta">IFTA</option>
+                      <option value="cab_card">Cab Card</option>
+                      <option value="trailer">Trailer Tag</option>
+                      <option value="trailer_registration">Trailer Registration</option>
+                    </optgroup>
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="tp-form-row">
+              <div class="tp-form-group">
+                <label>State</label>
+                <input type="text" [(ngModel)]="permitForm.state" placeholder="e.g., FL" maxlength="5">
+              </div>
+              <div class="tp-form-group">
+                <label>Cost</label>
+                <input type="number" [(ngModel)]="permitForm.cost" placeholder="0.00" step="0.01">
+              </div>
+            </div>
+            @if (activeTab() === 'trailer') {
+              <div class="tp-form-row tp-form-row-single">
+                <div class="tp-form-group">
+                  <label>Charge Frequency</label>
+                  <select [(ngModel)]="permitForm.chargeFrequency">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="one_time">One Time</option>
+                  </select>
+                </div>
               </div>
             }
-          </div>
-          <div class="tp-form-group">
-            <label>Notes</label>
-            <textarea [(ngModel)]="permitForm.notes" rows="2" placeholder="Optional notes..."></textarea>
-          </div>
+            <div class="tp-form-row">
+              <div class="tp-form-group">
+                <label>Issue Date</label>
+                <input type="date" [(ngModel)]="permitForm.issueDate">
+              </div>
+              <div class="tp-form-group">
+                <label>Expiry Date</label>
+                <input type="date" [(ngModel)]="permitForm.expiryDate">
+              </div>
+            </div>
+            <div class="tp-form-row">
+              <div class="tp-form-group">
+                <label>Assigned Driver</label>
+                <select [(ngModel)]="permitForm.assignedDriverId">
+                  <option [ngValue]="null">Unassigned</option>
+                  @for (d of drivers(); track d.id) {
+                    <option [ngValue]="d.id">{{ d.name }}</option>
+                  }
+                </select>
+              </div>
+              @if (activeTab() !== 'trailer') {
+                <div class="tp-form-group">
+                  <label>Truck #</label>
+                  <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" placeholder="e.g., 1210">
+                </div>
+              }
+            </div>
+            <div class="tp-form-group">
+              <label>Notes</label>
+              <textarea [(ngModel)]="permitForm.notes" rows="2" placeholder="Optional notes..."></textarea>
+            </div>
+          }
         </div>
         <div class="tp-modal-footer">
           <button class="tp-btn" (click)="closeModal()">Cancel</button>

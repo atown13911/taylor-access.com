@@ -32,13 +32,18 @@ export class TagsPermitsComponent implements OnInit {
   saving = signal(false);
   showAddModal = signal(false);
   editingPermit = signal<any>(null);
+  trailerModalTab = signal<'details' | 'photo'>('details');
 
   // Document upload
   uploadingDoc = signal(false);
   uploadTarget = signal<any>(null);   // permit being uploaded to
   permitDocFile: File | null = null;
+  trailerPhotoUploading = signal(false);
+  trailerPhotoFileName = signal('');
+  trailerPhotoPreviewUrl = signal<string | null>(null);
+  private trailerPhotoFile: File | null = null;
 
-  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
 
   filteredPermits = computed(() => {
     let list = this.permits().filter(p => !this.irpTypes.includes(p.permitType));
@@ -273,8 +278,10 @@ export class TagsPermitsComponent implements OnInit {
     const defaultType = tab === 'irp'
       ? 'irp'
       : (tab === 'trailer' ? 'standard_equipment' : 'overweight');
-    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
     this.editingPermit.set(null);
+    this.trailerModalTab.set('details');
+    this.resetTrailerPhotoState();
     this.showAddModal.set(true);
   }
 
@@ -285,15 +292,22 @@ export class TagsPermitsComponent implements OnInit {
       permitNumber: p.permitNumber, permitType: p.permitType, state: p.state || '',
       issueDate: p.issueDate ? new Date(p.issueDate).toISOString().split('T')[0] : '',
       expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split('T')[0] : '',
-      cost: p.cost, assignedDriverId: p.assignedDriverId, assignedTruckNumber: p.assignedTruckNumber || '', notes: p.notes || ''
+      cost: p.cost,
+      chargeFrequency: p.chargeFrequency || p.billingFrequency || p.rateFrequency || p.frequency || 'monthly',
+      assignedDriverId: p.assignedDriverId, assignedTruckNumber: p.assignedTruckNumber || '', notes: p.notes || '',
+      photoUrl: p.photoUrl || p.imageUrl || p.trailerPhotoUrl || p.avatarUrl || null
     };
+    this.trailerModalTab.set('details');
+    this.resetTrailerPhotoState(this.permitForm.photoUrl || null);
     this.showAddModal.set(true);
   }
 
   closeModal() {
     this.showAddModal.set(false);
     this.editingPermit.set(null);
-    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.trailerModalTab.set('details');
+    this.resetTrailerPhotoState();
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, chargeFrequency: 'monthly', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
   }
 
   onTrailerSelectionChange(trailerId: any): void {
@@ -313,10 +327,13 @@ export class TagsPermitsComponent implements OnInit {
       issueDate: row.issueDate ? new Date(row.issueDate).toISOString().split('T')[0] : (this.permitForm.issueDate || ''),
       expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString().split('T')[0] : (this.permitForm.expiryDate || ''),
       cost: row.cost ?? this.permitForm.cost ?? null,
+      chargeFrequency: row.chargeFrequency || this.permitForm.chargeFrequency || 'monthly',
       assignedDriverId: row.assignedDriverId ?? this.permitForm.assignedDriverId ?? null,
       assignedTruckNumber: row.assignedTruckNumber || this.permitForm.assignedTruckNumber || '',
-      notes: row.notes || this.permitForm.notes || ''
+      notes: row.notes || this.permitForm.notes || '',
+      photoUrl: row.photoUrl || row.imageUrl || this.permitForm.photoUrl || null
     };
+    this.resetTrailerPhotoState(this.permitForm.photoUrl || null);
   }
 
   savePermit() {
@@ -446,6 +463,56 @@ export class TagsPermitsComponent implements OnInit {
         this.uploadingDoc.set(false);
       }
     });
+  }
+
+  openTrailerPhotoPicker(): void {
+    const input = document.getElementById('trailer-photo-input') as HTMLInputElement | null;
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
+  onTrailerPhotoSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement)?.files?.[0];
+    if (!file) return;
+    this.trailerPhotoFile = file;
+    this.trailerPhotoFileName.set(file.name);
+    this.setTrailerPhotoPreview(URL.createObjectURL(file));
+  }
+
+  clearTrailerPhotoSelection(): void {
+    this.trailerPhotoFile = null;
+    this.trailerPhotoFileName.set('');
+    this.setTrailerPhotoPreview(this.permitForm?.photoUrl || null);
+  }
+
+  async uploadTrailerPhoto(): Promise<void> {
+    const trailerId = String(this.permitForm?.trailerId ?? this.editingPermit()?.id ?? '').trim();
+    if (!trailerId) {
+      this.toast.error('Save or select a trailer first before uploading a photo.', 'Photo upload');
+      return;
+    }
+    if (!this.trailerPhotoFile) {
+      this.toast.error('Select a photo file first.', 'Photo upload');
+      return;
+    }
+
+    this.trailerPhotoUploading.set(true);
+    try {
+      const url = await this.tryUploadTrailerPhoto(trailerId, this.trailerPhotoFile);
+      if (url) {
+        this.permitForm = { ...this.permitForm, photoUrl: url };
+        this.setTrailerPhotoPreview(url);
+      }
+      this.trailerPhotoFile = null;
+      this.trailerPhotoFileName.set('');
+      this.toast.success('Trailer photo uploaded', 'Success');
+      this.loadData();
+    } catch (err: any) {
+      this.toast.error(this.extractErrorMessage(err, 'Failed to upload trailer photo'), 'Photo upload');
+    } finally {
+      this.trailerPhotoUploading.set(false);
+    }
   }
 
   viewPermitDoc(p: any): void {
@@ -600,11 +667,13 @@ export class TagsPermitsComponent implements OnInit {
       issueDate: t?.issueDate || t?.registrationStartDate || t?.createdAt || null,
       expiryDate: t?.expiryDate || t?.registrationExpiry || null,
       cost: t?.cost ?? t?.purchasePrice ?? null,
+      chargeFrequency: t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       assignedDriverId,
       assignedDriverName: assignedDriverName || t?.assignedDriverName || t?.ownerName || '',
       assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
       notes: t?.notes || '',
+      photoUrl: t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null,
       hasFile: false,
       fileName: null
     };
@@ -627,8 +696,12 @@ export class TagsPermitsComponent implements OnInit {
       issueDate: this.permitForm.issueDate ? new Date(this.permitForm.issueDate).toISOString() : null,
       expiryDate: this.permitForm.expiryDate ? new Date(this.permitForm.expiryDate).toISOString() : null,
       cost: this.permitForm.cost ?? null,
+      chargeFrequency: this.permitForm.chargeFrequency || 'monthly',
+      billingFrequency: this.permitForm.chargeFrequency || 'monthly',
       status: this.permitForm.assignedDriverId ? 'rented' : 'available',
       notes: this.permitForm.notes || null,
+      photoUrl: this.permitForm.photoUrl || null,
+      imageUrl: this.permitForm.photoUrl || null,
       assignedDriverName,
       organizationId
     };
@@ -640,9 +713,13 @@ export class TagsPermitsComponent implements OnInit {
       registrationStartDate: trailerBody.issueDate,
       registrationExpiry: trailerBody.expiryDate,
       purchasePrice: trailerBody.cost,
+      chargeFrequency: trailerBody.chargeFrequency,
+      billingFrequency: trailerBody.billingFrequency,
       status: this.permitForm.assignedDriverId ? 'in_use' : 'available',
       ownerName: assignedDriverName,
       notes: trailerBody.notes,
+      photoUrl: trailerBody.photoUrl,
+      imageUrl: trailerBody.imageUrl,
       organizationId
     };
 
@@ -769,6 +846,67 @@ export class TagsPermitsComponent implements OnInit {
   private trailerPath(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     return `${this.trailerApiRoot}${normalizedPath}`;
+  }
+
+  private async tryUploadTrailerPhoto(trailerId: string, file: File): Promise<string | null> {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('photo', file);
+    fd.append('image', file);
+
+    const paths = [
+      `/trailers/${trailerId}/photo`,
+      `/trailers/${trailerId}/upload-photo`,
+      `/trailers/${trailerId}/image`,
+      `/equipment/${trailerId}/photo`,
+      `/equipment/${trailerId}/upload-photo`,
+      `/equipment/${trailerId}/image`
+    ];
+
+    let lastErr: any = null;
+    for (const path of paths) {
+      try {
+        const res: any = await firstValueFrom(this.http.post<any>(this.trailerPath(path), fd));
+        return this.extractUploadedPhotoUrl(res) || null;
+      } catch (err: any) {
+        lastErr = err;
+      }
+    }
+    throw lastErr ?? new Error('Unable to upload trailer photo');
+  }
+
+  private extractUploadedPhotoUrl(payload: any): string | null {
+    const candidates = [
+      payload?.url,
+      payload?.photoUrl,
+      payload?.imageUrl,
+      payload?.data?.url,
+      payload?.data?.photoUrl,
+      payload?.data?.imageUrl,
+      payload?.result?.url,
+      payload?.result?.photoUrl,
+      payload?.result?.imageUrl
+    ];
+    for (const value of candidates) {
+      const text = String(value ?? '').trim();
+      if (text) return text;
+    }
+    return null;
+  }
+
+  private setTrailerPhotoPreview(url: string | null): void {
+    const previous = this.trailerPhotoPreviewUrl();
+    if (previous && previous.startsWith('blob:')) {
+      URL.revokeObjectURL(previous);
+    }
+    this.trailerPhotoPreviewUrl.set(url);
+  }
+
+  private resetTrailerPhotoState(initialUrl: string | null = null): void {
+    this.trailerPhotoFile = null;
+    this.trailerPhotoFileName.set('');
+    this.trailerPhotoUploading.set(false);
+    this.setTrailerPhotoPreview(initialUrl);
   }
 
   private async trailerGetWithPathFallback(path: string): Promise<any> {
