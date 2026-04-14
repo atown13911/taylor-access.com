@@ -244,6 +244,7 @@
           <tr>
             <th>Trailer #</th>
             <th>Type</th>
+            <th>Vendor</th>
             <th>State</th>
             <th>Assigned Driver</th>
             <th>Truck #</th>
@@ -260,6 +261,7 @@
             <tr>
               <td class="tp-mono">{{ p.permitNumber }}</td>
               <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
+              <td>{{ getTrailerVendorLabel(p.vendor) }}</td>
               <td>{{ p.state || '—' }}</td>
               <td>
                 @if (p.assignedDriverName) {
@@ -301,7 +303,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="11" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
+            <tr><td colspan="12" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
           }
         </tbody>
       </table>
@@ -473,6 +475,16 @@
               </div>
             </div>
             @if (activeTab() === 'trailer') {
+              <div class="tp-form-row tp-form-row-single">
+                <div class="tp-form-group">
+                  <label>Vendor</label>
+                  <select [(ngModel)]="permitForm.vendor">
+                    @for (vendor of trailerVendorOptions; track vendor) {
+                      <option [value]="vendor">{{ getTrailerVendorLabel(vendor) }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
               <div class="tp-form-row tp-form-row-single">
                 <div class="tp-form-group">
                   <label>Charge Frequency</label>
