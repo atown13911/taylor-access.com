@@ -99,7 +99,9 @@ export class TagsPermitsComponent implements OnInit {
       );
     }
     if (type) list = list.filter(p => (p.permitType || '') === type);
-    if (status) list = list.filter(p => this.getPermitStatus(p) === status);
+    if (status === 'active' || status === 'inactive') {
+      list = list.filter(p => this.getTrailerAssignmentStatus(p) === status);
+    }
     return list;
   });
 
@@ -271,6 +273,43 @@ export class TagsPermitsComponent implements OnInit {
     if (days < 0) return 'expired';
     if (days <= 30) return 'expiring';
     return 'active';
+  }
+
+  getTrailerAssignmentStatus(p: any): 'active' | 'inactive' {
+    const rawStatus = String(
+      p?.status
+      ?? p?.assignmentStatus
+      ?? p?.driverAssignmentStatus
+      ?? ''
+    ).trim().toLowerCase();
+
+    const isAssigned = !!(
+      p?.assignedDriverId
+      || String(p?.assignedDriverName || '').trim()
+      || rawStatus === 'active'
+      || rawStatus === 'assigned'
+      || rawStatus === 'rented'
+      || rawStatus === 'in_use'
+      || rawStatus === 'in-use'
+    );
+
+    return isAssigned ? 'active' : 'inactive';
+  }
+
+  selectMainTab(tab: 'permits' | 'irp' | 'trailer' | 'fuel-cards'): void {
+    this.activeTab.set(tab);
+
+    if (tab === 'trailer') {
+      const value = this.statusFilter();
+      if (value && value !== 'active' && value !== 'inactive') {
+        this.statusFilter.set('');
+      }
+      return;
+    }
+
+    if (this.statusFilter() === 'inactive') {
+      this.statusFilter.set('');
+    }
   }
 
   openAddModal() {

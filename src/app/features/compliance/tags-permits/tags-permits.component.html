@@ -27,16 +27,16 @@
 
   <!-- Tabs -->
   <div class="tp-tabs">
-    <button class="tp-tab" [class.active]="activeTab() === 'permits'" (click)="activeTab.set('permits')">
+    <button class="tp-tab" [class.active]="activeTab() === 'permits'" (click)="selectMainTab('permits')">
       <i class="bx bx-badge-check"></i> Permits
     </button>
-    <button class="tp-tab" [class.active]="activeTab() === 'irp'" (click)="activeTab.set('irp')">
+    <button class="tp-tab" [class.active]="activeTab() === 'irp'" (click)="selectMainTab('irp')">
       <i class="bx bx-globe"></i> IRP
     </button>
-    <button class="tp-tab" [class.active]="activeTab() === 'fuel-cards'" (click)="activeTab.set('fuel-cards')">
+    <button class="tp-tab" [class.active]="activeTab() === 'fuel-cards'" (click)="selectMainTab('fuel-cards')">
       <i class="bx bx-credit-card"></i> Fuel Cards
     </button>
-    <button class="tp-tab" [class.active]="activeTab() === 'trailer'" (click)="activeTab.set('trailer')">
+    <button class="tp-tab" [class.active]="activeTab() === 'trailer'" (click)="selectMainTab('trailer')">
       <i class="bx bx-package"></i> Trailer
     </button>
   </div>
@@ -66,9 +66,14 @@
       </select>
       <select class="tp-filter-select" [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
         <option value="">All Statuses</option>
-        <option value="active">Active</option>
-        <option value="expiring">Expiring</option>
-        <option value="expired">Expired</option>
+        @if (activeTab() === 'trailer') {
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        } @else {
+          <option value="active">Active</option>
+          <option value="expiring">Expiring</option>
+          <option value="expired">Expired</option>
+        }
       </select>
     }
   </div>
@@ -143,7 +148,7 @@
                   </button>
                 }
               </td>
-              <td><span class="tp-status" [class]="getPermitStatus(p)">{{ getPermitStatus(p) }}</span></td>
+              <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerAssignmentStatus(p) }}</span></td>
               <td class="tp-actions">
                 <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
                 <button class="tp-icon-btn danger" title="Delete" (click)="deletePermit(p)"><i class="bx bx-trash"></i></button>

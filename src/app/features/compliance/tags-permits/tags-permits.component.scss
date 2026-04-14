@@ -109,6 +109,7 @@
 .tp-status {
   padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize;
   &.active { background: rgba(0,255,136,0.1); color: #00ff88; }
+  &.inactive { background: rgba(136,136,170,0.15); color: #b5b5d1; }
   &.complete { background: rgba(0,255,136,0.1); color: #00ff88; }
   &.partial { background: rgba(255,170,0,0.1); color: #ffaa00; }
   &.missing { background: rgba(136,136,170,0.1); color: #8888aa; }
