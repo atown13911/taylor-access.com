@@ -812,9 +812,8 @@ export class TagsPermitsComponent implements OnInit {
     const selectedDriver = this.drivers().find((d: any) => `${d?.id}` === `${this.permitForm?.assignedDriverId ?? ''}`);
     const assignedDriverName = String(selectedDriver?.name || '').trim() || null;
     const selectedTrailerStatus = this.normalizeTrailerStatus(this.permitForm.trailerStatus);
-    const keepDriverAssignment = selectedTrailerStatus === 'active';
-    const persistedDriverId = keepDriverAssignment ? (this.permitForm.assignedDriverId ?? null) : null;
-    const persistedDriverName = keepDriverAssignment ? assignedDriverName : null;
+    const persistedDriverId = this.permitForm.assignedDriverId ?? null;
+    const persistedDriverName = assignedDriverName;
     const trailerBody: any = {
       number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
       trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
