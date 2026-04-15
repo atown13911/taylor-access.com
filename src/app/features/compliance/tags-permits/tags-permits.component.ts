@@ -19,6 +19,7 @@ export class TagsPermitsComponent implements OnInit {
   private apiUrl = environment.apiUrl;
   private trailerApiUrl = `${this.apiUrl}/api/v1/assets-proxy`;
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
+  private readonly trailerStatusOverridesKey = 'ta_trailer_status_overrides';
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
@@ -42,6 +43,7 @@ export class TagsPermitsComponent implements OnInit {
   trailerPhotoFileName = signal('');
   trailerPhotoPreviewUrl = signal<string | null>(null);
   private trailerPhotoFile: File | null = null;
+  private trailerStatusOverrides = signal<Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>>({});
   readonly trailerVendorOptions = ['ryder', 'metro', 'taylor_leasing', 'other'] as const;
 
   permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
@@ -245,6 +247,7 @@ export class TagsPermitsComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.loadTrailerStatusOverrides();
     this.loadData();
   }
 
@@ -356,6 +359,44 @@ export class TagsPermitsComponent implements OnInit {
     if (status === 'active') return 'in_use';
     if (status === 'inactive') return 'available';
     return status;
+  }
+
+  private getTrailerStatusOverride(trailerId: unknown): 'active' | 'inactive' | 'returned' | 'closed_out' | null {
+    const key = String(trailerId ?? '').trim();
+    if (!key) return null;
+    return this.trailerStatusOverrides()[key] ?? null;
+  }
+
+  private setTrailerStatusOverride(trailerId: unknown, status: 'active' | 'inactive' | 'returned' | 'closed_out'): void {
+    const key = String(trailerId ?? '').trim();
+    if (!key) return;
+    const next = { ...this.trailerStatusOverrides(), [key]: status };
+    this.trailerStatusOverrides.set(next);
+    this.persistTrailerStatusOverrides(next);
+  }
+
+  private loadTrailerStatusOverrides(): void {
+    try {
+      const raw = localStorage.getItem(this.trailerStatusOverridesKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+      const next: Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'> = {};
+      for (const [id, value] of Object.entries(parsed)) {
+        next[String(id)] = this.normalizeTrailerStatus(value);
+      }
+      this.trailerStatusOverrides.set(next);
+    } catch {
+      // Ignore malformed local values.
+    }
+  }
+
+  private persistTrailerStatusOverrides(overrides: Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>): void {
+    try {
+      localStorage.setItem(this.trailerStatusOverridesKey, JSON.stringify(overrides));
+    } catch {
+      // Ignore storage issues.
+    }
   }
 
   selectMainTab(tab: 'permits' | 'irp' | 'trailer' | 'fuel-cards'): void {
@@ -780,6 +821,9 @@ export class TagsPermitsComponent implements OnInit {
       ?? t?.driver_id
       ?? null;
     const assignedDriverId = rawAssignedDriverId ?? this.findDriverIdByName(assignedDriverName);
+    const backendStatus = this.getTrailerAssignmentStatus(t);
+    const overrideStatus = this.getTrailerStatusOverride(t?.id);
+    const resolvedTrailerStatus = overrideStatus ?? backendStatus;
 
     return {
       id: t?.id,
@@ -792,7 +836,7 @@ export class TagsPermitsComponent implements OnInit {
       vendor: this.normalizeTrailerVendor(t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
       vendorLabel: this.getTrailerVendorLabel(t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
       chargeFrequency: t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
-      trailerStatus: this.getTrailerAssignmentStatus(t),
+      trailerStatus: resolvedTrailerStatus,
       assignedDriverId,
       assignedDriverName: assignedDriverName || '',
       assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
@@ -831,6 +875,7 @@ export class TagsPermitsComponent implements OnInit {
       billingFrequency: this.permitForm.chargeFrequency || 'monthly',
       status: this.mapTrailerBackendStatus(selectedTrailerStatus),
       assignmentStatus: selectedTrailerStatus,
+      trailerStatus: selectedTrailerStatus,
       notes: this.permitForm.notes || null,
       photoUrl: this.permitForm.photoUrl || null,
       imageUrl: this.permitForm.photoUrl || null,
@@ -854,6 +899,7 @@ export class TagsPermitsComponent implements OnInit {
       billingFrequency: trailerBody.billingFrequency,
       status: this.mapEquipmentBackendStatus(selectedTrailerStatus),
       assignmentStatus: selectedTrailerStatus,
+      trailerStatus: selectedTrailerStatus,
       assignedDriverId: trailerBody.assignedDriverId,
       driverId: trailerBody.driverId,
       ownerName: persistedDriverName,
@@ -883,6 +929,9 @@ export class TagsPermitsComponent implements OnInit {
 
       if (trailerId && persistedDriverId && selectedTrailerStatus === 'active') {
         await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId, assignedDriverName);
+      }
+      if (trailerId) {
+        this.setTrailerStatusOverride(trailerId, selectedTrailerStatus);
       }
 
       this.saving.set(false);

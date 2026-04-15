@@ -296,7 +296,7 @@
                   </button>
                 }
               </td>
-              <td><span class="tp-status" [class]="getPermitStatus(p)">{{ getPermitStatus(p) }}</span></td>
+              <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
                 <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
                 <button class="tp-icon-btn danger" title="Delete" (click)="deletePermit(p)"><i class="bx bx-trash"></i></button>
