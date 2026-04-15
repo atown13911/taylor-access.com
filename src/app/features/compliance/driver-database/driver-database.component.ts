@@ -481,7 +481,7 @@ export class DriverDatabaseComponent implements OnInit {
   complianceItems = [
     { key: 'cdl', label: 'CDL / License' }, { key: 'medical', label: 'Medical Certificate' },
     { key: 'mvr', label: 'Motor Vehicle Record' }, { key: 'drug', label: 'Drug & Alcohol Test' },
-    { key: 'dqf', label: 'Driver Qualification File' }, { key: 'employment', label: 'Employment Verification' },
+    { key: 'dqf', label: 'Employment Application' }, { key: 'employment', label: 'Employment Verification' },
     { key: 'training', label: 'Training' }, { key: 'insurance', label: 'Insurance' },
     { key: 'vehicle', label: 'Vehicle Docs' }, { key: 'permits', label: 'Permits' },
     { key: 'ifta', label: 'IFTA' }, { key: 'irp', label: 'IRP' },
@@ -742,7 +742,7 @@ export class DriverDatabaseComponent implements OnInit {
   getComplianceTooltip(driver: any, item: string): string {
     const labels: any = {
       cdl: 'CDL / License', medical: 'Medical Certificate', mvr: 'Motor Vehicle Record',
-      drug: 'Drug & Alcohol Test', dqf: 'Driver Qualification File', employment: 'Employment Verification',
+      drug: 'Drug & Alcohol Test', dqf: 'Employment Application', employment: 'Employment Verification',
       training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
       permits: 'Permits', ifta: 'IFTA', safety: 'Safety', violations: 'Violations',
       contract: 'Contract', irp: 'IRP / Cab Card',
