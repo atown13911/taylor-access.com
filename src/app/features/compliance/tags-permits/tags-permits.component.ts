@@ -917,8 +917,8 @@ export class TagsPermitsComponent implements OnInit {
       permitNumber: fieldOverride.permitNumber || t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
       permitType: fieldOverride.permitType || t?.type || t?.subtype || 'standard_equipment',
       state: fieldOverride.state || t?.state || t?.currentLocation || '',
-      issueDate: fieldOverride.issueDate ?? t?.issueDate || t?.registrationStartDate || t?.createdAt || null,
-      expiryDate: fieldOverride.expiryDate ?? t?.expiryDate || t?.registrationExpiry || null,
+      issueDate: fieldOverride.issueDate ?? (t?.issueDate || t?.registrationStartDate || t?.createdAt || null),
+      expiryDate: fieldOverride.expiryDate ?? (t?.expiryDate || t?.registrationExpiry || null),
       cost: fieldOverride.cost ?? t?.cost ?? t?.purchasePrice ?? null,
       vendor: this.normalizeTrailerVendor(fieldOverride.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
       vendorLabel: this.getTrailerVendorLabel(fieldOverride.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
@@ -929,7 +929,7 @@ export class TagsPermitsComponent implements OnInit {
       assignedTruckNumber: fieldOverride.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
       notes: fieldOverride.notes || t?.notes || '',
-      photoUrl: fieldOverride.photoUrl ?? t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null,
+      photoUrl: fieldOverride.photoUrl ?? (t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null),
       hasFile: false,
       fileName: null
     };
