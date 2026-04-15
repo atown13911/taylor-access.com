@@ -149,15 +149,13 @@ public class AssetsProxyController : ControllerBase
         if (Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase)
             || Request.Method.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
             return null;
-        if (!Request.ContentLength.HasValue || Request.ContentLength.Value <= 0)
-            return null;
 
         Request.EnableBuffering();
         Request.Body.Position = 0;
         using var ms = new MemoryStream();
         await Request.Body.CopyToAsync(ms);
         Request.Body.Position = 0;
-        return ms.ToArray();
+        return ms.Length > 0 ? ms.ToArray() : null;
     }
 
     private static IEnumerable<string> BuildCandidateUrls(int limit, string equipmentType)
