@@ -254,7 +254,7 @@ export class TagsPermitsComponent implements OnInit {
   trailerOptions = computed(() => {
     return this.trailers()
       .map((t: any) => ({
-        id: t?.id,
+        id: this.resolveTrailerId(t),
         number: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
         tag: t?.tagNumber || t?.permitNumber || '',
         type: t?.type || 'trailer'
@@ -515,7 +515,7 @@ export class TagsPermitsComponent implements OnInit {
   editPermit(p: any) {
     this.editingPermit.set(p);
     this.permitForm = {
-      trailerId: p.id ?? null,
+      trailerId: this.resolveTrailerId(p),
       permitNumber: p.permitNumber, permitType: p.permitType, state: p.state || '',
       issueDate: p.issueDate ? new Date(p.issueDate).toISOString().split('T')[0] : '',
       expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split('T')[0] : '',
@@ -543,7 +543,7 @@ export class TagsPermitsComponent implements OnInit {
     if (this.activeTab() !== 'trailer') return;
     const id = String(trailerId ?? '').trim();
     if (!id) return;
-    const trailer = this.trailers().find((t: any) => `${t?.id}` === id);
+    const trailer = this.trailers().find((t: any) => `${this.resolveTrailerId(t)}` === id);
     if (!trailer) return;
 
     const row = this.mapTrailerRow(trailer);
@@ -906,13 +906,14 @@ export class TagsPermitsComponent implements OnInit {
       ?? t?.driver_id
       ?? null;
     const assignedDriverId = rawAssignedDriverId ?? this.findDriverIdByName(assignedDriverName);
+    const trailerId = this.resolveTrailerId(t);
     const backendStatus = this.getTrailerAssignmentStatus(t);
-    const overrideStatus = this.getTrailerStatusOverride(t?.id);
-    const fieldOverride = this.getTrailerFieldOverride(t?.id) || {};
+    const overrideStatus = this.getTrailerStatusOverride(trailerId);
+    const fieldOverride = this.getTrailerFieldOverride(trailerId) || {};
     const resolvedTrailerStatus = overrideStatus ?? backendStatus;
 
     return {
-      id: t?.id,
+      id: trailerId,
       permitNumber: fieldOverride.permitNumber || t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
       permitType: fieldOverride.permitType || t?.type || t?.subtype || 'standard_equipment',
       state: fieldOverride.state || t?.state || t?.currentLocation || '',
@@ -938,6 +939,7 @@ export class TagsPermitsComponent implements OnInit {
     this.saving.set(true);
     const editing = this.editingPermit();
     const selectedTrailerId = this.permitForm.trailerId ? `${this.permitForm.trailerId}` : '';
+    const editingTrailerId = this.resolveTrailerId(editing);
     const organizationId = this.getOrganizationId();
     const selectedDriver = this.drivers().find((d: any) => `${d?.id}` === `${this.permitForm?.assignedDriverId ?? ''}`);
     const assignedDriverName = String(selectedDriver?.name || '').trim() || null;
@@ -996,7 +998,7 @@ export class TagsPermitsComponent implements OnInit {
     };
 
     try {
-      let trailerId = selectedTrailerId || editing?.id;
+      let trailerId = selectedTrailerId || (editingTrailerId ? `${editingTrailerId}` : '');
       if (trailerId) {
         try {
           await firstValueFrom(this.http.put<any>(this.trailerPath(`/equipment/${trailerId}`), equipmentBody));
@@ -1111,6 +1113,17 @@ export class TagsPermitsComponent implements OnInit {
     if (!normalizedTarget) return null;
     const match = this.drivers().find((d: any) => this.normalizeNameKey(d?.name || d?.driverName) === normalizedTarget);
     return match?.id ?? null;
+  }
+
+  private resolveTrailerId(source: any): any {
+    return source?.id
+      ?? source?.equipmentId
+      ?? source?.trailerId
+      ?? source?.assetId
+      ?? source?.unitId
+      ?? source?._id
+      ?? source?.uuid
+      ?? null;
   }
 
   private getOrganizationId(): number | null {
