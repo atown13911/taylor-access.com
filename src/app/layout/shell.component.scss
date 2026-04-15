@@ -527,18 +527,6 @@
   }
 }
 
-.mode-toggle-btn {
-  border: 1px solid rgba(125, 211, 252, 0.24);
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.16), rgba(0, 212, 255, 0.06));
-  color: #9fe9ff;
-}
-
-.app-shell.mode-hard .mode-toggle-btn {
-  border-color: rgba(168, 85, 247, 0.45);
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(0, 212, 255, 0.12));
-  color: #d7b9ff;
-  box-shadow: 0 0 16px rgba(168, 85, 247, 0.28);
-}
 
 .notification-badge {
   position: absolute;
@@ -633,34 +621,6 @@
   &:hover {
     background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(0, 212, 255, 0.1));
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-  }
-}
-
-// Visual mode variants
-.app-shell.mode-soft {
-  .sidebar,
-  .topbar {
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-}
-
-.app-shell.mode-hard {
-  .sidebar {
-    border-right-color: rgba(168, 85, 247, 0.35);
-    box-shadow:
-      inset -1px 0 0 rgba(168, 85, 247, 0.2),
-      0 0 30px rgba(168, 85, 247, 0.16),
-      0 12px 34px rgba(0, 0, 0, 0.35);
-  }
-
-  .topbar {
-    border-bottom-color: rgba(168, 85, 247, 0.28);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34), 0 0 24px rgba(168, 85, 247, 0.12);
-  }
-
-  .ticker-label {
-    box-shadow: 0 0 16px rgba(255, 42, 109, 0.26);
   }
 }
 
