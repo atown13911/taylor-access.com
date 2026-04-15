@@ -1167,6 +1167,9 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   private extractErrorMessage(err: any, fallback: string): string {
+    if (Number(err?.status || 0) === 415) {
+      return 'Photo upload failed: unsupported media format for this endpoint.';
+    }
     const body = err?.error;
     if (typeof body === 'string' && body.trim()) return body.trim();
     if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim();
@@ -1186,11 +1189,6 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   private async tryUploadTrailerPhoto(trailerId: string, file: File): Promise<string | null> {
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('photo', file);
-    fd.append('image', file);
-
     const paths = [
       `/trailers/${trailerId}/photo`,
       `/trailers/${trailerId}/upload-photo`,
@@ -1199,17 +1197,37 @@ export class TagsPermitsComponent implements OnInit {
       `/equipment/${trailerId}/upload-photo`,
       `/equipment/${trailerId}/image`
     ];
+    const payloads = this.buildPhotoUploadPayloads(file);
 
     let lastErr: any = null;
     for (const path of paths) {
-      try {
-        const res: any = await firstValueFrom(this.http.post<any>(this.trailerPath(path), fd));
-        return this.extractUploadedPhotoUrl(res) || null;
-      } catch (err: any) {
-        lastErr = err;
+      for (const payload of payloads) {
+        try {
+          const res: any = await firstValueFrom(this.http.post<any>(this.trailerPath(path), payload));
+          return this.extractUploadedPhotoUrl(res) || null;
+        } catch (err: any) {
+          lastErr = err;
+          if (!this.shouldTryNextPhotoUploadVariant(err)) {
+            throw err;
+          }
+        }
       }
     }
     throw lastErr ?? new Error('Unable to upload trailer photo');
+  }
+
+  private buildPhotoUploadPayloads(file: File): FormData[] {
+    const keys = ['file', 'photo', 'image', 'upload', 'attachment'];
+    return keys.map((key) => {
+      const fd = new FormData();
+      fd.append(key, file);
+      return fd;
+    });
+  }
+
+  private shouldTryNextPhotoUploadVariant(err: any): boolean {
+    const status = Number(err?.status || 0);
+    return status === 400 || status === 404 || status === 405 || status === 415;
   }
 
   private extractUploadedPhotoUrl(payload: any): string | null {
