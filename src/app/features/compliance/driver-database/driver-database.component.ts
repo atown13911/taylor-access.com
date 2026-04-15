@@ -640,6 +640,42 @@ export class DriverDatabaseComponent implements OnInit {
     return 'dot dot-red';
   }
 
+  getOtherStatus(driver: any): 'compliant' | 'expiring' | 'expired' | 'none' {
+    const items = ['i9', 'w9', 'directDeposit', 'deduction'];
+    let hasExpiring = false;
+    let hasExpired = false;
+    let hasMissing = false;
+
+    for (const item of items) {
+      const status = this.getItemStatus(driver, item);
+      if (status === 'expired') hasExpired = true;
+      else if (status === 'expiring') hasExpiring = true;
+      else if (status === 'none') hasMissing = true;
+    }
+
+    if (hasExpired) return 'expired';
+    if (hasExpiring) return 'expiring';
+    if (hasMissing) return 'none';
+    return 'compliant';
+  }
+
+  getOtherComplianceClass(driver: any): string {
+    const status = this.getOtherStatus(driver);
+    if (status === 'compliant') return 'dot dot-green';
+    if (status === 'expiring') return 'dot dot-yellow';
+    return 'dot dot-red';
+  }
+
+  getOtherComplianceTooltip(driver: any): string {
+    const labels: Record<string, string> = {
+      compliant: 'Compliant',
+      expiring: 'Expiring Soon',
+      expired: 'Expired',
+      none: 'Not on File'
+    };
+    return `Other (I-9, W-9, Direct Deposit, Deduction): ${labels[this.getOtherStatus(driver)]}`;
+  }
+
   async attachDocsToDrivers(): Promise<void> {
     const drivers = this.drivers();
     const allDocs = this.allDocs();

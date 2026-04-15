@@ -93,6 +93,7 @@
             <th class="col-dot" title="Safety">Safety</th>
             <th class="col-dot" title="Violations Record">Viol.</th>
             <th class="col-dot" title="Contract">Contract</th>
+            <th class="col-dot" title="I-9, W-9, Direct Deposit, Deduction">Other</th>
             <th class="col-overall">Overall</th>
             <th class="col-actions">Actions</th>
           </tr>
@@ -126,6 +127,7 @@
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'safety')" [title]="getComplianceTooltip(driver, 'safety')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'violations')" [title]="getComplianceTooltip(driver, 'violations')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'contract')" [title]="getComplianceTooltip(driver, 'contract')"></span></td>
+              <td class="col-dot"><span class="dot" [class]="getOtherComplianceClass(driver)" [title]="getOtherComplianceTooltip(driver)"></span></td>
               <td class="col-overall">
                 <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallLabel(driver) }}</span>
               </td>
@@ -148,7 +150,7 @@
             </tr>
           }
           @if (filteredDrivers().length === 0 && !loading()) {
-            <tr><td colspan="18" class="empty-row">No drivers found</td></tr>
+            <tr><td colspan="19" class="empty-row">No drivers found</td></tr>
           }
         </tbody>
       </table>
