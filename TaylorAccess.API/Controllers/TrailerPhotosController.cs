@@ -156,6 +156,6 @@ public class TrailerPhotosController : ControllerBase
     private string BuildViewUrl(string trailerId)
     {
         var encodedTrailerId = Uri.EscapeDataString(trailerId);
-        return $"{Request.Scheme}://{Request.Host}{Request.PathBase}/api/v1/trailer-photos/{encodedTrailerId}/view";
+        return $"/api/v1/trailer-photos/{encodedTrailerId}/view";
     }
 }

@@ -939,6 +939,11 @@ export class TagsPermitsComponent implements OnInit {
     const fieldOverride = this.getTrailerFieldOverride(trailerId) || {};
     const resolvedTrailerStatus = overrideStatus ?? backendStatus;
 
+    const resolvedPhotoUrl = this.normalizeTrailerPhotoUrl(
+      fieldOverride.photoUrl ?? (t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null),
+      trailerId
+    );
+
     return {
       id: trailerId,
       permitNumber: fieldOverride.permitNumber || t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
@@ -956,7 +961,7 @@ export class TagsPermitsComponent implements OnInit {
       assignedTruckNumber: fieldOverride.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
       notes: fieldOverride.notes || t?.notes || '',
-      photoUrl: fieldOverride.photoUrl ?? (t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null),
+      photoUrl: resolvedPhotoUrl,
       hasFile: false,
       fileName: null
     };
@@ -1193,10 +1198,38 @@ export class TagsPermitsComponent implements OnInit {
     const payload = new FormData();
     payload.append('file', file);
     const encodedTrailerId = encodeURIComponent(String(trailerId).trim());
-    const res: any = await firstValueFrom(
+    await firstValueFrom(
       this.http.post<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/upload`, payload)
     );
-    return this.extractUploadedPhotoUrl(res) || `${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/view`;
+    return this.buildTrailerPhotoViewUrl(trailerId);
+  }
+
+  private buildTrailerPhotoViewUrl(trailerId: unknown): string {
+    const encodedTrailerId = encodeURIComponent(String(trailerId ?? '').trim());
+    return `${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/view`;
+  }
+
+  private normalizeTrailerPhotoUrl(value: unknown, trailerId: unknown): string | null {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+
+    if (/^https?:\/\//i.test(raw)) {
+      try {
+        const parsed = new URL(raw);
+        if (parsed.hostname.includes('railway.internal')) {
+          return this.buildTrailerPhotoViewUrl(trailerId);
+        }
+      } catch {
+        return this.buildTrailerPhotoViewUrl(trailerId);
+      }
+      return raw;
+    }
+
+    if (raw.startsWith('/api/v1/trailer-photos/')) {
+      return `${this.apiUrl}${raw}`;
+    }
+
+    return raw;
   }
 
   private extractUploadedPhotoUrl(payload: any): string | null {
@@ -1292,7 +1325,7 @@ export class TagsPermitsComponent implements OnInit {
       let changed = false;
       for (const row of photos) {
         const trailerId = String(row?.trailerId ?? '').trim();
-        const photoUrl = String(row?.photoUrl ?? '').trim();
+        const photoUrl = this.normalizeTrailerPhotoUrl(row?.photoUrl, trailerId) || this.buildTrailerPhotoViewUrl(trailerId);
         if (!trailerId || !photoUrl) continue;
         next[trailerId] = { ...(next[trailerId] || {}), photoUrl };
         changed = true;
