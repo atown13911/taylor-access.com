@@ -760,6 +760,7 @@ export class TagsPermitsComponent implements OnInit {
       if (url) {
         this.permitForm = { ...this.permitForm, photoUrl: url };
         this.setTrailerPhotoPreview(url);
+        this.setTrailerFieldOverride(trailerId, { photoUrl: url });
       }
       this.trailerPhotoFile = null;
       this.trailerPhotoFileName.set('');
@@ -1213,6 +1214,9 @@ export class TagsPermitsComponent implements OnInit {
         }
       }
     }
+
+    const fallbackUrl = await this.tryUploadTrailerPhotoDocument(trailerId, file);
+    if (fallbackUrl) return fallbackUrl;
     throw lastErr ?? new Error('Unable to upload trailer photo');
   }
 
@@ -1227,7 +1231,7 @@ export class TagsPermitsComponent implements OnInit {
 
   private shouldTryNextPhotoUploadVariant(err: any): boolean {
     const status = Number(err?.status || 0);
-    return status === 400 || status === 404 || status === 405 || status === 415;
+    return status === 400 || status === 404 || status === 405 || status === 415 || status === 500 || status === 502 || status === 503;
   }
 
   private extractUploadedPhotoUrl(payload: any): string | null {
@@ -1247,6 +1251,29 @@ export class TagsPermitsComponent implements OnInit {
       if (text) return text;
     }
     return null;
+  }
+
+  private async tryUploadTrailerPhotoDocument(trailerId: string, file: File): Promise<string | null> {
+    const equipmentId = Number(trailerId);
+    if (!Number.isFinite(equipmentId) || equipmentId <= 0) return null;
+
+    const payload = new FormData();
+    payload.append('file', file);
+    payload.append('equipmentId', `${equipmentId}`);
+    payload.append('documentType', 'front');
+    payload.append('description', 'Trailer photo');
+
+    const res: any = await firstValueFrom(this.http.post<any>(this.trailerPath('/documents'), payload));
+    const uploadedId = Number(
+      res?.id
+      ?? res?.data?.id
+      ?? res?.result?.id
+      ?? 0
+    );
+    if (Number.isFinite(uploadedId) && uploadedId > 0) {
+      return this.trailerPath(`/documents/${uploadedId}/download`);
+    }
+    return this.trailerPath(`/documents/equipment/${equipmentId}/photo/front`);
   }
 
   private setTrailerPhotoPreview(url: string | null): void {
