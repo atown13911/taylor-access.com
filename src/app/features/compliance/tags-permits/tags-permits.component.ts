@@ -1190,48 +1190,13 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   private async tryUploadTrailerPhoto(trailerId: string, file: File): Promise<string | null> {
-    const paths = [
-      `/trailers/${trailerId}/photo`,
-      `/trailers/${trailerId}/upload-photo`,
-      `/trailers/${trailerId}/image`,
-      `/equipment/${trailerId}/photo`,
-      `/equipment/${trailerId}/upload-photo`,
-      `/equipment/${trailerId}/image`
-    ];
-    const payloads = this.buildPhotoUploadPayloads(file);
-
-    let lastErr: any = null;
-    for (const path of paths) {
-      for (const payload of payloads) {
-        try {
-          const res: any = await firstValueFrom(this.http.post<any>(this.trailerPath(path), payload));
-          return this.extractUploadedPhotoUrl(res) || null;
-        } catch (err: any) {
-          lastErr = err;
-          if (!this.shouldTryNextPhotoUploadVariant(err)) {
-            throw err;
-          }
-        }
-      }
-    }
-
-    const fallbackUrl = await this.tryUploadTrailerPhotoDocument(trailerId, file);
-    if (fallbackUrl) return fallbackUrl;
-    throw lastErr ?? new Error('Unable to upload trailer photo');
-  }
-
-  private buildPhotoUploadPayloads(file: File): FormData[] {
-    const keys = ['file', 'photo', 'image', 'upload', 'attachment'];
-    return keys.map((key) => {
-      const fd = new FormData();
-      fd.append(key, file);
-      return fd;
-    });
-  }
-
-  private shouldTryNextPhotoUploadVariant(err: any): boolean {
-    const status = Number(err?.status || 0);
-    return status === 400 || status === 404 || status === 405 || status === 415 || status === 500 || status === 502 || status === 503;
+    const payload = new FormData();
+    payload.append('file', file);
+    const encodedTrailerId = encodeURIComponent(String(trailerId).trim());
+    const res: any = await firstValueFrom(
+      this.http.post<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/upload`, payload)
+    );
+    return this.extractUploadedPhotoUrl(res) || `${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/view`;
   }
 
   private extractUploadedPhotoUrl(payload: any): string | null {
@@ -1251,29 +1216,6 @@ export class TagsPermitsComponent implements OnInit {
       if (text) return text;
     }
     return null;
-  }
-
-  private async tryUploadTrailerPhotoDocument(trailerId: string, file: File): Promise<string | null> {
-    const equipmentId = Number(trailerId);
-    if (!Number.isFinite(equipmentId) || equipmentId <= 0) return null;
-
-    const payload = new FormData();
-    payload.append('file', file);
-    payload.append('equipmentId', `${equipmentId}`);
-    payload.append('documentType', 'front');
-    payload.append('description', 'Trailer photo');
-
-    const res: any = await firstValueFrom(this.http.post<any>(this.trailerPath('/documents'), payload));
-    const uploadedId = Number(
-      res?.id
-      ?? res?.data?.id
-      ?? res?.result?.id
-      ?? 0
-    );
-    if (Number.isFinite(uploadedId) && uploadedId > 0) {
-      return this.trailerPath(`/documents/${uploadedId}/download`);
-    }
-    return this.trailerPath(`/documents/equipment/${equipmentId}/photo/front`);
   }
 
   private setTrailerPhotoPreview(url: string | null): void {
@@ -1301,6 +1243,7 @@ export class TagsPermitsComponent implements OnInit {
         this.http.get<any>(`${this.apiUrl}/api/v1/assets-proxy/trailers?limit=1000`)
       );
       this.trailers.set(Array.isArray(proxyRes?.data) ? proxyRes.data : []);
+      await this.syncTrailerPhotoOverrides();
       return;
     } catch (err: any) {
       // If proxy endpoint exists but upstream failed, avoid browser-side direct fallback
@@ -1315,6 +1258,7 @@ export class TagsPermitsComponent implements OnInit {
     try {
       const res: any = await this.trailerGetWithPathFallback('/equipment?equipmentType=trailer&limit=1000');
       this.trailers.set(Array.isArray(res?.data) ? res.data : []);
+      await this.syncTrailerPhotoOverrides();
     } catch (err: any) {
       if (!this.shouldFallbackToEquipment(err)) {
         this.trailers.set([]);
@@ -1323,9 +1267,43 @@ export class TagsPermitsComponent implements OnInit {
       try {
         const res: any = await this.trailerGetWithPathFallback('/trailers?limit=1000');
         this.trailers.set(Array.isArray(res?.data) ? res.data : []);
+        await this.syncTrailerPhotoOverrides();
       } catch {
         this.trailers.set([]);
       }
+    }
+  }
+
+  private async syncTrailerPhotoOverrides(): Promise<void> {
+    const trailerIds = this.trailers()
+      .map((t: any) => String(this.resolveTrailerId(t) ?? '').trim())
+      .filter((id: string) => !!id);
+    if (!trailerIds.length) return;
+
+    try {
+      const query = encodeURIComponent(Array.from(new Set(trailerIds)).join(','));
+      const res: any = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos?trailerIds=${query}`)
+      );
+      const photos = Array.isArray(res?.data) ? res.data : [];
+      if (!photos.length) return;
+
+      const next = { ...this.trailerFieldOverrides() };
+      let changed = false;
+      for (const row of photos) {
+        const trailerId = String(row?.trailerId ?? '').trim();
+        const photoUrl = String(row?.photoUrl ?? '').trim();
+        if (!trailerId || !photoUrl) continue;
+        next[trailerId] = { ...(next[trailerId] || {}), photoUrl };
+        changed = true;
+      }
+
+      if (changed) {
+        this.trailerFieldOverrides.set(next);
+        this.persistTrailerFieldOverrides(next);
+      }
+    } catch {
+      // Ignore photo override sync failures.
     }
   }
 }

@@ -352,6 +352,26 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""TrailerPhotos"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""TrailerId"" VARCHAR(100) NOT NULL,
+            ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+            ""FileName"" VARCHAR(255) NOT NULL,
+            ""ContentType"" VARCHAR(100) NULL,
+            ""FileSize"" BIGINT NOT NULL DEFAULT 0,
+            ""FileContent"" text NOT NULL,
+            ""UploadedByUserId"" INTEGER NULL,
+            ""UploadedBy"" VARCHAR(150) NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_TrailerPhotos_Org_TrailerId""
+            ON ""TrailerPhotos"" (""OrganizationId"", ""TrailerId"");
+        CREATE INDEX IF NOT EXISTS ""IX_TrailerPhotos_TrailerId_UpdatedAt""
+            ON ""TrailerPhotos"" (""TrailerId"", ""UpdatedAt"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""PerformanceReviews"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL,

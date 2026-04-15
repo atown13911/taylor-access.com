@@ -10,7 +10,7 @@ namespace TaylorAccess.API.Controllers;
 public class AssetsProxyController : ControllerBase
 {
     private static readonly int[] RetryableGetStatuses = { 400, 404, 502, 503 };
-    private static readonly int[] RetryableWriteStatuses = { 404, 502, 503 };
+    private static readonly int[] RetryableWriteStatuses = { 400, 404, 405, 415, 502, 503 };
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AssetsProxyController> _logger;
 
