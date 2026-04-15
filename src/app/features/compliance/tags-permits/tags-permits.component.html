@@ -258,7 +258,7 @@
         </thead>
         <tbody>
           @for (p of filteredTrailerPermits(); track p.id) {
-            <tr>
+            <tr class="tp-row-clickable" (click)="openTrailerDrawer(p)">
               <td class="tp-mono">{{ p.permitNumber }}</td>
               <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
               <td>{{ getTrailerVendorLabel(p.vendor) }}</td>
@@ -282,11 +282,11 @@
               <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
               <td class="tp-doc-cell">
                 @if (p.hasFile || p.fileName) {
-                  <button class="tp-icon-btn" title="View document" (click)="viewPermitDoc(p)"><i class="bx bx-show"></i></button>
-                  <button class="tp-icon-btn" title="Download" (click)="downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
-                  <button class="tp-icon-btn danger" title="Remove document" (click)="deletePermitDoc(p)"><i class="bx bx-x"></i></button>
+                  <button class="tp-icon-btn" title="View document" (click)="$event.stopPropagation(); viewPermitDoc(p)"><i class="bx bx-show"></i></button>
+                  <button class="tp-icon-btn" title="Download" (click)="$event.stopPropagation(); downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
+                  <button class="tp-icon-btn danger" title="Remove document" (click)="$event.stopPropagation(); deletePermitDoc(p)"><i class="bx bx-x"></i></button>
                 } @else {
-                  <button class="tp-icon-btn upload" title="Upload document" (click)="openUploadDoc(p)"
+                  <button class="tp-icon-btn upload" title="Upload document" (click)="$event.stopPropagation(); openUploadDoc(p)"
                     [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id">
                     @if (uploadingDoc() && uploadTarget()?.id === p.id) {
                       <i class="bx bx-loader-alt bx-spin"></i>
@@ -298,8 +298,8 @@
               </td>
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
-                <button class="tp-icon-btn" title="Edit" (click)="editPermit(p)"><i class="bx bx-edit"></i></button>
-                <button class="tp-icon-btn danger" title="Delete" (click)="deletePermit(p)"><i class="bx bx-trash"></i></button>
+                <button class="tp-icon-btn" title="Edit" (click)="$event.stopPropagation(); editPermit(p)"><i class="bx bx-edit"></i></button>
+                <button class="tp-icon-btn danger" title="Delete" (click)="$event.stopPropagation(); deletePermit(p)"><i class="bx bx-trash"></i></button>
               </td>
             </tr>
           } @empty {
@@ -555,6 +555,53 @@
         </div>
       </div>
     </div>
+  }
+
+  @if (selectedTrailerDrawer()) {
+    <div class="tp-drawer-backdrop" (click)="closeTrailerDrawer()"></div>
+    <aside class="tp-trailer-drawer" (click)="$event.stopPropagation()">
+      <div class="tp-trailer-drawer-header">
+        <div>
+          <h3>Trailer Details</h3>
+          <p>{{ selectedTrailerDrawer()?.permitNumber || selectedTrailerDrawer()?.assignedTruckNumber || 'Selected trailer' }}</p>
+        </div>
+        <button class="tp-close" (click)="closeTrailerDrawer()">&times;</button>
+      </div>
+
+      <div class="tp-trailer-drawer-photo">
+        @if (selectedTrailerDrawer()?.photoUrl) {
+          <img [src]="selectedTrailerDrawer()?.photoUrl" alt="Trailer photo">
+        } @else {
+          <div class="tp-photo-placeholder">
+            <i class="bx bx-image"></i>
+            <span>No uploaded photo yet</span>
+          </div>
+        }
+      </div>
+
+      <div class="tp-trailer-drawer-actions">
+        <button class="tp-btn primary" (click)="openTrailerEditFromDrawer()">
+          <i class="bx bx-edit"></i> Edit Trailer
+        </button>
+        <button class="tp-btn" (click)="openTrailerPhotoFromDrawer()">
+          <i class="bx bx-image-add"></i> Upload / View Photo
+        </button>
+      </div>
+
+      <div class="tp-trailer-drawer-grid">
+        <div class="tp-trailer-drawer-item"><span>Type</span><strong>{{ selectedTrailerDrawer()?.permitType || '—' }}</strong></div>
+        <div class="tp-trailer-drawer-item"><span>Status</span><strong>{{ getTrailerStatusLabel(selectedTrailerDrawer()) }}</strong></div>
+        <div class="tp-trailer-drawer-item"><span>Vendor</span><strong>{{ getTrailerVendorLabel(selectedTrailerDrawer()?.vendor) }}</strong></div>
+        <div class="tp-trailer-drawer-item"><span>Frequency</span><strong>{{ selectedTrailerDrawer()?.chargeFrequency || '—' }}</strong></div>
+        <div class="tp-trailer-drawer-item"><span>Driver</span><strong>{{ selectedTrailerDrawer()?.assignedDriverName || 'Unassigned' }}</strong></div>
+        <div class="tp-trailer-drawer-item"><span>Truck #</span><strong>{{ selectedTrailerDrawer()?.assignedTruckNumber || '—' }}</strong></div>
+      </div>
+
+      <div class="tp-trailer-drawer-notes">
+        <span>Notes</span>
+        <p>{{ selectedTrailerDrawer()?.notes || 'No notes' }}</p>
+      </div>
+    </aside>
   }
 
   <!-- Floating Add Button -->

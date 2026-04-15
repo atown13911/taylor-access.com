@@ -35,6 +35,7 @@ export class TagsPermitsComponent implements OnInit {
   showAddModal = signal(false);
   editingPermit = signal<any>(null);
   trailerModalTab = signal<'details' | 'photo'>('details');
+  selectedTrailerDrawer = signal<any | null>(null);
 
   // Document upload
   uploadingDoc = signal(false);
@@ -537,6 +538,31 @@ export class TagsPermitsComponent implements OnInit {
     this.trailerModalTab.set('details');
     this.resetTrailerPhotoState();
     this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+  }
+
+  openTrailerDrawer(row: any): void {
+    if (this.activeTab() !== 'trailer') return;
+    this.selectedTrailerDrawer.set(row);
+  }
+
+  closeTrailerDrawer(): void {
+    this.selectedTrailerDrawer.set(null);
+  }
+
+  openTrailerEditFromDrawer(): void {
+    const row = this.selectedTrailerDrawer();
+    if (!row) return;
+    this.closeTrailerDrawer();
+    this.editPermit(row);
+    this.trailerModalTab.set('details');
+  }
+
+  openTrailerPhotoFromDrawer(): void {
+    const row = this.selectedTrailerDrawer();
+    if (!row) return;
+    this.closeTrailerDrawer();
+    this.editPermit(row);
+    this.trailerModalTab.set('photo');
   }
 
   onTrailerSelectionChange(trailerId: any): void {

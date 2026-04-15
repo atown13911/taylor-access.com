@@ -139,6 +139,7 @@
 .tp-driver-link { color: var(--cyan); font-weight: 500; }
 .tp-actions { display: flex; gap: 4px; }
 .tp-doc-cell { display: flex; gap: 3px; align-items: center; }
+.tp-row-clickable { cursor: pointer; }
 .tp-icon-btn {
   width: 30px; height: 30px; border: none; border-radius: 6px; background: rgba(0,212,255,0.08); color: var(--cyan);
   cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;
@@ -259,6 +260,120 @@
 .tp-photo-help {
   font-size: 0.78rem;
   color: var(--text-secondary);
+}
+
+.tp-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 99998;
+}
+
+.tp-trailer-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(420px, 92vw);
+  background: #0d0d14;
+  border-left: 1px solid rgba(0, 212, 255, 0.2);
+  box-shadow: -14px 0 28px rgba(0, 0, 0, 0.45);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.tp-trailer-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+  }
+  p {
+    margin: 0.2rem 0 0;
+    color: var(--cyan);
+    font-size: 0.82rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
+
+.tp-trailer-drawer-photo {
+  border: 1px dashed rgba(0, 212, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  img {
+    width: 100%;
+    height: 240px;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.tp-trailer-drawer-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.tp-trailer-drawer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.tp-trailer-drawer-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  span {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  strong {
+    color: var(--text-primary);
+    font-size: 0.86rem;
+    font-weight: 600;
+    word-break: break-word;
+  }
+}
+
+.tp-trailer-drawer-notes {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.75rem;
+  span {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  p {
+    margin: 0.45rem 0 0;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 }
 
 // Floating Action Button
