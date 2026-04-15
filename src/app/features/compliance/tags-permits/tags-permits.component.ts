@@ -20,6 +20,7 @@ export class TagsPermitsComponent implements OnInit {
   private trailerApiUrl = `${this.apiUrl}/api/v1/assets-proxy`;
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
   private readonly trailerStatusOverridesKey = 'ta_trailer_status_overrides';
+  private readonly trailerFieldOverridesKey = 'ta_trailer_field_overrides';
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
   permits = signal<any[]>([]);
@@ -44,6 +45,22 @@ export class TagsPermitsComponent implements OnInit {
   trailerPhotoPreviewUrl = signal<string | null>(null);
   private trailerPhotoFile: File | null = null;
   private trailerStatusOverrides = signal<Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>>({});
+  private trailerFieldOverrides = signal<Record<string, Partial<{
+    permitNumber: string;
+    permitType: string;
+    state: string;
+    issueDate: string | null;
+    expiryDate: string | null;
+    cost: number | null;
+    vendor: 'ryder' | 'metro' | 'taylor_leasing' | 'other';
+    chargeFrequency: string;
+    trailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out';
+    assignedDriverId: any;
+    assignedDriverName: string;
+    assignedTruckNumber: string;
+    notes: string;
+    photoUrl: string | null;
+  }>>>({});
   readonly trailerVendorOptions = ['ryder', 'metro', 'taylor_leasing', 'other'] as const;
 
   permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
@@ -248,6 +265,7 @@ export class TagsPermitsComponent implements OnInit {
 
   ngOnInit() {
     this.loadTrailerStatusOverrides();
+    this.loadTrailerFieldOverrides();
     this.loadData();
   }
 
@@ -394,6 +412,73 @@ export class TagsPermitsComponent implements OnInit {
   private persistTrailerStatusOverrides(overrides: Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>): void {
     try {
       localStorage.setItem(this.trailerStatusOverridesKey, JSON.stringify(overrides));
+    } catch {
+      // Ignore storage issues.
+    }
+  }
+
+  private getTrailerFieldOverride(trailerId: unknown): Partial<{
+    permitNumber: string;
+    permitType: string;
+    state: string;
+    issueDate: string | null;
+    expiryDate: string | null;
+    cost: number | null;
+    vendor: 'ryder' | 'metro' | 'taylor_leasing' | 'other';
+    chargeFrequency: string;
+    trailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out';
+    assignedDriverId: any;
+    assignedDriverName: string;
+    assignedTruckNumber: string;
+    notes: string;
+    photoUrl: string | null;
+  }> | null {
+    const key = String(trailerId ?? '').trim();
+    if (!key) return null;
+    return this.trailerFieldOverrides()[key] ?? null;
+  }
+
+  private setTrailerFieldOverride(
+    trailerId: unknown,
+    values: Partial<{
+      permitNumber: string;
+      permitType: string;
+      state: string;
+      issueDate: string | null;
+      expiryDate: string | null;
+      cost: number | null;
+      vendor: 'ryder' | 'metro' | 'taylor_leasing' | 'other';
+      chargeFrequency: string;
+      trailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out';
+      assignedDriverId: any;
+      assignedDriverName: string;
+      assignedTruckNumber: string;
+      notes: string;
+      photoUrl: string | null;
+    }>
+  ): void {
+    const key = String(trailerId ?? '').trim();
+    if (!key) return;
+    const next = { ...this.trailerFieldOverrides(), [key]: { ...(this.trailerFieldOverrides()[key] || {}), ...values } };
+    this.trailerFieldOverrides.set(next);
+    this.persistTrailerFieldOverrides(next);
+  }
+
+  private loadTrailerFieldOverrides(): void {
+    try {
+      const raw = localStorage.getItem(this.trailerFieldOverridesKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+      this.trailerFieldOverrides.set(parsed);
+    } catch {
+      // Ignore malformed local values.
+    }
+  }
+
+  private persistTrailerFieldOverrides(overrides: Record<string, any>): void {
+    try {
+      localStorage.setItem(this.trailerFieldOverridesKey, JSON.stringify(overrides));
     } catch {
       // Ignore storage issues.
     }
@@ -823,26 +908,27 @@ export class TagsPermitsComponent implements OnInit {
     const assignedDriverId = rawAssignedDriverId ?? this.findDriverIdByName(assignedDriverName);
     const backendStatus = this.getTrailerAssignmentStatus(t);
     const overrideStatus = this.getTrailerStatusOverride(t?.id);
+    const fieldOverride = this.getTrailerFieldOverride(t?.id) || {};
     const resolvedTrailerStatus = overrideStatus ?? backendStatus;
 
     return {
       id: t?.id,
-      permitNumber: t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
-      permitType: t?.type || t?.subtype || 'standard_equipment',
-      state: t?.state || t?.currentLocation || '',
-      issueDate: t?.issueDate || t?.registrationStartDate || t?.createdAt || null,
-      expiryDate: t?.expiryDate || t?.registrationExpiry || null,
-      cost: t?.cost ?? t?.purchasePrice ?? null,
-      vendor: this.normalizeTrailerVendor(t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
-      vendorLabel: this.getTrailerVendorLabel(t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
-      chargeFrequency: t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
+      permitNumber: fieldOverride.permitNumber || t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
+      permitType: fieldOverride.permitType || t?.type || t?.subtype || 'standard_equipment',
+      state: fieldOverride.state || t?.state || t?.currentLocation || '',
+      issueDate: fieldOverride.issueDate ?? t?.issueDate || t?.registrationStartDate || t?.createdAt || null,
+      expiryDate: fieldOverride.expiryDate ?? t?.expiryDate || t?.registrationExpiry || null,
+      cost: fieldOverride.cost ?? t?.cost ?? t?.purchasePrice ?? null,
+      vendor: this.normalizeTrailerVendor(fieldOverride.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
+      vendorLabel: this.getTrailerVendorLabel(fieldOverride.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
+      chargeFrequency: fieldOverride.chargeFrequency || t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       trailerStatus: resolvedTrailerStatus,
-      assignedDriverId,
-      assignedDriverName: assignedDriverName || '',
-      assignedTruckNumber: t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
+      assignedDriverId: fieldOverride.assignedDriverId ?? assignedDriverId,
+      assignedDriverName: fieldOverride.assignedDriverName || assignedDriverName || '',
+      assignedTruckNumber: fieldOverride.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
-      notes: t?.notes || '',
-      photoUrl: t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null,
+      notes: fieldOverride.notes || t?.notes || '',
+      photoUrl: fieldOverride.photoUrl ?? t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null,
       hasFile: false,
       fileName: null
     };
@@ -932,6 +1018,22 @@ export class TagsPermitsComponent implements OnInit {
       }
       if (trailerId) {
         this.setTrailerStatusOverride(trailerId, selectedTrailerStatus);
+        this.setTrailerFieldOverride(trailerId, {
+          permitNumber: trailerBody.permitNumber || '',
+          permitType: trailerBody.type || 'standard_equipment',
+          state: trailerBody.state || '',
+          issueDate: trailerBody.issueDate || null,
+          expiryDate: trailerBody.expiryDate || null,
+          cost: trailerBody.cost ?? null,
+          vendor: this.normalizeTrailerVendor(trailerBody.vendor),
+          chargeFrequency: trailerBody.chargeFrequency || 'monthly',
+          trailerStatus: selectedTrailerStatus,
+          assignedDriverId: persistedDriverId,
+          assignedDriverName: persistedDriverName || '',
+          assignedTruckNumber: trailerBody.number || '',
+          notes: trailerBody.notes || '',
+          photoUrl: trailerBody.photoUrl || null
+        });
       }
 
       this.saving.set(false);
