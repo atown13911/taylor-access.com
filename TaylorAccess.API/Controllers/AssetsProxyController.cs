@@ -69,25 +69,25 @@ public class AssetsProxyController : ControllerBase
 
     [HttpGet("{**path}")]
     public Task<IActionResult> ForwardGet([FromRoute] string? path) =>
-        ForwardToAssetsAsync(HttpMethod.Get, path, null);
+        ForwardToAssetsAsync(HttpMethod.Get, path);
 
     [HttpPost("{**path}")]
-    public Task<IActionResult> ForwardPost([FromRoute] string? path, [FromBody] object? body) =>
-        ForwardToAssetsAsync(HttpMethod.Post, path, body);
+    public Task<IActionResult> ForwardPost([FromRoute] string? path) =>
+        ForwardToAssetsAsync(HttpMethod.Post, path);
 
     [HttpPut("{**path}")]
-    public Task<IActionResult> ForwardPut([FromRoute] string? path, [FromBody] object? body) =>
-        ForwardToAssetsAsync(HttpMethod.Put, path, body);
+    public Task<IActionResult> ForwardPut([FromRoute] string? path) =>
+        ForwardToAssetsAsync(HttpMethod.Put, path);
 
     [HttpPatch("{**path}")]
-    public Task<IActionResult> ForwardPatch([FromRoute] string? path, [FromBody] object? body) =>
-        ForwardToAssetsAsync(new HttpMethod("PATCH"), path, body);
+    public Task<IActionResult> ForwardPatch([FromRoute] string? path) =>
+        ForwardToAssetsAsync(new HttpMethod("PATCH"), path);
 
     [HttpDelete("{**path}")]
     public Task<IActionResult> ForwardDelete([FromRoute] string? path) =>
-        ForwardToAssetsAsync(HttpMethod.Delete, path, null);
+        ForwardToAssetsAsync(HttpMethod.Delete, path);
 
-    private async Task<IActionResult> ForwardToAssetsAsync(HttpMethod method, string? path, object? body)
+    private async Task<IActionResult> ForwardToAssetsAsync(HttpMethod method, string? path)
     {
         var relativePath = (path ?? string.Empty).Trim('/');
         if (string.IsNullOrWhiteSpace(relativePath))
@@ -99,6 +99,8 @@ public class AssetsProxyController : ControllerBase
             client.DefaultRequestHeaders.Authorization = auth;
 
         var attempts = BuildCandidateUrlsForPath(relativePath, Request.QueryString.Value ?? string.Empty).ToList();
+        var bodyBytes = await ReadIncomingBodyAsync();
+        var requestContentType = Request.ContentType;
         var errors = new List<object>();
 
         foreach (var url in attempts)
@@ -106,22 +108,26 @@ public class AssetsProxyController : ControllerBase
             try
             {
                 using var request = new HttpRequestMessage(method, url);
-                if (body is not null && method != HttpMethod.Get && method != HttpMethod.Delete)
-                    request.Content = JsonContent.Create(body);
+                if (bodyBytes is not null && method != HttpMethod.Get && method != HttpMethod.Delete)
+                {
+                    request.Content = new ByteArrayContent(bodyBytes);
+                    if (!string.IsNullOrWhiteSpace(requestContentType))
+                        request.Content.Headers.TryAddWithoutValidation("Content-Type", requestContentType);
+                }
 
                 using var response = await client.SendAsync(request);
                 var responseBody = await response.Content.ReadAsStringAsync();
-                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                var responseContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
                 var status = (int)response.StatusCode;
 
                 if (response.IsSuccessStatusCode)
-                    return Content(responseBody, contentType);
+                    return Content(responseBody, responseContentType);
 
                 errors.Add(new { url, status });
                 var retryableStatuses = method == HttpMethod.Get ? RetryableGetStatuses : RetryableWriteStatuses;
                 var looksLikeGatewayHostnameError =
                     status == 400 &&
-                    contentType.Contains("text/html", StringComparison.OrdinalIgnoreCase) &&
+                    responseContentType.Contains("text/html", StringComparison.OrdinalIgnoreCase) &&
                     responseBody.Contains("Invalid Hostname", StringComparison.OrdinalIgnoreCase);
 
                 var shouldRetry = retryableStatuses.Contains(status) || looksLikeGatewayHostnameError;
@@ -136,6 +142,22 @@ public class AssetsProxyController : ControllerBase
 
         _logger.LogWarning("Assets proxy failed for {Method} {Path}: {@Errors}", method.Method, relativePath, errors);
         return StatusCode(502, new { error = "Assets proxy upstream failure", method = method.Method, path = relativePath, attempts = errors });
+    }
+
+    private async Task<byte[]?> ReadIncomingBodyAsync()
+    {
+        if (Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase)
+            || Request.Method.Equals("DELETE", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (!Request.ContentLength.HasValue || Request.ContentLength.Value <= 0)
+            return null;
+
+        Request.EnableBuffering();
+        Request.Body.Position = 0;
+        using var ms = new MemoryStream();
+        await Request.Body.CopyToAsync(ms);
+        Request.Body.Position = 0;
+        return ms.ToArray();
     }
 
     private static IEnumerable<string> BuildCandidateUrls(int limit, string equipmentType)
