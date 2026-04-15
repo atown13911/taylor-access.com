@@ -552,6 +552,7 @@ export class TicketsComponent implements OnInit {
   private authService = inject(AuthService);
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
+  private readonly scopedGatewayPrefix = '/api/v1/open/taylor-access';
 
   mainTab = signal<'support_ticket' | 'request' | 'audit'>('support_ticket');
   directionTab = signal<'all' | 'sent' | 'received'>('all');
@@ -699,6 +700,41 @@ export class TicketsComponent implements OnInit {
       dueDate: ticket.dueDate ?? null,
       ...overrides
     };
+  }
+
+  private getTicketApiBases(): string[] {
+    const trimmedBase = String(this.apiUrl || '').replace(/\/+$/, '');
+    if (!trimmedBase) return [];
+
+    const candidates = [trimmedBase];
+    if (!trimmedBase.includes('/api/v1/open/')) {
+      if (trimmedBase.endsWith('/api/v1')) {
+        candidates.push(`${trimmedBase}/open/taylor-access`);
+      } else {
+        candidates.push(`${trimmedBase}${this.scopedGatewayPrefix}`);
+      }
+    }
+
+    return Array.from(new Set(candidates));
+  }
+
+  private async fetchTicketDetail(ticketId: number): Promise<any> {
+    const bases = this.getTicketApiBases();
+    let lastError: any = null;
+
+    for (let i = 0; i < bases.length; i++) {
+      const base = bases[i];
+      try {
+        return await this.http.get(`${base}/api/v1/tickets/${ticketId}`).toPromise();
+      } catch (err: any) {
+        lastError = err;
+        const shouldRetryScopedFallback = err?.status === 404 && i < bases.length - 1;
+        if (shouldRetryScopedFallback) continue;
+        throw err;
+      }
+    }
+
+    throw lastError || new Error('Unable to load ticket details');
   }
 
   isSentRequest(): boolean {
@@ -978,11 +1014,26 @@ export class TicketsComponent implements OnInit {
   async viewTicket(ticket: any) {
     this.markAsRead(ticket.id);
     try {
-      const response: any = await this.http.get(`${this.apiUrl}/api/v1/tickets/${ticket.id}`).toPromise();
+      const response: any = await this.fetchTicketDetail(ticket.id);
       this.selectedTicket.set(response.ticket);
       this.ticketComments.set(response.ticket.comments || []);
-    } catch (err) {
-      console.error('Failed to load ticket:', err);
+    } catch (err: any) {
+      const status = err?.status ?? null;
+      const message = err?.error?.message || err?.message || 'Unknown error';
+      console.error('Failed to load ticket details', {
+        ticketId: ticket?.id,
+        status,
+        message
+      });
+
+      if (status === 404) {
+        this.closeTicketDetail();
+        this.toast.warning('Ticket no longer available. Refreshing list...');
+        await this.loadTickets();
+        await this.loadStats();
+        return;
+      }
+
       this.toast.error('Failed to load ticket details');
     }
   }
