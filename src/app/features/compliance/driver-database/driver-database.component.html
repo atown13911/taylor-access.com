@@ -85,7 +85,6 @@
             <th class="col-dot" title="Drug & Alcohol Testing">Drug Test</th>
             <th class="col-dot" title="Employment Application">EMP</th>
             <th class="col-dot" title="Employment Verification">Employ</th>
-            <th class="col-dot" title="Training & Orientation">Training</th>
             <th class="col-dot" title="Insurance Coverage">Insur.</th>
             <th class="col-dot" title="Vehicle Documents">Vehicle</th>
             <th class="col-dot" title="Permits & Authority">Permits</th>
@@ -119,7 +118,6 @@
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'drug')" [title]="getComplianceTooltip(driver, 'drug')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'dqf')" [title]="getComplianceTooltip(driver, 'dqf')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'employment')" [title]="getComplianceTooltip(driver, 'employment')"></span></td>
-              <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'training')" [title]="getComplianceTooltip(driver, 'training')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'insurance')" [title]="getComplianceTooltip(driver, 'insurance')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'vehicle')" [title]="getComplianceTooltip(driver, 'vehicle')"></span></td>
               <td class="col-dot"><span class="dot" [class]="getComplianceClass(driver, 'permits')" [title]="getComplianceTooltip(driver, 'permits')"></span></td>
@@ -150,7 +148,7 @@
             </tr>
           }
           @if (filteredDrivers().length === 0 && !loading()) {
-            <tr><td colspan="19" class="empty-row">No drivers found</td></tr>
+            <tr><td colspan="18" class="empty-row">No drivers found</td></tr>
           }
         </tbody>
       </table>
