@@ -347,14 +347,18 @@ export class DriverListComponent implements OnInit {
   selectDriverRow(driver: DriverRow): void {
     this._fetchTarget = 'panel';
     this.fetchFullDriver(driver);
-    this.loadPanelDocs(driver.id);
+    this.loadPanelDocs(driver);
   }
 
-  loadPanelDocs(driverId: string): void {
-    this.api.getDriverDocuments(driverId).subscribe({
-      next: (res: any) => this.panelDocs.set(res?.data || []),
-      error: () => this.panelDocs.set([])
-    });
+  loadPanelDocs(driver: DriverRow | any): void {
+    const aliasIds = this.resolveAliasDriverIds(driver);
+    Promise.all(
+      aliasIds.map((id: string) =>
+        this.api.getDriverDocuments(id).toPromise().then((res: any) => res?.data || []).catch(() => [])
+      )
+    ).then((docLists: any[]) => {
+      this.panelDocs.set(this.mergeDocuments(...docLists));
+    }).catch(() => this.panelDocs.set([]));
   }
 
   getPanelDoc(key: string): any {
@@ -376,6 +380,55 @@ export class DriverListComponent implements OnInit {
       const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
       return terms.some((t: string) => name.includes(t));
     }) || null;
+  }
+
+  private resolveAliasDriverIds(driver: DriverRow | any): string[] {
+    const toId = (value: any) => String(value ?? '').trim();
+    const baseId = toId(driver?.id);
+    const baseEmail = String(driver?.email || '').trim().toLowerCase();
+    const basePhone = String(driver?.phone || '').replace(/\D+/g, '');
+    const basePhoneLast7 = basePhone.length >= 7 ? basePhone.slice(-7) : '';
+    const baseName = String(driver?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+    const ids = new Set<string>();
+    if (baseId) ids.add(baseId);
+
+    for (const row of this.drivers()) {
+      const rowId = toId((row as any)?.id);
+      if (!rowId) continue;
+      const rowEmail = String((row as any)?.email || '').trim().toLowerCase();
+      const rowPhone = String((row as any)?.phone || '').replace(/\D+/g, '');
+      const rowPhoneLast7 = rowPhone.length >= 7 ? rowPhone.slice(-7) : '';
+      const rowName = String((row as any)?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+      const emailMatch = !!baseEmail && baseEmail === rowEmail;
+      const phoneMatch = !!basePhone && basePhone === rowPhone;
+      const namePhoneMatch = !!baseName && !!basePhoneLast7 && baseName === rowName && basePhoneLast7 === rowPhoneLast7;
+      if (emailMatch || phoneMatch || namePhoneMatch) {
+        ids.add(rowId);
+      }
+    }
+
+    return Array.from(ids);
+  }
+
+  private mergeDocuments(...docSets: any[][]): any[] {
+    const byId = new Map<string, any>();
+    for (const set of docSets) {
+      for (const doc of set || []) {
+        const key = String(doc?.id ?? `${doc?.driverId ?? ''}|${doc?.category ?? ''}|${doc?.subCategory ?? ''}|${doc?.documentName ?? ''}`).trim();
+        if (!key) continue;
+        const existing = byId.get(key);
+        if (!existing) {
+          byId.set(key, doc);
+          continue;
+        }
+        const existingTs = new Date(existing?.updatedAt || existing?.createdAt || 0).getTime();
+        const nextTs = new Date(doc?.updatedAt || doc?.createdAt || 0).getTime();
+        if (nextTs >= existingTs) byId.set(key, doc);
+      }
+    }
+    return Array.from(byId.values());
   }
 
   archivePanelDoc(item: any): void {
