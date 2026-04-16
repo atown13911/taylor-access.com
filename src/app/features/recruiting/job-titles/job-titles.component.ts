@@ -254,7 +254,7 @@ export class JobTitlesComponent implements OnInit {
 
   async saveTitle() {
     if (!this.newTitle.title?.trim()) return;
-    if (!this.newTitle.organizationId) return;
+    if (!this.editingTitleId && !this.newTitle.organizationId) return;
 
     const payload = {
       ...this.newTitle,
