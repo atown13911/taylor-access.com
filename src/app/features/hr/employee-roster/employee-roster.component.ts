@@ -1,4 +1,4 @@
-﻿import { Component, signal, computed, OnInit, inject } from '@angular/core';
+import { Component, signal, computed, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -187,10 +187,10 @@ import { AuthService } from '../../../core/services/auth.service';
                   <tr>
                       <td><strong>{{ emp.name }}</strong><br><span class="text-muted">#{{ emp.id }}</span></td>
                       <td>{{ emp.email }}</td>
-                      <td>{{ emp.phone || 'ΓÇö' }}</td>
+                      <td>{{ emp.phone || '—' }}</td>
                       <td><span class="role-badge">{{ emp.role || 'user' }}</span></td>
-                      <td>{{ emp.department || 'ΓÇö' }}</td>
-                      <td>{{ emp.position || 'ΓÇö' }}</td>
+                      <td>{{ emp.department || '—' }}</td>
+                      <td>{{ emp.position || '—' }}</td>
                       <td class="text-muted">{{ emp.createdAt | date:'short' }}</td>
                     @if (bulkCompared()) {
                       <td class="exists-cell">
@@ -1164,7 +1164,7 @@ import { AuthService } from '../../../core/services/auth.service';
                     <label>Job Position</label>
                     <select [(ngModel)]="editingEmployee.jobTitle" class="form-select">
                       <option value="">Select Job Position</option>
-                      <option *ngFor="let jt of jobTitlesList()" [value]="jt.title">{{ jt.title }}</option>
+                      <option *ngFor="let pos of getFilteredPositions(editingEmployee.departmentId)" [value]="pos.title">{{ pos.title }}</option>
                     </select>
                   </div>
                 </div>
@@ -1186,7 +1186,7 @@ import { AuthService } from '../../../core/services/auth.service';
               <!-- SATELLITE EMPLOYEES: Show satellite's shared banking info -->
               @if (editingEmployee?.entityType === 'satellite' && editingEmployee?.satelliteId) {
                 <div class="form-section">
-                  <h3><i class="bx bx-credit-card"></i> Satellite Banking ΓÇö {{ satelliteDetails()?.name || 'Loading...' }}</h3>
+                  <h3><i class="bx bx-credit-card"></i> Satellite Banking — {{ satelliteDetails()?.name || 'Loading...' }}</h3>
                   <div class="country-banner">
                     <i class="bx bx-info-circle"></i> Financial details are shared across all employees in this satellite. Edit on the <a href="javascript:void(0)" (click)="showEditModal = false; router.navigate(['/satellites'])" style="color:#00f2fe">Satellites page</a>.
                   </div>
@@ -1232,9 +1232,9 @@ import { AuthService } from '../../../core/services/auth.service';
                   <h3><i class="bx bx-credit-card"></i> Banking Information</h3>
                   <div class="country-banner">
                     @if (getEmployeeCountry() === 'BA') {
-                      <i class="bx bx-globe"></i> <strong>Bosnia & Herzegovina</strong> ΓÇö IBAN / SWIFT format
+                      <i class="bx bx-globe"></i> <strong>Bosnia & Herzegovina</strong> — IBAN / SWIFT format
                     } @else {
-                      <i class="bx bx-globe"></i> <strong>United States</strong> ΓÇö Routing / Account Number format
+                      <i class="bx bx-globe"></i> <strong>United States</strong> — Routing / Account Number format
                     }
                   </div>
 
@@ -1497,7 +1497,7 @@ import { AuthService } from '../../../core/services/auth.service';
             @if (editModalTab() === 'business' && satelliteDetails()) {
               <div class="form-section">
                 <div class="biz-header">
-                  <h3><i class="bx bx-building-house"></i> {{ satelliteDetails()?.name }} ΓÇö Satellite Details</h3>
+                  <h3><i class="bx bx-building-house"></i> {{ satelliteDetails()?.name }} — Satellite Details</h3>
                   <a class="biz-edit-link" href="javascript:void(0)" (click)="showEditModal = false; router.navigate(['/satellites'])">
                     <i class="bx bx-edit"></i> Edit on Satellites Page
                   </a>
@@ -1509,13 +1509,13 @@ import { AuthService } from '../../../core/services/auth.service';
                   <div class="biz-card">
                     <h4><i class="bx bx-id-card"></i> Business Registration (Bosnia)</h4>
                     <div class="biz-grid">
-                      <div class="biz-field"><span class="biz-label">Legal Business Name</span><span class="biz-value">{{ satelliteDetails()?.legalBusinessName || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">DBA Name</span><span class="biz-value">{{ satelliteDetails()?.dbaName || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">JIB (Tax ID)</span><span class="biz-value mono">{{ satelliteDetails()?.jib || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">PDV (VAT Number)</span><span class="biz-value mono">{{ satelliteDetails()?.pdvNumber || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Court Registration</span><span class="biz-value">{{ satelliteDetails()?.courtRegistration || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Activity Code</span><span class="biz-value mono">{{ satelliteDetails()?.activityCode || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Registration Number</span><span class="biz-value mono">{{ satelliteDetails()?.registrationNumber || 'ΓÇö' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Legal Business Name</span><span class="biz-value">{{ satelliteDetails()?.legalBusinessName || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">DBA Name</span><span class="biz-value">{{ satelliteDetails()?.dbaName || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">JIB (Tax ID)</span><span class="biz-value mono">{{ satelliteDetails()?.jib || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">PDV (VAT Number)</span><span class="biz-value mono">{{ satelliteDetails()?.pdvNumber || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Court Registration</span><span class="biz-value">{{ satelliteDetails()?.courtRegistration || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Activity Code</span><span class="biz-value mono">{{ satelliteDetails()?.activityCode || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Registration Number</span><span class="biz-value mono">{{ satelliteDetails()?.registrationNumber || '—' }}</span></div>
                     </div>
                   </div>
                 } @else {
@@ -1523,15 +1523,15 @@ import { AuthService } from '../../../core/services/auth.service';
                   <div class="biz-card">
                     <h4><i class="bx bx-id-card"></i> Business Registration (USA)</h4>
                     <div class="biz-grid">
-                      <div class="biz-field"><span class="biz-label">Legal Business Name</span><span class="biz-value">{{ satelliteDetails()?.legalBusinessName || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">DBA Name</span><span class="biz-value">{{ satelliteDetails()?.dbaName || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Business Structure</span><span class="biz-value">{{ satelliteDetails()?.businessStructure || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">EIN / Tax ID</span><span class="biz-value mono">{{ satelliteDetails()?.einTaxId || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">State Tax ID</span><span class="biz-value mono">{{ satelliteDetails()?.stateTaxId || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">DOT Number</span><span class="biz-value mono">{{ satelliteDetails()?.dotNumber || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">MC Number</span><span class="biz-value mono">{{ satelliteDetails()?.mcNumber || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">State of Incorporation</span><span class="biz-value">{{ satelliteDetails()?.stateOfIncorporation || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Incorporation Date</span><span class="biz-value">{{ satelliteDetails()?.incorporationDate || 'ΓÇö' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Legal Business Name</span><span class="biz-value">{{ satelliteDetails()?.legalBusinessName || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">DBA Name</span><span class="biz-value">{{ satelliteDetails()?.dbaName || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Business Structure</span><span class="biz-value">{{ satelliteDetails()?.businessStructure || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">EIN / Tax ID</span><span class="biz-value mono">{{ satelliteDetails()?.einTaxId || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">State Tax ID</span><span class="biz-value mono">{{ satelliteDetails()?.stateTaxId || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">DOT Number</span><span class="biz-value mono">{{ satelliteDetails()?.dotNumber || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">MC Number</span><span class="biz-value mono">{{ satelliteDetails()?.mcNumber || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">State of Incorporation</span><span class="biz-value">{{ satelliteDetails()?.stateOfIncorporation || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Incorporation Date</span><span class="biz-value">{{ satelliteDetails()?.incorporationDate || '—' }}</span></div>
                     </div>
                   </div>
 
@@ -1539,11 +1539,11 @@ import { AuthService } from '../../../core/services/auth.service';
                   <div class="biz-card">
                     <h4><i class="bx bx-shield-quarter"></i> Insurance & Compliance</h4>
                     <div class="biz-grid">
-                      <div class="biz-field"><span class="biz-label">Insurance Carrier</span><span class="biz-value">{{ satelliteDetails()?.insuranceCarrier || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Policy Number</span><span class="biz-value mono">{{ satelliteDetails()?.insurancePolicyNumber || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Expiration</span><span class="biz-value">{{ satelliteDetails()?.insuranceExpirationDate || 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Cargo Limit</span><span class="biz-value">{{ satelliteDetails()?.cargoInsuranceLimit ? ('$' + satelliteDetails()?.cargoInsuranceLimit?.toLocaleString()) : 'ΓÇö' }}</span></div>
-                      <div class="biz-field"><span class="biz-label">Liability Limit</span><span class="biz-value">{{ satelliteDetails()?.liabilityInsuranceLimit ? ('$' + satelliteDetails()?.liabilityInsuranceLimit?.toLocaleString()) : 'ΓÇö' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Insurance Carrier</span><span class="biz-value">{{ satelliteDetails()?.insuranceCarrier || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Policy Number</span><span class="biz-value mono">{{ satelliteDetails()?.insurancePolicyNumber || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Expiration</span><span class="biz-value">{{ satelliteDetails()?.insuranceExpirationDate || '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Cargo Limit</span><span class="biz-value">{{ satelliteDetails()?.cargoInsuranceLimit ? ('$' + satelliteDetails()?.cargoInsuranceLimit?.toLocaleString()) : '—' }}</span></div>
+                      <div class="biz-field"><span class="biz-label">Liability Limit</span><span class="biz-value">{{ satelliteDetails()?.liabilityInsuranceLimit ? ('$' + satelliteDetails()?.liabilityInsuranceLimit?.toLocaleString()) : '—' }}</span></div>
                     </div>
                   </div>
                 }
@@ -1552,14 +1552,14 @@ import { AuthService } from '../../../core/services/auth.service';
                 <div class="biz-card">
                   <h4><i class="bx bx-map"></i> Location & Contact</h4>
                   <div class="biz-grid">
-                    <div class="biz-field"><span class="biz-label">Address</span><span class="biz-value">{{ satelliteDetails()?.address || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">City</span><span class="biz-value">{{ satelliteDetails()?.city || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">State / Province</span><span class="biz-value">{{ satelliteDetails()?.state || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">ZIP / Postal</span><span class="biz-value">{{ satelliteDetails()?.zipCode || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">Country</span><span class="biz-value">{{ satelliteDetails()?.country || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">Contact Name</span><span class="biz-value">{{ satelliteDetails()?.contactName || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">Contact Email</span><span class="biz-value">{{ satelliteDetails()?.contactEmail || 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">Contact Phone</span><span class="biz-value">{{ satelliteDetails()?.contactPhone || 'ΓÇö' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Address</span><span class="biz-value">{{ satelliteDetails()?.address || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">City</span><span class="biz-value">{{ satelliteDetails()?.city || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">State / Province</span><span class="biz-value">{{ satelliteDetails()?.state || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">ZIP / Postal</span><span class="biz-value">{{ satelliteDetails()?.zipCode || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Country</span><span class="biz-value">{{ satelliteDetails()?.country || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Contact Name</span><span class="biz-value">{{ satelliteDetails()?.contactName || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Contact Email</span><span class="biz-value">{{ satelliteDetails()?.contactEmail || '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Contact Phone</span><span class="biz-value">{{ satelliteDetails()?.contactPhone || '—' }}</span></div>
                   </div>
                 </div>
 
@@ -1567,9 +1567,9 @@ import { AuthService } from '../../../core/services/auth.service';
                 <div class="biz-card">
                   <h4><i class="bx bx-dollar-circle"></i> Financial</h4>
                   <div class="biz-grid">
-                    <div class="biz-field"><span class="biz-label">Commission Rate</span><span class="biz-value">{{ satelliteDetails()?.commissionRate ? (satelliteDetails()?.commissionRate + '%') : 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">Revenue Share</span><span class="biz-value">{{ satelliteDetails()?.revenueSharePercent ? (satelliteDetails()?.revenueSharePercent + '%') : 'ΓÇö' }}</span></div>
-                    <div class="biz-field"><span class="biz-label">Payment Terms</span><span class="biz-value">{{ satelliteDetails()?.paymentTerms || 'ΓÇö' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Commission Rate</span><span class="biz-value">{{ satelliteDetails()?.commissionRate ? (satelliteDetails()?.commissionRate + '%') : '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Revenue Share</span><span class="biz-value">{{ satelliteDetails()?.revenueSharePercent ? (satelliteDetails()?.revenueSharePercent + '%') : '—' }}</span></div>
+                    <div class="biz-field"><span class="biz-label">Payment Terms</span><span class="biz-value">{{ satelliteDetails()?.paymentTerms || '—' }}</span></div>
                   </div>
                 </div>
 
@@ -1582,7 +1582,7 @@ import { AuthService } from '../../../core/services/auth.service';
                       @for (owner of satelliteOwners(); track owner.id) {
                         <div class="biz-field">
                           <span class="biz-label">{{ owner.role }}</span>
-                          <span class="biz-value">{{ owner.name }} ΓÇö {{ owner.ownershipPercent }}%</span>
+                          <span class="biz-value">{{ owner.name }} — {{ owner.ownershipPercent }}%</span>
                         </div>
                       }
                     </div>
@@ -1803,24 +1803,24 @@ import { AuthService } from '../../../core/services/auth.service';
                   <div class="form-group">
                     <label>Employee Country (for labels/formats)</label>
                     <select [(ngModel)]="editingEmployee.country" class="form-select">
-                      <option value="USA">≡ƒç║≡ƒç╕ United States</option>
-                      <option value="Bosnia">≡ƒçº≡ƒçª Bosnia and Herzegovina</option>
-                      <option value="Canada">≡ƒç¿≡ƒçª Canada</option>
-                      <option value="Mexico">≡ƒç▓≡ƒç╜ Mexico</option>
-                      <option value="UK">≡ƒç¼≡ƒçº United Kingdom</option>
-                      <option value="Germany">≡ƒç⌐≡ƒç¬ Germany</option>
-                      <option value="France">≡ƒç½≡ƒç╖ France</option>
-                      <option value="Other">≡ƒîÉ Other</option>
+                      <option value="USA">🇺🇸 United States</option>
+                      <option value="Bosnia">🇧🇦 Bosnia and Herzegovina</option>
+                      <option value="Canada">🇨🇦 Canada</option>
+                      <option value="Mexico">🇲🇽 Mexico</option>
+                      <option value="UK">🇬🇧 United Kingdom</option>
+                      <option value="Germany">🇩🇪 Germany</option>
+                      <option value="France">🇫🇷 France</option>
+                      <option value="Other">🌐 Other</option>
                     </select>
                   </div>
                   <div class="form-group">
                     <label>Language</label>
                     <select [(ngModel)]="editingEmployee.language" class="form-select">
-                      <option value="en">≡ƒç║≡ƒç╕ English</option>
-                      <option value="bs">≡ƒçº≡ƒçª Bosnian</option>
-                      <option value="es">≡ƒç▓≡ƒç╜ Spanish</option>
-                      <option value="fr">≡ƒç½≡ƒç╖ French</option>
-                      <option value="de">≡ƒç⌐≡ƒç¬ German</option>
+                      <option value="en">🇺🇸 English</option>
+                      <option value="bs">🇧🇦 Bosnian</option>
+                      <option value="es">🇲🇽 Spanish</option>
+                      <option value="fr">🇫🇷 French</option>
+                      <option value="de">🇩🇪 German</option>
                     </select>
                   </div>
                 </div>
@@ -1936,16 +1936,16 @@ import { AuthService } from '../../../core/services/auth.service';
                 <div class="form-group">
                   <label>Timezone</label>
                   <select [(ngModel)]="editingEmployee.timezone" class="form-select">
-                    <option value="America/New_York">≡ƒç║≡ƒç╕ Eastern Time (New York)</option>
-                    <option value="America/Chicago">≡ƒç║≡ƒç╕ Central Time (Chicago)</option>
-                    <option value="America/Denver">≡ƒç║≡ƒç╕ Mountain Time (Denver)</option>
-                    <option value="America/Los_Angeles">≡ƒç║≡ƒç╕ Pacific Time (Los Angeles)</option>
-                    <option value="Europe/Sarajevo">≡ƒçº≡ƒçª Central European Time (Sarajevo)</option>
-                    <option value="Europe/London">≡ƒç¼≡ƒçº GMT (London)</option>
-                    <option value="Europe/Paris">≡ƒç½≡ƒç╖ Central European Time (Paris)</option>
-                    <option value="Europe/Berlin">≡ƒç⌐≡ƒç¬ Central European Time (Berlin)</option>
-                    <option value="America/Mexico_City">≡ƒç▓≡ƒç╜ Central Time (Mexico City)</option>
-                    <option value="America/Toronto">≡ƒç¿≡ƒçª Eastern Time (Toronto)</option>
+                    <option value="America/New_York">🇺🇸 Eastern Time (New York)</option>
+                    <option value="America/Chicago">🇺🇸 Central Time (Chicago)</option>
+                    <option value="America/Denver">🇺🇸 Mountain Time (Denver)</option>
+                    <option value="America/Los_Angeles">🇺🇸 Pacific Time (Los Angeles)</option>
+                    <option value="Europe/Sarajevo">🇧🇦 Central European Time (Sarajevo)</option>
+                    <option value="Europe/London">🇬🇧 GMT (London)</option>
+                    <option value="Europe/Paris">🇫🇷 Central European Time (Paris)</option>
+                    <option value="Europe/Berlin">🇩🇪 Central European Time (Berlin)</option>
+                    <option value="America/Mexico_City">🇲🇽 Central Time (Mexico City)</option>
+                    <option value="America/Toronto">🇨🇦 Eastern Time (Toronto)</option>
                   </select>
                 </div>
               </div>
@@ -2490,7 +2490,7 @@ import { AuthService } from '../../../core/services/auth.service';
       display: flex;
       align-items: flex-start;
       justify-content: center;
-      padding: 72px 20px 20px;
+      padding: 16px 20px 20px;
       overflow-y: auto;
       z-index: 110000;
       animation: fadeIn 0.2s ease;
@@ -4362,7 +4362,6 @@ export class EmployeeRosterComponent implements OnInit {
   departments = signal<any[]>([]);
   positions = signal<any[]>([]);
   empDivisions = signal<any[]>([]);
-  jobTitlesList = signal<any[]>([]);
   availableRoles = signal<any[]>([]);
 
   // Search is now client-side via the searchTerm signal and displayedEmployees computed
@@ -4427,7 +4426,6 @@ export class EmployeeRosterComponent implements OnInit {
       this.loadDepartments(),
       this.loadPositions(),
       this.loadEmpDivisions(),
-      this.loadJobTitles(),
       this.loadRoles(),
       this.loadDocCategories()
     ]);
@@ -4515,24 +4513,7 @@ export class EmployeeRosterComponent implements OnInit {
   async loadPositions() {
     try {
       const response: any = await this.http.get(`${this.apiUrl}/api/v1/positions?adminReport=true&includeAll=true&pageSize=500`).toPromise();
-      let positions = response?.data || [];
-
-      // If no positions exist, also try loading job titles as fallback
-      if (positions.length === 0) {
-        try {
-          const jtRes: any = await this.http.get(`${this.apiUrl}/api/v1/job-titles`).toPromise();
-          const jobTitles = jtRes?.data || [];
-          positions = jobTitles.map((jt: any) => ({
-            id: jt.id,
-            title: jt.title,
-            departmentId: jt.departmentId,
-            departmentName: jt.department?.name || '',
-            level: jt.level,
-            source: 'job_title'
-          }));
-        } catch {}
-      }
-
+      const positions = response?.data || [];
       this.positions.set(positions);
     } catch (err) {
       console.error('Failed to load positions:', err);
@@ -4544,13 +4525,6 @@ export class EmployeeRosterComponent implements OnInit {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/divisions?limit=500`).toPromise();
       this.empDivisions.set(res?.data || []);
     } catch { this.empDivisions.set([]); }
-  }
-
-  async loadJobTitles() {
-    try {
-      const res: any = await this.http.get(`${this.apiUrl}/api/v1/job-titles`).toPromise();
-      this.jobTitlesList.set(res?.data || []);
-    } catch { this.jobTitlesList.set([]); }
   }
 
   getFilteredDivisions(orgId: any): any[] {
@@ -4618,12 +4592,12 @@ export class EmployeeRosterComponent implements OnInit {
       this.loadRoster();
       this.loadSummary();
       
-      this.toast.champagne(`≡ƒÄë ${empName} created! Use Edit to add additional details.`);
+      this.toast.champagne(`🎉 ${empName} created! Use Edit to add additional details.`);
     } catch (err: any) {
       console.error('Failed to add employee:', err);
       const errorMsg = err?.error?.error || err?.error?.message || 'Failed to add employee';
       if (errorMsg.toLowerCase().includes('already exists')) {
-        this.toast.champagne(`≡ƒæñ ${this.newEmployee.name} already exists in the system! You can find them in the roster and edit their details.`);
+        this.toast.champagne(`👤 ${this.newEmployee.name} already exists in the system! You can find them in the roster and edit their details.`);
         this.showAddModal = false;
         this.resetForm();
       } else {
@@ -4949,7 +4923,7 @@ export class EmployeeRosterComponent implements OnInit {
 
     // Also check city/location hints
     const city = (this.satelliteDetails()?.city || '').toLowerCase();
-    const bosnianCities = ['sarajevo', 'tuzla', 'zenica', 'mostar', 'banja luka', 'bihac', 'biha─ç', 'velika kladu┼ía', 'velika kladusa', 'br─ìko', 'brcko', 'travnik', 'cazin'];
+    const bosnianCities = ['sarajevo', 'tuzla', 'zenica', 'mostar', 'banja luka', 'bihac', 'bihać', 'velika kladuša', 'velika kladusa', 'brčko', 'brcko', 'travnik', 'cazin'];
     if (bosnianCities.some(c => city.includes(c))) return 'BA';
 
     return 'US';
@@ -5075,12 +5049,12 @@ export class EmployeeRosterComponent implements OnInit {
 
   maskAccount(num: string): string {
     if (!num || num.length < 4) return num || '';
-    return 'ΓÇóΓÇóΓÇóΓÇó' + num.slice(-4);
+    return '••••' + num.slice(-4);
   }
 
   maskIban(iban: string): string {
     if (!iban || iban.length < 8) return iban || '';
-    return iban.slice(0, 4) + ' ΓÇóΓÇóΓÇóΓÇó ΓÇóΓÇóΓÇóΓÇó ' + iban.slice(-4);
+    return iban.slice(0, 4) + ' •••• •••• ' + iban.slice(-4);
   }
 
   private extractPayrollSettings(employee: any): any {
@@ -5223,7 +5197,7 @@ export class EmployeeRosterComponent implements OnInit {
       this.loadRoster();
       this.loadSummary();
       
-      this.toast.champagne(`≡ƒÄë ${employeeName} updated successfully!`);
+      this.toast.champagne(`🎉 ${employeeName} updated successfully!`);
     } catch (err: any) {
       console.error('Failed to update employee:', err);
       alert(err?.error?.message || 'Failed to update employee');
@@ -5760,4 +5734,3 @@ export class EmployeeRosterComponent implements OnInit {
     });
   }
 }
-
