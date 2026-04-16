@@ -33,6 +33,7 @@ import { environment } from '../../../../environments/environment';
               <th>Category</th>
               <th>Salary Range</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -54,6 +55,11 @@ import { environment } from '../../../../environments/environment';
                   {{ title.isActive ? 'Active' : 'Inactive' }}
                 </span>
               </td>
+              <td>
+                <button class="icon-btn" (click)="editTitle(title)" title="Edit title" aria-label="Edit title">
+                  <i class="bx bx-edit-alt"></i>
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -62,7 +68,7 @@ import { environment } from '../../../../environments/environment';
       <!-- Create Modal -->
       <div *ngIf="showModal" class="modal-overlay" (click)="showModal = false">
         <div class="modal-content" (click)="$event.stopPropagation()">
-          <h2>Add Job Title</h2>
+          <h2>{{ editingTitleId ? 'Edit Job Title' : 'Add Job Title' }}</h2>
           <div class="form-grid">
             <input type="text" [(ngModel)]="newTitle.title" placeholder="Title *" class="form-input">
             <input type="text" [(ngModel)]="newTitle.code" placeholder="Code" class="form-input">
@@ -100,8 +106,8 @@ import { environment } from '../../../../environments/environment';
             <textarea [(ngModel)]="newTitle.description" placeholder="Description" rows="3" class="form-textarea"></textarea>
           </div>
           <div class="modal-actions">
-            <button class="btn-secondary" (click)="showModal = false">Cancel</button>
-            <button class="btn-primary" (click)="createTitle()">Add Title</button>
+            <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button class="btn-primary" (click)="saveTitle()">{{ editingTitleId ? 'Save Changes' : 'Add Title' }}</button>
           </div>
         </div>
       </div>
@@ -120,6 +126,8 @@ import { environment } from '../../../../environments/environment';
     .level-badge { background: rgba(102, 126, 234, 0.2); color: #667eea; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
     .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
     .status-badge.active { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .icon-btn { border: 1px solid rgba(0, 242, 254, 0.35); background: rgba(0, 242, 254, 0.1); color: #00f2fe; border-radius: 8px; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .icon-btn:hover { background: rgba(0, 242, 254, 0.2); }
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal-content { background: rgba(26, 26, 46, 0.98); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 16px; padding: 32px; width: 90%; max-width: 600px; }
     .form-grid { display: grid; gap: 16px; margin-bottom: 24px; }
@@ -138,6 +146,7 @@ export class JobTitlesComponent implements OnInit {
   departments = signal<any[]>([]);
   filteredDepartments = signal<any[]>([]);
   showModal = false;
+  editingTitleId: number | null = null;
 
   newTitle: any = {
     title: '',
@@ -146,7 +155,8 @@ export class JobTitlesComponent implements OnInit {
     category: '',
     description: '',
     organizationId: null,
-    departmentId: null
+    departmentId: null,
+    isActive: true
   };
 
   ngOnInit() {
@@ -187,18 +197,58 @@ export class JobTitlesComponent implements OnInit {
     }
   }
 
-  async createTitle() {
+  editTitle(title: any) {
+    this.editingTitleId = Number(title?.id);
+    const organizationId = title?.organizationId ?? title?.organization?.id ?? null;
+    this.newTitle = {
+      title: title?.title || '',
+      code: title?.code || '',
+      level: title?.level || '',
+      category: title?.category || '',
+      description: title?.description || '',
+      organizationId,
+      departmentId: title?.departmentId ?? title?.department?.id ?? null,
+      isActive: typeof title?.isActive === 'boolean' ? title.isActive : true
+    };
+    this.onOrgChange(this.newTitle.organizationId);
+    this.showModal = true;
+  }
+
+  closeModal() {
+    this.showModal = false;
+    this.editingTitleId = null;
+    this.newTitle = {
+      title: '',
+      code: '',
+      level: '',
+      category: '',
+      description: '',
+      organizationId: null,
+      departmentId: null,
+      isActive: true
+    };
+    this.filteredDepartments.set([]);
+  }
+
+  async saveTitle() {
     if (!this.newTitle.title?.trim()) return;
     if (!this.newTitle.organizationId) return;
 
+    const payload = {
+      ...this.newTitle,
+      title: this.newTitle.title.trim()
+    };
+
     try {
-      await this.http.post(`${this.apiUrl}/api/v1/job-titles`, this.newTitle).toPromise();
-      this.showModal = false;
-      this.newTitle = { title: '', code: '', level: '', category: '', description: '', organizationId: null, departmentId: null };
-      this.filteredDepartments.set([]);
-      this.loadTitles();
+      if (this.editingTitleId) {
+        await this.http.put(`${this.apiUrl}/api/v1/job-titles/${this.editingTitleId}`, payload).toPromise();
+      } else {
+        await this.http.post(`${this.apiUrl}/api/v1/job-titles`, payload).toPromise();
+      }
+      this.closeModal();
+      await this.loadTitles();
     } catch (err) {
-      console.error('Failed to create title:', err);
+      console.error('Failed to save title:', err);
     }
   }
 }
