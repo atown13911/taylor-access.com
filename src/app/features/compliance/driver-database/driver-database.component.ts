@@ -496,6 +496,7 @@ export class DriverDatabaseComponent implements OnInit {
     } else {
       this.selectedDriver.set(driver);
       this.loadDriverDocs(driver.id);
+      this.loadDriverDetails(driver.id);
     }
   }
 
@@ -516,12 +517,44 @@ export class DriverDatabaseComponent implements OnInit {
   loadDriverDocs(driverId: any): void {
     const filtered = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
     this.driverDocs.set(filtered);
-    if (filtered.length === 0) {
-      this.api.getDriverDocuments(driverId).subscribe({
-        next: (res: any) => this.driverDocs.set(res?.data || []),
-        error: () => this.driverDocs.set([])
-      });
-    }
+    this.api.getDriverDocuments(driverId).subscribe({
+      next: (res: any) => {
+        const docs = res?.data || [];
+        this.updateDriverDocsInState(driverId, docs);
+        if (`${this.selectedDriver()?.id ?? ''}` === `${driverId ?? ''}`) {
+          this.driverDocs.set(docs);
+        }
+      },
+      error: () => {
+        if (`${this.selectedDriver()?.id ?? ''}` === `${driverId ?? ''}`) {
+          this.driverDocs.set(filtered);
+        }
+      }
+    });
+  }
+
+  private loadDriverDetails(driverId: any): void {
+    this.http.get<any>(`${environment.apiUrl}/api/v1/drivers/${driverId}`).subscribe({
+      next: (res: any) => {
+        const full = res?.data || res;
+        if (!full) return;
+        const merged = { ...(this.selectedDriver() || {}), ...full };
+        if (`${merged?.id ?? ''}` === `${this.selectedDriver()?.id ?? ''}`) {
+          this.selectedDriver.set(merged);
+        }
+        this.drivers.update((rows: any[]) => rows.map((d: any) => (`${d?.id ?? ''}` === `${merged?.id ?? ''}` ? { ...d, ...full } : d)));
+      },
+      error: () => {
+        // Keep current selected row when detail fetch fails.
+      }
+    });
+  }
+
+  private updateDriverDocsInState(driverId: any, docs: any[]): void {
+    const id = `${driverId ?? ''}`;
+    this.drivers.update((rows: any[]) =>
+      rows.map((d: any) => (`${d?.id ?? ''}` === id ? { ...d, _docs: docs } : d))
+    );
   }
 
   getCompDoc(driver: any, key: string): any {
