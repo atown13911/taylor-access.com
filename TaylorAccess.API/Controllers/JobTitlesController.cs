@@ -160,7 +160,7 @@ public class JobTitlesController : ControllerBase
     /// Create job title
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "admin,manager,hr")]
+    [Authorize(Roles = "admin,manager,hr,product_owner,superadmin,development")]
     public async Task<ActionResult<object>> CreateJobTitle([FromBody] JobTitle jobTitle)
     {
         var user = await _currentUserService.GetUserAsync();
@@ -185,7 +185,7 @@ public class JobTitlesController : ControllerBase
     /// Update job title
     /// </summary>
     [HttpPut("{id}")]
-    [Authorize(Roles = "admin,manager,hr")]
+    [Authorize(Roles = "admin,manager,hr,product_owner,superadmin,development")]
     public async Task<ActionResult> UpdateJobTitle(int id, [FromBody] JobTitle updatedJobTitle)
     {
         var user = await _currentUserService.GetUserAsync();
