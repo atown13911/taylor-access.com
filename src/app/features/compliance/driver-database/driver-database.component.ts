@@ -80,7 +80,6 @@ export class DriverDatabaseComponent implements OnInit {
 
   complianceStats = computed(() => {
     const drivers = this.drivers().filter((d: any) => this.isActiveStatus(d.status));
-    const docs = this.allDocs();
     const requiredItems = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
     const totalSlots = drivers.length * requiredItems.length;
 
@@ -88,12 +87,11 @@ export class DriverDatabaseComponent implements OnInit {
 
     for (const driver of drivers) {
       for (const item of requiredItems) {
-        const driverDocs: any[] = driver._docs || [];
-        const doc = this.findDocInList(driverDocs, item);
-        if (doc) {
+        const status = this.getItemStatus(driver, item);
+        if (status !== 'none') {
           uploaded++;
-          if (doc.status === 'expired') expired++;
-          else if (doc.status === 'expiring') expiring++;
+          if (status === 'expired') expired++;
+          else if (status === 'expiring') expiring++;
         }
       }
     }
