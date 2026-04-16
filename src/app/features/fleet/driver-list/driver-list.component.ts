@@ -264,6 +264,7 @@ export class DriverListComponent implements OnInit {
   profileDriver = signal<any>(null);
   profileTab = signal<'profile' | 'documents'>('profile');
   driverDocuments = signal<any[]>([]);
+  profileDocs = signal<any[]>([]);
 
   complianceItems = [
     { key: 'cdl', label: 'CDL / License' },
@@ -283,6 +284,7 @@ export class DriverListComponent implements OnInit {
   ];
 
   getComplianceStatus(driver: any, key: string): string {
+    const docs = this.getComplianceDocsForDriver(driver);
     if (key === 'cdl' && driver.licenseNumber) {
       return this.isExpired(driver.licenseExpiry) ? 'dot-red' :
              this.isExpiringSoon(driver.licenseExpiry) ? 'dot-yellow' : 'dot-green';
@@ -298,7 +300,7 @@ export class DriverListComponent implements OnInit {
              this.isExpiringSoon(driver.twiccExpiry) ? 'dot-yellow' : 'dot-green';
     }
 
-    const doc = this.getPanelDoc(key);
+    const doc = this.getComplianceDocByKey(key, docs);
     if (doc) {
       if (doc.status === 'expired') return 'dot-red';
       if (doc.status === 'expiring') return 'dot-yellow';
@@ -361,10 +363,9 @@ export class DriverListComponent implements OnInit {
     }).catch(() => this.panelDocs.set([]));
   }
 
-  getPanelDoc(key: string): any {
+  private getComplianceDocByKey(key: string, docs: any[]): any {
     const sub = this.compSubMap[key];
     const cat = this.compCategoryMap[key];
-    const docs = this.panelDocs();
     if (!docs.length) return null;
     let doc = docs.find((d: any) => d.subCategory === sub);
     if (doc) return doc;
@@ -380,6 +381,19 @@ export class DriverListComponent implements OnInit {
       const name = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
       return terms.some((t: string) => name.includes(t));
     }) || null;
+  }
+
+  getPanelDoc(key: string): any {
+    return this.getComplianceDocByKey(key, this.panelDocs());
+  }
+
+  private getComplianceDocsForDriver(driver: any): any[] {
+    const driverId = String(driver?.id || '').trim();
+    const profileId = String(this.profileDriver()?.id || '').trim();
+    if (driverId && profileId && driverId === profileId) {
+      return this.profileDocs();
+    }
+    return this.panelDocs();
   }
 
   private resolveAliasDriverIds(driver: DriverRow | any): string[] {
@@ -458,8 +472,10 @@ export class DriverListComponent implements OnInit {
   viewDriver(driver: DriverRow): void {
     this.profileTab.set('profile');
     this.driverDocuments.set([]);
+    this.profileDocs.set([]);
     this._fetchTarget = 'modal';
     this.fetchFullDriver(driver);
+    this.loadProfileDocs(driver);
   }
 
   closeProfile(): void {
@@ -662,6 +678,18 @@ export class DriverListComponent implements OnInit {
     this.profileDriver.set(null);
     this.profileTab.set('profile');
     this.driverDocuments.set([]);
+    this.profileDocs.set([]);
+  }
+
+  private loadProfileDocs(driver: DriverRow | any): void {
+    const aliasIds = this.resolveAliasDriverIds(driver);
+    Promise.all(
+      aliasIds.map((id: string) =>
+        this.api.getDriverDocuments(id).toPromise().then((res: any) => res?.data || []).catch(() => [])
+      )
+    ).then((docLists: any[]) => {
+      this.profileDocs.set(this.mergeDocuments(...docLists));
+    }).catch(() => this.profileDocs.set([]));
   }
 
   switchProfileTab(tab: 'profile' | 'documents'): void {
