@@ -70,40 +70,61 @@ import { environment } from '../../../../environments/environment';
         <div class="modal-content" (click)="$event.stopPropagation()">
           <h2>{{ editingTitleId ? 'Edit Job Title' : 'Add Job Title' }}</h2>
           <div class="form-grid">
-            <input type="text" [(ngModel)]="newTitle.title" placeholder="Title *" class="form-input">
-            <input type="text" [(ngModel)]="newTitle.code" placeholder="Code" class="form-input">
+            <label class="field-label">
+              <span>Title *</span>
+              <input type="text" [(ngModel)]="newTitle.title" placeholder="Enter title" class="form-input">
+            </label>
+            <label class="field-label">
+              <span>Code</span>
+              <input type="text" [(ngModel)]="newTitle.code" placeholder="Enter code" class="form-input">
+            </label>
             <div class="form-row">
-              <select [(ngModel)]="newTitle.organizationId" (ngModelChange)="onOrgChange($event)" class="form-select">
-                <option [ngValue]="null">Select Organization *</option>
-                <option *ngFor="let org of organizations()" [ngValue]="org.id">{{ org.name }}</option>
-              </select>
-              <select [(ngModel)]="newTitle.departmentId" class="form-select">
-                <option [ngValue]="null">Select Department</option>
-                <option *ngFor="let dept of filteredDepartments()" [ngValue]="dept.id">{{ dept.name }}</option>
-              </select>
+              <label class="field-label">
+                <span>Organization *</span>
+                <select [(ngModel)]="newTitle.organizationId" (ngModelChange)="onOrgChange($event)" class="form-select">
+                  <option [ngValue]="null">Select Organization</option>
+                  <option *ngFor="let org of organizations()" [ngValue]="org.id">{{ org.name }}</option>
+                </select>
+              </label>
+              <label class="field-label">
+                <span>Department</span>
+                <select [(ngModel)]="newTitle.departmentId" class="form-select">
+                  <option [ngValue]="null">Select Department</option>
+                  <option *ngFor="let dept of filteredDepartments()" [ngValue]="dept.id">{{ dept.name }}</option>
+                </select>
+              </label>
             </div>
             <div class="form-row">
-              <select [(ngModel)]="newTitle.level" class="form-select">
-                <option value="">Select Level</option>
-                <option value="entry">Entry</option>
-                <option value="junior">Junior</option>
-                <option value="mid">Mid</option>
-                <option value="senior">Senior</option>
-                <option value="lead">Lead</option>
-                <option value="manager">Manager</option>
-                <option value="director">Director</option>
-                <option value="executive">Executive</option>
-              </select>
-              <select [(ngModel)]="newTitle.category" class="form-select">
-                <option value="">Select Category</option>
-                <option value="operations">Operations</option>
-                <option value="admin">Administration</option>
-                <option value="sales">Sales</option>
-                <option value="technical">Technical</option>
-                <option value="management">Management</option>
-              </select>
+              <label class="field-label">
+                <span>Level</span>
+                <select [(ngModel)]="newTitle.level" class="form-select">
+                  <option value="">Select Level</option>
+                  <option value="entry">Entry</option>
+                  <option value="junior">Junior</option>
+                  <option value="mid">Mid</option>
+                  <option value="senior">Senior</option>
+                  <option value="lead">Lead</option>
+                  <option value="manager">Manager</option>
+                  <option value="director">Director</option>
+                  <option value="executive">Executive</option>
+                </select>
+              </label>
+              <label class="field-label">
+                <span>Category</span>
+                <select [(ngModel)]="newTitle.category" class="form-select">
+                  <option value="">Select Category</option>
+                  <option value="operations">Operations</option>
+                  <option value="admin">Administration</option>
+                  <option value="sales">Sales</option>
+                  <option value="technical">Technical</option>
+                  <option value="management">Management</option>
+                </select>
+              </label>
             </div>
-            <textarea [(ngModel)]="newTitle.description" placeholder="Description" rows="3" class="form-textarea"></textarea>
+            <label class="field-label">
+              <span>Description</span>
+              <textarea [(ngModel)]="newTitle.description" placeholder="Enter description" rows="3" class="form-textarea"></textarea>
+            </label>
           </div>
           <div class="modal-actions">
             <button class="btn-secondary" (click)="closeModal()">Cancel</button>
@@ -132,6 +153,7 @@ import { environment } from '../../../../environments/environment';
     .modal-content { background: rgba(26, 26, 46, 0.98); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 16px; padding: 32px; width: 90%; max-width: 600px; }
     .form-grid { display: grid; gap: 16px; margin-bottom: 24px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-label { display: grid; gap: 8px; color: #b8c0d9; font-size: 0.9rem; font-weight: 600; }
     .form-input, .form-select, .form-textarea { background: rgba(16, 18, 27, 0.8); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 8px; padding: 12px; color: #e0e0e0; width: 100%; }
     .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
     .btn-secondary { background: rgba(156, 163, 175, 0.2); color: #9ca3af; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; }
