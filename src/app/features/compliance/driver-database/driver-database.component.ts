@@ -515,20 +515,30 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   loadDriverDocs(driverId: any): void {
-    const filtered = this.allDocs().filter(d => d.driverId?.toString() === driverId?.toString());
+    const selected = this.selectedDriver();
+    const aliasIds = new Set<string>(
+      (`${selected?.id ?? ''}` === `${driverId ?? ''}`
+        ? (selected?._aliasDriverIds || [selected?.id])
+        : [driverId]
+      )
+      .map((id: any) => String(id ?? '').trim())
+      .filter((id: string) => !!id)
+    );
+    if (!aliasIds.size) aliasIds.add(String(driverId ?? '').trim());
+
+    const filtered = this.allDocs().filter(d => aliasIds.has(String(d.driverId ?? '').trim()));
     this.driverDocs.set(filtered);
-    this.api.getDriverDocuments(driverId).subscribe({
-      next: (res: any) => {
-        const docs = res?.data || [];
-        this.updateDriverDocsInState(driverId, docs);
-        if (`${this.selectedDriver()?.id ?? ''}` === `${driverId ?? ''}`) {
-          this.driverDocs.set(docs);
-        }
-      },
-      error: () => {
-        if (`${this.selectedDriver()?.id ?? ''}` === `${driverId ?? ''}`) {
-          this.driverDocs.set(filtered);
-        }
+    Promise.all(Array.from(aliasIds).map((id: string) =>
+      this.api.getDriverDocuments(id).toPromise().then((res: any) => res?.data || []).catch(() => [])
+    )).then((docLists: any[]) => {
+      const docs = this.mergeDocs(...docLists, filtered);
+      this.updateDriverDocsInState(driverId, docs);
+      if (`${this.selectedDriver()?.id ?? ''}` === `${driverId ?? ''}`) {
+        this.driverDocs.set(docs);
+      }
+    }).catch(() => {
+      if (`${this.selectedDriver()?.id ?? ''}` === `${driverId ?? ''}`) {
+        this.driverDocs.set(filtered);
       }
     });
   }
@@ -555,6 +565,25 @@ export class DriverDatabaseComponent implements OnInit {
     this.drivers.update((rows: any[]) =>
       rows.map((d: any) => (`${d?.id ?? ''}` === id ? { ...d, _docs: docs } : d))
     );
+  }
+
+  private mergeDocs(...docSets: any[][]): any[] {
+    const map = new Map<string, any>();
+    for (const set of docSets) {
+      for (const doc of set || []) {
+        const key = String(doc?.id ?? `${doc?.driverId ?? ''}|${doc?.category ?? ''}|${doc?.subCategory ?? ''}|${doc?.documentName ?? ''}`).trim();
+        if (!key) continue;
+        const prev = map.get(key);
+        if (!prev) {
+          map.set(key, doc);
+          continue;
+        }
+        const prevTs = new Date(prev?.updatedAt || prev?.createdAt || 0).getTime();
+        const nextTs = new Date(doc?.updatedAt || doc?.createdAt || 0).getTime();
+        if (nextTs >= prevTs) map.set(key, doc);
+      }
+    }
+    return Array.from(map.values());
   }
 
   getCompDoc(driver: any, key: string): any {
@@ -1005,24 +1034,33 @@ export class DriverDatabaseComponent implements OnInit {
     const unique: any[] = [];
 
     for (const driver of drivers || []) {
+      const currentId = String(driver?.id ?? '').trim();
       const keys = this.buildDriverIdentityKeys(driver);
       if (keys.length === 0) {
-        unique.push(driver);
+        const row = { ...driver, _aliasDriverIds: currentId ? [currentId] : [] };
+        unique.push(row);
         continue;
       }
 
       let winner = keys.map(k => identityMap.get(k)).find(Boolean) || null;
       if (!winner) {
-        winner = driver;
+        winner = { ...driver, _aliasDriverIds: currentId ? [currentId] : [] };
         unique.push(winner);
       } else {
+        const winnerIds = new Set<string>((winner?._aliasDriverIds || []).map((id: any) => String(id ?? '').trim()).filter((id: string) => !!id));
+        if (String(winner?.id ?? '').trim()) winnerIds.add(String(winner.id).trim());
+        if (currentId) winnerIds.add(currentId);
+
         // Keep the most recently updated record for duplicate identities.
         const currentTs = this.getRecordTimestamp(driver);
         const winnerTs = this.getRecordTimestamp(winner);
         if (currentTs > winnerTs) {
           const idx = unique.indexOf(winner);
-          if (idx >= 0) unique[idx] = driver;
-          winner = driver;
+          const replacement = { ...driver, _aliasDriverIds: Array.from(winnerIds) };
+          if (idx >= 0) unique[idx] = replacement;
+          winner = replacement;
+        } else {
+          winner._aliasDriverIds = Array.from(winnerIds);
         }
       }
 
