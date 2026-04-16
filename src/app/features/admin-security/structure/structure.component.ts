@@ -7,13 +7,12 @@ import { PositionsComponent } from '../positions/positions.component';
 import { SatellitesComponent } from '../satellites/satellites.component';
 import { AgenciesComponent } from '../agencies/agencies.component';
 import { TerminalsComponent } from '../terminals/terminals.component';
-import { JobTitlesComponent } from '../../recruiting/job-titles/job-titles.component';
-type StructureTab = 'organizations' | 'divisions' | 'departments' | 'positions' | 'terminals' | 'job_titles' | 'satellites' | 'agencies';
+type StructureTab = 'organizations' | 'divisions' | 'departments' | 'positions' | 'terminals' | 'satellites' | 'agencies';
 
 @Component({
   selector: 'app-structure',
   standalone: true,
-  imports: [CommonModule, OrganizationsComponent, DivisionsComponent, DepartmentsComponent, PositionsComponent, SatellitesComponent, AgenciesComponent, TerminalsComponent, JobTitlesComponent],
+  imports: [CommonModule, OrganizationsComponent, DivisionsComponent, DepartmentsComponent, PositionsComponent, SatellitesComponent, AgenciesComponent, TerminalsComponent],
   template: `
     <div class="structure-page">
       <div class="structure-tabs">
@@ -28,9 +27,6 @@ type StructureTab = 'organizations' | 'divisions' | 'departments' | 'positions' 
         </button>
         <button class="structure-tab" [class.active]="activeTab() === 'positions'" (click)="activeTab.set('positions')">
           <i class="bx bx-id-card"></i> Job Positions
-        </button>
-        <button class="structure-tab" [class.active]="activeTab() === 'job_titles'" (click)="activeTab.set('job_titles')">
-          <i class="bx bx-purchase-tag"></i> Job Titles
         </button>
         <button class="structure-tab" [class.active]="activeTab() === 'terminals'" (click)="activeTab.set('terminals')">
           <i class="bx bx-package"></i> Terminals
@@ -62,9 +58,6 @@ type StructureTab = 'organizations' | 'divisions' | 'departments' | 'positions' 
           }
           @case ('positions') {
             <app-positions></app-positions>
-          }
-          @case ('job_titles') {
-            <app-job-titles></app-job-titles>
           }
           @case ('terminals') {
             <app-terminals></app-terminals>
