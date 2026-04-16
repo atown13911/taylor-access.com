@@ -76,7 +76,10 @@ import { environment } from '../../../../environments/environment';
             </label>
             <label class="field-label">
               <span>Code</span>
-              <input type="text" [(ngModel)]="newTitle.code" placeholder="Enter code" class="form-input">
+              <select [(ngModel)]="newTitle.code" class="form-select">
+                <option value="">None</option>
+                <option *ngFor="let code of codeOptions()" [value]="code">{{ code }}</option>
+              </select>
             </label>
             <div class="form-row">
               <label class="field-label">
@@ -167,6 +170,7 @@ export class JobTitlesComponent implements OnInit {
   organizations = signal<any[]>([]);
   departments = signal<any[]>([]);
   filteredDepartments = signal<any[]>([]);
+  codeOptions = signal<string[]>([]);
   showModal = false;
   editingTitleId: number | null = null;
 
@@ -213,7 +217,16 @@ export class JobTitlesComponent implements OnInit {
   async loadTitles() {
     try {
       const response: any = await this.http.get(`${this.apiUrl}/api/v1/job-titles`).toPromise();
-      this.jobTitles.set(response?.data || []);
+      const titles = response?.data || [];
+      this.jobTitles.set(titles);
+      const codes: string[] = Array.from(
+        new Set<string>(
+          titles
+            .map((t: any) => String(t?.code || '').trim())
+            .filter((v: string) => !!v)
+        )
+      ).sort((a, b) => a.localeCompare(b));
+      this.codeOptions.set(codes);
     } catch (err) {
       console.error('Failed to load titles:', err);
     }
