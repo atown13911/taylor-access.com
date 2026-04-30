@@ -232,7 +232,7 @@ public class ApplicantsController : ControllerBase
             .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
         var merged = MergePositions(positions);
 
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
     }
 
     [HttpPost("positions")]
@@ -250,13 +250,14 @@ public class ApplicantsController : ControllerBase
         var name = string.IsNullOrWhiteSpace(request.Name) ? string.Empty : request.Name.Trim();
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(new { error = "Position name is required" });
+        var color = NormalizeColor(request.Color);
 
         var positions = organizations
             .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
         var merged = MergePositions(positions);
 
         if (!merged.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            merged.Add(new ApplicantPositionItem(name, true));
+            merged.Add(new ApplicantPositionItem(name, true, color));
         merged = MergePositions(merged);
 
         var node = BuildPositionsNode(merged);
@@ -270,7 +271,7 @@ public class ApplicantsController : ControllerBase
         }
         await _context.SaveChangesAsync();
 
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
     }
 
     [HttpPut("positions/status")]
@@ -295,9 +296,9 @@ public class ApplicantsController : ControllerBase
 
         var idx = merged.FindIndex(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (idx >= 0)
-            merged[idx] = new ApplicantPositionItem(merged[idx].Name, request.IsActive);
+            merged[idx] = new ApplicantPositionItem(merged[idx].Name, request.IsActive, merged[idx].Color);
         else
-            merged.Add(new ApplicantPositionItem(name, request.IsActive));
+            merged.Add(new ApplicantPositionItem(name, request.IsActive, null));
         merged = MergePositions(merged);
 
         var node = BuildPositionsNode(merged);
@@ -310,7 +311,7 @@ public class ApplicantsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
     }
 
     [HttpPut("positions")]
@@ -342,7 +343,8 @@ public class ApplicantsController : ControllerBase
         if (duplicateIdx >= 0 && duplicateIdx != idx)
             return BadRequest(new { error = "A position with that name already exists" });
 
-        merged[idx] = new ApplicantPositionItem(newName, request.IsActive);
+        var color = NormalizeColor(request.Color) ?? merged[idx].Color;
+        merged[idx] = new ApplicantPositionItem(newName, request.IsActive, color);
         merged = MergePositions(merged);
 
         var node = BuildPositionsNode(merged);
@@ -355,7 +357,7 @@ public class ApplicantsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
     }
 
     [HttpDelete("positions/{name}")]
@@ -407,7 +409,7 @@ public class ApplicantsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
-        return Ok(new { data = next.Select(p => new { name = p.Name, isActive = p.IsActive }).ToList() });
+        return Ok(new { data = next.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
     }
 
     private static JsonObject ParseSettings(string? rawSettings)
@@ -440,7 +442,7 @@ public class ApplicantsController : ControllerBase
                 var raw = item.ToString();
                 var name = string.IsNullOrWhiteSpace(raw) ? string.Empty : raw.Trim();
                 if (!string.IsNullOrWhiteSpace(name))
-                    list.Add(new ApplicantPositionItem(name, true));
+                    list.Add(new ApplicantPositionItem(name, true, null));
                 continue;
             }
 
@@ -455,7 +457,8 @@ public class ApplicantsController : ControllerBase
                 if (activeNode is not null && bool.TryParse(activeNode.ToString(), out var parsed))
                     isActive = parsed;
 
-                list.Add(new ApplicantPositionItem(name, isActive));
+                var color = NormalizeColor(obj["color"]?.ToString() ?? obj["Color"]?.ToString());
+                list.Add(new ApplicantPositionItem(name, isActive, color));
             }
         }
 
@@ -471,9 +474,12 @@ public class ApplicantsController : ControllerBase
             if (string.IsNullOrWhiteSpace(name)) continue;
 
             if (map.TryGetValue(name, out var existing))
-                map[name] = new ApplicantPositionItem(name, existing.IsActive || item.IsActive);
+            {
+                var mergedColor = existing.Color ?? item.Color;
+                map[name] = new ApplicantPositionItem(name, existing.IsActive || item.IsActive, mergedColor);
+            }
             else
-                map[name] = new ApplicantPositionItem(name, item.IsActive);
+                map[name] = new ApplicantPositionItem(name, item.IsActive, item.Color);
         }
 
         return map.Values
@@ -490,10 +496,28 @@ public class ApplicantsController : ControllerBase
             array.Add(new JsonObject
             {
                 ["name"] = item.Name,
-                ["isActive"] = item.IsActive
+                ["isActive"] = item.IsActive,
+                ["color"] = item.Color
             });
         }
         return array;
+    }
+
+    private static string? NormalizeColor(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var value = raw.Trim();
+        if (!value.StartsWith("#")) value = "#" + value;
+        if (value.Length != 7) return null;
+        for (var i = 1; i < value.Length; i++)
+        {
+            var c = value[i];
+            var isHex = (c >= '0' && c <= '9')
+                || (c >= 'a' && c <= 'f')
+                || (c >= 'A' && c <= 'F');
+            if (!isHex) return null;
+        }
+        return value.ToUpperInvariant();
     }
 
     private static string NormalizeStatus(string? raw)
@@ -521,10 +545,10 @@ public class ApplicantsController : ControllerBase
     }
 }
 
-public record AddApplicantPositionRequest(string Name);
+public record AddApplicantPositionRequest(string Name, string? Color);
 public record UpdateApplicantPositionStatusRequest(string Name, bool IsActive);
-public record UpdateApplicantPositionRequest(string CurrentName, string NewName, bool IsActive);
-public record ApplicantPositionItem(string Name, bool IsActive);
+public record UpdateApplicantPositionRequest(string CurrentName, string NewName, bool IsActive, string? Color);
+public record ApplicantPositionItem(string Name, bool IsActive, string? Color);
 public record CreateApplicantRecordRequest(
     string FullName,
     string? Gender,

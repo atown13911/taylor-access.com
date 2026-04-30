@@ -27,6 +27,7 @@ interface ApplicantRow {
 interface ApplicantPosition {
   name: string;
   isActive: boolean;
+  color?: string | null;
 }
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
@@ -267,9 +268,15 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             @for (position of positionTabs(); track position) {
               <button
                 class="position-tab"
+                [class.position-colored]="position !== 'all' && !!getPositionColor(position)"
                 [class.active]="selectedPosition() === position"
+                [style.--position-color]="position !== 'all' ? getPositionColor(position) : null"
+                [style.--position-color-soft]="position !== 'all' ? getPositionSoftColor(position) : null"
                 (click)="selectPosition(position)"
               >
+                @if (position !== 'all' && getPositionColor(position)) {
+                  <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
+                }
                 <span>{{ position === 'all' ? 'All Positions' : position }}</span>
                 @if (position !== 'all') {
                   <i
@@ -377,7 +384,20 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   <td><strong>{{ row.fullName }}</strong></td>
                   <td>{{ row.gender || '—' }}</td>
                   <td>{{ row.age ?? '—' }}</td>
-                  <td>{{ row.position || '—' }}</td>
+                  <td>
+                    @if (row.position) {
+                      <span
+                        class="position-pill"
+                        [class.has-color]="!!getPositionColor(row.position)"
+                        [style.--position-color]="getPositionColor(row.position)"
+                        [style.--position-color-soft]="getPositionSoftColor(row.position)"
+                      >
+                        {{ row.position }}
+                      </span>
+                    } @else {
+                      —
+                    }
+                  </td>
                   <td>{{ row.source || '—' }}</td>
                   <td>{{ row.trainingGroupAssignment || '—' }}</td>
                   <td>
@@ -628,6 +648,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 placeholder="Dispatcher, Recruiter, Driver Manager..."
               />
             </div>
+            <div class="form-row">
+              <label>Color</label>
+              <div class="color-field">
+                <input
+                  type="color"
+                  [ngModel]="newPositionColor()"
+                  (ngModelChange)="newPositionColor.set(normalizeColorHex($event) || '#38BDF8')"
+                />
+                <input
+                  type="text"
+                  [ngModel]="newPositionColor()"
+                  (ngModelChange)="newPositionColor.set(normalizeColorHex($event) || '#38BDF8')"
+                  placeholder="#38BDF8"
+                />
+              </div>
+            </div>
             <div class="actions">
               <button class="btn-secondary" (click)="showAddPosition.set(false)">Cancel</button>
               <button class="btn-primary" (click)="addPosition()">Add</button>
@@ -651,6 +687,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <option value="inactive">Inactive</option>
               </select>
             </div>
+            <div class="form-row">
+              <label>Color</label>
+              <div class="color-field">
+                <input
+                  type="color"
+                  [ngModel]="positionSettingsTargetColor()"
+                  (ngModelChange)="positionSettingsTargetColor.set(normalizeColorHex($event) || '#38BDF8')"
+                />
+                <input
+                  type="text"
+                  [ngModel]="positionSettingsTargetColor()"
+                  (ngModelChange)="positionSettingsTargetColor.set(normalizeColorHex($event) || '#38BDF8')"
+                  placeholder="#38BDF8"
+                />
+              </div>
+            </div>
             <div class="actions">
               <button class="btn-danger" (click)="deletePositionTab()">Delete Position</button>
               <button class="btn-secondary" (click)="showPositionSettings.set(false)">Cancel</button>
@@ -673,7 +725,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-tabs-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
     .position-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .position-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 0.84rem; display: inline-flex; align-items: center; gap: 6px; }
+    .position-tab.position-colored { border-color: var(--position-color, #2a2a4e); }
     .position-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .position-tab.position-colored.active { border-color: var(--position-color, #00d4ff); background: var(--position-color-soft, rgba(56, 189, 248, 0.2)); color: #f8fafc; }
+    .position-color-dot { width: 8px; height: 8px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); }
     .position-settings-icon { font-size: 0.9rem; color: #8aa0b8; border-radius: 999px; padding: 1px; }
     .position-settings-icon:hover { color: #d9f6ff; background: rgba(255,255,255,0.08); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
@@ -726,6 +781,8 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .icon-btn.success:hover { border-color: #22c55e; color: #86efac; }
     .icon-btn.danger:hover { border-color: #ef4444; color: #fecaca; }
     .cv-link-btn { background: transparent; color: #7dd3fc; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.86rem; }
+    .position-pill { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid #2a2a4e; padding: 3px 10px; font-size: 0.78rem; color: #d1d5db; background: rgba(17,24,39,0.8); }
+    .position-pill.has-color { border-color: var(--position-color, #2a2a4e); background: var(--position-color-soft, rgba(56, 189, 248, 0.16)); color: #f8fafc; }
     .empty { text-align: center; color: #8aa0b8; padding: 20px; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { width: 100%; max-width: 520px; background: #161a2a; border: 1px solid #2a2a4e; border-radius: 12px; padding: 16px; h3 { margin-top: 0; color: #fff; } }
@@ -736,6 +793,9 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .hired-details-grid span { color: #8aa0b8; font-size: 0.75rem; }
     .hired-details-grid strong { color: #e2e8f0; font-size: 0.9rem; }
     .form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; label { color: #8aa0b8; font-size: 0.8rem; } input, textarea, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } }
+    .color-field { display: flex; gap: 8px; align-items: center; }
+    .color-field input[type='color'] { width: 52px; min-width: 52px; height: 38px; padding: 4px; border-radius: 8px; cursor: pointer; }
+    .color-field input[type='text'] { flex: 1; text-transform: uppercase; }
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .hint { color: #8aa0b8; font-size: 0.78rem; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
@@ -765,9 +825,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   showHiredDetails = signal(false);
   hiredDetailsTrainingGroupAssignment = signal('');
   newPositionName = signal('');
+  newPositionColor = signal('#38BDF8');
   positionSettingsOriginalName = signal('');
   positionSettingsTargetName = signal('');
   positionSettingsTargetActive = signal(true);
+  positionSettingsTargetColor = signal('#38BDF8');
   selectedApplicantId = signal<number | null>(null);
   applicantsSyncError = signal('');
   private positionsRefreshTimer: any;
@@ -782,13 +844,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     for (const p of this.customPositions()) {
       const normalized = this.normalizePositionName(p?.name);
       if (!normalized) continue;
-      map.set(normalized.toLowerCase(), { name: normalized, isActive: !!p.isActive });
+      map.set(normalized.toLowerCase(), { name: normalized, isActive: !!p.isActive, color: this.normalizeColorHex(p.color) });
     }
     for (const row of this.rows()) {
       const normalized = this.normalizePositionName(row.position);
       if (!normalized) continue;
       if (!map.has(normalized.toLowerCase())) {
-        map.set(normalized.toLowerCase(), { name: normalized, isActive: true });
+        map.set(normalized.toLowerCase(), { name: normalized, isActive: true, color: null });
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -1279,16 +1341,19 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   openAddPosition(): void {
     this.newPositionName.set('');
+    this.newPositionColor.set('#38BDF8');
     this.showAddPosition.set(true);
   }
 
   async addPosition(): Promise<void> {
     const value = String(this.newPositionName() || '').trim();
     if (!value) return;
-    await this.addCustomPosition(value, true, true);
+    const color = this.normalizeColorHex(this.newPositionColor());
+    await this.addCustomPosition(value, true, true, color);
     this.positionStateFilter.set('active');
     this.selectedPosition.set(value);
     this.newPositionName.set('');
+    this.newPositionColor.set('#38BDF8');
     this.showAddPosition.set(false);
   }
 
@@ -1298,6 +1363,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.positionSettingsOriginalName.set(position);
     this.positionSettingsTargetName.set(position);
     this.positionSettingsTargetActive.set(target?.isActive ?? true);
+    this.positionSettingsTargetColor.set(this.normalizeColorHex(target?.color) || '#38BDF8');
     this.showPositionSettings.set(true);
   }
 
@@ -1307,12 +1373,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const currentName = this.normalizePositionName(this.positionSettingsOriginalName());
     if (!currentName) return;
     const isActive = this.positionSettingsTargetActive();
+    const color = this.normalizeColorHex(this.positionSettingsTargetColor());
 
     this.customPositions.update((list) => {
       const idx = list.findIndex((p) => p.name.toLowerCase() === currentName.toLowerCase());
       if (idx < 0) return list;
       const next = [...list];
-      next[idx] = { ...next[idx], name: newName, isActive };
+      next[idx] = { ...next[idx], name: newName, isActive, color };
       return next;
     });
     this.persistLocalPositions();
@@ -1321,7 +1388,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const res = await firstValueFrom(
         this.http.put<{ data?: unknown[] }>(
           `${this.apiUrl}/api/v1/applicants/positions`,
-          { currentName, newName, isActive }
+          { currentName, newName, isActive, color }
         )
       );
       this.customPositions.set(this.parsePositionPayload(res?.data));
@@ -1555,17 +1622,18 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async addCustomPosition(position: string, isActive = true, syncToApi = false): Promise<void> {
+  private async addCustomPosition(position: string, isActive = true, syncToApi = false, color?: string | null): Promise<void> {
     const normalized = this.normalizePositionName(position);
     if (!normalized) return;
+    const normalizedColor = this.normalizeColorHex(color);
     this.customPositions.update((list) => {
       const idx = list.findIndex((p) => p.name.toLowerCase() === normalized.toLowerCase());
       if (idx >= 0) {
         const next = [...list];
-        next[idx] = { ...next[idx], isActive };
+        next[idx] = { ...next[idx], isActive, color: normalizedColor ?? next[idx].color ?? null };
         return next;
       }
-      return [...list, { name: normalized, isActive }]
+      return [...list, { name: normalized, isActive, color: normalizedColor ?? null }]
         .sort((a, b) => a.name.localeCompare(b.name));
     });
     this.persistLocalPositions();
@@ -1574,7 +1642,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
     try {
       const res = await firstValueFrom(
-        this.http.post<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized })
+        this.http.post<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized, color: normalizedColor })
       );
       this.customPositions.set(this.parsePositionPayload(res?.data));
       this.persistLocalPositions();
@@ -1707,7 +1775,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         const name = this.normalizePositionName(row['name'] ?? row['Name']);
         if (!name) continue;
         const isActive = this.toBoolean(row['isActive'] ?? row['IsActive'], true);
-        map.set(name.toLowerCase(), { name, isActive });
+        const color = this.normalizeColorHex(row['color'] ?? row['Color']);
+        map.set(name.toLowerCase(), { name, isActive, color });
       }
     }
 
@@ -1825,6 +1894,36 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       return '';
     }
     return String(value ?? '').trim();
+  }
+
+  getPositionColor(positionName: unknown): string | null {
+    const name = this.normalizePositionName(positionName);
+    if (!name) return null;
+    const match = this.allPositions().find((p) => p.name.toLowerCase() === name.toLowerCase());
+    return this.normalizeColorHex(match?.color);
+  }
+
+  getPositionSoftColor(positionName: unknown): string | null {
+    const color = this.getPositionColor(positionName);
+    if (!color) return null;
+    return this.hexToRgba(color, 0.22);
+  }
+
+  normalizeColorHex(value: unknown): string | null {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const candidate = raw.startsWith('#') ? raw : `#${raw}`;
+    if (!/^#[0-9A-Fa-f]{6}$/.test(candidate)) return null;
+    return candidate.toUpperCase();
+  }
+
+  private hexToRgba(hex: string, alpha: number): string {
+    const normalized = this.normalizeColorHex(hex);
+    if (!normalized) return `rgba(56, 189, 248, ${alpha})`;
+    const r = parseInt(normalized.slice(1, 3), 16);
+    const g = parseInt(normalized.slice(3, 5), 16);
+    const b = parseInt(normalized.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   private normalizeAge(value: unknown): number | null {
