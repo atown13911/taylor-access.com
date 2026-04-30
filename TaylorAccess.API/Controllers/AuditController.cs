@@ -40,8 +40,10 @@ public class AuditController : ControllerBase
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized(new { message = "User not found" });
 
-        var role = user.Role?.ToLower();
-        int? orgFilter = (role == "product_owner" || role == "superadmin") ? null : user.OrganizationId;
+        var role = user.Role?.ToLowerInvariant();
+        int? orgFilter = (role == "product_owner" || role == "superadmin" || role == "development")
+            ? null
+            : user.OrganizationId;
 
         var logs = await _mongo.GetAuditLogsAsync(
             entityType: entityType,
@@ -50,7 +52,8 @@ public class AuditController : ControllerBase
             organizationId: orgFilter,
             from: from?.ToUniversalTime(),
             to: to?.ToUniversalTime(),
-            limit: limit * page
+            limit: limit * page,
+            includeUnscopedOrganization: orgFilter.HasValue
         );
 
         if (!string.IsNullOrEmpty(action))
@@ -94,10 +97,24 @@ public class AuditController : ControllerBase
     [HttpGet("summary")]
     public async Task<ActionResult<object>> GetSummary([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not found" });
+
+        var role = user.Role?.ToLowerInvariant();
+        int? orgFilter = (role == "product_owner" || role == "superadmin" || role == "development")
+            ? null
+            : user.OrganizationId;
+
         var fromDate = from?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(-30);
         var toDate = to?.ToUniversalTime() ?? DateTime.UtcNow;
 
-        var logs = await _mongo.GetAuditLogsAsync(from: fromDate, to: toDate, limit: 10000);
+        var logs = await _mongo.GetAuditLogsAsync(
+            organizationId: orgFilter,
+            from: fromDate,
+            to: toDate,
+            limit: 10000,
+            includeUnscopedOrganization: orgFilter.HasValue
+        );
 
         return Ok(new
         {

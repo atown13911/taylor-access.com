@@ -22,7 +22,15 @@ public interface IMongoDbService
 
     // Audit log methods
     Task LogAuditAsync(MongoAuditLog log);
-    Task<List<MongoAuditLog>> GetAuditLogsAsync(string? entityType = null, int? entityId = null, int? userId = null, int? organizationId = null, DateTime? from = null, DateTime? to = null, int limit = 100);
+    Task<List<MongoAuditLog>> GetAuditLogsAsync(
+        string? entityType = null,
+        int? entityId = null,
+        int? userId = null,
+        int? organizationId = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        int limit = 100,
+        bool includeUnscopedOrganization = false);
 
     // Scheduled job log methods
     Task<MongoJobLog> InsertJobLogAsync(MongoJobLog log);
@@ -188,7 +196,15 @@ public class MongoDbService : IMongoDbService
         }
     }
 
-    public async Task<List<MongoAuditLog>> GetAuditLogsAsync(string? entityType = null, int? entityId = null, int? userId = null, int? organizationId = null, DateTime? from = null, DateTime? to = null, int limit = 100)
+    public async Task<List<MongoAuditLog>> GetAuditLogsAsync(
+        string? entityType = null,
+        int? entityId = null,
+        int? userId = null,
+        int? organizationId = null,
+        DateTime? from = null,
+        DateTime? to = null,
+        int limit = 100,
+        bool includeUnscopedOrganization = false)
     {
         if (_auditLogs == null) return new List<MongoAuditLog>();
         try
@@ -199,7 +215,20 @@ public class MongoDbService : IMongoDbService
             if (!string.IsNullOrEmpty(entityType)) filter &= builder.Eq(a => a.EntityType, entityType);
             if (entityId.HasValue) filter &= builder.Eq(a => a.EntityId, entityId);
             if (userId.HasValue) filter &= builder.Eq(a => a.UserId, userId);
-            if (organizationId.HasValue) filter &= builder.Eq(a => a.OrganizationId, organizationId);
+            if (organizationId.HasValue)
+            {
+                if (includeUnscopedOrganization)
+                {
+                    filter &= builder.Or(
+                        builder.Eq(a => a.OrganizationId, organizationId.Value),
+                        builder.Eq(a => a.OrganizationId, (int?)null)
+                    );
+                }
+                else
+                {
+                    filter &= builder.Eq(a => a.OrganizationId, organizationId.Value);
+                }
+            }
             if (from.HasValue) filter &= builder.Gte(a => a.Timestamp, from.Value);
             if (to.HasValue) filter &= builder.Lte(a => a.Timestamp, to.Value);
 

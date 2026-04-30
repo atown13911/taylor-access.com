@@ -155,13 +155,36 @@ public class GatewayMongoDbService : IMongoDbService
         await InsertAsync("audit_logs", doc);
     }
 
-    public async Task<List<MongoAuditLog>> GetAuditLogsAsync(string? entityType, int? entityId, int? userId, int? organizationId, DateTime? from, DateTime? to, int limit)
+    public async Task<List<MongoAuditLog>> GetAuditLogsAsync(
+        string? entityType,
+        int? entityId,
+        int? userId,
+        int? organizationId,
+        DateTime? from,
+        DateTime? to,
+        int limit,
+        bool includeUnscopedOrganization = false)
     {
         var filter = new BsonDocument();
         if (!string.IsNullOrEmpty(entityType)) filter["EntityType"] = entityType;
         if (entityId.HasValue) filter["EntityId"] = entityId.Value;
         if (userId.HasValue) filter["UserId"] = userId.Value;
-        if (organizationId.HasValue) filter["OrganizationId"] = organizationId.Value;
+        if (organizationId.HasValue)
+        {
+            if (includeUnscopedOrganization)
+            {
+                filter["$or"] = new BsonArray
+                {
+                    new BsonDocument("OrganizationId", organizationId.Value),
+                    new BsonDocument("OrganizationId", BsonNull.Value),
+                    new BsonDocument("OrganizationId", new BsonDocument("$exists", false))
+                };
+            }
+            else
+            {
+                filter["OrganizationId"] = organizationId.Value;
+            }
+        }
         if (from.HasValue) filter["Timestamp"] = new BsonDocument("$gte", from.Value);
         if (to.HasValue) filter.Set("Timestamp", new BsonDocument { { "$gte", from ?? DateTime.MinValue }, { "$lte", to.Value } });
 
