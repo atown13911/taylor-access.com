@@ -1136,6 +1136,7 @@ export class PerformanceReviewsComponent implements OnInit {
   private toMetricRow(review: Review): ReviewMetricRow {
     const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
+    const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
     const liveCallVolume = liveComms.callVolume;
     const liveTextVolume = liveComms.textVolume;
@@ -1147,8 +1148,10 @@ export class PerformanceReviewsComponent implements OnInit {
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
     const callVolume = persisted?.callVolume ?? Math.max(snapshotCallVolume, liveCallVolume);
     const textVolume = persisted?.textVolume ?? Math.max(snapshotTextVolume, liveTextVolume);
-    const totalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
-    const activeHours = persisted?.workHours ?? (hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours);
+    const rawTotalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
+    const rawWorkHours = persisted?.workHours ?? (hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours);
+    const activeHours = rawWorkHours > 0 ? rawWorkHours : assignedWorkHours;
+    const totalHours = Math.max(rawTotalHours, activeHours);
     const idleHours = Math.max(0, totalHours - activeHours);
     const activityRate = persisted?.activityRate ?? (hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate);
     const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
@@ -1165,6 +1168,13 @@ export class PerformanceReviewsComponent implements OnInit {
       invoicedRevenue,
       score
     };
+  }
+
+  private getAssignedWorkHoursForSelectedRange(): number {
+    const { from, to } = this.parseMonthKey(this.selectedReviewMonth());
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const dayCount = Math.max(1, Math.floor((to.getTime() - from.getTime()) / msPerDay) + 1);
+    return dayCount * 8;
   }
 
   private async loadPersistedDailyMetrics(): Promise<void> {
