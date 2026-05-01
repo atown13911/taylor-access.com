@@ -483,6 +483,8 @@ public class PerformanceReviewsController : ControllerBase
         var fromDate = targetStart.ToString("yyyy-MM-dd");
         var toDate = rangeEnd.ToString("yyyy-MM-dd");
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var reportMeetingsByEmail = new Dictionary<string, (int Hosted, int Joined)>(StringComparer.OrdinalIgnoreCase);
+        var reportMeetingsByName = new Dictionary<string, (int Hosted, int Joined)>(StringComparer.OrdinalIgnoreCase);
 
         var smsRows = 0;
         try
@@ -509,6 +511,54 @@ public class PerformanceReviewsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Zoom SMS pull via gateway failed; using smsSessionCount fallback");
+        }
+
+        try
+        {
+            var reportsUsersResponse = await client.GetAsync($"{crmBase}/reports/users?from={fromDate}&to={toDate}");
+            if (reportsUsersResponse.IsSuccessStatusCode)
+            {
+                var reportsUsersJson = await reportsUsersResponse.Content.ReadAsStringAsync();
+                using var reportsUsersDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(reportsUsersJson) ? "{}" : reportsUsersJson);
+                if (TryGetPropertyIgnoreCase(reportsUsersDoc.RootElement, "data", out var reportUsersData)
+                    && reportUsersData.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in reportUsersData.EnumerateArray())
+                    {
+                        var hosted = ReadIntAny(item, "meetingsHosted", "meetings_hosted", "meetings", "meetingCount", "meeting_count");
+                        if (hosted <= 0)
+                            hosted = ReadIntAny(item, "meetingCount", "meeting_count", "meetingTimes", "meeting_times");
+                        var joined = ReadIntAny(item, "meetingsJoined", "meetings_joined", "participants", "participantCount", "participant_count");
+                        if (joined <= 0) joined = hosted;
+                        if (hosted <= 0 && joined <= 0) continue;
+
+                        var reportEmail = ReadStringAny(item, "email", "userEmail", "user_email");
+                        if (!string.IsNullOrWhiteSpace(reportEmail))
+                        {
+                            var key = reportEmail.Trim().ToLowerInvariant();
+                            var existing = reportMeetingsByEmail.GetValueOrDefault(key);
+                            reportMeetingsByEmail[key] = (Math.Max(existing.Hosted, hosted), Math.Max(existing.Joined, joined));
+                            var localPart = ExtractEmailLocalPart(key);
+                            if (!string.IsNullOrWhiteSpace(localPart))
+                            {
+                                var existingLocal = reportMeetingsByEmail.GetValueOrDefault(localPart!);
+                                reportMeetingsByEmail[localPart!] = (Math.Max(existingLocal.Hosted, hosted), Math.Max(existingLocal.Joined, joined));
+                            }
+                        }
+
+                        var reportName = NormalizeName(ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name"));
+                        if (!string.IsNullOrWhiteSpace(reportName))
+                        {
+                            var existing = reportMeetingsByName.GetValueOrDefault(reportName);
+                            reportMeetingsByName[reportName] = (Math.Max(existing.Hosted, hosted), Math.Max(existing.Joined, joined));
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Zoom reports/users pull failed; continuing without report meetings fallback");
         }
 
         var meetingRows = new List<(string? HostId, string? HostEmail, string? HostName, DateTime? StartUtc)>();
@@ -667,6 +717,32 @@ public class PerformanceReviewsController : ControllerBase
                 {
                     meetingsHostedByEmployee[emp.EmployeeId] = hosted;
                     meetingsJoinedByEmployee[emp.EmployeeId] = hosted;
+                }
+            }
+
+            if (meetingsHostedByEmployee[emp.EmployeeId] <= 0 && meetingsJoinedByEmployee[emp.EmployeeId] <= 0)
+            {
+                (int Hosted, int Joined) reportFallback = default;
+                foreach (var emailKey in emailCandidates)
+                {
+                    if (reportMeetingsByEmail.TryGetValue(emailKey, out reportFallback))
+                        break;
+                    var localPart = ExtractEmailLocalPart(emailKey);
+                    if (!string.IsNullOrWhiteSpace(localPart)
+                        && reportMeetingsByEmail.TryGetValue(localPart!, out reportFallback))
+                        break;
+                }
+                if (reportFallback.Hosted <= 0 && reportFallback.Joined <= 0
+                    && !string.IsNullOrWhiteSpace(employeeNameKey)
+                    && reportMeetingsByName.TryGetValue(employeeNameKey, out var reportByName))
+                {
+                    reportFallback = reportByName;
+                }
+
+                if (reportFallback.Hosted > 0 || reportFallback.Joined > 0)
+                {
+                    meetingsHostedByEmployee[emp.EmployeeId] = Math.Max(0, reportFallback.Hosted);
+                    meetingsJoinedByEmployee[emp.EmployeeId] = Math.Max(0, reportFallback.Joined > 0 ? reportFallback.Joined : reportFallback.Hosted);
                 }
             }
         }
