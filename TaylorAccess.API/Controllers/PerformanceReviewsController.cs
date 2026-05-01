@@ -261,15 +261,29 @@ public class PerformanceReviewsController : ControllerBase
         if (employees.Count == 0)
             return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found", employeeSource, orgFilter } });
 
-        var zoomRecords = await _context.ZoomUserRecords
-            .AsNoTracking()
-            .Where(z => z.Email != null && z.ZoomUserId != null)
-            .Select(z => new { z.Email, z.ZoomUserId })
-            .ToListAsync();
-        var zoomUserIdByEmail = zoomRecords
-            .Where(z => !string.IsNullOrWhiteSpace(z.Email) && !string.IsNullOrWhiteSpace(z.ZoomUserId))
-            .GroupBy(z => z.Email!.Trim().ToLowerInvariant())
-            .ToDictionary(g => g.Key, g => g.Select(x => x.ZoomUserId!.Trim()).FirstOrDefault() ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        var zoomUserIdByEmail = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var zoomRecords = await _context.ZoomUserRecords
+                .AsNoTracking()
+                .Where(z => z.Email != null && z.ZoomUserId != null)
+                .Select(z => new { z.Email, z.ZoomUserId })
+                .ToListAsync();
+
+            zoomUserIdByEmail = zoomRecords
+                .Where(z => !string.IsNullOrWhiteSpace(z.Email) && !string.IsNullOrWhiteSpace(z.ZoomUserId))
+                .GroupBy(z => z.Email!.Trim().ToLowerInvariant())
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(x => x.ZoomUserId!.Trim()).FirstOrDefault() ?? string.Empty,
+                    StringComparer.OrdinalIgnoreCase
+                );
+        }
+        catch (Exception ex)
+        {
+            // Do not fail the endpoint if Zoom user cache table is unavailable.
+            _logger.LogWarning(ex, "ZoomUserRecords lookup failed; continuing without cached zoom-user mapping");
+        }
 
         var days = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
