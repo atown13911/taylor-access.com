@@ -413,6 +413,14 @@ public class PerformanceReviewsController : ControllerBase
                     }
                     if (totalCalls <= 0)
                         totalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
+                    var totalCallMinutes = ReadDoubleAny(metricElement, "totalCallMinutes", "total_call_minutes", "callDurationMinutes", "call_duration_minutes", "totalCallDuration", "total_call_duration");
+                    if (totalCallMinutes <= 0)
+                        totalCallMinutes = ReadDoubleAny(item, "totalCallMinutes", "total_call_minutes", "callDurationMinutes", "call_duration_minutes", "totalCallDuration", "total_call_duration");
+                    var totalCallSeconds = ReadDoubleAny(metricElement, "totalCallSeconds", "total_call_seconds", "callDurationSeconds", "call_duration_seconds", "totalCallDurationSeconds", "total_call_duration_seconds");
+                    if (totalCallSeconds <= 0)
+                        totalCallSeconds = ReadDoubleAny(item, "totalCallSeconds", "total_call_seconds", "callDurationSeconds", "call_duration_seconds", "totalCallDurationSeconds", "total_call_duration_seconds");
+                    if (totalCallMinutes <= 0 && totalCallSeconds > 0)
+                        totalCallMinutes = totalCallSeconds / 60d;
 
                     var row = new ZoomUserMetricLite
                     {
@@ -422,6 +430,7 @@ public class PerformanceReviewsController : ControllerBase
                         Email = ReadStringAny(userElement, "email", "userEmail", "user_email", "workEmail", "work_email")
                             ?? ReadStringAny(item, "email", "userEmail", "user_email", "workEmail", "work_email"),
                         TotalCalls = totalCalls,
+                        TotalCallMinutes = Math.Max(0, totalCallMinutes),
                         SmsSessionCount = ReadIntAny(metricElement, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count")
                             + ReadIntAny(metricElement, "smsReceivedCount", "sms_received_count", "smsSentCount", "sms_sent_count"),
                         MeetingsHosted = ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted")
@@ -485,6 +494,7 @@ public class PerformanceReviewsController : ControllerBase
         var callByEmployee = new Dictionary<int, int>();
         var textByEmployee = new Dictionary<int, int>();
         var meetingsByEmployee = new Dictionary<int, int>();
+        var totalCallMinutesByEmployee = new Dictionary<int, double>();
         var matchedCount = 0;
         foreach (var emp in employees)
         {
@@ -565,6 +575,7 @@ public class PerformanceReviewsController : ControllerBase
             callByEmployee[emp.EmployeeId] = zoomMetric?.TotalCalls ?? 0;
             textByEmployee[emp.EmployeeId] = smsCount;
             meetingsByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsHosted ?? 0;
+            totalCallMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.TotalCallMinutes ?? 0);
         }
 
         var usedCallLogFallback = false;
@@ -647,6 +658,7 @@ public class PerformanceReviewsController : ControllerBase
                     {
                         var matchedEmployees = new HashSet<int>();
                         var fallbackCallByEmployee = new Dictionary<int, int>();
+                        var fallbackCallMinutesByEmployee = new Dictionary<int, double>();
                         foreach (var item in callData.EnumerateArray())
                         {
                             callLogRows++;
@@ -667,6 +679,16 @@ public class PerformanceReviewsController : ControllerBase
                                 if (string.IsNullOrWhiteSpace(ownerName))
                                     ownerName = NormalizeName(ReadStringAny(ownerNode, "name", "displayName", "display_name"));
                             }
+                            var durationMinutes = ReadDoubleAny(
+                                item,
+                                "durationMinutes", "duration_minutes", "callDurationMinutes", "call_duration_minutes",
+                                "duration", "durationMin", "duration_mins", "durationMins");
+                            var durationSeconds = ReadDoubleAny(
+                                item,
+                                "durationSeconds", "duration_seconds", "callDurationSeconds", "call_duration_seconds", "durationSec");
+                            if (durationMinutes <= 0 && durationSeconds > 0)
+                                durationMinutes = durationSeconds / 60d;
+                            if (durationMinutes < 0) durationMinutes = 0;
 
                             if (!string.IsNullOrWhiteSpace(ownerUserId)
                                 && zoomUserIdToEmployeeIds.TryGetValue(ownerUserId.Trim(), out var ownerIds))
@@ -704,6 +726,7 @@ public class PerformanceReviewsController : ControllerBase
                             foreach (var id in matchedIds)
                             {
                                 fallbackCallByEmployee[id] = fallbackCallByEmployee.GetValueOrDefault(id) + 1;
+                                fallbackCallMinutesByEmployee[id] = fallbackCallMinutesByEmployee.GetValueOrDefault(id) + durationMinutes;
                                 matchedEmployees.Add(id);
                             }
                             if (matchedIds.Count > 0) callLogRowsMatched++;
@@ -715,6 +738,11 @@ public class PerformanceReviewsController : ControllerBase
                             {
                                 var existing = callByEmployee.GetValueOrDefault(kvp.Key);
                                 callByEmployee[kvp.Key] = Math.Max(existing, kvp.Value);
+                            }
+                            foreach (var kvp in fallbackCallMinutesByEmployee)
+                            {
+                                var existing = totalCallMinutesByEmployee.GetValueOrDefault(kvp.Key);
+                                totalCallMinutesByEmployee[kvp.Key] = Math.Max(existing, kvp.Value);
                             }
 
                             usedCallLogFallback = true;
@@ -735,14 +763,18 @@ public class PerformanceReviewsController : ControllerBase
         var rows = new List<object>(employees.Count);
         foreach (var emp in employees)
         {
+            var totalCallMinutes = Math.Round(Math.Max(0, totalCallMinutesByEmployee.GetValueOrDefault(emp.EmployeeId)), 1);
+            var callVolume = callByEmployee.GetValueOrDefault(emp.EmployeeId);
             rows.Add(new
             {
                 employeeId = emp.EmployeeId,
                 employeeName = emp.Name,
                 email = emp.Email,
-                callVolume = callByEmployee.GetValueOrDefault(emp.EmployeeId),
+                callVolume = callVolume,
                 textVolume = textByEmployee.GetValueOrDefault(emp.EmployeeId),
                 meetingsHosted = meetingsByEmployee.GetValueOrDefault(emp.EmployeeId),
+                totalCallMinutes = totalCallMinutes,
+                avgCallMinutes = callVolume > 0 ? Math.Round(totalCallMinutes / callVolume, 2) : 0,
                 source = usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway"
             });
         }
@@ -1223,6 +1255,14 @@ public class PerformanceReviewsController : ControllerBase
         return 0;
     }
 
+    private static double ReadDouble(JsonElement element, string propName)
+    {
+        if (!TryGetPropertyIgnoreCase(element, propName, out var value)) return 0;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var num)) return num;
+        if (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), out var parsed)) return parsed;
+        return 0;
+    }
+
     private static string? ReadStringAny(JsonElement element, params string[] propNames)
     {
         foreach (var propName in propNames)
@@ -1238,6 +1278,16 @@ public class PerformanceReviewsController : ControllerBase
         foreach (var propName in propNames)
         {
             var value = ReadInt(element, propName);
+            if (value > 0) return value;
+        }
+        return 0;
+    }
+
+    private static double ReadDoubleAny(JsonElement element, params string[] propNames)
+    {
+        foreach (var propName in propNames)
+        {
+            var value = ReadDouble(element, propName);
             if (value > 0) return value;
         }
         return 0;
@@ -1283,6 +1333,7 @@ internal class ZoomUserMetricLite
     public string? ZoomUserId { get; set; }
     public string? Email { get; set; }
     public int TotalCalls { get; set; }
+    public double TotalCallMinutes { get; set; }
     public int SmsSessionCount { get; set; }
     public int MeetingsHosted { get; set; }
 }

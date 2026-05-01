@@ -34,6 +34,8 @@ interface Review {
 }
 interface ReviewMetricRow extends Review {
   callVolume: number;
+  totalCallMinutes: number;
+  avgCallMinutes: number;
   textVolume: number;
   totalHours: number;
   activeHours: number;
@@ -45,6 +47,8 @@ interface ReviewMetricRow extends Review {
 interface ZoomMetricRow {
   employeeId: number;
   callVolume: number;
+  totalCallMinutes?: number;
+  avgCallMinutes?: number;
   textVolume: number;
   meetingsHosted?: number;
   email?: string;
@@ -70,6 +74,8 @@ type ReviewTableSort =
   | 'activity-asc'
   | 'calls-desc'
   | 'calls-asc'
+  | 'calltime-desc'
+  | 'calltime-asc'
   | 'clocked-desc'
   | 'clocked-asc';
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
@@ -191,6 +197,8 @@ type RosterEmployee = Record<string, any>;
               <tr>
                 <th>Employee</th>
                 <th>Calls</th>
+                <th>Total Call Time</th>
+                <th>Avg Call Time</th>
                 <th>Texts</th>
                 <th>Clocked Hrs</th>
                 <th>Work Hrs</th>
@@ -206,6 +214,8 @@ type RosterEmployee = Record<string, any>;
                 <tr>
                   <td><strong>{{ review.employeeName || 'Employee #' + review.employeeId }}</strong></td>
                   <td>{{ review.callVolume }}</td>
+                  <td>{{ review.totalCallMinutes | number:'1.1-1' }} min</td>
+                  <td>{{ review.avgCallMinutes | number:'1.1-2' }} min</td>
                   <td>{{ review.textVolume }}</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
@@ -582,6 +592,8 @@ type RosterEmployee = Record<string, any>;
     .reviews-table td:nth-child(8),
     .reviews-table td:nth-child(9),
     .reviews-table td:nth-child(10),
+    .reviews-table td:nth-child(11),
+    .reviews-table td:nth-child(12),
     .reviews-table th:nth-child(2),
     .reviews-table th:nth-child(3),
     .reviews-table th:nth-child(4),
@@ -590,7 +602,9 @@ type RosterEmployee = Record<string, any>;
     .reviews-table th:nth-child(7),
     .reviews-table th:nth-child(8),
     .reviews-table th:nth-child(9),
-    .reviews-table th:nth-child(10) {
+    .reviews-table th:nth-child(10),
+    .reviews-table th:nth-child(11),
+    .reviews-table th:nth-child(12) {
       text-align: center;
     }
     .reviews-table td:first-child,
@@ -665,6 +679,8 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'activity-asc', label: 'Activity %: Low to High' },
     { value: 'calls-desc', label: 'Calls: High to Low' },
     { value: 'calls-asc', label: 'Calls: Low to High' },
+    { value: 'calltime-desc', label: 'Total Call Time: High to Low' },
+    { value: 'calltime-asc', label: 'Total Call Time: Low to High' },
     { value: 'clocked-desc', label: 'Clocked Hrs: High to Low' },
     { value: 'clocked-asc', label: 'Clocked Hrs: Low to High' },
     { value: 'employee-asc', label: 'Employee: A to Z' },
@@ -833,6 +849,10 @@ export class PerformanceReviewsComponent implements OnInit {
           return a.callVolume - b.callVolume;
         case 'calls-desc':
           return b.callVolume - a.callVolume;
+        case 'calltime-asc':
+          return a.totalCallMinutes - b.totalCallMinutes;
+        case 'calltime-desc':
+          return b.totalCallMinutes - a.totalCallMinutes;
         case 'clocked-asc':
           return a.totalHours - b.totalHours;
         case 'clocked-desc':
@@ -997,6 +1017,19 @@ export class PerformanceReviewsComponent implements OnInit {
         const metric: ZoomMetricRow = {
           employeeId: Number.isFinite(employeeId) ? employeeId : 0,
           callVolume: this.readNumeric(row, ['callVolume', 'totalCalls', 'calls', 'callCount', 'phoneCalls']),
+          totalCallMinutes: Number(
+            row?.totalCallMinutes
+            ?? row?.total_call_minutes
+            ?? row?.totalCallDuration
+            ?? row?.callDurationMinutes
+            ?? 0
+          ),
+          avgCallMinutes: Number(
+            row?.avgCallMinutes
+            ?? row?.avg_call_minutes
+            ?? row?.averageCallMinutes
+            ?? 0
+          ),
           textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
           meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings', 'meetingsJoined']),
           email: email || undefined,
@@ -1248,7 +1281,7 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
   }
 
-  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; textVolume: number; meetingsHosted: number } {
+  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; totalCallMinutes: number; avgCallMinutes: number; textVolume: number; meetingsHosted: number } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoomById = this.zoomMetricMap()[employeeId];
@@ -1271,8 +1304,15 @@ export class PerformanceReviewsComponent implements OnInit {
     const nameKey = this.normalizeName(employeeName || emp?.name);
     const zoomByName = nameKey ? this.zoomMetricByName()[nameKey] : undefined;
     const zoom = zoomById ?? zoomByEmail ?? zoomByName;
+    const callVolume = Math.max(localCalls, Number(zoom?.callVolume || 0));
+    const totalCallMinutes = Math.max(0, Number(zoom?.totalCallMinutes || 0));
+    const avgCallMinutes = callVolume > 0
+      ? (Number(zoom?.avgCallMinutes || 0) > 0 ? Number(zoom?.avgCallMinutes || 0) : totalCallMinutes / callVolume)
+      : 0;
     return {
-      callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
+      callVolume,
+      totalCallMinutes,
+      avgCallMinutes,
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0)),
       meetingsHosted: Number(zoom?.meetingsHosted || 0)
     };
@@ -1301,13 +1341,15 @@ export class PerformanceReviewsComponent implements OnInit {
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
-    const { callVolume: liveCallVolume, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted } = liveComms;
+    const { callVolume: liveCallVolume, totalCallMinutes: liveTotalCallMinutes, avgCallMinutes: liveAvgCallMinutes, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted } = liveComms;
     const liveTime = this.getEmployeeTime(review.employeeId, review.employeeName);
     const liveRevenue = this.getAttributedRevenue(review.employeeId);
 
     const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
     const callVolume = persisted?.callVolume ?? Math.max(snapshotCallVolume, liveCallVolume);
+    const totalCallMinutes = Math.max(0, liveTotalCallMinutes);
+    const avgCallMinutes = callVolume > 0 ? (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : totalCallMinutes / callVolume) : 0;
     const textVolume = persisted?.textVolume ?? Math.max(snapshotTextVolume, liveTextVolume);
     const rawTotalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
     const activityHoursEstimate = this.estimateActivityHours(callVolume, textVolume, liveMeetingsHosted, assignedWorkHours);
@@ -1322,6 +1364,8 @@ export class PerformanceReviewsComponent implements OnInit {
     return {
       ...review,
       callVolume,
+      totalCallMinutes,
+      avgCallMinutes,
       textVolume,
       totalHours,
       activeHours,
