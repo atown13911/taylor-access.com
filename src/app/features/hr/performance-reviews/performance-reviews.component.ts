@@ -143,8 +143,9 @@ type RosterEmployee = Record<string, any>;
             <span class="table-title-chip">Saved Performance Table</span>
           </div>
           <div class="tabs period-mode-tabs">
-            <button class="tab" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Weekly</button>
-            <button class="tab" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Monthly</button>
+            <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'weekly'" (click)="showReportsTab.set(false); onPeriodModeChange('weekly')">Weekly</button>
+            <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'monthly'" (click)="showReportsTab.set(false); onPeriodModeChange('monthly')">Monthly</button>
+            <button class="tab" [class.active]="showReportsTab()" (click)="openReportsTab()">Report</button>
           </div>
         </div>
         <div class="month-filter">
@@ -181,7 +182,78 @@ type RosterEmployee = Record<string, any>;
       </div>
 
       <!-- Reviews Table -->
-      @if (loadingReviews()) {
+      @if (showReportsTab()) {
+        <section class="report-view">
+          <div class="report-cards report-cards-primary">
+            <article class="report-card">
+              <span>Total Staff</span>
+              <strong>{{ performanceSummary().totalStaff }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Active Staff</span>
+              <strong>{{ performanceSummary().activeStaff }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Total Calls</span>
+              <strong>{{ performanceSummary().totalCalls }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Total Call Time</span>
+              <strong>{{ performanceSummary().totalCallMinutes | number:'1.0-0' }} min</strong>
+            </article>
+            <article class="report-card">
+              <span>Average Activity</span>
+              <strong>{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</strong>
+            </article>
+          </div>
+
+          <div class="report-grid">
+            <div class="report-panel">
+              <h3>Status Breakdown</h3>
+              @for (item of reportStatusBreakdown(); track item.label) {
+                <div class="report-row">
+                  <span>{{ item.label }}</span>
+                  <div class="report-bar-wrap"><div class="report-bar" [style.width.%]="item.percent"></div></div>
+                  <strong>{{ item.count }}</strong>
+                </div>
+              } @empty {
+                <div class="chart-empty">No review data yet.</div>
+              }
+            </div>
+            <div class="report-panel">
+              <h3>Activity Buckets</h3>
+              @for (bucket of reportActivityBuckets(); track bucket.label) {
+                <div class="report-row">
+                  <span>{{ bucket.label }}</span>
+                  <div class="report-bar-wrap"><div class="report-bar alt" [style.width.%]="bucket.percent"></div></div>
+                  <strong>{{ bucket.count }}</strong>
+                </div>
+              } @empty {
+                <div class="chart-empty">No activity data yet.</div>
+              }
+            </div>
+            <div class="report-panel report-panel-wide">
+              <h3>Top Performers (Activity %)</h3>
+              <div class="report-table-head">
+                <span>Employee</span>
+                <span>Activity %</span>
+                <span>Calls</span>
+                <span>Call Time</span>
+              </div>
+              @for (row of reportTopActivityRows(); track row.employeeId) {
+                <div class="report-table-row">
+                  <span>{{ row.employeeName || ('Employee #' + row.employeeId) }}</span>
+                  <span>{{ (row.activityRate * 100) | number:'1.0-0' }}%</span>
+                  <span>{{ row.callVolume }}</span>
+                  <span>{{ row.totalCallMinutes | number:'1.0-0' }} min</span>
+                </div>
+              } @empty {
+                <div class="chart-empty">No ranked rows available.</div>
+              }
+            </div>
+          </div>
+        </section>
+      } @else if (loadingReviews()) {
         <div class="loading-state">
           <i class='bx bx-loader-alt bx-spin'></i>
           <h3>Loading performance reviews...</h3>
@@ -622,6 +694,24 @@ type RosterEmployee = Record<string, any>;
       min-width: 180px;
     }
     .reviews-table thead th:first-child { z-index: 3; }
+    .report-view { margin-top: 8px; }
+    .report-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .report-card { background: #10192c; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .report-card span { color: #8aa0b8; font-size: 0.78rem; }
+    .report-card strong { color: #e0f2fe; font-size: 1.12rem; }
+    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .report-panel { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; background: #0f172a; }
+    .report-panel-wide { grid-column: 1 / -1; }
+    .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
+    .report-row { display: grid; grid-template-columns: 140px 1fr 46px; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .report-row span { color: #cbd5e1; font-size: 0.82rem; }
+    .report-row strong { color: #e2e8f0; text-align: right; font-size: 0.82rem; }
+    .report-bar-wrap { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
+    .report-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0ea5e9); border-radius: 999px; }
+    .report-bar.alt { background: linear-gradient(90deg, #a78bfa, #818cf8); }
+    .report-table-head, .report-table-row { display: grid; grid-template-columns: 1.6fr 0.7fr 0.5fr 0.8fr; gap: 10px; align-items: center; padding: 10px 12px; }
+    .report-table-head { color: #8aa0b8; text-transform: uppercase; font-size: 0.72rem; border-bottom: 1px solid #2a2a4e; background: #0d0d1a; letter-spacing: 0.04em; }
+    .report-table-row { color: #dbeafe; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.84rem; }
     .type-badge { background: rgba(0, 212, 255, 0.1); color: #00d4ff; padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .status-badge { padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .status-badge.pending { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
@@ -676,6 +766,7 @@ export class PerformanceReviewsComponent implements OnInit {
   selectedWeekNumber = signal(1);
   selectedWeekYear = signal(new Date().getUTCFullYear());
   selectedTableSort = signal<ReviewTableSort>('score-desc');
+  showReportsTab = signal(false);
   periodMode = signal<'weekly' | 'monthly'>('weekly');
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
   tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
@@ -895,6 +986,41 @@ export class PerformanceReviewsComponent implements OnInit {
     });
 
     return rows;
+  });
+  reportStatusBreakdown = computed(() => {
+    const rows = this.metricRows();
+    const total = rows.length || 1;
+    const pending = rows.filter(r => this.normalizeReviewStatus(r.status) === 'pending').length;
+    const completed = rows.filter(r => this.normalizeReviewStatus(r.status) === 'completed').length;
+    const seeded = rows.filter(r => !!r.isSeeded).length;
+    return [
+      { label: 'Pending', count: pending, percent: (pending / total) * 100 },
+      { label: 'Completed', count: completed, percent: (completed / total) * 100 },
+      { label: 'Draft/Seeded', count: seeded, percent: (seeded / total) * 100 }
+    ].filter(x => x.count > 0);
+  });
+  reportActivityBuckets = computed(() => {
+    const rows = this.metricRows();
+    const total = rows.length || 1;
+    const buckets = [
+      { label: '0% - 24%', count: 0 },
+      { label: '25% - 49%', count: 0 },
+      { label: '50% - 74%', count: 0 },
+      { label: '75% - 100%', count: 0 }
+    ];
+    for (const row of rows) {
+      const pct = Number(row.activityRate || 0) * 100;
+      if (pct < 25) buckets[0].count++;
+      else if (pct < 50) buckets[1].count++;
+      else if (pct < 75) buckets[2].count++;
+      else buckets[3].count++;
+    }
+    return buckets.map(b => ({ ...b, percent: (b.count / total) * 100 })).filter(b => b.count > 0);
+  });
+  reportTopActivityRows = computed(() => {
+    return [...this.metricRows()]
+      .sort((a, b) => (b.activityRate - a.activityRate) || (b.callVolume - a.callVolume))
+      .slice(0, 8);
   });
   totalInvoicedRevenue30d = computed(() => {
     const seriesTotal = this.revenueSeries().reduce(
@@ -1122,6 +1248,7 @@ export class PerformanceReviewsComponent implements OnInit {
   async onPeriodModeChange(mode: 'weekly' | 'monthly') {
     if (this.periodMode() === mode) return;
     this.periodMode.set(mode);
+    this.showReportsTab.set(false);
     if (mode === 'weekly') {
       this.initializeCurrentWeekSelection();
       this.selectedReviewMonth.set(this.buildWeekRangeValue(this.selectedWeekYear(), this.selectedWeekNumber()));
@@ -1138,6 +1265,10 @@ export class PerformanceReviewsComponent implements OnInit {
     await this.persistDailyMetricsSnapshot();
     await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
+  }
+
+  openReportsTab(): void {
+    this.showReportsTab.set(true);
   }
 
   async onWeekNumberChange(value: number | string): Promise<void> {
