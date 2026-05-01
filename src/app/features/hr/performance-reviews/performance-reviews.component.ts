@@ -1218,7 +1218,7 @@ export class PerformanceReviewsComponent implements OnInit {
             ?? 0
           ),
           textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
-          meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings_hosted', 'hostedMeetings', 'hosted_meetings']),
+          meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings_hosted', 'hostedMeetings', 'hosted_meetings', 'meetings', 'meetingCount', 'meeting_count']),
           meetingsJoined: this.readNumeric(row, ['meetingsJoined', 'meetings_joined', 'joinedMeetings', 'joined_meetings']),
           email: email || undefined,
           employeeName: String(row?.employeeName || row?.name || row?.displayName || '').trim() || undefined

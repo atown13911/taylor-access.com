@@ -433,10 +433,12 @@ public class PerformanceReviewsController : ControllerBase
                         TotalCallMinutes = Math.Max(0, totalCallMinutes),
                         SmsSessionCount = ReadIntAny(metricElement, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count")
                             + ReadIntAny(metricElement, "smsReceivedCount", "sms_received_count", "smsSentCount", "sms_sent_count"),
-                        MeetingsHosted = ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted")
-                            + ReadIntAny(item, "meetingsHosted", "meetings_hosted"),
-                        MeetingsJoined = ReadIntAny(metricElement, "meetingsJoined", "meetings_joined")
-                            + ReadIntAny(item, "meetingsJoined", "meetings_joined")
+                        MeetingsHosted =
+                            ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count")
+                            + ReadIntAny(item, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count"),
+                        MeetingsJoined =
+                            ReadIntAny(metricElement, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings")
+                            + ReadIntAny(item, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings")
                     };
                     if (row.SmsSessionCount <= 0)
                         row.SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count");
