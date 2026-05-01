@@ -579,6 +579,7 @@ public class PerformanceReviewsController : ControllerBase
             {
                 var emailToEmployeeIds = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
                 var nameToEmployeeIds = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+                var zoomUserIdToEmployeeIds = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
                 foreach (var emp in employees)
                 {
                     var keys = new[] { emp.Email, emp.ZoomEmail, emp.PersonalEmail }
@@ -604,6 +605,25 @@ public class PerformanceReviewsController : ControllerBase
                             }
                             localIds.Add(emp.EmployeeId);
                         }
+                    }
+
+                    var zoomUserIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if (!string.IsNullOrWhiteSpace(emp.ZoomUserId))
+                        zoomUserIds.Add(emp.ZoomUserId.Trim());
+                    foreach (var key in keys)
+                    {
+                        var mappedZoomUserId = zoomUserIdByEmail.GetValueOrDefault(key);
+                        if (!string.IsNullOrWhiteSpace(mappedZoomUserId))
+                            zoomUserIds.Add(mappedZoomUserId.Trim());
+                    }
+                    foreach (var zoomUserId in zoomUserIds)
+                    {
+                        if (!zoomUserIdToEmployeeIds.TryGetValue(zoomUserId, out var ids))
+                        {
+                            ids = new HashSet<int>();
+                            zoomUserIdToEmployeeIds[zoomUserId] = ids;
+                        }
+                        ids.Add(emp.EmployeeId);
                     }
 
                     var nameKey = NormalizeName(emp.Name);
@@ -632,12 +652,30 @@ public class PerformanceReviewsController : ControllerBase
                         {
                             callLogRows++;
                             var matchedIds = new HashSet<int>();
+                            var ownerUserId = ReadStringAny(item, "ownerUserId", "owner_user_id", "userId", "user_id", "agentId", "agent_id");
+                            var ownerEmail = ReadStringAny(item, "ownerEmail", "owner_email", "userEmail", "user_email");
                             var callerEmail = ReadStringAny(item, "caller_email", "callerEmail");
                             var calleeEmail = ReadStringAny(item, "callee_email", "calleeEmail");
+                            var ownerName = NormalizeName(ReadStringAny(item, "ownerName", "owner_name", "agentName", "agent_name"));
                             var callerName = NormalizeName(ReadStringAny(item, "caller_name", "callerName"));
                             var calleeName = NormalizeName(ReadStringAny(item, "callee_name", "calleeName"));
 
-                            foreach (var key in new[] { callerEmail, calleeEmail }
+                            if (TryGetPropertyIgnoreCase(item, "owner", out var ownerNode)
+                                && ownerNode.ValueKind == JsonValueKind.Object)
+                            {
+                                ownerUserId ??= ReadStringAny(ownerNode, "id", "userId", "user_id", "zoomUserId", "zoom_user_id");
+                                ownerEmail ??= ReadStringAny(ownerNode, "email", "userEmail", "user_email");
+                                if (string.IsNullOrWhiteSpace(ownerName))
+                                    ownerName = NormalizeName(ReadStringAny(ownerNode, "name", "displayName", "display_name"));
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(ownerUserId)
+                                && zoomUserIdToEmployeeIds.TryGetValue(ownerUserId.Trim(), out var ownerIds))
+                            {
+                                foreach (var id in ownerIds) matchedIds.Add(id);
+                            }
+
+                            foreach (var key in new[] { ownerEmail, callerEmail, calleeEmail }
                                 .Where(v => !string.IsNullOrWhiteSpace(v))
                                 .Select(v => v!.Trim().ToLowerInvariant()))
                             {
@@ -655,7 +693,7 @@ public class PerformanceReviewsController : ControllerBase
 
                             if (matchedIds.Count == 0)
                             {
-                                foreach (var nameKey in new[] { callerName, calleeName }.Where(v => !string.IsNullOrWhiteSpace(v)))
+                                foreach (var nameKey in new[] { ownerName, callerName, calleeName }.Where(v => !string.IsNullOrWhiteSpace(v)))
                                 {
                                     if (nameToEmployeeIds.TryGetValue(nameKey!, out var ids))
                                     {
