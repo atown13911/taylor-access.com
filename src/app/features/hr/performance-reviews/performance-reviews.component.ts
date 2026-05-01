@@ -1154,7 +1154,7 @@ export class PerformanceReviewsComponent implements OnInit {
     const totalHours = rawTotalHours > 0 ? Math.min(rawTotalHours, assignedWorkHours) : activityHoursEstimate;
     const activeHours = assignedWorkHours;
     const idleHours = Math.max(0, activeHours - totalHours);
-    const activityRate = persisted?.activityRate ?? (activeHours > 0 ? Math.min(1, totalHours / activeHours) : 0);
+    const activityRate = activeHours > 0 ? Math.min(1, totalHours / activeHours) : 0;
     const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
     const computedScore = this.computePerformanceScore(callVolume, textVolume, activeHours, totalHours, invoicedRevenue);
     const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), computedScore) : computedScore);
