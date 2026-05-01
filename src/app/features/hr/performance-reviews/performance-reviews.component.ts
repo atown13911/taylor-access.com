@@ -61,6 +61,17 @@ interface PersistedMetricRow {
   invoicedRevenue: number;
   score: number;
 }
+type ReviewTableSort =
+  | 'employee-asc'
+  | 'employee-desc'
+  | 'score-desc'
+  | 'score-asc'
+  | 'activity-desc'
+  | 'activity-asc'
+  | 'calls-desc'
+  | 'calls-asc'
+  | 'clocked-desc'
+  | 'clocked-asc';
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
 
@@ -150,6 +161,14 @@ type RosterEmployee = Record<string, any>;
             </select>
           }
         </div>
+        <div class="sort-filter">
+          <label>Sort By</label>
+          <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
+            @for (opt of tableSortOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
       </div>
 
       <!-- Reviews Table -->
@@ -183,7 +202,7 @@ type RosterEmployee = Record<string, any>;
               </tr>
             </thead>
             <tbody>
-              @for (review of metricRows(); track review.id) {
+              @for (review of sortedMetricRows(); track review.id) {
                 <tr>
                   <td><strong>{{ review.employeeName || 'Employee #' + review.employeeId }}</strong></td>
                   <td>{{ review.callVolume }}</td>
@@ -518,9 +537,10 @@ type RosterEmployee = Record<string, any>;
     .period-mode-tabs { margin-bottom: 0; }
     .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter { display: flex; align-items: center; gap: 8px; }
+    .sort-filter { display: flex; align-items: center; gap: 8px; }
     .week-selector { display: flex; align-items: center; gap: 8px; }
-    .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
-    .month-filter select, .month-filter input[type="date"] { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
+    .month-filter label, .sort-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .month-filter select, .month-filter input[type="date"], .sort-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
     .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
     .add-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
@@ -586,8 +606,21 @@ export class PerformanceReviewsComponent implements OnInit {
   selectedReviewMonth = signal('current');
   selectedWeekNumber = signal(1);
   selectedWeekYear = signal(new Date().getUTCFullYear());
+  selectedTableSort = signal<ReviewTableSort>('score-desc');
   periodMode = signal<'weekly' | 'monthly'>('weekly');
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
+  tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
+    { value: 'score-desc', label: 'Score: High to Low' },
+    { value: 'score-asc', label: 'Score: Low to High' },
+    { value: 'activity-desc', label: 'Activity %: High to Low' },
+    { value: 'activity-asc', label: 'Activity %: Low to High' },
+    { value: 'calls-desc', label: 'Calls: High to Low' },
+    { value: 'calls-asc', label: 'Calls: Low to High' },
+    { value: 'clocked-desc', label: 'Clocked Hrs: High to Low' },
+    { value: 'clocked-asc', label: 'Clocked Hrs: Low to High' },
+    { value: 'employee-asc', label: 'Employee: A to Z' },
+    { value: 'employee-desc', label: 'Employee: Z to A' }
+  ];
 
   // Call Metrics
   callLogs = signal<any[]>([]);
@@ -727,6 +760,40 @@ export class PerformanceReviewsComponent implements OnInit {
   filteredReviews = computed(() => this.reviewRows());
   metricRows = computed<ReviewMetricRow[]>(() => {
     return this.filteredReviews().map((review) => this.toMetricRow(review));
+  });
+  sortedMetricRows = computed<ReviewMetricRow[]>(() => {
+    const rows = [...this.metricRows()];
+    const sort = this.selectedTableSort();
+    const employeeLabel = (r: ReviewMetricRow) => String(r.employeeName || `Employee #${r.employeeId}`).trim().toLowerCase();
+
+    rows.sort((a, b) => {
+      switch (sort) {
+        case 'employee-asc':
+          return employeeLabel(a).localeCompare(employeeLabel(b));
+        case 'employee-desc':
+          return employeeLabel(b).localeCompare(employeeLabel(a));
+        case 'score-asc':
+          return a.score - b.score;
+        case 'score-desc':
+          return b.score - a.score;
+        case 'activity-asc':
+          return a.activityRate - b.activityRate;
+        case 'activity-desc':
+          return b.activityRate - a.activityRate;
+        case 'calls-asc':
+          return a.callVolume - b.callVolume;
+        case 'calls-desc':
+          return b.callVolume - a.callVolume;
+        case 'clocked-asc':
+          return a.totalHours - b.totalHours;
+        case 'clocked-desc':
+          return b.totalHours - a.totalHours;
+        default:
+          return b.score - a.score;
+      }
+    });
+
+    return rows;
   });
   totalInvoicedRevenue30d = computed(() => {
     const seriesTotal = this.revenueSeries().reduce(
