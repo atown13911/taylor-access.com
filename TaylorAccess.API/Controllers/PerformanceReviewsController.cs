@@ -434,7 +434,9 @@ public class PerformanceReviewsController : ControllerBase
                         SmsSessionCount = ReadIntAny(metricElement, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count")
                             + ReadIntAny(metricElement, "smsReceivedCount", "sms_received_count", "smsSentCount", "sms_sent_count"),
                         MeetingsHosted = ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted")
-                            + ReadIntAny(metricElement, "meetingsJoined", "meetings_joined")
+                            + ReadIntAny(item, "meetingsHosted", "meetings_hosted"),
+                        MeetingsJoined = ReadIntAny(metricElement, "meetingsJoined", "meetings_joined")
+                            + ReadIntAny(item, "meetingsJoined", "meetings_joined")
                     };
                     if (row.SmsSessionCount <= 0)
                         row.SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count");
@@ -493,7 +495,8 @@ public class PerformanceReviewsController : ControllerBase
 
         var callByEmployee = new Dictionary<int, int>();
         var textByEmployee = new Dictionary<int, int>();
-        var meetingsByEmployee = new Dictionary<int, int>();
+        var meetingsHostedByEmployee = new Dictionary<int, int>();
+        var meetingsJoinedByEmployee = new Dictionary<int, int>();
         var totalCallMinutesByEmployee = new Dictionary<int, double>();
         var matchedCount = 0;
         foreach (var emp in employees)
@@ -574,7 +577,8 @@ public class PerformanceReviewsController : ControllerBase
 
             callByEmployee[emp.EmployeeId] = zoomMetric?.TotalCalls ?? 0;
             textByEmployee[emp.EmployeeId] = smsCount;
-            meetingsByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsHosted ?? 0;
+            meetingsHostedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsHosted ?? 0;
+            meetingsJoinedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsJoined ?? 0;
             totalCallMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.TotalCallMinutes ?? 0);
         }
 
@@ -772,7 +776,8 @@ public class PerformanceReviewsController : ControllerBase
                 email = emp.Email,
                 callVolume = callVolume,
                 textVolume = textByEmployee.GetValueOrDefault(emp.EmployeeId),
-                meetingsHosted = meetingsByEmployee.GetValueOrDefault(emp.EmployeeId),
+                meetingsHosted = meetingsHostedByEmployee.GetValueOrDefault(emp.EmployeeId),
+                meetingsJoined = meetingsJoinedByEmployee.GetValueOrDefault(emp.EmployeeId),
                 totalCallMinutes = totalCallMinutes,
                 avgCallMinutes = callVolume > 0 ? Math.Round(totalCallMinutes / callVolume, 2) : 0,
                 source = usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway"
@@ -1336,6 +1341,7 @@ internal class ZoomUserMetricLite
     public double TotalCallMinutes { get; set; }
     public int SmsSessionCount { get; set; }
     public int MeetingsHosted { get; set; }
+    public int MeetingsJoined { get; set; }
 }
 
 public class BulkMonthlyPerformanceMetricsSnapshotRequest

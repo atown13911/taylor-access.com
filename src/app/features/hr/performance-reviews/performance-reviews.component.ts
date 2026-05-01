@@ -37,6 +37,8 @@ interface ReviewMetricRow extends Review {
   totalCallMinutes: number;
   avgCallMinutes: number;
   textVolume: number;
+  meetingsHosted: number;
+  meetingsJoined: number;
   totalHours: number;
   activeHours: number;
   idleHours: number;
@@ -51,6 +53,7 @@ interface ZoomMetricRow {
   avgCallMinutes?: number;
   textVolume: number;
   meetingsHosted?: number;
+  meetingsJoined?: number;
   email?: string;
   employeeName?: string;
 }
@@ -277,6 +280,8 @@ type RosterEmployee = Record<string, any>;
                 <th>Total Call Time</th>
                 <th>Avg Call Time</th>
                 <th>Texts</th>
+                <th>Meetings Hosted</th>
+                <th>Meetings Joined</th>
                 <th>Clocked Hrs</th>
                 <th>Work Hrs</th>
                 <th>Activity %</th>
@@ -294,6 +299,8 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ review.totalCallMinutes | number:'1.1-1' }} min</td>
                   <td>{{ review.avgCallMinutes | number:'1.1-2' }} min</td>
                   <td>{{ review.textVolume }}</td>
+                  <td>{{ review.meetingsHosted }}</td>
+                  <td>{{ review.meetingsJoined }}</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
                   <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
@@ -674,6 +681,8 @@ type RosterEmployee = Record<string, any>;
     .reviews-table td:nth-child(10),
     .reviews-table td:nth-child(11),
     .reviews-table td:nth-child(12),
+    .reviews-table td:nth-child(13),
+    .reviews-table td:nth-child(14),
     .reviews-table th:nth-child(2),
     .reviews-table th:nth-child(3),
     .reviews-table th:nth-child(4),
@@ -684,7 +693,9 @@ type RosterEmployee = Record<string, any>;
     .reviews-table th:nth-child(9),
     .reviews-table th:nth-child(10),
     .reviews-table th:nth-child(11),
-    .reviews-table th:nth-child(12) {
+    .reviews-table th:nth-child(12),
+    .reviews-table th:nth-child(13),
+    .reviews-table th:nth-child(14) {
       text-align: center;
     }
     .reviews-table td:first-child,
@@ -1191,7 +1202,8 @@ export class PerformanceReviewsComponent implements OnInit {
             ?? 0
           ),
           textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
-          meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings', 'meetingsJoined']),
+          meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings_hosted', 'hostedMeetings', 'hosted_meetings']),
+          meetingsJoined: this.readNumeric(row, ['meetingsJoined', 'meetings_joined', 'joinedMeetings', 'joined_meetings']),
           email: email || undefined,
           employeeName: String(row?.employeeName || row?.name || row?.displayName || '').trim() || undefined
         };
@@ -1446,7 +1458,7 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
   }
 
-  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; totalCallMinutes: number; avgCallMinutes: number; textVolume: number; meetingsHosted: number } {
+  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; totalCallMinutes: number; avgCallMinutes: number; textVolume: number; meetingsHosted: number; meetingsJoined: number } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoomById = this.zoomMetricMap()[employeeId];
@@ -1479,7 +1491,8 @@ export class PerformanceReviewsComponent implements OnInit {
       totalCallMinutes,
       avgCallMinutes,
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0)),
-      meetingsHosted: Number(zoom?.meetingsHosted || 0)
+      meetingsHosted: Number(zoom?.meetingsHosted || 0),
+      meetingsJoined: Number(zoom?.meetingsJoined || 0)
     };
   }
 
@@ -1506,7 +1519,7 @@ export class PerformanceReviewsComponent implements OnInit {
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
-    const { callVolume: liveCallVolume, totalCallMinutes: liveTotalCallMinutes, avgCallMinutes: liveAvgCallMinutes, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted } = liveComms;
+    const { callVolume: liveCallVolume, totalCallMinutes: liveTotalCallMinutes, avgCallMinutes: liveAvgCallMinutes, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted, meetingsJoined: liveMeetingsJoined } = liveComms;
     const liveTime = this.getEmployeeTime(review.employeeId, review.employeeName);
     const liveRevenue = this.getAttributedRevenue(review.employeeId);
 
@@ -1532,6 +1545,8 @@ export class PerformanceReviewsComponent implements OnInit {
       totalCallMinutes,
       avgCallMinutes,
       textVolume,
+      meetingsHosted: liveMeetingsHosted,
+      meetingsJoined: liveMeetingsJoined,
       totalHours,
       activeHours,
       idleHours,
