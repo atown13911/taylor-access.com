@@ -422,6 +422,25 @@ public class PerformanceReviewsController : ControllerBase
                     if (totalCallMinutes <= 0 && totalCallSeconds > 0)
                         totalCallMinutes = totalCallSeconds / 60d;
 
+                    var meetingsHosted =
+                        ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count")
+                        + ReadIntAny(item, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count");
+                    var meetingsJoined =
+                        ReadIntAny(metricElement, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings")
+                        + ReadIntAny(item, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings");
+                    var meetingMinutes = ReadDoubleAny(metricElement, "meetingMinutes", "meeting_minutes", "meetingsMinutes", "meetings_minutes", "totalMeetingMinutes", "total_meeting_minutes");
+                    if (meetingMinutes <= 0)
+                        meetingMinutes = ReadDoubleAny(item, "meetingMinutes", "meeting_minutes", "meetingsMinutes", "meetings_minutes", "totalMeetingMinutes", "total_meeting_minutes");
+                    if (meetingsHosted <= 0 && meetingMinutes > 0)
+                    {
+                        // Some Zoom payloads only expose meeting minutes; approximate count for reporting.
+                        meetingsHosted = Math.Max(1, (int)Math.Round(meetingMinutes / 30d, MidpointRounding.AwayFromZero));
+                    }
+                    if (meetingsJoined <= 0 && meetingMinutes > 0)
+                    {
+                        meetingsJoined = meetingsHosted;
+                    }
+
                     var row = new ZoomUserMetricLite
                     {
                         ZoomUserId = ReadStringAny(metricElement, "zoomUserId", "zoom_user_id", "userId", "user_id")
@@ -433,12 +452,9 @@ public class PerformanceReviewsController : ControllerBase
                         TotalCallMinutes = Math.Max(0, totalCallMinutes),
                         SmsSessionCount = ReadIntAny(metricElement, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count")
                             + ReadIntAny(metricElement, "smsReceivedCount", "sms_received_count", "smsSentCount", "sms_sent_count"),
-                        MeetingsHosted =
-                            ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count")
-                            + ReadIntAny(item, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count"),
-                        MeetingsJoined =
-                            ReadIntAny(metricElement, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings")
-                            + ReadIntAny(item, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings")
+                        MeetingsHosted = meetingsHosted,
+                        MeetingsJoined = meetingsJoined,
+                        MeetingMinutes = Math.Max(0, meetingMinutes)
                     };
                     if (row.SmsSessionCount <= 0)
                         row.SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count");
@@ -493,6 +509,50 @@ public class PerformanceReviewsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Zoom SMS pull via gateway failed; using smsSessionCount fallback");
+        }
+
+        var meetingRows = new List<(string? HostId, string? HostEmail, string? HostName, DateTime? StartUtc)>();
+        try
+        {
+            var meetingsResponse = await client.GetAsync($"{crmBase}/meetings?type=past&pageSize=500");
+            if (meetingsResponse.IsSuccessStatusCode)
+            {
+                var meetingsJson = await meetingsResponse.Content.ReadAsStringAsync();
+                using var meetingsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(meetingsJson) ? "{}" : meetingsJson);
+                if (TryGetPropertyIgnoreCase(meetingsDoc.RootElement, "data", out var meetingsData)
+                    && meetingsData.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in meetingsData.EnumerateArray())
+                    {
+                        var startRaw = ReadStringAny(item, "startTime", "start_time", "date", "meetingDate", "meeting_date");
+                        DateTime? startUtc = null;
+                        if (!string.IsNullOrWhiteSpace(startRaw) && DateTime.TryParse(startRaw, out var parsedStart))
+                            startUtc = parsedStart.ToUniversalTime();
+                        if (startUtc.HasValue)
+                        {
+                            var day = startUtc.Value.Date;
+                            if (day < targetStart.Date || day > rangeEnd.Date) continue;
+                        }
+
+                        var hostNode = default(JsonElement);
+                        var hasHostNode = TryGetPropertyIgnoreCase(item, "host", out hostNode) && hostNode.ValueKind == JsonValueKind.Object;
+                        var hostId =
+                            ReadStringAny(item, "hostId", "host_id", "ownerUserId", "owner_user_id", "userId", "user_id")
+                            ?? (hasHostNode ? ReadStringAny(hostNode, "id", "hostId", "host_id", "userId", "user_id") : null);
+                        var hostEmail =
+                            ReadStringAny(item, "hostEmail", "host_email", "ownerEmail", "owner_email", "email")
+                            ?? (hasHostNode ? ReadStringAny(hostNode, "email", "hostEmail", "host_email") : null);
+                        var hostName =
+                            ReadStringAny(item, "hostName", "host_name", "ownerName", "owner_name", "name")
+                            ?? (hasHostNode ? ReadStringAny(hostNode, "name", "displayName", "display_name") : null);
+                        meetingRows.Add((hostId?.Trim(), hostEmail?.Trim().ToLowerInvariant(), NormalizeName(hostName), startUtc));
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Zoom meetings pull via gateway failed; continuing without meetings fallback");
         }
 
         var callByEmployee = new Dictionary<int, int>();
@@ -582,6 +642,33 @@ public class PerformanceReviewsController : ControllerBase
             meetingsHostedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsHosted ?? 0;
             meetingsJoinedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsJoined ?? 0;
             totalCallMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.TotalCallMinutes ?? 0);
+
+            if (meetingRows.Count > 0
+                && meetingsHostedByEmployee[emp.EmployeeId] <= 0
+                && meetingsJoinedByEmployee[emp.EmployeeId] <= 0)
+            {
+                var zoomIdCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(emp.ZoomUserId))
+                    zoomIdCandidates.Add(emp.ZoomUserId.Trim());
+                foreach (var mapped in mappedZoomUserIds.Where(v => !string.IsNullOrWhiteSpace(v)))
+                    zoomIdCandidates.Add(mapped.Trim());
+
+                var emailCandidateSet = new HashSet<string>(emailCandidates, StringComparer.OrdinalIgnoreCase);
+                var hosted = 0;
+                foreach (var meeting in meetingRows)
+                {
+                    var hostMatched =
+                        (!string.IsNullOrWhiteSpace(meeting.HostId) && zoomIdCandidates.Contains(meeting.HostId))
+                        || (!string.IsNullOrWhiteSpace(meeting.HostEmail) && emailCandidateSet.Contains(meeting.HostEmail))
+                        || (!string.IsNullOrWhiteSpace(employeeNameKey) && !string.IsNullOrWhiteSpace(meeting.HostName) && string.Equals(meeting.HostName, employeeNameKey, StringComparison.OrdinalIgnoreCase));
+                    if (hostMatched) hosted++;
+                }
+                if (hosted > 0)
+                {
+                    meetingsHostedByEmployee[emp.EmployeeId] = hosted;
+                    meetingsJoinedByEmployee[emp.EmployeeId] = hosted;
+                }
+            }
         }
 
         var usedCallLogFallback = false;
@@ -1344,6 +1431,7 @@ internal class ZoomUserMetricLite
     public int SmsSessionCount { get; set; }
     public int MeetingsHosted { get; set; }
     public int MeetingsJoined { get; set; }
+    public double MeetingMinutes { get; set; }
 }
 
 public class BulkMonthlyPerformanceMetricsSnapshotRequest
