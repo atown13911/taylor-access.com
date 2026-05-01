@@ -110,9 +110,12 @@ type RosterEmployee = Record<string, any>;
       @if (pageTab() === 'reviews') {
       <!-- Stats -->
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div><span class="stat-val">{{ reviewRows().length }}</span><span class="stat-lbl">Total Reviews</span></div></div>
-        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-time'></i></div><div><span class="stat-val">{{ getReviewCount('pending') }}</span><span class="stat-lbl">Pending</span></div></div>
-        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-check-circle'></i></div><div><span class="stat-val">{{ getReviewCount('completed') }}</span><span class="stat-lbl">Completed</span></div></div>
+        <div class="stat-card"><div class="stat-icon staff"><i class='bx bx-group'></i></div><div><span class="stat-val">{{ performanceSummary().totalStaff }}</span><span class="stat-lbl">Total Staff</span></div></div>
+        <div class="stat-card"><div class="stat-icon calls"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ performanceSummary().totalCalls }}</span><span class="stat-lbl">Total Calls</span></div></div>
+        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-time-five'></i></div><div><span class="stat-val">{{ performanceSummary().totalCallMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Call Time</span></div></div>
+        <div class="stat-card"><div class="stat-icon activity"><i class='bx bx-line-chart'></i></div><div><span class="stat-val">{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</span><span class="stat-lbl">Avg Activity</span></div></div>
+        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-medal'></i></div><div><span class="stat-val">{{ performanceSummary().avgScore | number:'1.0-0' }}</span><span class="stat-lbl">Avg Score</span></div></div>
+        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-user-check'></i></div><div><span class="stat-val">{{ performanceSummary().activeStaff }}</span><span class="stat-lbl">Active Staff</span></div></div>
       </div>
       <div class="integration-status-row">
         <div class="status-item">
@@ -535,6 +538,9 @@ type RosterEmployee = Record<string, any>;
     .stat-icon.total { background: rgba(0, 212, 255, 0.12); color: #00d4ff; }
     .stat-icon.pending { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
     .stat-icon.completed { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
+    .stat-icon.staff { background: rgba(59, 130, 246, 0.14); color: #60a5fa; }
+    .stat-icon.calls { background: rgba(14, 165, 233, 0.14); color: #38bdf8; }
+    .stat-icon.activity { background: rgba(139, 92, 246, 0.14); color: #a78bfa; }
     .stat-icon.draft { background: rgba(156, 163, 175, 0.12); color: #9ca3af; }
     .stat-val { font-size: 1.4rem; font-weight: 700; color: #fff; display: block; }
     .stat-lbl { font-size: 0.78rem; color: #888; }
@@ -825,6 +831,32 @@ export class PerformanceReviewsComponent implements OnInit {
   filteredReviews = computed(() => this.reviewRows());
   metricRows = computed<ReviewMetricRow[]>(() => {
     return this.filteredReviews().map((review) => this.toMetricRow(review));
+  });
+  performanceSummary = computed(() => {
+    const rows = this.metricRows();
+    const totalStaff = this.employees().length || rows.length;
+    const totalCalls = rows.reduce((sum, row) => sum + Number(row.callVolume || 0), 0);
+    const totalCallMinutes = rows.reduce((sum, row) => sum + Number(row.totalCallMinutes || 0), 0);
+    const avgActivityPercent = rows.length
+      ? rows.reduce((sum, row) => sum + (Number(row.activityRate || 0) * 100), 0) / rows.length
+      : 0;
+    const avgScore = rows.length
+      ? rows.reduce((sum, row) => sum + Number(row.score || 0), 0) / rows.length
+      : 0;
+    const activeStaff = rows.filter(row =>
+      Number(row.callVolume || 0) > 0
+      || Number(row.textVolume || 0) > 0
+      || Number(row.totalCallMinutes || 0) > 0
+      || Number(row.totalHours || 0) > 0
+    ).length;
+    return {
+      totalStaff,
+      totalCalls,
+      totalCallMinutes,
+      avgActivityPercent,
+      avgScore,
+      activeStaff
+    };
   });
   sortedMetricRows = computed<ReviewMetricRow[]>(() => {
     const rows = [...this.metricRows()];
