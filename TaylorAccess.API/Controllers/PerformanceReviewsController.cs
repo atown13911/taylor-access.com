@@ -187,7 +187,6 @@ public class PerformanceReviewsController : ControllerBase
             if (rangeEnd < targetStart) (targetStart, rangeEnd) = (rangeEnd, targetStart);
             targetYear = rangeEnd.Year;
             targetMonth = rangeEnd.Month;
-            sync = false; // custom windows should be read-only period reports
         }
         else
         {
@@ -353,7 +352,7 @@ public class PerformanceReviewsController : ControllerBase
             }
         }
 
-        var skipWindowUnsupportedMetrics = hasCustomRange;
+        var skipWindowUnsupportedMetrics = false;
         JsonDocument? metricsDoc = null;
         if (!skipWindowUnsupportedMetrics)
         {
