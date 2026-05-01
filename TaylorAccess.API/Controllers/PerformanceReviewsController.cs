@@ -261,6 +261,16 @@ public class PerformanceReviewsController : ControllerBase
         if (employees.Count == 0)
             return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found", employeeSource, orgFilter } });
 
+        var zoomRecords = await _context.ZoomUserRecords
+            .AsNoTracking()
+            .Where(z => z.Email != null && z.ZoomUserId != null)
+            .Select(z => new { z.Email, z.ZoomUserId })
+            .ToListAsync();
+        var zoomUserIdByEmail = zoomRecords
+            .Where(z => !string.IsNullOrWhiteSpace(z.Email) && !string.IsNullOrWhiteSpace(z.ZoomUserId))
+            .GroupBy(z => z.Email!.Trim().ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.Select(x => x.ZoomUserId!.Trim()).FirstOrDefault() ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+
         var days = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
             ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
@@ -374,14 +384,38 @@ public class PerformanceReviewsController : ControllerBase
                 foreach (var item in metricsData.EnumerateArray())
                 {
                     crmMetricsRows++;
+                    var metricElement = item;
+                    if (TryGetPropertyIgnoreCase(item, "metrics", out var metricsNode) && metricsNode.ValueKind == JsonValueKind.Object)
+                        metricElement = metricsNode;
+                    var userElement = item;
+                    if (TryGetPropertyIgnoreCase(item, "user", out var userNode) && userNode.ValueKind == JsonValueKind.Object)
+                        userElement = userNode;
+
+                    var totalCalls = ReadIntAny(metricElement, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
+                    if (totalCalls <= 0)
+                    {
+                        var outboundCalls = ReadIntAny(metricElement, "outboundCalls", "outbound_calls");
+                        var inboundCalls = ReadIntAny(metricElement, "inboundCalls", "inbound_calls");
+                        totalCalls = outboundCalls + inboundCalls;
+                    }
+                    if (totalCalls <= 0)
+                        totalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
+
                     var row = new ZoomUserMetricLite
                     {
-                        ZoomUserId = ReadStringAny(item, "zoomUserId", "zoom_user_id", "userId", "user_id"),
-                        Email = ReadStringAny(item, "email", "userEmail", "user_email"),
-                        TotalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count"),
-                        SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count"),
-                        MeetingsHosted = ReadIntAny(item, "meetingsHosted", "meetings_hosted")
+                        ZoomUserId = ReadStringAny(metricElement, "zoomUserId", "zoom_user_id", "userId", "user_id")
+                            ?? ReadStringAny(userElement, "zoomUserId", "zoom_user_id", "userId", "user_id")
+                            ?? ReadStringAny(item, "zoomUserId", "zoom_user_id", "userId", "user_id"),
+                        Email = ReadStringAny(userElement, "email", "userEmail", "user_email", "workEmail", "work_email")
+                            ?? ReadStringAny(item, "email", "userEmail", "user_email", "workEmail", "work_email"),
+                        TotalCalls = totalCalls,
+                        SmsSessionCount = ReadIntAny(metricElement, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count")
+                            + ReadIntAny(metricElement, "smsReceivedCount", "sms_received_count", "smsSentCount", "sms_sent_count"),
+                        MeetingsHosted = ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted")
+                            + ReadIntAny(metricElement, "meetingsJoined", "meetings_joined")
                     };
+                    if (row.SmsSessionCount <= 0)
+                        row.SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count");
 
                     if (!string.IsNullOrWhiteSpace(row.Email))
                     {
@@ -393,7 +427,10 @@ public class PerformanceReviewsController : ControllerBase
                     }
                     if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
                         metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
-                    var nameKey = NormalizeName(ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name"));
+                    var nameKey = NormalizeName(
+                        ReadStringAny(userElement, "displayName", "display_name", "userName", "user_name", "name")
+                        ?? ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name")
+                    );
                     if (!string.IsNullOrWhiteSpace(nameKey))
                         metricsByName[nameKey] = row;
                     if (row.TotalCalls > 0) crmMetricsRowsWithCalls++;
@@ -453,6 +490,12 @@ public class PerformanceReviewsController : ControllerBase
                 .Where(v => !string.IsNullOrWhiteSpace(v))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            var mappedZoomUserIds = emailCandidates
+                .Select(email => zoomUserIdByEmail.GetValueOrDefault(email))
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
             var employeeNameKey = NormalizeName(emp.Name);
 
             ZoomUserMetricLite? zoomMetric = null;
@@ -477,6 +520,17 @@ public class PerformanceReviewsController : ControllerBase
             {
                 zoomMetric = byZoomUser;
             }
+            if (zoomMetric == null && mappedZoomUserIds.Count > 0)
+            {
+                foreach (var mappedZoomUserId in mappedZoomUserIds)
+                {
+                    if (metricsByZoomUserId.TryGetValue(mappedZoomUserId, out var mappedByZoomUser))
+                    {
+                        zoomMetric = mappedByZoomUser;
+                        break;
+                    }
+                }
+            }
 
             if (zoomMetric == null
                 && !string.IsNullOrWhiteSpace(employeeNameKey)
@@ -485,7 +539,7 @@ public class PerformanceReviewsController : ControllerBase
                 zoomMetric = byName;
             }
 
-            var zoomUserId = zoomMetric?.ZoomUserId ?? emp.ZoomUserId;
+            var zoomUserId = zoomMetric?.ZoomUserId ?? emp.ZoomUserId ?? mappedZoomUserIds.FirstOrDefault();
             var smsCount = 0;
             if (!string.IsNullOrWhiteSpace(zoomUserId) && smsByOwner.TryGetValue(zoomUserId!, out var mappedSms))
                 smsCount = mappedSms;
