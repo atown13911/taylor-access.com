@@ -1150,12 +1150,11 @@ export class PerformanceReviewsComponent implements OnInit {
     const callVolume = persisted?.callVolume ?? Math.max(snapshotCallVolume, liveCallVolume);
     const textVolume = persisted?.textVolume ?? Math.max(snapshotTextVolume, liveTextVolume);
     const rawTotalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
-    const rawWorkHours = persisted?.workHours ?? (hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours);
     const activityHoursEstimate = this.estimateActivityHours(callVolume, textVolume, liveMeetingsHosted, assignedWorkHours);
     const totalHours = rawTotalHours > 0 ? Math.min(rawTotalHours, assignedWorkHours) : activityHoursEstimate;
-    const activeHours = rawWorkHours > 0 ? Math.min(rawWorkHours, totalHours > 0 ? totalHours : assignedWorkHours) : activityHoursEstimate;
-    const idleHours = Math.max(0, totalHours - activeHours);
-    const activityRate = persisted?.activityRate ?? (totalHours > 0 ? Math.min(1, activeHours / totalHours) : 0);
+    const activeHours = assignedWorkHours;
+    const idleHours = Math.max(0, activeHours - totalHours);
+    const activityRate = persisted?.activityRate ?? (activeHours > 0 ? Math.min(1, totalHours / activeHours) : 0);
     const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
     const computedScore = this.computePerformanceScore(callVolume, textVolume, activeHours, totalHours, invoicedRevenue);
     const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), computedScore) : computedScore);
