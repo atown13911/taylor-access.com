@@ -46,6 +46,7 @@ interface ZoomMetricRow {
   employeeId: number;
   callVolume: number;
   textVolume: number;
+  meetingsHosted?: number;
   email?: string;
   employeeName?: string;
 }
@@ -856,6 +857,7 @@ export class PerformanceReviewsComponent implements OnInit {
           employeeId: Number.isFinite(employeeId) ? employeeId : 0,
           callVolume: this.readNumeric(row, ['callVolume', 'totalCalls', 'calls', 'callCount', 'phoneCalls']),
           textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
+          meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings', 'meetingsJoined']),
           email: email || undefined,
           employeeName: String(row?.employeeName || row?.name || row?.displayName || '').trim() || undefined
         };
@@ -1086,7 +1088,7 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
   }
 
-  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; textVolume: number } {
+  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; textVolume: number; meetingsHosted: number } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoomById = this.zoomMetricMap()[employeeId];
@@ -1111,7 +1113,8 @@ export class PerformanceReviewsComponent implements OnInit {
     const zoom = zoomById ?? zoomByEmail ?? zoomByName;
     return {
       callVolume: Math.max(localCalls, Number(zoom?.callVolume || 0)),
-      textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0))
+      textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0)),
+      meetingsHosted: Number(zoom?.meetingsHosted || 0)
     };
   }
 
@@ -1138,11 +1141,9 @@ export class PerformanceReviewsComponent implements OnInit {
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
-    const liveCallVolume = liveComms.callVolume;
-    const liveTextVolume = liveComms.textVolume;
+    const { callVolume: liveCallVolume, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted } = liveComms;
     const liveTime = this.getEmployeeTime(review.employeeId, review.employeeName);
     const liveRevenue = this.getAttributedRevenue(review.employeeId);
-    const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
 
     const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
@@ -1150,12 +1151,14 @@ export class PerformanceReviewsComponent implements OnInit {
     const textVolume = persisted?.textVolume ?? Math.max(snapshotTextVolume, liveTextVolume);
     const rawTotalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
     const rawWorkHours = persisted?.workHours ?? (hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours);
-    const activeHours = rawWorkHours > 0 ? rawWorkHours : assignedWorkHours;
-    const totalHours = Math.max(rawTotalHours, activeHours);
+    const activityHoursEstimate = this.estimateActivityHours(callVolume, textVolume, liveMeetingsHosted, assignedWorkHours);
+    const totalHours = rawTotalHours > 0 ? Math.min(rawTotalHours, assignedWorkHours) : activityHoursEstimate;
+    const activeHours = rawWorkHours > 0 ? Math.min(rawWorkHours, totalHours > 0 ? totalHours : assignedWorkHours) : activityHoursEstimate;
     const idleHours = Math.max(0, totalHours - activeHours);
-    const activityRate = persisted?.activityRate ?? (hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate);
+    const activityRate = persisted?.activityRate ?? (totalHours > 0 ? Math.min(1, activeHours / totalHours) : 0);
     const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
-    const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), liveScore) : liveScore);
+    const computedScore = this.computePerformanceScore(callVolume, textVolume, activeHours, totalHours, invoicedRevenue);
+    const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), computedScore) : computedScore);
 
     return {
       ...review,
@@ -1175,6 +1178,14 @@ export class PerformanceReviewsComponent implements OnInit {
     const msPerDay = 1000 * 60 * 60 * 24;
     const dayCount = Math.max(1, Math.floor((to.getTime() - from.getTime()) / msPerDay) + 1);
     return dayCount * 8;
+  }
+
+  private estimateActivityHours(callVolume: number, textVolume: number, meetingsHosted: number, assignedHours: number): number {
+    const callHours = Math.max(0, callVolume) * 0.2;
+    const textHours = Math.max(0, textVolume) * 0.04;
+    const meetingHours = Math.max(0, meetingsHosted) * 0.5;
+    const estimated = callHours + textHours + meetingHours;
+    return Math.min(assignedHours, Number(estimated.toFixed(2)));
   }
 
   private async loadPersistedDailyMetrics(): Promise<void> {
