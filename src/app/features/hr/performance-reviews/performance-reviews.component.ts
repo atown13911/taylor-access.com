@@ -185,8 +185,8 @@ type RosterEmployee = Record<string, any>;
           <p>Create a performance review to get started</p>
         </div>
       } @else {
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap reviews-table-wrap">
+          <table class="reviews-table">
             <thead>
               <tr>
                 <th>Employee</th>
@@ -549,10 +549,59 @@ type RosterEmployee = Record<string, any>;
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
     .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
     .table-wrap { border-radius: 12px; border: 1px solid #2a2a4e; overflow: hidden; }
+    .reviews-table-wrap { max-height: 68vh; overflow: auto; border-color: #374151; }
     table { width: 100%; border-collapse: collapse; }
     th { padding: 12px 16px; text-align: left; font-size: 0.75rem; color: #888; text-transform: uppercase; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     td { padding: 14px 16px; color: #ccc; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
     tr:hover td { background: rgba(0, 212, 255, 0.03); }
+    .reviews-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+      color: #cbd5e1;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #334155;
+      white-space: nowrap;
+    }
+    .reviews-table tbody tr:nth-child(odd) td { background: rgba(15, 23, 42, 0.35); }
+    .reviews-table tbody tr:nth-child(even) td { background: rgba(2, 6, 23, 0.65); }
+    .reviews-table tbody tr:hover td {
+      background: rgba(14, 165, 233, 0.14);
+      color: #e2e8f0;
+    }
+    .reviews-table th,
+    .reviews-table td { vertical-align: middle; }
+    .reviews-table td:nth-child(2),
+    .reviews-table td:nth-child(3),
+    .reviews-table td:nth-child(4),
+    .reviews-table td:nth-child(5),
+    .reviews-table td:nth-child(6),
+    .reviews-table td:nth-child(7),
+    .reviews-table td:nth-child(8),
+    .reviews-table td:nth-child(9),
+    .reviews-table td:nth-child(10),
+    .reviews-table th:nth-child(2),
+    .reviews-table th:nth-child(3),
+    .reviews-table th:nth-child(4),
+    .reviews-table th:nth-child(5),
+    .reviews-table th:nth-child(6),
+    .reviews-table th:nth-child(7),
+    .reviews-table th:nth-child(8),
+    .reviews-table th:nth-child(9),
+    .reviews-table th:nth-child(10) {
+      text-align: center;
+    }
+    .reviews-table td:first-child,
+    .reviews-table th:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: #0b1220;
+      min-width: 180px;
+    }
+    .reviews-table thead th:first-child { z-index: 3; }
     .type-badge { background: rgba(0, 212, 255, 0.1); color: #00d4ff; padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .status-badge { padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .status-badge.pending { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
@@ -564,7 +613,7 @@ type RosterEmployee = Record<string, any>;
     .score-pill.low { background: rgba(239, 68, 68, 0.16); color: #ef4444; }
     .rating i { font-size: 1rem; color: #333; &.filled { color: #fbbf24; } }
     .star-input i { font-size: 1.4rem; cursor: pointer; color: #333; &.filled { color: #fbbf24; } &:hover { color: #fbbf24; } }
-    .icon-btn { background: none; border: none; color: #888; cursor: pointer; font-size: 1.1rem; padding: 4px; &:hover { color: #00d4ff; } }
+    .icon-btn { background: rgba(30, 41, 59, 0.45); border: 1px solid #334155; color: #a5b4fc; cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px; &:hover { color: #22d3ee; border-color: #22d3ee; background: rgba(34, 211, 238, 0.12); } }
     .loading-state { text-align: center; padding: 60px 20px; color: #8fb6ff; i { font-size: 2.4rem; color: #42a5ff; display: block; margin-bottom: 10px; } h3 { color: #d7e7ff; margin: 0 0 6px; } p { margin: 0; font-size: 0.9rem; color: #9bb5d3; } }
     .empty-state { text-align: center; padding: 60px 20px; color: #888; i { font-size: 3rem; color: #444; display: block; margin-bottom: 12px; } h3 { color: #ccc; margin: 0 0 6px; } p { margin: 0; font-size: 0.9rem; } }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
