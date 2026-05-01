@@ -171,14 +171,16 @@ type RosterEmployee = Record<string, any>;
             </select>
           }
         </div>
-        <div class="sort-filter">
-          <label>Sort By</label>
-          <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
-            @for (opt of tableSortOptions; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
+        @if (!showReportsTab()) {
+          <div class="sort-filter">
+            <label>Sort By</label>
+            <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
+              @for (opt of tableSortOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+        }
       </div>
 
       <!-- Reviews Table -->
