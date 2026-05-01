@@ -129,11 +129,15 @@ type RosterEmployee = Record<string, any>;
         </div>
         <div class="month-filter">
           <label>Review Period</label>
-          <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
-            @for (opt of reviewPeriodOptions(); track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
+          @if (periodMode() === 'weekly') {
+            <input type="date" [ngModel]="selectedWeeklyDate()" (ngModelChange)="onWeeklyDateChange($event)">
+          } @else {
+            <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
+              @for (opt of reviewPeriodOptions(); track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          }
         </div>
       </div>
 
@@ -504,7 +508,7 @@ type RosterEmployee = Record<string, any>;
     .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter { display: flex; align-items: center; gap: 8px; }
     .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
-    .month-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
+    .month-filter select, .month-filter input[type="date"] { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
     .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
     .add-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
@@ -568,6 +572,7 @@ export class PerformanceReviewsComponent implements OnInit {
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
   selectedReviewMonth = signal('current');
+  selectedWeeklyDate = signal(new Date().toISOString().slice(0, 10));
   periodMode = signal<'weekly' | 'monthly'>('weekly');
 
   // Call Metrics
@@ -902,6 +907,9 @@ export class PerformanceReviewsComponent implements OnInit {
   async onReviewMonthChange(value: string) {
     if (!value) return;
     this.selectedReviewMonth.set(value);
+    if (this.periodMode() === 'weekly' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      this.selectedWeeklyDate.set(value);
+    }
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
@@ -917,6 +925,9 @@ export class PerformanceReviewsComponent implements OnInit {
     if (this.periodMode() === mode) return;
     this.periodMode.set(mode);
     this.selectedReviewMonth.set('current');
+    if (mode === 'weekly') {
+      this.selectedWeeklyDate.set(new Date().toISOString().slice(0, 10));
+    }
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
@@ -927,6 +938,12 @@ export class PerformanceReviewsComponent implements OnInit {
     await this.persistDailyMetricsSnapshot();
     await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
+  }
+
+  async onWeeklyDateChange(value: string): Promise<void> {
+    if (!value) return;
+    this.selectedWeeklyDate.set(value);
+    await this.onReviewMonthChange(value);
   }
 
   private async reloadReviewData(): Promise<void> {
