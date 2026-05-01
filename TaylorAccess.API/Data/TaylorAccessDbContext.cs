@@ -115,6 +115,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Timesheet> Timesheets => Set<Timesheet>();
     public DbSet<PerformanceReview> PerformanceReviews => Set<PerformanceReview>();
+    public DbSet<EmployeePerformanceDailyMetric> EmployeePerformanceDailyMetrics => Set<EmployeePerformanceDailyMetric>();
     public DbSet<ApplicantRecord> ApplicantRecords => Set<ApplicantRecord>();
     public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
     public DbSet<MotivDriverProfile> MotivDriverProfiles => Set<MotivDriverProfile>();
@@ -212,6 +213,10 @@ public class TaylorAccessDbContext : DbContext
 
         modelBuilder.Entity<PerformanceReview>()
             .HasIndex(r => new { r.OrganizationId, r.EmployeeId, r.Year, r.Month })
+            .IsUnique();
+
+        modelBuilder.Entity<EmployeePerformanceDailyMetric>()
+            .HasIndex(r => new { r.OrganizationId, r.EmployeeId, r.MetricDate })
             .IsUnique();
     }
 }

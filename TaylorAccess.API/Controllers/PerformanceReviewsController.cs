@@ -1014,6 +1014,151 @@ public class PerformanceReviewsController : ControllerBase
         });
     }
 
+    [HttpPost("daily-metrics-upsert")]
+    public async Task<ActionResult<object>> UpsertDailyMetrics([FromBody] BulkDailyPerformanceMetricsUpsertRequest request)
+    {
+        if (request.Rows == null || request.Rows.Count == 0)
+            return BadRequest(new { message = "rows are required" });
+
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var organizationId = orgId ?? user.OrganizationId ?? request.OrganizationId ?? 0;
+        if (organizationId <= 0)
+            return BadRequest(new { message = "organizationId is required" });
+
+        var metricDate = DateTime.UtcNow.Date;
+        if (!string.IsNullOrWhiteSpace(request.MetricDate) && DateTime.TryParse(request.MetricDate, out var parsedDate))
+            metricDate = parsedDate.Date;
+
+        var byEmployee = request.Rows
+            .Where(r => r != null && r.EmployeeId > 0)
+            .GroupBy(r => r.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.Last());
+        if (byEmployee.Count == 0)
+            return BadRequest(new { message = "at least one row with a valid employeeId is required" });
+
+        var employeeIds = byEmployee.Keys.ToList();
+        var existingRows = await _context.EmployeePerformanceDailyMetrics
+            .Where(r => r.OrganizationId == organizationId
+                && r.MetricDate == metricDate
+                && employeeIds.Contains(r.EmployeeId))
+            .ToListAsync();
+        var existingByEmployee = existingRows.ToDictionary(r => r.EmployeeId, r => r);
+
+        var now = DateTime.UtcNow;
+        var inserted = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var (employeeId, metric) in byEmployee)
+        {
+            if (!existingByEmployee.TryGetValue(employeeId, out var row))
+            {
+                row = new EmployeePerformanceDailyMetric
+                {
+                    OrganizationId = organizationId,
+                    EmployeeId = employeeId,
+                    MetricDate = metricDate,
+                    CreatedAt = now
+                };
+                _context.EmployeePerformanceDailyMetrics.Add(row);
+                inserted++;
+            }
+            else if (!request.ForceUpdateExisting)
+            {
+                skipped++;
+                continue;
+            }
+            else
+            {
+                updated++;
+            }
+
+            row.EmployeeName = FirstNonEmpty(metric.EmployeeName, row.EmployeeName, $"Employee #{employeeId}");
+            row.CallVolume = Math.Max(metric.CallVolume, 0);
+            row.TextVolume = Math.Max(metric.TextVolume, 0);
+            row.ClockedHours = ToMoney(metric.ClockedHours);
+            row.WorkHours = ToMoney(metric.WorkHours);
+            row.ActivityRate = ToRate(metric.ActivityRate);
+            row.InvoicedRevenue = ToMoney(metric.InvoicedRevenue);
+            row.Score = Math.Clamp(metric.Score, 0, 100);
+            row.Source = string.IsNullOrWhiteSpace(metric.Source) ? "zoom-google-sync" : metric.Source.Trim();
+            row.UpdatedAt = now;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new
+        {
+            data = new
+            {
+                organizationId,
+                metricDate = metricDate.ToString("yyyy-MM-dd"),
+                inserted,
+                updated,
+                skipped,
+                total = byEmployee.Count
+            }
+        });
+    }
+
+    [HttpGet("daily-metrics-table")]
+    public async Task<ActionResult<object>> GetDailyMetricsTable([FromQuery] string? from, [FromQuery] string? to)
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var organizationId = orgId ?? user.OrganizationId ?? 0;
+        if (organizationId <= 0)
+            return BadRequest(new { message = "organizationId is required" });
+
+        var now = DateTime.UtcNow.Date;
+        var fromDate = now.AddDays(-6);
+        var toDate = now;
+        if (!string.IsNullOrWhiteSpace(from) && DateTime.TryParse(from, out var parsedFrom))
+            fromDate = parsedFrom.Date;
+        if (!string.IsNullOrWhiteSpace(to) && DateTime.TryParse(to, out var parsedTo))
+            toDate = parsedTo.Date;
+        if (toDate < fromDate) (fromDate, toDate) = (toDate, fromDate);
+
+        var rows = await _context.EmployeePerformanceDailyMetrics
+            .AsNoTracking()
+            .Where(r => r.OrganizationId == organizationId
+                && r.MetricDate >= fromDate
+                && r.MetricDate <= toDate)
+            .ToListAsync();
+
+        var aggregated = rows
+            .GroupBy(r => new { r.EmployeeId, r.EmployeeName })
+            .Select(g => new
+            {
+                employeeId = g.Key.EmployeeId,
+                employeeName = g.Key.EmployeeName,
+                callVolume = g.Sum(x => x.CallVolume),
+                textVolume = g.Sum(x => x.TextVolume),
+                clockedHours = Math.Round(g.Sum(x => x.ClockedHours), 2),
+                workHours = Math.Round(g.Sum(x => x.WorkHours), 2),
+                activityRate = g.Sum(x => x.ClockedHours) > 0
+                    ? Math.Round(g.Sum(x => x.WorkHours) / g.Sum(x => x.ClockedHours), 4)
+                    : 0m,
+                invoicedRevenue = Math.Round(g.Sum(x => x.InvoicedRevenue), 2),
+                score = (int)Math.Round(g.Average(x => (double)x.Score))
+            })
+            .OrderBy(x => x.employeeName)
+            .ToList();
+
+        return Ok(new
+        {
+            data = aggregated,
+            meta = new
+            {
+                from = fromDate.ToString("yyyy-MM-dd"),
+                to = toDate.ToString("yyyy-MM-dd"),
+                totalEmployees = aggregated.Count
+            }
+        });
+    }
+
     private static decimal ToMoney(decimal value) => Math.Round(Math.Max(value, 0), 2);
     private static decimal ToRate(decimal value) => Math.Round(Math.Clamp(value, 0m, 1m), 4);
 
@@ -1164,6 +1309,28 @@ public class MonthlyPerformanceMetricSnapshotRow
     public decimal ActivityRate { get; set; }
     public decimal InvoicedRevenue { get; set; }
     public int Score { get; set; }
+}
+
+public class BulkDailyPerformanceMetricsUpsertRequest
+{
+    public int? OrganizationId { get; set; }
+    public string? MetricDate { get; set; }
+    public bool ForceUpdateExisting { get; set; }
+    public List<DailyPerformanceMetricUpsertRow> Rows { get; set; } = new();
+}
+
+public class DailyPerformanceMetricUpsertRow
+{
+    public int EmployeeId { get; set; }
+    public string? EmployeeName { get; set; }
+    public int CallVolume { get; set; }
+    public int TextVolume { get; set; }
+    public decimal ClockedHours { get; set; }
+    public decimal WorkHours { get; set; }
+    public decimal ActivityRate { get; set; }
+    public decimal InvoicedRevenue { get; set; }
+    public int Score { get; set; }
+    public string? Source { get; set; }
 }
 
 internal class ZoomEmployeeCandidate

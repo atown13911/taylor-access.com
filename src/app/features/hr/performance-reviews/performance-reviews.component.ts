@@ -49,6 +49,17 @@ interface ZoomMetricRow {
   email?: string;
   employeeName?: string;
 }
+interface PersistedMetricRow {
+  employeeId: number;
+  employeeName?: string;
+  callVolume: number;
+  textVolume: number;
+  clockedHours: number;
+  workHours: number;
+  activityRate: number;
+  invoicedRevenue: number;
+  score: number;
+}
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
 
@@ -107,9 +118,8 @@ type RosterEmployee = Record<string, any>;
       <!-- Sub-Tabs -->
       <div class="review-controls">
         <div class="review-tab-stack">
-          <div class="tabs">
-            <button class="tab" [class.active]="activeTab() === 'pending'" (click)="activeTab.set('pending')">Pending</button>
-            <button class="tab" [class.active]="activeTab() === 'completed'" (click)="activeTab.set('completed')">Completed</button>
+          <div class="tabs period-mode-tabs">
+            <span class="table-title-chip">Saved Performance Table</span>
           </div>
           <div class="tabs period-mode-tabs">
             <button class="tab" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Weekly</button>
@@ -490,6 +500,7 @@ type RosterEmployee = Record<string, any>;
     .review-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
     .review-tab-stack { display: flex; flex-direction: column; gap: 2px; }
     .period-mode-tabs { margin-bottom: 0; }
+    .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter { display: flex; align-items: center; gap: 8px; }
     .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
@@ -551,6 +562,7 @@ export class PerformanceReviewsComponent implements OnInit {
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
   zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
   zoomMetricByName = signal<Record<string, ZoomMetricRow>>({});
+  persistedMetricMap = signal<Record<number, PersistedMetricRow>>({});
   googleApiStatus = signal<IntegrationState>('checking');
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
@@ -569,7 +581,6 @@ export class PerformanceReviewsComponent implements OnInit {
     duration: 0, outcome: 'answered', notes: ''
   };
   employees = signal<any[]>([]);
-  activeTab = signal<'pending' | 'completed'>('pending');
   showModal = signal(false);
   editingReview = signal<Review | null>(null);
   viewingReview = signal<Review | null>(null);
@@ -693,10 +704,7 @@ export class PerformanceReviewsComponent implements OnInit {
       });
   });
 
-  filteredReviews = computed(() => {
-    const tab = this.activeTab();
-    return this.reviewRows().filter(r => this.normalizeReviewStatus(r.status) === tab);
-  });
+  filteredReviews = computed(() => this.reviewRows());
   metricRows = computed<ReviewMetricRow[]>(() => {
     return this.filteredReviews().map((review) => this.toMetricRow(review));
   });
@@ -895,8 +903,10 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
-      this.loadZoomMetrics()
+      this.loadZoomMetrics(),
+      this.loadPersistedDailyMetrics()
     ]);
+    await this.persistDailyMetricsSnapshot();
     await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
@@ -909,8 +919,10 @@ export class PerformanceReviewsComponent implements OnInit {
     await Promise.all([
       this.loadReviews(),
       this.loadZoomMetrics(),
-      this.loadTimeclockSummary()
+      this.loadTimeclockSummary(),
+      this.loadPersistedDailyMetrics()
     ]);
+    await this.persistDailyMetricsSnapshot();
     await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
@@ -921,8 +933,10 @@ export class PerformanceReviewsComponent implements OnInit {
       this.loadEmployees(),
       this.loadTimeclockSummary(),
       this.loadReviews(),
-      this.loadZoomMetrics()
+      this.loadZoomMetrics(),
+      this.loadPersistedDailyMetrics()
     ]);
+    await this.persistDailyMetricsSnapshot();
     await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
@@ -1120,6 +1134,7 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   private toMetricRow(review: Review): ReviewMetricRow {
+    const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
     const liveCallVolume = liveComms.callVolume;
@@ -1130,14 +1145,14 @@ export class PerformanceReviewsComponent implements OnInit {
 
     const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
-    const callVolume = Math.max(snapshotCallVolume, liveCallVolume);
-    const textVolume = Math.max(snapshotTextVolume, liveTextVolume);
-    const totalHours = hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours;
-    const activeHours = hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours;
-    const idleHours = hasSnapshot ? Math.max(0, totalHours - activeHours) : liveTime.idleHours;
-    const activityRate = hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate;
-    const invoicedRevenue = hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue;
-    const score = hasSnapshot ? Math.max(Number(review.score || 0), liveScore) : liveScore;
+    const callVolume = persisted?.callVolume ?? Math.max(snapshotCallVolume, liveCallVolume);
+    const textVolume = persisted?.textVolume ?? Math.max(snapshotTextVolume, liveTextVolume);
+    const totalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
+    const activeHours = persisted?.workHours ?? (hasSnapshot ? Math.max(Number(review.workHours || 0), liveTime.activeHours) : liveTime.activeHours);
+    const idleHours = Math.max(0, totalHours - activeHours);
+    const activityRate = persisted?.activityRate ?? (hasSnapshot ? Math.max(Number(review.activityRate || 0), liveTime.activityRate) : liveTime.activityRate);
+    const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
+    const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), liveScore) : liveScore);
 
     return {
       ...review,
@@ -1150,6 +1165,63 @@ export class PerformanceReviewsComponent implements OnInit {
       invoicedRevenue,
       score
     };
+  }
+
+  private async loadPersistedDailyMetrics(): Promise<void> {
+    const { fromKey, toKey } = this.parseMonthKey(this.selectedReviewMonth());
+    try {
+      const res: any = await this.http
+        .get(`${this.apiUrl}/api/v1/performance-reviews/daily-metrics-table?from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(toKey)}`)
+        .toPromise();
+      const rows: any[] = Array.isArray(res?.data) ? res.data : [];
+      const nextMap: Record<number, PersistedMetricRow> = {};
+      for (const row of rows) {
+        const employeeId = Number(row?.employeeId || 0);
+        if (!employeeId) continue;
+        nextMap[employeeId] = {
+          employeeId,
+          employeeName: String(row?.employeeName || '').trim() || undefined,
+          callVolume: Number(row?.callVolume || 0),
+          textVolume: Number(row?.textVolume || 0),
+          clockedHours: Number(row?.clockedHours || 0),
+          workHours: Number(row?.workHours || 0),
+          activityRate: Number(row?.activityRate || 0),
+          invoicedRevenue: Number(row?.invoicedRevenue || 0),
+          score: Number(row?.score || 0)
+        };
+      }
+      this.persistedMetricMap.set(nextMap);
+    } catch {
+      this.persistedMetricMap.set({});
+    }
+  }
+
+  private async persistDailyMetricsSnapshot(): Promise<void> {
+    const { toKey } = this.parseMonthKey(this.selectedReviewMonth());
+    const rows = this.reviewRows().map((review) => this.toMetricRow(review));
+    if (!rows.length) return;
+    const payload = {
+      metricDate: toKey,
+      forceUpdateExisting: false,
+      rows: rows.map((row) => ({
+        employeeId: Number(row.employeeId || 0),
+        employeeName: row.employeeName || '',
+        callVolume: Number(row.callVolume || 0),
+        textVolume: Number(row.textVolume || 0),
+        clockedHours: Number((row.totalHours || 0).toFixed(2)),
+        workHours: Number((row.activeHours || 0).toFixed(2)),
+        activityRate: Number((row.activityRate || 0).toFixed(4)),
+        invoicedRevenue: Number((row.invoicedRevenue || 0).toFixed(2)),
+        score: Number(row.score || 0),
+        source: 'zoom-google-sync'
+      }))
+    };
+    try {
+      await this.http.post(`${this.apiUrl}/api/v1/performance-reviews/daily-metrics-upsert`, payload).toPromise();
+      await this.loadPersistedDailyMetrics();
+    } catch {
+      // Best-effort persistence. UI can still use live values if this call fails.
+    }
   }
 
   private async persistMonthlyMetricsSnapshot(): Promise<void> {

@@ -408,6 +408,31 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""EmployeePerformanceDailyMetrics"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""EmployeeId"" INTEGER NOT NULL,
+            ""EmployeeName"" VARCHAR(100) NULL,
+            ""MetricDate"" DATE NOT NULL,
+            ""CallVolume"" INTEGER NOT NULL DEFAULT 0,
+            ""TextVolume"" INTEGER NOT NULL DEFAULT 0,
+            ""ClockedHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""WorkHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""ActivityRate"" numeric(6,4) NOT NULL DEFAULT 0,
+            ""InvoicedRevenue"" numeric(12,2) NOT NULL DEFAULT 0,
+            ""Score"" INTEGER NOT NULL DEFAULT 0,
+            ""Source"" VARCHAR(60) NOT NULL DEFAULT 'zoom-google-sync',
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_EmployeePerformanceDailyMetrics_Users_EmployeeId"" FOREIGN KEY (""EmployeeId"") REFERENCES ""Users""(""Id"") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_EmployeePerformanceDailyMetrics_Org_Employee_Date""
+            ON ""EmployeePerformanceDailyMetrics"" (""OrganizationId"", ""EmployeeId"", ""MetricDate"");
+        CREATE INDEX IF NOT EXISTS ""IX_EmployeePerformanceDailyMetrics_Org_Date""
+            ON ""EmployeePerformanceDailyMetrics"" (""OrganizationId"", ""MetricDate"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""ApplicantRecords"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""FullName"" VARCHAR(200) NOT NULL,
