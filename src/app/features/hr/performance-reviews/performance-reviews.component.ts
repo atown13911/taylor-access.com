@@ -1174,9 +1174,16 @@ export class PerformanceReviewsComponent implements OnInit {
 
   private getAssignedWorkHoursForSelectedRange(): number {
     const { from, to } = this.parseMonthKey(this.selectedReviewMonth());
-    const msPerDay = 1000 * 60 * 60 * 24;
-    const dayCount = Math.max(1, Math.floor((to.getTime() - from.getTime()) / msPerDay) + 1);
-    return dayCount * 8;
+    const cursor = new Date(from.getTime());
+    let businessDays = 0;
+    while (cursor.getTime() <= to.getTime()) {
+      const day = cursor.getUTCDay();
+      if (day !== 0 && day !== 6) {
+        businessDays += 1;
+      }
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return Math.max(0, businessDays) * 8;
   }
 
   private estimateActivityHours(callVolume: number, textVolume: number, meetingsHosted: number, assignedHours: number): number {
