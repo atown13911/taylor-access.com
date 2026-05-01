@@ -77,6 +77,10 @@ type ReviewTableSort =
   | 'activity-asc'
   | 'calls-desc'
   | 'calls-asc'
+  | 'meetings-hosted-desc'
+  | 'meetings-hosted-asc'
+  | 'meetings-joined-desc'
+  | 'meetings-joined-asc'
   | 'calltime-desc'
   | 'calltime-asc'
   | 'clocked-desc'
@@ -789,6 +793,10 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'activity-asc', label: 'Activity %: Low to High' },
     { value: 'calls-desc', label: 'Calls: High to Low' },
     { value: 'calls-asc', label: 'Calls: Low to High' },
+    { value: 'meetings-hosted-desc', label: 'Meetings Hosted: High to Low' },
+    { value: 'meetings-hosted-asc', label: 'Meetings Hosted: Low to High' },
+    { value: 'meetings-joined-desc', label: 'Meetings Joined: High to Low' },
+    { value: 'meetings-joined-asc', label: 'Meetings Joined: Low to High' },
     { value: 'calltime-desc', label: 'Total Call Time: High to Low' },
     { value: 'calltime-asc', label: 'Total Call Time: Low to High' },
     { value: 'clocked-desc', label: 'Clocked Hrs: High to Low' },
@@ -985,6 +993,14 @@ export class PerformanceReviewsComponent implements OnInit {
           return a.callVolume - b.callVolume;
         case 'calls-desc':
           return b.callVolume - a.callVolume;
+        case 'meetings-hosted-asc':
+          return a.meetingsHosted - b.meetingsHosted;
+        case 'meetings-hosted-desc':
+          return b.meetingsHosted - a.meetingsHosted;
+        case 'meetings-joined-asc':
+          return a.meetingsJoined - b.meetingsJoined;
+        case 'meetings-joined-desc':
+          return b.meetingsJoined - a.meetingsJoined;
         case 'calltime-asc':
           return a.totalCallMinutes - b.totalCallMinutes;
         case 'calltime-desc':
