@@ -130,7 +130,18 @@ type RosterEmployee = Record<string, any>;
         <div class="month-filter">
           <label>Review Period</label>
           @if (periodMode() === 'weekly') {
-            <input type="date" [ngModel]="selectedWeeklyDate()" (ngModelChange)="onWeeklyDateChange($event)">
+            <div class="week-selector">
+              <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
+                @for (week of weekOptions; track week) {
+                  <option [ngValue]="week">Week {{ week }}</option>
+                }
+              </select>
+              <select [ngModel]="selectedWeekYear()" (ngModelChange)="onWeekYearChange($event)">
+                @for (year of reviewYearOptions(); track year) {
+                  <option [ngValue]="year">{{ year }}</option>
+                }
+              </select>
+            </div>
           } @else {
             <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
               @for (opt of reviewPeriodOptions(); track opt.value) {
@@ -507,6 +518,7 @@ type RosterEmployee = Record<string, any>;
     .period-mode-tabs { margin-bottom: 0; }
     .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter { display: flex; align-items: center; gap: 8px; }
+    .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select, .month-filter input[type="date"] { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
@@ -572,8 +584,10 @@ export class PerformanceReviewsComponent implements OnInit {
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
   selectedReviewMonth = signal('current');
-  selectedWeeklyDate = signal(new Date().toISOString().slice(0, 10));
+  selectedWeekNumber = signal(1);
+  selectedWeekYear = signal(new Date().getUTCFullYear());
   periodMode = signal<'weekly' | 'monthly'>('weekly');
+  weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
 
   // Call Metrics
   callLogs = signal<any[]>([]);
@@ -750,6 +764,11 @@ export class PerformanceReviewsComponent implements OnInit {
     return opts;
   });
 
+  reviewYearOptions = computed(() => {
+    const current = new Date().getUTCFullYear();
+    return Array.from({ length: 7 }, (_, idx) => current - 3 + idx);
+  });
+
   selectedReviewMonthLabel = computed(() => {
     const selected = this.selectedReviewMonth();
     const found = this.reviewPeriodOptions().find(o => o.value === selected);
@@ -759,6 +778,7 @@ export class PerformanceReviewsComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.initializeCurrentWeekSelection();
     this.restoreManagementTabs();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
@@ -907,9 +927,6 @@ export class PerformanceReviewsComponent implements OnInit {
   async onReviewMonthChange(value: string) {
     if (!value) return;
     this.selectedReviewMonth.set(value);
-    if (this.periodMode() === 'weekly' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      this.selectedWeeklyDate.set(value);
-    }
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
@@ -924,9 +941,11 @@ export class PerformanceReviewsComponent implements OnInit {
   async onPeriodModeChange(mode: 'weekly' | 'monthly') {
     if (this.periodMode() === mode) return;
     this.periodMode.set(mode);
-    this.selectedReviewMonth.set('current');
     if (mode === 'weekly') {
-      this.selectedWeeklyDate.set(new Date().toISOString().slice(0, 10));
+      this.initializeCurrentWeekSelection();
+      this.selectedReviewMonth.set(this.buildWeekRangeValue(this.selectedWeekYear(), this.selectedWeekNumber()));
+    } else {
+      this.selectedReviewMonth.set('current');
     }
     this.loadingReviews.set(true);
     await Promise.all([
@@ -940,10 +959,18 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(false);
   }
 
-  async onWeeklyDateChange(value: string): Promise<void> {
-    if (!value) return;
-    this.selectedWeeklyDate.set(value);
-    await this.onReviewMonthChange(value);
+  async onWeekNumberChange(value: number | string): Promise<void> {
+    const week = Number(value);
+    if (!Number.isFinite(week) || week < 1 || week > 52) return;
+    this.selectedWeekNumber.set(week);
+    await this.onReviewMonthChange(this.buildWeekRangeValue(this.selectedWeekYear(), week));
+  }
+
+  async onWeekYearChange(value: number | string): Promise<void> {
+    const year = Number(value);
+    if (!Number.isFinite(year) || year < 2000 || year > 2100) return;
+    this.selectedWeekYear.set(year);
+    await this.onReviewMonthChange(this.buildWeekRangeValue(year, this.selectedWeekNumber()));
   }
 
   private async reloadReviewData(): Promise<void> {
@@ -1389,6 +1416,43 @@ export class PerformanceReviewsComponent implements OnInit {
     return Math.round(callScore + textScore + activeHoursScore + activityRatioScore + revenueScore);
   }
 
+  private initializeCurrentWeekSelection(): void {
+    const now = new Date();
+    const info = this.getIsoWeekInfo(now);
+    this.selectedWeekNumber.set(Math.min(52, Math.max(1, info.week)));
+    this.selectedWeekYear.set(info.year);
+  }
+
+  private buildWeekRangeValue(year: number, week: number): string {
+    const normalizedWeek = Math.min(52, Math.max(1, Math.trunc(week)));
+    const start = this.getIsoWeekStartDate(year, normalizedWeek);
+    const end = new Date(start.getTime());
+    end.setUTCDate(end.getUTCDate() + 6);
+    return `${start.toISOString().slice(0, 10)}_${end.toISOString().slice(0, 10)}`;
+  }
+
+  private getIsoWeekInfo(input: Date): { year: number; week: number } {
+    const date = new Date(Date.UTC(input.getUTCFullYear(), input.getUTCMonth(), input.getUTCDate()));
+    const dayNumber = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - dayNumber + 3);
+    const isoYear = date.getUTCFullYear();
+    const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+    const firstDayNumber = (firstThursday.getUTCDay() + 6) % 7;
+    firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNumber + 3);
+    const week = 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return { year: isoYear, week: Math.min(52, Math.max(1, week)) };
+  }
+
+  private getIsoWeekStartDate(year: number, week: number): Date {
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const dayNumber = (jan4.getUTCDay() + 6) % 7;
+    const weekOneMonday = new Date(jan4.getTime());
+    weekOneMonday.setUTCDate(jan4.getUTCDate() - dayNumber);
+    const start = new Date(weekOneMonday.getTime());
+    start.setUTCDate(weekOneMonday.getUTCDate() + (week - 1) * 7);
+    return start;
+  }
+
   private parseMonthKey(value: string): { year: number; month: number; from: Date; to: Date; fromKey: string; toKey: string } {
     const now = new Date();
     const toUtcDate = (d: Date) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -1400,8 +1464,9 @@ export class PerformanceReviewsComponent implements OnInit {
         from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), 1));
         to = toUtcDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
       } else {
-        to = toUtcDate(now);
-        from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
+        from = this.getIsoWeekStartDate(this.selectedWeekYear(), this.selectedWeekNumber());
+        to = new Date(from.getTime());
+        to.setUTCDate(to.getUTCDate() + 6);
       }
     } else if (value.includes('_')) {
       const [fromRaw, toRaw] = value.split('_');
