@@ -1865,7 +1865,7 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   private extractEmployeeTitleCandidatesRaw(emp: RosterEmployee): string[] {
-    const positionNode = emp?.['position'];
+    const positionNode = emp?.['position'] ?? emp?.['Position'];
     const values: string[] = [];
     const pushValue = (value: any) => {
       if (value == null) return;
@@ -1878,26 +1878,33 @@ export class PerformanceReviewsComponent implements OnInit {
       if (!values.some(v => v.toLowerCase() === text.toLowerCase())) values.push(text);
     };
 
-    pushValue(emp?.['positionName']);
-    pushValue(emp?.['positionTitle']);
-    pushValue(emp?.['position_label']);
+    pushValue(emp?.['positionName'] ?? emp?.['PositionName']);
+    pushValue(emp?.['positionTitle'] ?? emp?.['PositionTitle']);
+    pushValue(emp?.['position_label'] ?? emp?.['PositionLabel']);
     if (typeof positionNode === 'object' && positionNode) {
-      pushValue(positionNode['name']);
-      pushValue(positionNode['title']);
-      pushValue(positionNode['label']);
+      pushValue(positionNode['name'] ?? positionNode['Name']);
+      pushValue(positionNode['title'] ?? positionNode['Title']);
+      pushValue(positionNode['label'] ?? positionNode['Label']);
     } else {
       pushValue(positionNode);
     }
-    pushValue(emp?.['jobTitle']);
-    pushValue(emp?.['title']);
-    pushValue(emp?.['role']);
-    pushValue(emp?.['roles']);
-    pushValue(emp?.['userRole']);
-    pushValue(emp?.['accessRole']);
-    pushValue(emp?.['permissionRole']);
-    pushValue(emp?.['departmentTitle']);
+    pushValue(emp?.['jobTitle'] ?? emp?.['JobTitle']);
+    pushValue(emp?.['title'] ?? emp?.['Title']);
+    pushValue(emp?.['role'] ?? emp?.['Role']);
+    pushValue(emp?.['roles'] ?? emp?.['Roles']);
+    pushValue(emp?.['userRole'] ?? emp?.['UserRole']);
+    pushValue(emp?.['accessRole'] ?? emp?.['AccessRole']);
+    pushValue(emp?.['permissionRole'] ?? emp?.['PermissionRole']);
+    pushValue(emp?.['departmentTitle'] ?? emp?.['DepartmentTitle']);
 
-    if (emp?.['isSuperAdmin'] === true || emp?.['superAdmin'] === true || emp?.['is_super_admin'] === true) {
+    if (
+      emp?.['isSuperAdmin'] === true
+      || emp?.['superAdmin'] === true
+      || emp?.['is_super_admin'] === true
+      || emp?.['IsSuperAdmin'] === true
+      || emp?.['SuperAdmin'] === true
+      || emp?.['Is_Super_Admin'] === true
+    ) {
       pushValue('superadmin');
     }
 
