@@ -404,6 +404,14 @@ type RosterEmployee = Record<string, any>;
         </div>
       }
 
+      <!-- Call Metrics Stats -->
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-icon staff"><i class='bx bx-group'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().staff }}</span><span class="stat-lbl">Team Members</span></div></div>
+        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().calls }}</span><span class="stat-lbl">Total Calls</span></div></div>
+        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-message-rounded-dots'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().texts }}</span><span class="stat-lbl">Texts</span></div></div>
+        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-video'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().meetings }}</span><span class="stat-lbl">Meetings Hosted</span></div></div>
+      </div>
+
       <div class="review-controls management-controls">
         <div class="review-tab-stack">
           <div class="tabs period-mode-tabs">
@@ -454,14 +462,6 @@ type RosterEmployee = Record<string, any>;
             }
           </select>
         </div>
-      </div>
-
-      <!-- Call Metrics Stats -->
-      <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon staff"><i class='bx bx-group'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().staff }}</span><span class="stat-lbl">Team Members</span></div></div>
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().calls }}</span><span class="stat-lbl">Total Calls</span></div></div>
-        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-message-rounded-dots'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().texts }}</span><span class="stat-lbl">Texts</span></div></div>
-        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-video'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().meetings }}</span><span class="stat-lbl">Meetings Hosted</span></div></div>
       </div>
 
       <!-- Log Call Button -->
