@@ -39,6 +39,7 @@ interface ReviewMetricRow extends Review {
   textVolume: number;
   meetingsHosted: number;
   meetingsJoined: number;
+  totalMeetingMinutes: number;
   totalHours: number;
   activeHours: number;
   idleHours: number;
@@ -54,6 +55,7 @@ interface ZoomMetricRow {
   textVolume: number;
   meetingsHosted?: number;
   meetingsJoined?: number;
+  totalMeetingMinutes?: number;
   email?: string;
   employeeName?: string;
 }
@@ -81,6 +83,8 @@ type ReviewTableSort =
   | 'meetings-hosted-asc'
   | 'meetings-joined-desc'
   | 'meetings-joined-asc'
+  | 'meetingtime-desc'
+  | 'meetingtime-asc'
   | 'calltime-desc'
   | 'calltime-asc'
   | 'clocked-desc'
@@ -120,6 +124,7 @@ type RosterEmployee = Record<string, any>;
         <div class="stat-card"><div class="stat-icon staff"><i class='bx bx-group'></i></div><div><span class="stat-val">{{ performanceSummary().totalStaff }}</span><span class="stat-lbl">Total Staff</span></div></div>
         <div class="stat-card"><div class="stat-icon calls"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ performanceSummary().totalCalls }}</span><span class="stat-lbl">Total Calls</span></div></div>
         <div class="stat-card"><div class="stat-icon total"><i class='bx bx-time-five'></i></div><div><span class="stat-val">{{ performanceSummary().totalCallMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Call Time</span></div></div>
+        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-video'></i></div><div><span class="stat-val">{{ performanceSummary().totalMeetingMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Meeting Time</span></div></div>
         <div class="stat-card"><div class="stat-icon activity"><i class='bx bx-line-chart'></i></div><div><span class="stat-val">{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</span><span class="stat-lbl">Avg Activity</span></div></div>
         <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-medal'></i></div><div><span class="stat-val">{{ performanceSummary().avgScore | number:'1.0-0' }}</span><span class="stat-lbl">Avg Score</span></div></div>
         <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-user-check'></i></div><div><span class="stat-val">{{ performanceSummary().activeStaff }}</span><span class="stat-lbl">Active Staff</span></div></div>
@@ -154,6 +159,15 @@ type RosterEmployee = Record<string, any>;
             <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'monthly'" (click)="showReportsTab.set(false); onPeriodModeChange('monthly')">Monthly</button>
             <button class="tab" [class.active]="showReportsTab()" (click)="openReportsTab()">Report</button>
           </div>
+        </div>
+        <div class="search-filter">
+          <label>Search</label>
+          <input
+            type="text"
+            [ngModel]="tableSearchTerm()"
+            (ngModelChange)="tableSearchTerm.set(($event || '').toString())"
+            placeholder="Employee name..."
+          />
         </div>
         <div class="month-filter">
           <label>Review Period</label>
@@ -209,6 +223,10 @@ type RosterEmployee = Record<string, any>;
             <article class="report-card">
               <span>Total Call Time</span>
               <strong>{{ performanceSummary().totalCallMinutes | number:'1.0-0' }} min</strong>
+            </article>
+            <article class="report-card">
+              <span>Total Meeting Time</span>
+              <strong>{{ performanceSummary().totalMeetingMinutes | number:'1.0-0' }} min</strong>
             </article>
             <article class="report-card">
               <span>Average Activity</span>
@@ -286,6 +304,7 @@ type RosterEmployee = Record<string, any>;
                 <th>Texts</th>
                 <th>Meetings Hosted</th>
                 <th>Meetings Joined</th>
+                <th>Total Meeting Time</th>
                 <th>Clocked Hrs</th>
                 <th>Work Hrs</th>
                 <th>Activity %</th>
@@ -305,6 +324,7 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ review.textVolume }}</td>
                   <td>{{ review.meetingsHosted }}</td>
                   <td>{{ review.meetingsJoined }}</td>
+                  <td>{{ review.totalMeetingMinutes | number:'1.1-1' }} min</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
                   <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
@@ -638,10 +658,18 @@ type RosterEmployee = Record<string, any>;
     .period-mode-tabs { margin-bottom: 0; }
     .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter { display: flex; align-items: center; gap: 8px; }
+    .search-filter { display: flex; align-items: center; gap: 8px; }
     .sort-filter { display: flex; align-items: center; gap: 8px; }
     .week-selector { display: flex; align-items: center; gap: 8px; }
-    .month-filter label, .sort-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
-    .month-filter select, .month-filter input[type="date"], .sort-filter select { min-width: 180px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
+    .month-filter label, .sort-filter label, .search-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
+      min-width: 180px;
+      background: #111827;
+      color: #d1d5db;
+      border: 1px solid #2a2a4e;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
     .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
     .add-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
@@ -687,6 +715,7 @@ type RosterEmployee = Record<string, any>;
     .reviews-table td:nth-child(12),
     .reviews-table td:nth-child(13),
     .reviews-table td:nth-child(14),
+    .reviews-table td:nth-child(15),
     .reviews-table th:nth-child(2),
     .reviews-table th:nth-child(3),
     .reviews-table th:nth-child(4),
@@ -699,7 +728,8 @@ type RosterEmployee = Record<string, any>;
     .reviews-table th:nth-child(11),
     .reviews-table th:nth-child(12),
     .reviews-table th:nth-child(13),
-    .reviews-table th:nth-child(14) {
+    .reviews-table th:nth-child(14),
+    .reviews-table th:nth-child(15) {
       text-align: center;
     }
     .reviews-table td:first-child,
@@ -783,6 +813,7 @@ export class PerformanceReviewsComponent implements OnInit {
   selectedWeekNumber = signal(1);
   selectedWeekYear = signal(new Date().getUTCFullYear());
   selectedTableSort = signal<ReviewTableSort>('score-desc');
+  tableSearchTerm = signal('');
   showReportsTab = signal(false);
   periodMode = signal<'weekly' | 'monthly'>('weekly');
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
@@ -797,6 +828,8 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'meetings-hosted-asc', label: 'Meetings Hosted: Low to High' },
     { value: 'meetings-joined-desc', label: 'Meetings Joined: High to Low' },
     { value: 'meetings-joined-asc', label: 'Meetings Joined: Low to High' },
+    { value: 'meetingtime-desc', label: 'Meeting Time: High to Low' },
+    { value: 'meetingtime-asc', label: 'Meeting Time: Low to High' },
     { value: 'calltime-desc', label: 'Total Call Time: High to Low' },
     { value: 'calltime-asc', label: 'Total Call Time: Low to High' },
     { value: 'clocked-desc', label: 'Clocked Hrs: High to Low' },
@@ -949,6 +982,7 @@ export class PerformanceReviewsComponent implements OnInit {
     const totalStaff = this.employees().length || rows.length;
     const totalCalls = rows.reduce((sum, row) => sum + Number(row.callVolume || 0), 0);
     const totalCallMinutes = rows.reduce((sum, row) => sum + Number(row.totalCallMinutes || 0), 0);
+    const totalMeetingMinutes = rows.reduce((sum, row) => sum + Number(row.totalMeetingMinutes || 0), 0);
     const avgActivityPercent = rows.length
       ? rows.reduce((sum, row) => sum + (Number(row.activityRate || 0) * 100), 0) / rows.length
       : 0;
@@ -965,13 +999,29 @@ export class PerformanceReviewsComponent implements OnInit {
       totalStaff,
       totalCalls,
       totalCallMinutes,
+      totalMeetingMinutes,
       avgActivityPercent,
       avgScore,
       activeStaff
     };
   });
   sortedMetricRows = computed<ReviewMetricRow[]>(() => {
-    const rows = [...this.metricRows()];
+    const searchTerm = this.tableSearchTerm().trim().toLowerCase();
+    const rows = [...this.metricRows()].filter((row) => {
+      if (!searchTerm) return true;
+      const employeeName = String(row.employeeName || `Employee #${row.employeeId}`).toLowerCase();
+      const employeeId = String(row.employeeId || '').toLowerCase();
+      const employee = this.employees().find(e => Number(e.id) === Number(row.employeeId));
+      const emailTokens = [
+        String(employee?.email || '').toLowerCase(),
+        String(employee?.workEmail || '').toLowerCase(),
+        String(employee?.personalEmail || '').toLowerCase(),
+        String(employee?.zoomEmail || '').toLowerCase()
+      ].filter(Boolean);
+      return employeeName.includes(searchTerm)
+        || employeeId.includes(searchTerm)
+        || emailTokens.some(email => email.includes(searchTerm));
+    });
     const sort = this.selectedTableSort();
     const employeeLabel = (r: ReviewMetricRow) => String(r.employeeName || `Employee #${r.employeeId}`).trim().toLowerCase();
 
@@ -1001,6 +1051,10 @@ export class PerformanceReviewsComponent implements OnInit {
           return a.meetingsJoined - b.meetingsJoined;
         case 'meetings-joined-desc':
           return b.meetingsJoined - a.meetingsJoined;
+        case 'meetingtime-asc':
+          return a.totalMeetingMinutes - b.totalMeetingMinutes;
+        case 'meetingtime-desc':
+          return b.totalMeetingMinutes - a.totalMeetingMinutes;
         case 'calltime-asc':
           return a.totalCallMinutes - b.totalCallMinutes;
         case 'calltime-desc':
@@ -1220,6 +1274,13 @@ export class PerformanceReviewsComponent implements OnInit {
           textVolume: this.readNumeric(row, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']),
           meetingsHosted: this.readNumeric(row, ['meetingsHosted', 'meetings_hosted', 'hostedMeetings', 'hosted_meetings', 'meetings', 'meetingCount', 'meeting_count']),
           meetingsJoined: this.readNumeric(row, ['meetingsJoined', 'meetings_joined', 'joinedMeetings', 'joined_meetings']),
+          totalMeetingMinutes: Number(
+            row?.totalMeetingMinutes
+            ?? row?.total_meeting_minutes
+            ?? row?.meetingMinutes
+            ?? row?.meeting_minutes
+            ?? 0
+          ),
           email: email || undefined,
           employeeName: String(row?.employeeName || row?.name || row?.displayName || '').trim() || undefined
         };
@@ -1474,7 +1535,7 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
   }
 
-  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; totalCallMinutes: number; avgCallMinutes: number; textVolume: number; meetingsHosted: number; meetingsJoined: number } {
+  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; totalCallMinutes: number; avgCallMinutes: number; textVolume: number; meetingsHosted: number; meetingsJoined: number; totalMeetingMinutes: number } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoomById = this.zoomMetricMap()[employeeId];
@@ -1508,7 +1569,8 @@ export class PerformanceReviewsComponent implements OnInit {
       avgCallMinutes,
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0)),
       meetingsHosted: Number(zoom?.meetingsHosted || 0),
-      meetingsJoined: Number(zoom?.meetingsJoined || 0)
+      meetingsJoined: Number(zoom?.meetingsJoined || 0),
+      totalMeetingMinutes: Math.max(0, Number(zoom?.totalMeetingMinutes || 0))
     };
   }
 
@@ -1535,7 +1597,7 @@ export class PerformanceReviewsComponent implements OnInit {
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
-    const { callVolume: liveCallVolume, totalCallMinutes: liveTotalCallMinutes, avgCallMinutes: liveAvgCallMinutes, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted, meetingsJoined: liveMeetingsJoined } = liveComms;
+    const { callVolume: liveCallVolume, totalCallMinutes: liveTotalCallMinutes, avgCallMinutes: liveAvgCallMinutes, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted, meetingsJoined: liveMeetingsJoined, totalMeetingMinutes: liveTotalMeetingMinutes } = liveComms;
     const liveTime = this.getEmployeeTime(review.employeeId, review.employeeName);
     const liveRevenue = this.getAttributedRevenue(review.employeeId);
 
@@ -1563,6 +1625,7 @@ export class PerformanceReviewsComponent implements OnInit {
       textVolume,
       meetingsHosted: liveMeetingsHosted,
       meetingsJoined: liveMeetingsJoined,
+      totalMeetingMinutes: liveTotalMeetingMinutes,
       totalHours,
       activeHours,
       idleHours,

@@ -483,8 +483,8 @@ public class PerformanceReviewsController : ControllerBase
         var fromDate = targetStart.ToString("yyyy-MM-dd");
         var toDate = rangeEnd.ToString("yyyy-MM-dd");
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var reportMeetingsByEmail = new Dictionary<string, (int Hosted, int Joined)>(StringComparer.OrdinalIgnoreCase);
-        var reportMeetingsByName = new Dictionary<string, (int Hosted, int Joined)>(StringComparer.OrdinalIgnoreCase);
+        var reportMeetingsByEmail = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
+        var reportMeetingsByName = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
 
         var smsRows = 0;
         try
@@ -529,20 +529,21 @@ public class PerformanceReviewsController : ControllerBase
                         if (hosted <= 0)
                             hosted = ReadIntAny(item, "meetingCount", "meeting_count", "meetingTimes", "meeting_times");
                         var joined = ReadIntAny(item, "meetingsJoined", "meetings_joined", "participants", "participantCount", "participant_count");
+                        var minutes = ReadDoubleAny(item, "meetingMinutes", "meeting_minutes", "minutes");
                         if (joined <= 0) joined = hosted;
-                        if (hosted <= 0 && joined <= 0) continue;
+                        if (hosted <= 0 && joined <= 0 && minutes <= 0) continue;
 
                         var reportEmail = ReadStringAny(item, "email", "userEmail", "user_email");
                         if (!string.IsNullOrWhiteSpace(reportEmail))
                         {
                             var key = reportEmail.Trim().ToLowerInvariant();
                             var existing = reportMeetingsByEmail.GetValueOrDefault(key);
-                            reportMeetingsByEmail[key] = (Math.Max(existing.Hosted, hosted), Math.Max(existing.Joined, joined));
+                            reportMeetingsByEmail[key] = (Math.Max(existing.Hosted, hosted), Math.Max(existing.Joined, joined), Math.Max(existing.Minutes, minutes));
                             var localPart = ExtractEmailLocalPart(key);
                             if (!string.IsNullOrWhiteSpace(localPart))
                             {
                                 var existingLocal = reportMeetingsByEmail.GetValueOrDefault(localPart!);
-                                reportMeetingsByEmail[localPart!] = (Math.Max(existingLocal.Hosted, hosted), Math.Max(existingLocal.Joined, joined));
+                                reportMeetingsByEmail[localPart!] = (Math.Max(existingLocal.Hosted, hosted), Math.Max(existingLocal.Joined, joined), Math.Max(existingLocal.Minutes, minutes));
                             }
                         }
 
@@ -550,7 +551,7 @@ public class PerformanceReviewsController : ControllerBase
                         if (!string.IsNullOrWhiteSpace(reportName))
                         {
                             var existing = reportMeetingsByName.GetValueOrDefault(reportName);
-                            reportMeetingsByName[reportName] = (Math.Max(existing.Hosted, hosted), Math.Max(existing.Joined, joined));
+                            reportMeetingsByName[reportName] = (Math.Max(existing.Hosted, hosted), Math.Max(existing.Joined, joined), Math.Max(existing.Minutes, minutes));
                         }
                     }
                 }
@@ -561,7 +562,7 @@ public class PerformanceReviewsController : ControllerBase
             _logger.LogWarning(ex, "Zoom reports/users pull failed; continuing without report meetings fallback");
         }
 
-        var meetingRows = new List<(string? HostId, string? HostEmail, string? HostName, DateTime? StartUtc)>();
+        var meetingRows = new List<(string? HostId, string? HostEmail, string? HostName, DateTime? StartUtc, double DurationMinutes)>();
         try
         {
             var meetingsResponse = await client.GetAsync($"{crmBase}/meetings?type=past&pageSize=500");
@@ -595,7 +596,9 @@ public class PerformanceReviewsController : ControllerBase
                         var hostName =
                             ReadStringAny(item, "hostName", "host_name", "ownerName", "owner_name", "name")
                             ?? (hasHostNode ? ReadStringAny(hostNode, "name", "displayName", "display_name") : null);
-                        meetingRows.Add((hostId?.Trim(), hostEmail?.Trim().ToLowerInvariant(), NormalizeName(hostName), startUtc));
+                        var durationMinutes = ReadDoubleAny(item, "duration", "duration_minutes", "meetingDurationMinutes", "meeting_duration_minutes");
+                        if (durationMinutes < 0) durationMinutes = 0;
+                        meetingRows.Add((hostId?.Trim(), hostEmail?.Trim().ToLowerInvariant(), NormalizeName(hostName), startUtc, durationMinutes));
                     }
                 }
             }
@@ -609,6 +612,7 @@ public class PerformanceReviewsController : ControllerBase
         var textByEmployee = new Dictionary<int, int>();
         var meetingsHostedByEmployee = new Dictionary<int, int>();
         var meetingsJoinedByEmployee = new Dictionary<int, int>();
+        var meetingMinutesByEmployee = new Dictionary<int, double>();
         var totalCallMinutesByEmployee = new Dictionary<int, double>();
         var matchedCount = 0;
         foreach (var emp in employees)
@@ -691,6 +695,7 @@ public class PerformanceReviewsController : ControllerBase
             textByEmployee[emp.EmployeeId] = smsCount;
             meetingsHostedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsHosted ?? 0;
             meetingsJoinedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsJoined ?? 0;
+            meetingMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.MeetingMinutes ?? 0);
             totalCallMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.TotalCallMinutes ?? 0);
 
             if (meetingRows.Count > 0
@@ -705,24 +710,30 @@ public class PerformanceReviewsController : ControllerBase
 
                 var emailCandidateSet = new HashSet<string>(emailCandidates, StringComparer.OrdinalIgnoreCase);
                 var hosted = 0;
+                var hostedMinutes = 0d;
                 foreach (var meeting in meetingRows)
                 {
                     var hostMatched =
                         (!string.IsNullOrWhiteSpace(meeting.HostId) && zoomIdCandidates.Contains(meeting.HostId))
                         || (!string.IsNullOrWhiteSpace(meeting.HostEmail) && emailCandidateSet.Contains(meeting.HostEmail))
                         || (!string.IsNullOrWhiteSpace(employeeNameKey) && !string.IsNullOrWhiteSpace(meeting.HostName) && string.Equals(meeting.HostName, employeeNameKey, StringComparison.OrdinalIgnoreCase));
-                    if (hostMatched) hosted++;
+                    if (hostMatched)
+                    {
+                        hosted++;
+                        hostedMinutes += Math.Max(0, meeting.DurationMinutes);
+                    }
                 }
                 if (hosted > 0)
                 {
                     meetingsHostedByEmployee[emp.EmployeeId] = hosted;
                     meetingsJoinedByEmployee[emp.EmployeeId] = hosted;
+                    meetingMinutesByEmployee[emp.EmployeeId] = Math.Max(meetingMinutesByEmployee.GetValueOrDefault(emp.EmployeeId), hostedMinutes);
                 }
             }
 
             if (meetingsHostedByEmployee[emp.EmployeeId] <= 0 && meetingsJoinedByEmployee[emp.EmployeeId] <= 0)
             {
-                (int Hosted, int Joined) reportFallback = default;
+                (int Hosted, int Joined, double Minutes) reportFallback = default;
                 foreach (var emailKey in emailCandidates)
                 {
                     if (reportMeetingsByEmail.TryGetValue(emailKey, out reportFallback))
@@ -743,6 +754,7 @@ public class PerformanceReviewsController : ControllerBase
                 {
                     meetingsHostedByEmployee[emp.EmployeeId] = Math.Max(0, reportFallback.Hosted);
                     meetingsJoinedByEmployee[emp.EmployeeId] = Math.Max(0, reportFallback.Joined > 0 ? reportFallback.Joined : reportFallback.Hosted);
+                    meetingMinutesByEmployee[emp.EmployeeId] = Math.Max(meetingMinutesByEmployee.GetValueOrDefault(emp.EmployeeId), Math.Max(0, reportFallback.Minutes));
                 }
             }
         }
@@ -934,6 +946,7 @@ public class PerformanceReviewsController : ControllerBase
         {
             var totalCallMinutes = Math.Round(Math.Max(0, totalCallMinutesByEmployee.GetValueOrDefault(emp.EmployeeId)), 1);
             var callVolume = callByEmployee.GetValueOrDefault(emp.EmployeeId);
+            var totalMeetingMinutes = Math.Round(Math.Max(0, meetingMinutesByEmployee.GetValueOrDefault(emp.EmployeeId)), 1);
             rows.Add(new
             {
                 employeeId = emp.EmployeeId,
@@ -943,6 +956,7 @@ public class PerformanceReviewsController : ControllerBase
                 textVolume = textByEmployee.GetValueOrDefault(emp.EmployeeId),
                 meetingsHosted = meetingsHostedByEmployee.GetValueOrDefault(emp.EmployeeId),
                 meetingsJoined = meetingsJoinedByEmployee.GetValueOrDefault(emp.EmployeeId),
+                totalMeetingMinutes = totalMeetingMinutes,
                 totalCallMinutes = totalCallMinutes,
                 avgCallMinutes = callVolume > 0 ? Math.Round(totalCallMinutes / callVolume, 2) : 0,
                 source = usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway"
