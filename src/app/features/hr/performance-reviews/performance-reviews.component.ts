@@ -1759,10 +1759,15 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   private extractEmployeeTitle(emp: RosterEmployee): string {
-    const value = emp?.['jobTitle']
-      ?? emp?.['title']
+    const positionNode = emp?.['position'];
+    const value = emp?.['positionName']
       ?? emp?.['positionTitle']
-      ?? emp?.['position']
+      ?? emp?.['position_label']
+      ?? (typeof positionNode === 'object' && positionNode
+        ? (positionNode['name'] ?? positionNode['title'] ?? positionNode['label'])
+        : positionNode)
+      ?? emp?.['jobTitle']
+      ?? emp?.['title']
       ?? emp?.['role']
       ?? emp?.['departmentTitle']
       ?? '';
@@ -1770,10 +1775,15 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   private extractEmployeeTitleRaw(emp: RosterEmployee): string {
-    const value = emp?.['jobTitle']
-      ?? emp?.['title']
+    const positionNode = emp?.['position'];
+    const value = emp?.['positionName']
       ?? emp?.['positionTitle']
-      ?? emp?.['position']
+      ?? emp?.['position_label']
+      ?? (typeof positionNode === 'object' && positionNode
+        ? (positionNode['name'] ?? positionNode['title'] ?? positionNode['label'])
+        : positionNode)
+      ?? emp?.['jobTitle']
+      ?? emp?.['title']
       ?? emp?.['role']
       ?? emp?.['departmentTitle']
       ?? '';
