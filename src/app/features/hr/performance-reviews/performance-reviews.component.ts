@@ -944,11 +944,16 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   availableManagementTitleOptions = computed(() => {
-    const selected = new Set(this.managementTitleTabs().map(t => t.toLowerCase()));
-    const titles = this.employees()
-      .map(emp => this.extractEmployeeTitleRaw(emp))
-      .filter((title): title is string => !!title && !selected.has(title.toLowerCase()));
-    return Array.from(new Set(titles)).sort((a, b) => a.localeCompare(b));
+    const selectedKeys = new Set(this.managementTitleTabs().map(t => this.normalizeManagementKey(t)).filter(Boolean));
+    const displayByKey = new Map<string, string>();
+    for (const emp of this.employees()) {
+      for (const candidate of this.extractEmployeeTitleCandidatesRaw(emp)) {
+        const key = this.normalizeManagementKey(candidate);
+        if (!key || selectedKeys.has(key) || displayByKey.has(key)) continue;
+        displayByKey.set(key, candidate);
+      }
+    }
+    return Array.from(displayByKey.values()).sort((a, b) => a.localeCompare(b));
   });
 
   managementEmployees = computed(() => {
@@ -958,7 +963,11 @@ export class PerformanceReviewsComponent implements OnInit {
 
     const selectedTab = this.activeManagementTitleTab();
     const effectiveTab = selectedTab || tabs[0];
-    return all.filter((emp) => this.extractEmployeeTitleRaw(emp) === effectiveTab);
+    const selectedKey = this.normalizeManagementKey(effectiveTab);
+    return all.filter((emp) =>
+      this.extractEmployeeTitleCandidatesRaw(emp)
+        .some(candidate => this.normalizeManagementKey(candidate) === selectedKey)
+    );
   });
 
   managementEmployeeIdSet = computed(() => new Set(this.managementEmployees().map(e => Number(e.id)).filter(Boolean)));
@@ -1847,35 +1856,58 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   private extractEmployeeTitle(emp: RosterEmployee): string {
-    const positionNode = emp?.['position'];
-    const value = emp?.['positionName']
-      ?? emp?.['positionTitle']
-      ?? emp?.['position_label']
-      ?? (typeof positionNode === 'object' && positionNode
-        ? (positionNode['name'] ?? positionNode['title'] ?? positionNode['label'])
-        : positionNode)
-      ?? emp?.['jobTitle']
-      ?? emp?.['title']
-      ?? emp?.['role']
-      ?? emp?.['departmentTitle']
-      ?? '';
+    const value = this.extractEmployeeTitleCandidatesRaw(emp)[0] || '';
     return String(value).toLowerCase().trim();
   }
 
   private extractEmployeeTitleRaw(emp: RosterEmployee): string {
+    return this.extractEmployeeTitleCandidatesRaw(emp)[0] || '';
+  }
+
+  private extractEmployeeTitleCandidatesRaw(emp: RosterEmployee): string[] {
     const positionNode = emp?.['position'];
-    const value = emp?.['positionName']
-      ?? emp?.['positionTitle']
-      ?? emp?.['position_label']
-      ?? (typeof positionNode === 'object' && positionNode
-        ? (positionNode['name'] ?? positionNode['title'] ?? positionNode['label'])
-        : positionNode)
-      ?? emp?.['jobTitle']
-      ?? emp?.['title']
-      ?? emp?.['role']
-      ?? emp?.['departmentTitle']
-      ?? '';
-    return String(value).trim();
+    const values: string[] = [];
+    const pushValue = (value: any) => {
+      if (value == null) return;
+      if (Array.isArray(value)) {
+        for (const item of value) pushValue(item);
+        return;
+      }
+      const text = String(value).trim();
+      if (!text) return;
+      if (!values.some(v => v.toLowerCase() === text.toLowerCase())) values.push(text);
+    };
+
+    pushValue(emp?.['positionName']);
+    pushValue(emp?.['positionTitle']);
+    pushValue(emp?.['position_label']);
+    if (typeof positionNode === 'object' && positionNode) {
+      pushValue(positionNode['name']);
+      pushValue(positionNode['title']);
+      pushValue(positionNode['label']);
+    } else {
+      pushValue(positionNode);
+    }
+    pushValue(emp?.['jobTitle']);
+    pushValue(emp?.['title']);
+    pushValue(emp?.['role']);
+    pushValue(emp?.['roles']);
+    pushValue(emp?.['userRole']);
+    pushValue(emp?.['accessRole']);
+    pushValue(emp?.['permissionRole']);
+    pushValue(emp?.['departmentTitle']);
+
+    if (emp?.['isSuperAdmin'] === true || emp?.['superAdmin'] === true || emp?.['is_super_admin'] === true) {
+      pushValue('superadmin');
+    }
+
+    return values;
+  }
+
+  private normalizeManagementKey(value: string): string {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
   }
 
   private extractEmployeeDescription(emp: RosterEmployee): string {
