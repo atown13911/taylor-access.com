@@ -89,6 +89,17 @@ type ReviewTableSort =
   | 'calltime-asc'
   | 'clocked-desc'
   | 'clocked-asc';
+type ManagementTableSort =
+  | 'employee-asc'
+  | 'employee-desc'
+  | 'calls-desc'
+  | 'calls-asc'
+  | 'texts-desc'
+  | 'texts-asc'
+  | 'meetings-desc'
+  | 'meetings-asc'
+  | 'activity-desc'
+  | 'activity-asc';
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
 
@@ -392,6 +403,58 @@ type RosterEmployee = Record<string, any>;
           }
         </div>
       }
+
+      <div class="review-controls management-controls">
+        <div class="review-tab-stack">
+          <div class="tabs period-mode-tabs">
+            <span class="table-title-chip">Management Performance Table</span>
+          </div>
+          <div class="tabs period-mode-tabs">
+            <button class="tab" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Weekly</button>
+            <button class="tab" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Monthly</button>
+          </div>
+        </div>
+        <div class="search-filter">
+          <label>Search</label>
+          <input
+            type="text"
+            [ngModel]="managementSearchTerm()"
+            (ngModelChange)="managementSearchTerm.set(($event || '').toString())"
+            placeholder="Employee name..."
+          />
+        </div>
+        <div class="month-filter">
+          <label>Review Period</label>
+          @if (periodMode() === 'weekly') {
+            <div class="week-selector">
+              <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
+                @for (week of weekOptions; track week) {
+                  <option [ngValue]="week">Week {{ week }}</option>
+                }
+              </select>
+              <select [ngModel]="selectedWeekYear()" (ngModelChange)="onWeekYearChange($event)">
+                @for (year of reviewYearOptions(); track year) {
+                  <option [ngValue]="year">{{ year }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
+              @for (opt of reviewPeriodOptions(); track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          }
+        </div>
+        <div class="sort-filter">
+          <label>Sort By</label>
+          <select [ngModel]="selectedManagementSort()" (ngModelChange)="selectedManagementSort.set($event)">
+            @for (opt of managementSortOptions; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
 
       <!-- Call Metrics Stats -->
       <div class="stats-row">
@@ -701,6 +764,7 @@ type RosterEmployee = Record<string, any>;
     .page-tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
     .page-tab:hover { color: #ccc; }
     .review-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .management-controls { margin-bottom: 16px; }
     .review-tab-stack { display: flex; flex-direction: column; gap: 2px; }
     .period-mode-tabs { margin-bottom: 0; }
     .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -904,6 +968,8 @@ export class PerformanceReviewsComponent implements OnInit {
   selectedWeekYear = signal(new Date().getUTCFullYear());
   selectedTableSort = signal<ReviewTableSort>('score-desc');
   tableSearchTerm = signal('');
+  selectedManagementSort = signal<ManagementTableSort>('calls-desc');
+  managementSearchTerm = signal('');
   showReportsTab = signal(false);
   periodMode = signal<'weekly' | 'monthly'>('weekly');
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
@@ -924,6 +990,18 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'calltime-asc', label: 'Total Call Time: Low to High' },
     { value: 'clocked-desc', label: 'Clocked Hrs: High to Low' },
     { value: 'clocked-asc', label: 'Clocked Hrs: Low to High' },
+    { value: 'employee-asc', label: 'Employee: A to Z' },
+    { value: 'employee-desc', label: 'Employee: Z to A' }
+  ];
+  managementSortOptions: Array<{ value: ManagementTableSort; label: string }> = [
+    { value: 'calls-desc', label: 'Calls: High to Low' },
+    { value: 'calls-asc', label: 'Calls: Low to High' },
+    { value: 'texts-desc', label: 'Texts: High to Low' },
+    { value: 'texts-asc', label: 'Texts: Low to High' },
+    { value: 'meetings-desc', label: 'Meetings: High to Low' },
+    { value: 'meetings-asc', label: 'Meetings: Low to High' },
+    { value: 'activity-desc', label: 'Activity %: High to Low' },
+    { value: 'activity-asc', label: 'Activity %: Low to High' },
     { value: 'employee-asc', label: 'Employee: A to Z' },
     { value: 'employee-desc', label: 'Employee: Z to A' }
   ];
@@ -1005,11 +1083,40 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.metricRows().filter(row => idSet.has(Number(row.employeeId)));
   });
   managementMetricRowsSorted = computed(() => {
-    return [...this.managementMetricRows()].sort((a, b) =>
-      (b.callVolume - a.callVolume)
-      || (b.meetingsHosted - a.meetingsHosted)
-      || String(a.employeeName || '').localeCompare(String(b.employeeName || ''))
-    );
+    const searchTerm = this.managementSearchTerm().trim().toLowerCase();
+    const rows = [...this.managementMetricRows()].filter((row) => {
+      if (!searchTerm) return true;
+      const name = String(row.employeeName || `Employee #${row.employeeId}`).toLowerCase();
+      return name.includes(searchTerm) || String(row.employeeId).includes(searchTerm);
+    });
+    const sort = this.selectedManagementSort();
+    rows.sort((a, b) => {
+      switch (sort) {
+        case 'employee-asc':
+          return String(a.employeeName || '').localeCompare(String(b.employeeName || ''));
+        case 'employee-desc':
+          return String(b.employeeName || '').localeCompare(String(a.employeeName || ''));
+        case 'calls-asc':
+          return a.callVolume - b.callVolume;
+        case 'calls-desc':
+          return b.callVolume - a.callVolume;
+        case 'texts-asc':
+          return a.textVolume - b.textVolume;
+        case 'texts-desc':
+          return b.textVolume - a.textVolume;
+        case 'meetings-asc':
+          return a.meetingsHosted - b.meetingsHosted;
+        case 'meetings-desc':
+          return b.meetingsHosted - a.meetingsHosted;
+        case 'activity-asc':
+          return a.activityRate - b.activityRate;
+        case 'activity-desc':
+          return b.activityRate - a.activityRate;
+        default:
+          return b.callVolume - a.callVolume;
+      }
+    });
+    return rows;
   });
   managementPerformanceSummary = computed(() => {
     const rows = this.managementMetricRows();
