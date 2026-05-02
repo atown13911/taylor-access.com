@@ -408,15 +408,44 @@ type RosterEmployee = Record<string, any>;
         </button>
       </div>
 
-      <!-- Call Logs Table -->
-      @if (managementCallLogs().length === 0) {
+      <!-- Management Performance Table -->
+      @if (managementMetricRowsSorted().length === 0) {
         <div class="empty-state">
-          <i class='bx bx-phone'></i>
-          <h3>No call logs yet</h3>
-          <p>Log your first call to start tracking metrics</p>
+          <i class='bx bx-group'></i>
+          <h3>No team data for this tab yet</h3>
+          <p>Assign employees to this management title to populate the table.</p>
         </div>
       } @else {
         <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Calls</th>
+                <th>Texts</th>
+                <th>Meetings</th>
+                <th>Call Time</th>
+                <th>Activity %</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of managementMetricRowsSorted(); track row.employeeId) {
+                <tr>
+                  <td><strong>{{ row.employeeName || ('Employee #' + row.employeeId) }}</strong></td>
+                  <td>{{ row.callVolume }}</td>
+                  <td>{{ row.textVolume }}</td>
+                  <td>{{ row.meetingsHosted }}</td>
+                  <td>{{ row.totalCallMinutes | number:'1.0-1' }} min</td>
+                  <td>{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (managementCallLogs().length > 0) {
+        <div class="table-wrap" style="margin-top: 14px;">
           <table>
             <thead>
               <tr>
@@ -974,6 +1003,13 @@ export class PerformanceReviewsComponent implements OnInit {
   managementMetricRows = computed(() => {
     const idSet = this.managementEmployeeIdSet();
     return this.metricRows().filter(row => idSet.has(Number(row.employeeId)));
+  });
+  managementMetricRowsSorted = computed(() => {
+    return [...this.managementMetricRows()].sort((a, b) =>
+      (b.callVolume - a.callVolume)
+      || (b.meetingsHosted - a.meetingsHosted)
+      || String(a.employeeName || '').localeCompare(String(b.employeeName || ''))
+    );
   });
   managementPerformanceSummary = computed(() => {
     const rows = this.managementMetricRows();
