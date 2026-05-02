@@ -361,6 +361,9 @@ type RosterEmployee = Record<string, any>;
         <button class="tab add-title-tab" (click)="toggleTitlePicker()">
           <i class='bx bx-plus'></i>
         </button>
+        <button class="tab settings-title-tab" title="Manage tabs" (click)="toggleTitleSettings()">
+          <i class='bx bx-cog'></i>
+        </button>
       </div>
 
       @if (showTitlePicker()) {
@@ -372,6 +375,21 @@ type RosterEmployee = Record<string, any>;
             }
           </select>
           <button class="btn-secondary" (click)="addManagementTitleTab()">Add Tab</button>
+        </div>
+      }
+      @if (showTitleSettings()) {
+        <div class="title-settings-popover">
+          <div class="title-settings-header">Manage Tabs</div>
+          @for (title of managementTitleTabs(); track title) {
+            <div class="title-settings-row">
+              <span>{{ title }}</span>
+              <button class="remove-tab-btn" title="Delete tab" (click)="removeManagementTitleTab(title)">
+                <i class='bx bx-trash'></i>
+              </button>
+            </div>
+          } @empty {
+            <div class="title-settings-empty">No tabs to manage.</div>
+          }
         </div>
       }
 
@@ -673,8 +691,51 @@ type RosterEmployee = Record<string, any>;
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
     .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
     .add-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
+    .settings-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
     .title-picker { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
     .title-picker select { min-width: 220px; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; }
+    .title-settings-popover {
+      width: min(420px, 100%);
+      border: 1px solid #2a2a4e;
+      border-radius: 10px;
+      background: #0f172a;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .title-settings-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid #2a2a4e;
+      color: #dbeafe;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .title-settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: #cbd5e1;
+      font-size: 0.9rem;
+    }
+    .title-settings-row:last-child { border-bottom: none; }
+    .title-settings-empty { padding: 12px; color: #94a3b8; font-size: 0.84rem; }
+    .remove-tab-btn {
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      background: rgba(239, 68, 68, 0.12);
+      color: #fecaca;
+      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .remove-tab-btn:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
     .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
     .table-wrap { border-radius: 12px; border: 1px solid #2a2a4e; overflow: hidden; }
@@ -843,6 +904,7 @@ export class PerformanceReviewsComponent implements OnInit {
   managementTitleTabs = signal<string[]>([]);
   activeManagementTitleTab = signal<string>('');
   showTitlePicker = signal(false);
+  showTitleSettings = signal(false);
   newManagementTitle = signal<string>('');
   showCallModal = signal(false);
   callForm: any = {
@@ -909,7 +971,14 @@ export class PerformanceReviewsComponent implements OnInit {
   toggleTitlePicker(): void {
     const next = !this.showTitlePicker();
     this.showTitlePicker.set(next);
+    if (next) this.showTitleSettings.set(false);
     if (next) this.newManagementTitle.set('');
+  }
+
+  toggleTitleSettings(): void {
+    const next = !this.showTitleSettings();
+    this.showTitleSettings.set(next);
+    if (next) this.showTitlePicker.set(false);
   }
 
   addManagementTitleTab(): void {
@@ -928,6 +997,25 @@ export class PerformanceReviewsComponent implements OnInit {
 
   selectManagementTitleTab(title: string): void {
     this.activeManagementTitleTab.set(title);
+    this.showTitleSettings.set(false);
+    this.persistManagementTabs();
+  }
+
+  removeManagementTitleTab(title: string): void {
+    const normalized = title.trim().toLowerCase();
+    const nextTabs = this.managementTitleTabs().filter(t => t.trim().toLowerCase() !== normalized);
+    this.managementTitleTabs.set(nextTabs);
+
+    if (nextTabs.length === 0) {
+      this.activeManagementTitleTab.set('');
+      this.showTitleSettings.set(false);
+      this.persistManagementTabs();
+      return;
+    }
+
+    if (this.activeManagementTitleTab().trim().toLowerCase() === normalized) {
+      this.activeManagementTitleTab.set(nextTabs[0]);
+    }
     this.persistManagementTabs();
   }
 
