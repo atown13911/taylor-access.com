@@ -395,10 +395,10 @@ type RosterEmployee = Record<string, any>;
 
       <!-- Call Metrics Stats -->
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ managementCallLogs().length }}</span><span class="stat-lbl">Total Calls</span></div></div>
-        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-phone-incoming'></i></div><div><span class="stat-val">{{ getCallCount('answered') }}</span><span class="stat-lbl">Answered</span></div></div>
-        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-phone-outgoing'></i></div><div><span class="stat-val">{{ getCallCount('outbound') }}</span><span class="stat-lbl">Outbound</span></div></div>
-        <div class="stat-card"><div class="stat-icon draft"><i class='bx bx-phone-off'></i></div><div><span class="stat-val">{{ getCallCount('missed') }}</span><span class="stat-lbl">Missed</span></div></div>
+        <div class="stat-card"><div class="stat-icon staff"><i class='bx bx-group'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().staff }}</span><span class="stat-lbl">Team Members</span></div></div>
+        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().calls }}</span><span class="stat-lbl">Total Calls</span></div></div>
+        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-message-rounded-dots'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().texts }}</span><span class="stat-lbl">Texts</span></div></div>
+        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-video'></i></div><div><span class="stat-val">{{ managementPerformanceSummary().meetings }}</span><span class="stat-lbl">Meetings Hosted</span></div></div>
       </div>
 
       <!-- Log Call Button -->
@@ -971,6 +971,19 @@ export class PerformanceReviewsComponent implements OnInit {
   });
 
   managementEmployeeIdSet = computed(() => new Set(this.managementEmployees().map(e => Number(e.id)).filter(Boolean)));
+  managementMetricRows = computed(() => {
+    const idSet = this.managementEmployeeIdSet();
+    return this.metricRows().filter(row => idSet.has(Number(row.employeeId)));
+  });
+  managementPerformanceSummary = computed(() => {
+    const rows = this.managementMetricRows();
+    return {
+      staff: rows.length,
+      calls: rows.reduce((sum, row) => sum + Number(row.callVolume || 0), 0),
+      texts: rows.reduce((sum, row) => sum + Number(row.textVolume || 0), 0),
+      meetings: rows.reduce((sum, row) => sum + Number(row.meetingsHosted || 0), 0)
+    };
+  });
 
   managementCallLogs = computed(() => {
     const idSet = this.managementEmployeeIdSet();
@@ -1267,7 +1280,26 @@ export class PerformanceReviewsComponent implements OnInit {
   async loadEmployees() {
     try {
       const res: any = await this.http.get(`${this.apiUrl}/api/v1/employee-roster?status=active&limit=5000`).toPromise();
-      this.employees.set(res?.data || []);
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      const normalized = rows.map((row: any) => {
+        const positionNode = row?.position ?? row?.Position ?? null;
+        return {
+          ...row,
+          role: row?.role ?? row?.Role ?? '',
+          jobTitle: row?.jobTitle ?? row?.JobTitle ?? '',
+          position: positionNode,
+          positionName: row?.positionName
+            ?? row?.PositionName
+            ?? row?.positionTitle
+            ?? row?.PositionTitle
+            ?? positionNode?.name
+            ?? positionNode?.Name
+            ?? positionNode?.title
+            ?? positionNode?.Title
+            ?? ''
+        };
+      });
+      this.employees.set(normalized);
     } catch { }
   }
   async loadTimeclockSummary() {
