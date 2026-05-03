@@ -483,9 +483,12 @@ public class PerformanceReviewsController : ControllerBase
         var fromDate = targetStart.ToString("yyyy-MM-dd");
         var toDate = rangeEnd.ToString("yyyy-MM-dd");
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var gmailByEmail = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
-        var gmailByEmailLocal = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
-        var gmailByNameGuess = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailPeriodByEmail = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailPeriodByEmailLocal = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailPeriodByNameGuess = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailFallbackByEmail = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailFallbackByEmailLocal = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailFallbackByNameGuess = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
         var reportMeetingsByEmail = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
         var reportMeetingsByName = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
 
@@ -522,7 +525,12 @@ public class PerformanceReviewsController : ControllerBase
             var gmailResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?from={fromDate}&to={toDate}");
             var gmailRowsAdded = 0;
 
-            async Task<int> ReadGmailRowsAsync(HttpResponseMessage response)
+            async Task<int> ReadGmailRowsAsync(
+                HttpResponseMessage response,
+                Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)> byEmailMap,
+                Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)> byLocalMap,
+                Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)> byNameMap,
+                bool includeRates)
             {
                 if (!response.IsSuccessStatusCode) return 0;
                 var gmailJson = await response.Content.ReadAsStringAsync();
@@ -539,32 +547,38 @@ public class PerformanceReviewsController : ControllerBase
                     var perf = (
                         SentCount: ReadIntAny(item, "sentCount", "sent_count"),
                         ReplyCount: ReadIntAny(item, "replyCount", "reply_count"),
-                        FirstResponseMinutes: ReadDoubleAny(item, "firstResponseMinutes", "first_response_minutes"),
-                        FollowUpRate: ReadDoubleAny(item, "followUpRate", "follow_up_rate"),
+                        FirstResponseMinutes: includeRates ? ReadDoubleAny(item, "firstResponseMinutes", "first_response_minutes") : 0d,
+                        FollowUpRate: includeRates ? ReadDoubleAny(item, "followUpRate", "follow_up_rate") : 0d,
                         InternalCount: ReadIntAny(item, "internalCount", "internal_count"),
                         ExternalCount: ReadIntAny(item, "externalCount", "external_count")
                     );
-                    gmailByEmail[email] = perf;
+                    byEmailMap[email] = perf;
                     var localPart = ExtractEmailLocalPart(email);
                     if (!string.IsNullOrWhiteSpace(localPart))
                     {
-                        gmailByEmailLocal[localPart] = perf;
+                        byLocalMap[localPart] = perf;
                         var guessedNameKey = NormalizeName(localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' '));
                         if (!string.IsNullOrWhiteSpace(guessedNameKey))
-                            gmailByNameGuess[guessedNameKey] = perf;
+                            byNameMap[guessedNameKey] = perf;
                     }
                     added++;
                 }
                 return added;
             }
 
-            gmailRowsAdded += await ReadGmailRowsAsync(gmailResponse);
+            gmailRowsAdded += await ReadGmailRowsAsync(gmailResponse, gmailPeriodByEmail, gmailPeriodByEmailLocal, gmailPeriodByNameGuess, includeRates: true);
 
-            // Fallback: some orgs only have recent Gmail sync windows persisted; widen window if the selected period has no rows yet.
+            // Fallback: only use wider window for count visibility (not period rates/timing).
             if (gmailRowsAdded == 0)
             {
                 var fallbackResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?days=120");
-                gmailRowsAdded += await ReadGmailRowsAsync(fallbackResponse);
+                await ReadGmailRowsAsync(
+                    fallbackResponse,
+                    gmailFallbackByEmail,
+                    gmailFallbackByEmailLocal,
+                    gmailFallbackByNameGuess,
+                    includeRates: false
+                );
             }
         }
         catch (Exception ex)
@@ -763,35 +777,53 @@ public class PerformanceReviewsController : ControllerBase
             meetingsJoinedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsJoined ?? 0;
             meetingMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.MeetingMinutes ?? 0);
             totalCallMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.TotalCallMinutes ?? 0);
-            var bestGmail = (SentCount: 0, ReplyCount: 0, FirstResponseMinutes: 0d, FollowUpRate: 0d, InternalCount: 0, ExternalCount: 0);
+            var bestGmailPeriod = (SentCount: 0, ReplyCount: 0, FirstResponseMinutes: 0d, FollowUpRate: 0d, InternalCount: 0, ExternalCount: 0);
+            var bestGmailFallback = (SentCount: 0, ReplyCount: 0, FirstResponseMinutes: 0d, FollowUpRate: 0d, InternalCount: 0, ExternalCount: 0);
             foreach (var emailKey in emailCandidates)
             {
-                if (gmailByEmail.TryGetValue(emailKey, out var byEmail))
+                if (gmailPeriodByEmail.TryGetValue(emailKey, out var byEmail))
                 {
-                    if (byEmail.SentCount > bestGmail.SentCount) bestGmail = byEmail;
+                    if (byEmail.SentCount > bestGmailPeriod.SentCount) bestGmailPeriod = byEmail;
                 }
                 var localPart = ExtractEmailLocalPart(emailKey);
-                if (!string.IsNullOrWhiteSpace(localPart) && gmailByEmailLocal.TryGetValue(localPart, out var byLocal))
+                if (!string.IsNullOrWhiteSpace(localPart) && gmailPeriodByEmailLocal.TryGetValue(localPart, out var byLocal))
                 {
-                    if (byLocal.SentCount > bestGmail.SentCount) bestGmail = byLocal;
+                    if (byLocal.SentCount > bestGmailPeriod.SentCount) bestGmailPeriod = byLocal;
+                }
+
+                if (gmailFallbackByEmail.TryGetValue(emailKey, out var byEmailFallback))
+                {
+                    if (byEmailFallback.SentCount > bestGmailFallback.SentCount) bestGmailFallback = byEmailFallback;
+                }
+                if (!string.IsNullOrWhiteSpace(localPart) && gmailFallbackByEmailLocal.TryGetValue(localPart, out var byLocalFallback))
+                {
+                    if (byLocalFallback.SentCount > bestGmailFallback.SentCount) bestGmailFallback = byLocalFallback;
                 }
             }
-            if (bestGmail.SentCount <= 0 && bestGmail.ReplyCount <= 0)
+            if (bestGmailPeriod.SentCount <= 0 && bestGmailPeriod.ReplyCount <= 0)
             {
                 var guessedNameKey = NormalizeName(emp.Name);
                 if (!string.IsNullOrWhiteSpace(guessedNameKey)
-                    && gmailByNameGuess.TryGetValue(guessedNameKey, out var byNameGuess)
-                    && byNameGuess.SentCount > bestGmail.SentCount)
+                    && gmailPeriodByNameGuess.TryGetValue(guessedNameKey, out var byNameGuess)
+                    && byNameGuess.SentCount > bestGmailPeriod.SentCount)
                 {
-                    bestGmail = byNameGuess;
+                    bestGmailPeriod = byNameGuess;
+                }
+                if (!string.IsNullOrWhiteSpace(guessedNameKey)
+                    && gmailFallbackByNameGuess.TryGetValue(guessedNameKey, out var byNameGuessFallback)
+                    && byNameGuessFallback.SentCount > bestGmailFallback.SentCount)
+                {
+                    bestGmailFallback = byNameGuessFallback;
                 }
             }
-            sentCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.SentCount);
-            replyCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.ReplyCount);
-            firstResponseMinutesByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.FirstResponseMinutes);
-            followUpRateByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.FollowUpRate);
-            internalCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.InternalCount);
-            externalCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.ExternalCount);
+            var hasPeriodGmailSignal = bestGmailPeriod.SentCount > 0 || bestGmailPeriod.ReplyCount > 0;
+            var chosenCounts = hasPeriodGmailSignal ? bestGmailPeriod : bestGmailFallback;
+            sentCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.SentCount);
+            replyCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.ReplyCount);
+            firstResponseMinutesByEmployee[emp.EmployeeId] = Math.Max(0, bestGmailPeriod.FirstResponseMinutes);
+            followUpRateByEmployee[emp.EmployeeId] = Math.Max(0, bestGmailPeriod.FollowUpRate);
+            internalCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.InternalCount);
+            externalCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.ExternalCount);
             if (sentCountByEmployee[emp.EmployeeId] > 0
                 || replyCountByEmployee[emp.EmployeeId] > 0
                 || firstResponseMinutesByEmployee[emp.EmployeeId] > 0
@@ -1093,7 +1125,8 @@ public class PerformanceReviewsController : ControllerBase
                     crmMetricsRows,
                     crmMetricsRowsWithCalls,
                     crmMetricsRowsWithTexts,
-                    gmailMailboxRows = gmailByEmail.Count,
+                    gmailPeriodMailboxRows = gmailPeriodByEmail.Count,
+                    gmailFallbackMailboxRows = gmailFallbackByEmail.Count,
                     gmailMatchedEmployees,
                     smsRows,
                     callLogRows,

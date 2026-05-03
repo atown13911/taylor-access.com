@@ -2257,12 +2257,15 @@ export class PerformanceReviewsComponent implements OnInit {
     externalCount: number
   ): number {
     const targetRevenue = Math.max(1, this.totalInvoicedRevenue30d() / Math.max(1, this.employees().length));
+    const workingHours = Math.max(0, activeHours);
+    const clockedHours = Math.max(0, totalHours);
+    const activityVsWorkingHours = workingHours > 0 ? Math.min(clockedHours / workingHours, 1) : 0;
     const callScore = Math.min(callVolume / 20, 1) * 25;
     const textScore = Math.min(textVolume / 40, 1) * 15;
-    const activeHoursScore = Math.min(activeHours / 160, 1) * 30;
-    const activityRatioScore = (totalHours > 0 ? Math.min(activeHours / totalHours, 1) : 0) * 15;
+    const clockedHoursScore = Math.min(clockedHours / 160, 1) * 15;
+    const activityVsWorkingHoursScore = activityVsWorkingHours * 30;
     const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 15;
-    const baseScore = callScore + textScore + activeHoursScore + activityRatioScore + revenueScore;
+    const baseScore = callScore + textScore + clockedHoursScore + activityVsWorkingHoursScore + revenueScore;
 
     const outboundTotal = Math.max(0, internalCount) + Math.max(0, externalCount);
     const externalRate = outboundTotal > 0 ? Math.max(0, externalCount) / outboundTotal : 0;
