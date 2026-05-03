@@ -126,9 +126,6 @@ type RosterEmployee = Record<string, any>;
           <h1><i class='bx bx-bar-chart-square'></i> Performance Reviews</h1>
           <p class="subtitle">Employee evaluations and performance tracking</p>
         </div>
-        <button class="btn-primary" (click)="openCreateModal()">
-          <i class='bx bx-plus'></i> New Review
-        </button>
       </header>
 
       <!-- Page Tabs -->
