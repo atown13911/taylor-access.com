@@ -104,6 +104,12 @@ type ManagementTableSort =
   | 'texts-asc'
   | 'meetings-desc'
   | 'meetings-asc'
+  | 'sent-desc'
+  | 'sent-asc'
+  | 'replies-desc'
+  | 'replies-asc'
+  | 'followup-desc'
+  | 'followup-asc'
   | 'activity-desc'
   | 'activity-asc';
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
@@ -499,6 +505,11 @@ type RosterEmployee = Record<string, any>;
                 <th>Meetings Hosted</th>
                 <th>Meetings Joined</th>
                 <th>Meeting Time</th>
+                <th>Sent</th>
+                <th>Replies</th>
+                <th>1st Resp (min)</th>
+                <th>Follow-Up %</th>
+                <th>Ext / Int</th>
                 <th>Call Time</th>
                 <th>Activity %</th>
               </tr>
@@ -512,6 +523,11 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ row.meetingsHosted }}</td>
                   <td>{{ row.meetingsJoined }}</td>
                   <td>{{ row.totalMeetingMinutes | number:'1.0-1' }} min</td>
+                  <td>{{ row.sentCount }}</td>
+                  <td>{{ row.replyCount }}</td>
+                  <td>{{ row.firstResponseMinutes | number:'1.0-1' }}</td>
+                  <td>{{ (row.followUpRate * 100) | number:'1.0-0' }}%</td>
+                  <td>{{ row.externalCount }} / {{ row.internalCount }}</td>
                   <td>{{ row.totalCallMinutes | number:'1.0-1' }} min</td>
                   <td>{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
                 </tr>
@@ -1012,6 +1028,12 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'texts-asc', label: 'Texts: Low to High' },
     { value: 'meetings-desc', label: 'Meetings: High to Low' },
     { value: 'meetings-asc', label: 'Meetings: Low to High' },
+    { value: 'sent-desc', label: 'Sent: High to Low' },
+    { value: 'sent-asc', label: 'Sent: Low to High' },
+    { value: 'replies-desc', label: 'Replies: High to Low' },
+    { value: 'replies-asc', label: 'Replies: Low to High' },
+    { value: 'followup-desc', label: 'Follow-Up %: High to Low' },
+    { value: 'followup-asc', label: 'Follow-Up %: Low to High' },
     { value: 'activity-desc', label: 'Activity %: High to Low' },
     { value: 'activity-asc', label: 'Activity %: Low to High' },
     { value: 'employee-asc', label: 'Employee: A to Z' },
@@ -1120,6 +1142,18 @@ export class PerformanceReviewsComponent implements OnInit {
           return a.meetingsHosted - b.meetingsHosted;
         case 'meetings-desc':
           return b.meetingsHosted - a.meetingsHosted;
+        case 'sent-asc':
+          return a.sentCount - b.sentCount;
+        case 'sent-desc':
+          return b.sentCount - a.sentCount;
+        case 'replies-asc':
+          return a.replyCount - b.replyCount;
+        case 'replies-desc':
+          return b.replyCount - a.replyCount;
+        case 'followup-asc':
+          return a.followUpRate - b.followUpRate;
+        case 'followup-desc':
+          return b.followUpRate - a.followUpRate;
         case 'activity-asc':
           return a.activityRate - b.activityRate;
         case 'activity-desc':
