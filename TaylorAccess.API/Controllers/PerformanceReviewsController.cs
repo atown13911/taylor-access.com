@@ -465,7 +465,12 @@ public class PerformanceReviewsController : ControllerBase
                         metricsByEmail[emailKey] = row;
                         var localPart = ExtractEmailLocalPart(emailKey);
                         if (!string.IsNullOrWhiteSpace(localPart))
+                        {
                             metricsByEmailLocal[localPart] = row;
+                            var guessedNameKey = NormalizeName(localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' '));
+                            if (!string.IsNullOrWhiteSpace(guessedNameKey))
+                                metricsByName[guessedNameKey] = row;
+                        }
                     }
                     if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
                         metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
@@ -617,6 +622,12 @@ public class PerformanceReviewsController : ControllerBase
                             {
                                 var existingLocal = reportMeetingsByEmail.GetValueOrDefault(localPart!);
                                 reportMeetingsByEmail[localPart!] = (Math.Max(existingLocal.Hosted, hosted), Math.Max(existingLocal.Joined, joined), Math.Max(existingLocal.Minutes, minutes));
+                                var guessedNameKey = NormalizeName(localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' '));
+                                if (!string.IsNullOrWhiteSpace(guessedNameKey))
+                                {
+                                    var existingGuess = reportMeetingsByName.GetValueOrDefault(guessedNameKey);
+                                    reportMeetingsByName[guessedNameKey] = (Math.Max(existingGuess.Hosted, hosted), Math.Max(existingGuess.Joined, joined), Math.Max(existingGuess.Minutes, minutes));
+                                }
                             }
                         }
 
@@ -760,6 +771,15 @@ public class PerformanceReviewsController : ControllerBase
             {
                 zoomMetric = byName;
             }
+            if (zoomMetric == null && !string.IsNullOrWhiteSpace(employeeNameKey))
+            {
+                foreach (var kvp in metricsByName)
+                {
+                    if (!NamesLikelyMatch(employeeNameKey, kvp.Key)) continue;
+                    zoomMetric = kvp.Value;
+                    break;
+                }
+            }
 
             var zoomUserId = zoomMetric?.ZoomUserId ?? emp.ZoomUserId ?? mappedZoomUserIds.FirstOrDefault();
             var smsCount = 0;
@@ -886,6 +906,16 @@ public class PerformanceReviewsController : ControllerBase
                     && reportMeetingsByName.TryGetValue(employeeNameKey, out var reportByName))
                 {
                     reportFallback = reportByName;
+                }
+                if (reportFallback.Hosted <= 0 && reportFallback.Joined <= 0
+                    && !string.IsNullOrWhiteSpace(employeeNameKey))
+                {
+                    foreach (var kvp in reportMeetingsByName)
+                    {
+                        if (!NamesLikelyMatch(employeeNameKey, kvp.Key)) continue;
+                        reportFallback = kvp.Value;
+                        if (reportFallback.Hosted > 0 || reportFallback.Joined > 0) break;
+                    }
                 }
 
                 if (reportFallback.Hosted > 0 || reportFallback.Joined > 0)
@@ -1634,6 +1664,26 @@ public class PerformanceReviewsController : ControllerBase
             || status.Contains("full time")
             || status.Contains("part-time")
             || status.Contains("part time");
+    }
+
+    private static bool NamesLikelyMatch(string? a, string? b)
+    {
+        var left = NormalizeName(a);
+        var right = NormalizeName(b);
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        if (string.Equals(left, right, StringComparison.OrdinalIgnoreCase)) return true;
+        if (left.Length >= 5 && right.Length >= 5
+            && (left.Contains(right, StringComparison.OrdinalIgnoreCase) || right.Contains(left, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        var leftTokens = left.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var rightTokens = right.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (leftTokens.Length >= 2 && rightTokens.Length >= 2)
+        {
+            return string.Equals(leftTokens[0], rightTokens[0], StringComparison.OrdinalIgnoreCase)
+                && string.Equals(leftTokens[^1], rightTokens[^1], StringComparison.OrdinalIgnoreCase);
+        }
+        return false;
     }
 }
 
