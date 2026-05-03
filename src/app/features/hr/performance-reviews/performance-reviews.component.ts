@@ -225,6 +225,12 @@ type RosterEmployee = Record<string, any>;
             </select>
           </div>
         }
+        <div class="update-filter">
+          <label>&nbsp;</label>
+          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="loadingReviews()">
+            {{ loadingReviews() ? 'Updating...' : 'Update' }}
+          </button>
+        </div>
       </div>
 
       <!-- Reviews Table -->
@@ -477,6 +483,12 @@ type RosterEmployee = Record<string, any>;
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
+        </div>
+        <div class="update-filter">
+          <label>&nbsp;</label>
+          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="loadingReviews()">
+            {{ loadingReviews() ? 'Updating...' : 'Update' }}
+          </button>
         </div>
       </div>
 
@@ -801,8 +813,9 @@ type RosterEmployee = Record<string, any>;
     .month-filter { display: flex; align-items: center; gap: 8px; }
     .search-filter { display: flex; align-items: center; gap: 8px; }
     .sort-filter { display: flex; align-items: center; gap: 8px; }
+    .update-filter { display: flex; align-items: center; gap: 8px; }
     .week-selector { display: flex; align-items: center; gap: 8px; }
-    .month-filter label, .sort-filter label, .search-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
       min-width: 180px;
       background: #111827;
@@ -1535,11 +1548,12 @@ export class PerformanceReviewsComponent implements OnInit {
     }
   }
 
-  async loadZoomMetrics() {
+  async loadZoomMetrics(sync = false) {
     try {
       const { year, month, fromKey, toKey } = this.parseMonthKey(this.selectedReviewMonth());
+      const syncFlag = sync ? 'true' : 'false';
       const res: any = await this.http
-        .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(toKey)}&sync=true`)
+        .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(toKey)}&sync=${syncFlag}`)
         .toPromise();
       const map: Record<number, ZoomMetricRow> = {};
       const emailMap: Record<string, ZoomMetricRow> = {};
@@ -1648,11 +1662,9 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
-      this.loadZoomMetrics(),
+      this.loadZoomMetrics(false),
       this.loadPersistedDailyMetrics()
     ]);
-    await this.persistDailyMetricsSnapshot();
-    await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
 
@@ -1669,12 +1681,10 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
-      this.loadZoomMetrics(),
+      this.loadZoomMetrics(false),
       this.loadTimeclockSummary(),
       this.loadPersistedDailyMetrics()
     ]);
-    await this.persistDailyMetricsSnapshot();
-    await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
   }
 
@@ -1702,12 +1712,31 @@ export class PerformanceReviewsComponent implements OnInit {
       this.loadEmployees(),
       this.loadTimeclockSummary(),
       this.loadReviews(),
-      this.loadZoomMetrics(),
+      this.loadZoomMetrics(false),
       this.loadPersistedDailyMetrics()
     ]);
-    await this.persistDailyMetricsSnapshot();
-    await this.persistMonthlyMetricsSnapshot();
     this.loadingReviews.set(false);
+  }
+
+  async updateMetricsNow(): Promise<void> {
+    this.loadingReviews.set(true);
+    try {
+      await Promise.all([
+        this.loadTimeclockSummary(),
+        this.loadZoomMetrics(true)
+      ]);
+      await this.persistDailyMetricsSnapshot();
+      await this.persistMonthlyMetricsSnapshot();
+      await Promise.all([
+        this.loadReviews(),
+        this.loadPersistedDailyMetrics()
+      ]);
+      this.toast.success('Performance metrics updated');
+    } catch {
+      this.toast.error('Failed to update performance metrics');
+    } finally {
+      this.loadingReviews.set(false);
+    }
   }
 
   openCreateModal() {
