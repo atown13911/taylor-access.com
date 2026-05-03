@@ -422,12 +422,14 @@ public class PerformanceReviewsController : ControllerBase
                     if (totalCallMinutes <= 0 && totalCallSeconds > 0)
                         totalCallMinutes = totalCallSeconds / 60d;
 
-                    var meetingsHosted =
-                        ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count")
-                        + ReadIntAny(item, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count");
-                    var meetingsJoined =
-                        ReadIntAny(metricElement, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings")
-                        + ReadIntAny(item, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings");
+                    var meetingsHosted = Math.Max(
+                        ReadIntAny(metricElement, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count", "hosted", "hostedCount", "hosted_count"),
+                        ReadIntAny(item, "meetingsHosted", "meetings_hosted", "hostedMeetings", "hosted_meetings", "meetings", "meetingCount", "meeting_count", "hosted", "hostedCount", "hosted_count")
+                    );
+                    var meetingsJoined = Math.Max(
+                        ReadIntAny(metricElement, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings", "participants", "participantCount", "participant_count", "meetingsAttended", "meetings_attended", "attendedMeetings", "attended_meetings"),
+                        ReadIntAny(item, "meetingsJoined", "meetings_joined", "joinedMeetings", "joined_meetings", "participants", "participantCount", "participant_count", "meetingsAttended", "meetings_attended", "attendedMeetings", "attended_meetings")
+                    );
                     var meetingMinutes = ReadDoubleAny(metricElement, "meetingMinutes", "meeting_minutes", "meetingsMinutes", "meetings_minutes", "totalMeetingMinutes", "total_meeting_minutes");
                     if (meetingMinutes <= 0)
                         meetingMinutes = ReadDoubleAny(item, "meetingMinutes", "meeting_minutes", "meetingsMinutes", "meetings_minutes", "totalMeetingMinutes", "total_meeting_minutes");
@@ -867,13 +869,19 @@ public class PerformanceReviewsController : ControllerBase
                     zoomIdCandidates.Add(mapped.Trim());
 
                 var emailCandidateSet = new HashSet<string>(emailCandidates, StringComparer.OrdinalIgnoreCase);
+                var emailLocalCandidateSet = new HashSet<string>(
+                    emailLocalCandidates.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()),
+                    StringComparer.OrdinalIgnoreCase
+                );
                 var hosted = 0;
                 var hostedMinutes = 0d;
                 foreach (var meeting in meetingRows)
                 {
+                    var meetingHostLocal = ExtractEmailLocalPart(meeting.HostEmail);
                     var hostMatched =
                         (!string.IsNullOrWhiteSpace(meeting.HostId) && zoomIdCandidates.Contains(meeting.HostId))
                         || (!string.IsNullOrWhiteSpace(meeting.HostEmail) && emailCandidateSet.Contains(meeting.HostEmail))
+                        || (!string.IsNullOrWhiteSpace(meetingHostLocal) && emailLocalCandidateSet.Contains(meetingHostLocal!))
                         || (!string.IsNullOrWhiteSpace(employeeNameKey) && !string.IsNullOrWhiteSpace(meeting.HostName) && string.Equals(meeting.HostName, employeeNameKey, StringComparison.OrdinalIgnoreCase));
                     if (hostMatched)
                     {
@@ -1678,10 +1686,30 @@ public class PerformanceReviewsController : ControllerBase
 
         var leftTokens = left.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var rightTokens = right.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (leftTokens.Length >= 2 && rightTokens.Length >= 2)
+        if (leftTokens.Length >= 1 && rightTokens.Length >= 1)
         {
-            return string.Equals(leftTokens[0], rightTokens[0], StringComparison.OrdinalIgnoreCase)
-                && string.Equals(leftTokens[^1], rightTokens[^1], StringComparison.OrdinalIgnoreCase);
+            var leftFirst = leftTokens[0];
+            var rightFirst = rightTokens[0];
+            var firstMatches =
+                string.Equals(leftFirst, rightFirst, StringComparison.OrdinalIgnoreCase)
+                || (leftFirst.Length >= 3 && rightFirst.StartsWith(leftFirst, StringComparison.OrdinalIgnoreCase))
+                || (rightFirst.Length >= 3 && leftFirst.StartsWith(rightFirst, StringComparison.OrdinalIgnoreCase));
+
+            if (!firstMatches) return false;
+
+            if (leftTokens.Length == 1 || rightTokens.Length == 1)
+                return true;
+
+            var leftLast = leftTokens[^1];
+            var rightLast = rightTokens[^1];
+            var lastMatches =
+                string.Equals(leftLast, rightLast, StringComparison.OrdinalIgnoreCase)
+                || (leftLast.Length == 1 && rightLast.StartsWith(leftLast, StringComparison.OrdinalIgnoreCase))
+                || (rightLast.Length == 1 && leftLast.StartsWith(rightLast, StringComparison.OrdinalIgnoreCase))
+                || (leftLast.Length >= 2 && rightLast.StartsWith(leftLast, StringComparison.OrdinalIgnoreCase))
+                || (rightLast.Length >= 2 && leftLast.StartsWith(rightLast, StringComparison.OrdinalIgnoreCase));
+
+            return lastMatches;
         }
         return false;
     }
