@@ -489,13 +489,6 @@ type RosterEmployee = Record<string, any>;
         </div>
       </div>
 
-      <!-- Log Call Button -->
-      <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
-        <button class="btn-primary" (click)="showCallModal.set(true)">
-          <i class='bx bx-plus'></i> Log Call
-        </button>
-      </div>
-
       <!-- Management Performance Table -->
       @if (managementMetricRowsSorted().length === 0) {
         <div class="empty-state">
@@ -1999,10 +1992,18 @@ export class PerformanceReviewsComponent implements OnInit {
 
     const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
-    const callVolume = persisted?.callVolume ?? Math.max(snapshotCallVolume, liveCallVolume);
+    const callVolume = Math.max(
+      Number(persisted?.callVolume || 0),
+      snapshotCallVolume,
+      liveCallVolume
+    );
     const totalCallMinutes = Math.max(0, liveTotalCallMinutes);
     const avgCallMinutes = callVolume > 0 ? (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : totalCallMinutes / callVolume) : 0;
-    const textVolume = persisted?.textVolume ?? Math.max(snapshotTextVolume, liveTextVolume);
+    const textVolume = Math.max(
+      Number(persisted?.textVolume || 0),
+      snapshotTextVolume,
+      liveTextVolume
+    );
     const rawTotalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
     const activityHoursEstimate = this.estimateActivityHours(callVolume, textVolume, liveMeetingsHosted, assignedWorkHours);
     const totalHours = rawTotalHours > 0 ? Math.min(rawTotalHours, assignedWorkHours) : activityHoursEstimate;
