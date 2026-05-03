@@ -224,8 +224,8 @@ type RosterEmployee = Record<string, any>;
         }
         <div class="update-filter">
           <label>&nbsp;</label>
-          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="loadingReviews()">
-            {{ loadingReviews() ? 'Updating...' : 'Update' }}
+          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+            {{ updatingMetrics() ? 'Updating...' : 'Update' }}
           </button>
         </div>
       </div>
@@ -483,8 +483,8 @@ type RosterEmployee = Record<string, any>;
         </div>
         <div class="update-filter">
           <label>&nbsp;</label>
-          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="loadingReviews()">
-            {{ loadingReviews() ? 'Updating...' : 'Update' }}
+          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+            {{ updatingMetrics() ? 'Updating...' : 'Update' }}
           </button>
         </div>
       </div>
@@ -998,6 +998,7 @@ export class PerformanceReviewsComponent implements OnInit {
   pageTab = signal<'reviews' | 'calls'>('reviews');
   reviews = signal<Review[]>([]);
   loadingReviews = signal<boolean>(true);
+  updatingMetrics = signal<boolean>(false);
   timeclockSummaries = signal<any[]>([]);
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
@@ -1552,9 +1553,6 @@ export class PerformanceReviewsComponent implements OnInit {
       const res: any = await this.http
         .get(`${this.apiUrl}/api/v1/performance-reviews/zoom-metrics?year=${year}&month=${month}&from=${encodeURIComponent(fromKey)}&to=${encodeURIComponent(toKey)}&sync=${syncFlag}`)
         .toPromise();
-      const map: Record<number, ZoomMetricRow> = {};
-      const emailMap: Record<string, ZoomMetricRow> = {};
-      const nameMap: Record<string, ZoomMetricRow> = {};
       const rows = Array.isArray(res?.data)
         ? res.data
         : Array.isArray(res?.data?.metrics)
@@ -1562,6 +1560,10 @@ export class PerformanceReviewsComponent implements OnInit {
           : Array.isArray(res?.metrics)
             ? res.metrics
             : [];
+
+      const map: Record<number, ZoomMetricRow> = {};
+      const emailMap: Record<string, ZoomMetricRow> = {};
+      const nameMap: Record<string, ZoomMetricRow> = {};
       for (const row of rows) {
         const employeeId = this.readNumeric(row, ['employeeId', 'userId', 'staffId', 'driverId', 'id']);
         const email = String(
@@ -1716,7 +1718,8 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   async updateMetricsNow(): Promise<void> {
-    this.loadingReviews.set(true);
+    if (this.updatingMetrics()) return;
+    this.updatingMetrics.set(true);
     try {
       await Promise.all([
         this.loadTimeclockSummary(),
@@ -1732,7 +1735,7 @@ export class PerformanceReviewsComponent implements OnInit {
     } catch {
       this.toast.error('Failed to update performance metrics');
     } finally {
-      this.loadingReviews.set(false);
+      this.updatingMetrics.set(false);
     }
   }
 
