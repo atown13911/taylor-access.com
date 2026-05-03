@@ -568,7 +568,7 @@ public class PerformanceReviewsController : ControllerBase
 
             gmailRowsAdded += await ReadGmailRowsAsync(gmailResponse, gmailPeriodByEmail, gmailPeriodByEmailLocal, gmailPeriodByNameGuess, includeRates: true);
 
-            // Fallback: only use wider window for count visibility (not period rates/timing).
+            // Fallback: use a wider window when period rows are empty, but still prefer period values whenever available.
             if (gmailRowsAdded == 0)
             {
                 var fallbackResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?days=120");
@@ -577,7 +577,7 @@ public class PerformanceReviewsController : ControllerBase
                     gmailFallbackByEmail,
                     gmailFallbackByEmailLocal,
                     gmailFallbackByNameGuess,
-                    includeRates: false
+                    includeRates: true
                 );
             }
         }
@@ -817,11 +817,13 @@ public class PerformanceReviewsController : ControllerBase
                 }
             }
             var hasPeriodGmailSignal = bestGmailPeriod.SentCount > 0 || bestGmailPeriod.ReplyCount > 0;
+            var hasPeriodRateSignal = bestGmailPeriod.FirstResponseMinutes > 0 || bestGmailPeriod.FollowUpRate > 0;
             var chosenCounts = hasPeriodGmailSignal ? bestGmailPeriod : bestGmailFallback;
+            var chosenRates = hasPeriodRateSignal ? bestGmailPeriod : bestGmailFallback;
             sentCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.SentCount);
             replyCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.ReplyCount);
-            firstResponseMinutesByEmployee[emp.EmployeeId] = Math.Max(0, bestGmailPeriod.FirstResponseMinutes);
-            followUpRateByEmployee[emp.EmployeeId] = Math.Max(0, bestGmailPeriod.FollowUpRate);
+            firstResponseMinutesByEmployee[emp.EmployeeId] = Math.Max(0, chosenRates.FirstResponseMinutes);
+            followUpRateByEmployee[emp.EmployeeId] = Math.Max(0, chosenRates.FollowUpRate);
             internalCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.InternalCount);
             externalCountByEmployee[emp.EmployeeId] = Math.Max(0, chosenCounts.ExternalCount);
             if (sentCountByEmployee[emp.EmployeeId] > 0
