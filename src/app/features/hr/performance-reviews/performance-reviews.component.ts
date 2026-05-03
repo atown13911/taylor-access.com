@@ -40,6 +40,12 @@ interface ReviewMetricRow extends Review {
   meetingsHosted: number;
   meetingsJoined: number;
   totalMeetingMinutes: number;
+  sentCount: number;
+  replyCount: number;
+  firstResponseMinutes: number;
+  followUpRate: number;
+  internalCount: number;
+  externalCount: number;
   totalHours: number;
   activeHours: number;
   idleHours: number;
@@ -56,6 +62,12 @@ interface ZoomMetricRow {
   meetingsHosted?: number;
   meetingsJoined?: number;
   totalMeetingMinutes?: number;
+  sentCount?: number;
+  replyCount?: number;
+  firstResponseMinutes?: number;
+  followUpRate?: number;
+  internalCount?: number;
+  externalCount?: number;
   email?: string;
   employeeName?: string;
 }
@@ -307,6 +319,11 @@ type RosterEmployee = Record<string, any>;
                 <th>Total Call Time</th>
                 <th>Avg Call Time</th>
                 <th>Texts</th>
+                <th>Sent</th>
+                <th>Replies</th>
+                <th>1st Resp (min)</th>
+                <th>Follow-Up %</th>
+                <th>Ext / Int</th>
                 <th>Clocked Hrs</th>
                 <th>Work Hrs</th>
                 <th>Activity %</th>
@@ -324,6 +341,11 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ review.totalCallMinutes | number:'1.1-1' }} min</td>
                   <td>{{ review.avgCallMinutes | number:'1.1-2' }} min</td>
                   <td>{{ review.textVolume }}</td>
+                  <td>{{ review.sentCount }}</td>
+                  <td>{{ review.replyCount }}</td>
+                  <td>{{ review.firstResponseMinutes | number:'1.0-1' }}</td>
+                  <td>{{ (review.followUpRate * 100) | number:'1.0-0' }}%</td>
+                  <td>{{ review.externalCount }} / {{ review.internalCount }}</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
                   <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
@@ -862,6 +884,8 @@ type RosterEmployee = Record<string, any>;
     .reviews-table td:nth-child(13),
     .reviews-table td:nth-child(14),
     .reviews-table td:nth-child(15),
+    .reviews-table td:nth-child(16),
+    .reviews-table td:nth-child(17),
     .reviews-table th:nth-child(2),
     .reviews-table th:nth-child(3),
     .reviews-table th:nth-child(4),
@@ -875,7 +899,9 @@ type RosterEmployee = Record<string, any>;
     .reviews-table th:nth-child(12),
     .reviews-table th:nth-child(13),
     .reviews-table th:nth-child(14),
-    .reviews-table th:nth-child(15) {
+    .reviews-table th:nth-child(15),
+    .reviews-table th:nth-child(16),
+    .reviews-table th:nth-child(17) {
       text-align: center;
     }
     .reviews-table td:first-child,
@@ -1527,6 +1553,20 @@ export class PerformanceReviewsComponent implements OnInit {
             ?? row?.meeting_minutes
             ?? 0
           ),
+          sentCount: this.readNumeric(row, ['sentCount', 'sent_count']),
+          replyCount: this.readNumeric(row, ['replyCount', 'reply_count']),
+          firstResponseMinutes: Number(
+            row?.firstResponseMinutes
+            ?? row?.first_response_minutes
+            ?? 0
+          ),
+          followUpRate: Number(
+            row?.followUpRate
+            ?? row?.follow_up_rate
+            ?? 0
+          ),
+          internalCount: this.readNumeric(row, ['internalCount', 'internal_count']),
+          externalCount: this.readNumeric(row, ['externalCount', 'external_count']),
           email: email || undefined,
           employeeName: String(row?.employeeName || row?.name || row?.displayName || '').trim() || undefined
         };
@@ -1677,7 +1717,19 @@ export class PerformanceReviewsComponent implements OnInit {
     const liveTextVolume = liveComms.textVolume;
     const liveTime = this.getEmployeeTime(employeeId);
     const liveRevenue = this.getAttributedRevenue(employeeId);
-    const liveScore = this.computePerformanceScore(liveCallVolume, liveTextVolume, liveTime.activeHours, liveTime.totalHours, liveRevenue);
+    const liveScore = this.computePerformanceScore(
+      liveCallVolume,
+      liveTextVolume,
+      liveTime.activeHours,
+      liveTime.totalHours,
+      liveRevenue,
+      liveComms.sentCount,
+      liveComms.replyCount,
+      liveComms.firstResponseMinutes,
+      liveComms.followUpRate,
+      liveComms.internalCount,
+      liveComms.externalCount
+    );
 
     const review: Review = {
       ...this.formData,
@@ -1781,7 +1833,21 @@ export class PerformanceReviewsComponent implements OnInit {
     return this.callLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
   }
 
-  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): { callVolume: number; totalCallMinutes: number; avgCallMinutes: number; textVolume: number; meetingsHosted: number; meetingsJoined: number; totalMeetingMinutes: number } {
+  private getEmployeeCommunicationMetrics(employeeId: number, employeeName?: string): {
+    callVolume: number;
+    totalCallMinutes: number;
+    avgCallMinutes: number;
+    textVolume: number;
+    meetingsHosted: number;
+    meetingsJoined: number;
+    totalMeetingMinutes: number;
+    sentCount: number;
+    replyCount: number;
+    firstResponseMinutes: number;
+    followUpRate: number;
+    internalCount: number;
+    externalCount: number;
+  } {
     const localCalls = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType !== 'text').length;
     const localTexts = this.managementCallLogs().filter(c => Number(c.employeeId) === Number(employeeId) && c.callType === 'text').length;
     const zoomById = this.zoomMetricMap()[employeeId];
@@ -1816,7 +1882,13 @@ export class PerformanceReviewsComponent implements OnInit {
       textVolume: Math.max(localTexts, Number(zoom?.textVolume || 0)),
       meetingsHosted: Number(zoom?.meetingsHosted || 0),
       meetingsJoined: Number(zoom?.meetingsJoined || 0),
-      totalMeetingMinutes: Math.max(0, Number(zoom?.totalMeetingMinutes || 0))
+      totalMeetingMinutes: Math.max(0, Number(zoom?.totalMeetingMinutes || 0)),
+      sentCount: Math.max(0, Number(zoom?.sentCount || 0)),
+      replyCount: Math.max(0, Number(zoom?.replyCount || 0)),
+      firstResponseMinutes: Math.max(0, Number(zoom?.firstResponseMinutes || 0)),
+      followUpRate: Math.max(0, Number(zoom?.followUpRate || 0)),
+      internalCount: Math.max(0, Number(zoom?.internalCount || 0)),
+      externalCount: Math.max(0, Number(zoom?.externalCount || 0))
     };
   }
 
@@ -1843,7 +1915,21 @@ export class PerformanceReviewsComponent implements OnInit {
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
-    const { callVolume: liveCallVolume, totalCallMinutes: liveTotalCallMinutes, avgCallMinutes: liveAvgCallMinutes, textVolume: liveTextVolume, meetingsHosted: liveMeetingsHosted, meetingsJoined: liveMeetingsJoined, totalMeetingMinutes: liveTotalMeetingMinutes } = liveComms;
+    const {
+      callVolume: liveCallVolume,
+      totalCallMinutes: liveTotalCallMinutes,
+      avgCallMinutes: liveAvgCallMinutes,
+      textVolume: liveTextVolume,
+      meetingsHosted: liveMeetingsHosted,
+      meetingsJoined: liveMeetingsJoined,
+      totalMeetingMinutes: liveTotalMeetingMinutes,
+      sentCount: liveSentCount,
+      replyCount: liveReplyCount,
+      firstResponseMinutes: liveFirstResponseMinutes,
+      followUpRate: liveFollowUpRate,
+      internalCount: liveInternalCount,
+      externalCount: liveExternalCount
+    } = liveComms;
     const liveTime = this.getEmployeeTime(review.employeeId, review.employeeName);
     const liveRevenue = this.getAttributedRevenue(review.employeeId);
 
@@ -1860,7 +1946,19 @@ export class PerformanceReviewsComponent implements OnInit {
     const idleHours = Math.max(0, activeHours - totalHours);
     const activityRate = activeHours > 0 ? Math.min(1, totalHours / activeHours) : 0;
     const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
-    const computedScore = this.computePerformanceScore(callVolume, textVolume, activeHours, totalHours, invoicedRevenue);
+    const computedScore = this.computePerformanceScore(
+      callVolume,
+      textVolume,
+      activeHours,
+      totalHours,
+      invoicedRevenue,
+      liveSentCount,
+      liveReplyCount,
+      liveFirstResponseMinutes,
+      liveFollowUpRate,
+      liveInternalCount,
+      liveExternalCount
+    );
     const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), computedScore) : computedScore);
 
     return {
@@ -1872,6 +1970,12 @@ export class PerformanceReviewsComponent implements OnInit {
       meetingsHosted: liveMeetingsHosted,
       meetingsJoined: liveMeetingsJoined,
       totalMeetingMinutes: liveTotalMeetingMinutes,
+      sentCount: liveSentCount,
+      replyCount: liveReplyCount,
+      firstResponseMinutes: liveFirstResponseMinutes,
+      followUpRate: liveFollowUpRate,
+      internalCount: liveInternalCount,
+      externalCount: liveExternalCount,
       totalHours,
       activeHours,
       idleHours,
@@ -2110,7 +2214,13 @@ export class PerformanceReviewsComponent implements OnInit {
     textVolume: number,
     activeHours: number,
     totalHours: number,
-    invoicedRevenue: number
+    invoicedRevenue: number,
+    sentCount: number,
+    replyCount: number,
+    firstResponseMinutes: number,
+    followUpRate: number,
+    internalCount: number,
+    externalCount: number
   ): number {
     const targetRevenue = Math.max(1, this.totalInvoicedRevenue30d() / Math.max(1, this.employees().length));
     const callScore = Math.min(callVolume / 20, 1) * 25;
@@ -2118,7 +2228,19 @@ export class PerformanceReviewsComponent implements OnInit {
     const activeHoursScore = Math.min(activeHours / 160, 1) * 30;
     const activityRatioScore = (totalHours > 0 ? Math.min(activeHours / totalHours, 1) : 0) * 15;
     const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 15;
-    return Math.round(callScore + textScore + activeHoursScore + activityRatioScore + revenueScore);
+    const baseScore = callScore + textScore + activeHoursScore + activityRatioScore + revenueScore;
+
+    const outboundTotal = Math.max(0, internalCount) + Math.max(0, externalCount);
+    const externalRate = outboundTotal > 0 ? Math.max(0, externalCount) / outboundTotal : 0;
+    const sentScore = Math.min(Math.max(0, sentCount) / 40, 1) * 25;
+    const replyScore = Math.min(Math.max(0, replyCount) / 25, 1) * 25;
+    const responseScore = firstResponseMinutes > 0 ? (1 - Math.min(firstResponseMinutes / 240, 1)) * 20 : 0;
+    const followUpScore = Math.min(Math.max(0, followUpRate), 1) * 20;
+    const externalMixScore = Math.min(Math.max(0, externalRate), 1) * 10;
+    const emailComposite = sentScore + replyScore + responseScore + followUpScore + externalMixScore;
+
+    const hasEmailSignal = sentCount > 0 || replyCount > 0 || firstResponseMinutes > 0 || followUpRate > 0 || outboundTotal > 0;
+    return Math.round(hasEmailSignal ? (baseScore * 0.8) + (emailComposite * 0.2) : baseScore);
   }
 
   private initializeCurrentWeekSelection(): void {

@@ -483,6 +483,8 @@ public class PerformanceReviewsController : ControllerBase
         var fromDate = targetStart.ToString("yyyy-MM-dd");
         var toDate = rangeEnd.ToString("yyyy-MM-dd");
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var gmailByEmail = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailByEmailLocal = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
         var reportMeetingsByEmail = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
         var reportMeetingsByName = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
 
@@ -511,6 +513,42 @@ public class PerformanceReviewsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Zoom SMS pull via gateway failed; using smsSessionCount fallback");
+        }
+
+        try
+        {
+            var gmailBase = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail";
+            var gmailResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?from={fromDate}&to={toDate}");
+            if (gmailResponse.IsSuccessStatusCode)
+            {
+                var gmailJson = await gmailResponse.Content.ReadAsStringAsync();
+                using var gmailDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(gmailJson) ? "{}" : gmailJson);
+                if (TryGetPropertyIgnoreCase(gmailDoc.RootElement, "data", out var gmailData)
+                    && gmailData.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in gmailData.EnumerateArray())
+                    {
+                        var email = ReadStringAny(item, "email", "userEmail", "user_email")?.Trim().ToLowerInvariant();
+                        if (string.IsNullOrWhiteSpace(email)) continue;
+                        var perf = (
+                            SentCount: ReadIntAny(item, "sentCount", "sent_count"),
+                            ReplyCount: ReadIntAny(item, "replyCount", "reply_count"),
+                            FirstResponseMinutes: ReadDoubleAny(item, "firstResponseMinutes", "first_response_minutes"),
+                            FollowUpRate: ReadDoubleAny(item, "followUpRate", "follow_up_rate"),
+                            InternalCount: ReadIntAny(item, "internalCount", "internal_count"),
+                            ExternalCount: ReadIntAny(item, "externalCount", "external_count")
+                        );
+                        gmailByEmail[email] = perf;
+                        var localPart = ExtractEmailLocalPart(email);
+                        if (!string.IsNullOrWhiteSpace(localPart))
+                            gmailByEmailLocal[localPart] = perf;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Gmail performance metrics pull via gateway failed; continuing without gmail enrichment");
         }
 
         try
@@ -613,6 +651,12 @@ public class PerformanceReviewsController : ControllerBase
         var meetingsHostedByEmployee = new Dictionary<int, int>();
         var meetingsJoinedByEmployee = new Dictionary<int, int>();
         var meetingMinutesByEmployee = new Dictionary<int, double>();
+        var sentCountByEmployee = new Dictionary<int, int>();
+        var replyCountByEmployee = new Dictionary<int, int>();
+        var firstResponseMinutesByEmployee = new Dictionary<int, double>();
+        var followUpRateByEmployee = new Dictionary<int, double>();
+        var internalCountByEmployee = new Dictionary<int, int>();
+        var externalCountByEmployee = new Dictionary<int, int>();
         var totalCallMinutesByEmployee = new Dictionary<int, double>();
         var matchedCount = 0;
         foreach (var emp in employees)
@@ -697,6 +741,25 @@ public class PerformanceReviewsController : ControllerBase
             meetingsJoinedByEmployee[emp.EmployeeId] = zoomMetric?.MeetingsJoined ?? 0;
             meetingMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.MeetingMinutes ?? 0);
             totalCallMinutesByEmployee[emp.EmployeeId] = Math.Max(0, zoomMetric?.TotalCallMinutes ?? 0);
+            var bestGmail = (SentCount: 0, ReplyCount: 0, FirstResponseMinutes: 0d, FollowUpRate: 0d, InternalCount: 0, ExternalCount: 0);
+            foreach (var emailKey in emailCandidates)
+            {
+                if (gmailByEmail.TryGetValue(emailKey, out var byEmail))
+                {
+                    if (byEmail.SentCount > bestGmail.SentCount) bestGmail = byEmail;
+                }
+                var localPart = ExtractEmailLocalPart(emailKey);
+                if (!string.IsNullOrWhiteSpace(localPart) && gmailByEmailLocal.TryGetValue(localPart, out var byLocal))
+                {
+                    if (byLocal.SentCount > bestGmail.SentCount) bestGmail = byLocal;
+                }
+            }
+            sentCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.SentCount);
+            replyCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.ReplyCount);
+            firstResponseMinutesByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.FirstResponseMinutes);
+            followUpRateByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.FollowUpRate);
+            internalCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.InternalCount);
+            externalCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.ExternalCount);
 
             if (meetingRows.Count > 0
                 && meetingsHostedByEmployee[emp.EmployeeId] <= 0
@@ -957,6 +1020,12 @@ public class PerformanceReviewsController : ControllerBase
                 meetingsHosted = meetingsHostedByEmployee.GetValueOrDefault(emp.EmployeeId),
                 meetingsJoined = meetingsJoinedByEmployee.GetValueOrDefault(emp.EmployeeId),
                 totalMeetingMinutes = totalMeetingMinutes,
+                sentCount = sentCountByEmployee.GetValueOrDefault(emp.EmployeeId),
+                replyCount = replyCountByEmployee.GetValueOrDefault(emp.EmployeeId),
+                firstResponseMinutes = Math.Round(Math.Max(0, firstResponseMinutesByEmployee.GetValueOrDefault(emp.EmployeeId)), 1),
+                followUpRate = Math.Round(Math.Max(0, followUpRateByEmployee.GetValueOrDefault(emp.EmployeeId)), 4),
+                internalCount = internalCountByEmployee.GetValueOrDefault(emp.EmployeeId),
+                externalCount = externalCountByEmployee.GetValueOrDefault(emp.EmployeeId),
                 totalCallMinutes = totalCallMinutes,
                 avgCallMinutes = callVolume > 0 ? Math.Round(totalCallMinutes / callVolume, 2) : 0,
                 source = usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway"
