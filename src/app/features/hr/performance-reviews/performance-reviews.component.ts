@@ -79,12 +79,6 @@ type ReviewTableSort =
   | 'activity-asc'
   | 'calls-desc'
   | 'calls-asc'
-  | 'meetings-hosted-desc'
-  | 'meetings-hosted-asc'
-  | 'meetings-joined-desc'
-  | 'meetings-joined-asc'
-  | 'meetingtime-desc'
-  | 'meetingtime-asc'
   | 'calltime-desc'
   | 'calltime-asc'
   | 'clocked-desc'
@@ -313,9 +307,6 @@ type RosterEmployee = Record<string, any>;
                 <th>Total Call Time</th>
                 <th>Avg Call Time</th>
                 <th>Texts</th>
-                <th>Meetings Hosted</th>
-                <th>Meetings Joined</th>
-                <th>Total Meeting Time</th>
                 <th>Clocked Hrs</th>
                 <th>Work Hrs</th>
                 <th>Activity %</th>
@@ -333,9 +324,6 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ review.totalCallMinutes | number:'1.1-1' }} min</td>
                   <td>{{ review.avgCallMinutes | number:'1.1-2' }} min</td>
                   <td>{{ review.textVolume }}</td>
-                  <td>{{ review.meetingsHosted }}</td>
-                  <td>{{ review.meetingsJoined }}</td>
-                  <td>{{ review.totalMeetingMinutes | number:'1.1-1' }} min</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
                   <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
@@ -486,7 +474,9 @@ type RosterEmployee = Record<string, any>;
                 <th>Employee</th>
                 <th>Calls</th>
                 <th>Texts</th>
-                <th>Meetings</th>
+                <th>Meetings Hosted</th>
+                <th>Meetings Joined</th>
+                <th>Meeting Time</th>
                 <th>Call Time</th>
                 <th>Activity %</th>
               </tr>
@@ -498,6 +488,8 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ row.callVolume }}</td>
                   <td>{{ row.textVolume }}</td>
                   <td>{{ row.meetingsHosted }}</td>
+                  <td>{{ row.meetingsJoined }}</td>
+                  <td>{{ row.totalMeetingMinutes | number:'1.0-1' }} min</td>
                   <td>{{ row.totalCallMinutes | number:'1.0-1' }} min</td>
                   <td>{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
                 </tr>
@@ -980,12 +972,6 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'activity-asc', label: 'Activity %: Low to High' },
     { value: 'calls-desc', label: 'Calls: High to Low' },
     { value: 'calls-asc', label: 'Calls: Low to High' },
-    { value: 'meetings-hosted-desc', label: 'Meetings Hosted: High to Low' },
-    { value: 'meetings-hosted-asc', label: 'Meetings Hosted: Low to High' },
-    { value: 'meetings-joined-desc', label: 'Meetings Joined: High to Low' },
-    { value: 'meetings-joined-asc', label: 'Meetings Joined: Low to High' },
-    { value: 'meetingtime-desc', label: 'Meeting Time: High to Low' },
-    { value: 'meetingtime-asc', label: 'Meeting Time: Low to High' },
     { value: 'calltime-desc', label: 'Total Call Time: High to Low' },
     { value: 'calltime-asc', label: 'Total Call Time: Low to High' },
     { value: 'clocked-desc', label: 'Clocked Hrs: High to Low' },
@@ -1296,18 +1282,6 @@ export class PerformanceReviewsComponent implements OnInit {
           return a.callVolume - b.callVolume;
         case 'calls-desc':
           return b.callVolume - a.callVolume;
-        case 'meetings-hosted-asc':
-          return a.meetingsHosted - b.meetingsHosted;
-        case 'meetings-hosted-desc':
-          return b.meetingsHosted - a.meetingsHosted;
-        case 'meetings-joined-asc':
-          return a.meetingsJoined - b.meetingsJoined;
-        case 'meetings-joined-desc':
-          return b.meetingsJoined - a.meetingsJoined;
-        case 'meetingtime-asc':
-          return a.totalMeetingMinutes - b.totalMeetingMinutes;
-        case 'meetingtime-desc':
-          return b.totalMeetingMinutes - a.totalMeetingMinutes;
         case 'calltime-asc':
           return a.totalCallMinutes - b.totalCallMinutes;
         case 'calltime-desc':
