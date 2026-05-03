@@ -77,17 +77,47 @@
 }
 
 .toggle-btn {
-  background: none;
-  border: none;
-  color: #888;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  color: #8fb6d7;
   font-size: 18px;
-  padding: 4px;
-  border-radius: 4px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
 
   &:hover {
     color: #00d4ff;
+    border-color: rgba(0, 212, 255, 0.55);
     background: rgba(0, 212, 255, 0.1);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.25);
   }
+}
+
+.sidebar-collapsed .sidebar-header {
+  padding: 10px 6px;
+  gap: 8px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sidebar-collapsed .logo {
+  width: 100%;
+  justify-content: center;
+}
+
+.sidebar-collapsed .logo i {
+  font-size: 24px;
+}
+
+.sidebar-collapsed .toggle-btn {
+  width: 30px;
+  height: 30px;
+  margin: 0 auto;
 }
 
 .sidebar-nav {

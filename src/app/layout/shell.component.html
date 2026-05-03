@@ -9,7 +9,12 @@
           <span class="logo-text">Taylor Access</span>
         }
       </div>
-      <button class="toggle-btn" (click)="toggleSidebar()">
+      <button
+        type="button"
+        class="toggle-btn"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+        [attr.title]="sidebarCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'">
         <i class="bx" [class.bx-menu]="sidebarCollapsed()" [class.bx-x]="!sidebarCollapsed()"></i>
       </button>
     </div>
