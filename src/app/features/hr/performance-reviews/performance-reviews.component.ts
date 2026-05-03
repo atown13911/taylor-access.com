@@ -310,7 +310,7 @@ type RosterEmployee = Record<string, any>;
         <div class="loading-state">
           <i class='bx bx-loader-alt bx-spin'></i>
           <h3>Loading performance reviews...</h3>
-          <p>Please wait while data syncs</p>
+          <p>Loading saved values</p>
         </div>
       } @else if (filteredReviews().length === 0) {
         <div class="empty-state">
@@ -1661,10 +1661,11 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
-      this.loadZoomMetrics(false),
       this.loadPersistedDailyMetrics()
     ]);
     this.loadingReviews.set(false);
+    void this.loadTimeclockSummary();
+    void this.loadZoomMetrics(false);
   }
 
   async onPeriodModeChange(mode: 'weekly' | 'monthly') {
@@ -1680,11 +1681,11 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadReviews(),
-      this.loadZoomMetrics(false),
-      this.loadTimeclockSummary(),
       this.loadPersistedDailyMetrics()
     ]);
     this.loadingReviews.set(false);
+    void this.loadTimeclockSummary();
+    void this.loadZoomMetrics(false);
   }
 
   openReportsTab(): void {
@@ -1709,12 +1710,12 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(true);
     await Promise.all([
       this.loadEmployees(),
-      this.loadTimeclockSummary(),
       this.loadReviews(),
-      this.loadZoomMetrics(false),
       this.loadPersistedDailyMetrics()
     ]);
     this.loadingReviews.set(false);
+    void this.loadTimeclockSummary();
+    void this.loadZoomMetrics(false);
   }
 
   async updateMetricsNow(): Promise<void> {
