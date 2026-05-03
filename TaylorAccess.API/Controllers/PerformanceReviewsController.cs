@@ -485,6 +485,7 @@ public class PerformanceReviewsController : ControllerBase
         var smsByOwner = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var gmailByEmail = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
         var gmailByEmailLocal = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
+        var gmailByNameGuess = new Dictionary<string, (int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount)>(StringComparer.OrdinalIgnoreCase);
         var reportMeetingsByEmail = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
         var reportMeetingsByName = new Dictionary<string, (int Hosted, int Joined, double Minutes)>(StringComparer.OrdinalIgnoreCase);
 
@@ -519,31 +520,51 @@ public class PerformanceReviewsController : ControllerBase
         {
             var gmailBase = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail";
             var gmailResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?from={fromDate}&to={toDate}");
-            if (gmailResponse.IsSuccessStatusCode)
+            var gmailRowsAdded = 0;
+
+            async Task<int> ReadGmailRowsAsync(HttpResponseMessage response)
             {
-                var gmailJson = await gmailResponse.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode) return 0;
+                var gmailJson = await response.Content.ReadAsStringAsync();
                 using var gmailDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(gmailJson) ? "{}" : gmailJson);
-                if (TryGetPropertyIgnoreCase(gmailDoc.RootElement, "data", out var gmailData)
-                    && gmailData.ValueKind == JsonValueKind.Array)
+                if (!TryGetPropertyIgnoreCase(gmailDoc.RootElement, "data", out var gmailData)
+                    || gmailData.ValueKind != JsonValueKind.Array)
+                    return 0;
+
+                var added = 0;
+                foreach (var item in gmailData.EnumerateArray())
                 {
-                    foreach (var item in gmailData.EnumerateArray())
+                    var email = ReadStringAny(item, "email", "userEmail", "user_email")?.Trim().ToLowerInvariant();
+                    if (string.IsNullOrWhiteSpace(email)) continue;
+                    var perf = (
+                        SentCount: ReadIntAny(item, "sentCount", "sent_count"),
+                        ReplyCount: ReadIntAny(item, "replyCount", "reply_count"),
+                        FirstResponseMinutes: ReadDoubleAny(item, "firstResponseMinutes", "first_response_minutes"),
+                        FollowUpRate: ReadDoubleAny(item, "followUpRate", "follow_up_rate"),
+                        InternalCount: ReadIntAny(item, "internalCount", "internal_count"),
+                        ExternalCount: ReadIntAny(item, "externalCount", "external_count")
+                    );
+                    gmailByEmail[email] = perf;
+                    var localPart = ExtractEmailLocalPart(email);
+                    if (!string.IsNullOrWhiteSpace(localPart))
                     {
-                        var email = ReadStringAny(item, "email", "userEmail", "user_email")?.Trim().ToLowerInvariant();
-                        if (string.IsNullOrWhiteSpace(email)) continue;
-                        var perf = (
-                            SentCount: ReadIntAny(item, "sentCount", "sent_count"),
-                            ReplyCount: ReadIntAny(item, "replyCount", "reply_count"),
-                            FirstResponseMinutes: ReadDoubleAny(item, "firstResponseMinutes", "first_response_minutes"),
-                            FollowUpRate: ReadDoubleAny(item, "followUpRate", "follow_up_rate"),
-                            InternalCount: ReadIntAny(item, "internalCount", "internal_count"),
-                            ExternalCount: ReadIntAny(item, "externalCount", "external_count")
-                        );
-                        gmailByEmail[email] = perf;
-                        var localPart = ExtractEmailLocalPart(email);
-                        if (!string.IsNullOrWhiteSpace(localPart))
-                            gmailByEmailLocal[localPart] = perf;
+                        gmailByEmailLocal[localPart] = perf;
+                        var guessedNameKey = NormalizeName(localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' '));
+                        if (!string.IsNullOrWhiteSpace(guessedNameKey))
+                            gmailByNameGuess[guessedNameKey] = perf;
                     }
+                    added++;
                 }
+                return added;
+            }
+
+            gmailRowsAdded += await ReadGmailRowsAsync(gmailResponse);
+
+            // Fallback: some orgs only have recent Gmail sync windows persisted; widen window if the selected period has no rows yet.
+            if (gmailRowsAdded == 0)
+            {
+                var fallbackResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?days=120");
+                gmailRowsAdded += await ReadGmailRowsAsync(fallbackResponse);
             }
         }
         catch (Exception ex)
@@ -658,6 +679,7 @@ public class PerformanceReviewsController : ControllerBase
         var internalCountByEmployee = new Dictionary<int, int>();
         var externalCountByEmployee = new Dictionary<int, int>();
         var totalCallMinutesByEmployee = new Dictionary<int, double>();
+        var gmailMatchedEmployees = 0;
         var matchedCount = 0;
         foreach (var emp in employees)
         {
@@ -754,12 +776,31 @@ public class PerformanceReviewsController : ControllerBase
                     if (byLocal.SentCount > bestGmail.SentCount) bestGmail = byLocal;
                 }
             }
+            if (bestGmail.SentCount <= 0 && bestGmail.ReplyCount <= 0)
+            {
+                var guessedNameKey = NormalizeName(emp.Name);
+                if (!string.IsNullOrWhiteSpace(guessedNameKey)
+                    && gmailByNameGuess.TryGetValue(guessedNameKey, out var byNameGuess)
+                    && byNameGuess.SentCount > bestGmail.SentCount)
+                {
+                    bestGmail = byNameGuess;
+                }
+            }
             sentCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.SentCount);
             replyCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.ReplyCount);
             firstResponseMinutesByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.FirstResponseMinutes);
             followUpRateByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.FollowUpRate);
             internalCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.InternalCount);
             externalCountByEmployee[emp.EmployeeId] = Math.Max(0, bestGmail.ExternalCount);
+            if (sentCountByEmployee[emp.EmployeeId] > 0
+                || replyCountByEmployee[emp.EmployeeId] > 0
+                || firstResponseMinutesByEmployee[emp.EmployeeId] > 0
+                || followUpRateByEmployee[emp.EmployeeId] > 0
+                || externalCountByEmployee[emp.EmployeeId] > 0
+                || internalCountByEmployee[emp.EmployeeId] > 0)
+            {
+                gmailMatchedEmployees++;
+            }
 
             if (meetingRows.Count > 0
                 && meetingsHostedByEmployee[emp.EmployeeId] <= 0
@@ -1052,6 +1093,8 @@ public class PerformanceReviewsController : ControllerBase
                     crmMetricsRows,
                     crmMetricsRowsWithCalls,
                     crmMetricsRowsWithTexts,
+                    gmailMailboxRows = gmailByEmail.Count,
+                    gmailMatchedEmployees,
                     smsRows,
                     callLogRows,
                     callLogRowsMatched,
