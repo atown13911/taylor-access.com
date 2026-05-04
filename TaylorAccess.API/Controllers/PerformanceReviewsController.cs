@@ -749,55 +749,81 @@ public class PerformanceReviewsController : ControllerBase
                 .ToList();
             var employeeNameKey = NormalizeName(emp.Name);
 
-            ZoomUserMetricLite? zoomMetric = null;
-            foreach (var emailKey in emailCandidates)
+            var zoomCandidates = new Dictionary<string, (ZoomUserMetricLite Metric, int Strength)>(StringComparer.OrdinalIgnoreCase);
+            void AddZoomCandidate(ZoomUserMetricLite? candidate, int strength)
             {
-                if (metricsByEmail.TryGetValue(emailKey, out zoomMetric))
-                    break;
+                if (candidate == null) return;
+                var key = !string.IsNullOrWhiteSpace(candidate.ZoomUserId)
+                    ? $"id:{candidate.ZoomUserId!.Trim()}"
+                    : !string.IsNullOrWhiteSpace(candidate.Email)
+                        ? $"email:{candidate.Email!.Trim().ToLowerInvariant()}"
+                        : $"anon:{candidate.GetHashCode()}";
+                if (zoomCandidates.TryGetValue(key, out var existing))
+                {
+                    if (strength > existing.Strength)
+                        zoomCandidates[key] = (candidate, strength);
+                    return;
+                }
+                zoomCandidates[key] = (candidate, strength);
             }
 
-            if (zoomMetric == null)
+            var hasExactEmailMatch = false;
+            foreach (var emailKey in emailCandidates)
             {
-                foreach (var localEmailKey in emailLocalCandidates)
+                if (metricsByEmail.TryGetValue(emailKey, out var byEmail))
                 {
-                    if (metricsByEmailLocal.TryGetValue(localEmailKey!, out zoomMetric))
-                        break;
+                    hasExactEmailMatch = true;
+                    AddZoomCandidate(byEmail, 100);
                 }
             }
 
-            if (zoomMetric == null
+            if (!hasExactEmailMatch)
+            {
+                foreach (var localEmailKey in emailLocalCandidates)
+                {
+                    if (metricsByEmailLocal.TryGetValue(localEmailKey!, out var byLocalEmail))
+                        AddZoomCandidate(byLocalEmail, 90);
+                }
+            }
+
+            if (!hasExactEmailMatch
                 && !string.IsNullOrWhiteSpace(emp.ZoomUserId)
                 && metricsByZoomUserId.TryGetValue(emp.ZoomUserId.Trim(), out var byZoomUser))
             {
-                zoomMetric = byZoomUser;
+                AddZoomCandidate(byZoomUser, 120);
             }
-            if (zoomMetric == null && mappedZoomUserIds.Count > 0)
+            if (!hasExactEmailMatch && mappedZoomUserIds.Count > 0)
             {
                 foreach (var mappedZoomUserId in mappedZoomUserIds)
                 {
                     if (metricsByZoomUserId.TryGetValue(mappedZoomUserId, out var mappedByZoomUser))
-                    {
-                        zoomMetric = mappedByZoomUser;
-                        break;
-                    }
+                        AddZoomCandidate(mappedByZoomUser, 110);
                 }
             }
 
-            if (zoomMetric == null
+            if (!hasExactEmailMatch
                 && !string.IsNullOrWhiteSpace(employeeNameKey)
                 && metricsByName.TryGetValue(employeeNameKey, out var byName))
             {
-                zoomMetric = byName;
+                AddZoomCandidate(byName, 80);
             }
-            if (zoomMetric == null && !string.IsNullOrWhiteSpace(employeeNameKey))
+            if (!hasExactEmailMatch && !string.IsNullOrWhiteSpace(employeeNameKey))
             {
                 foreach (var kvp in metricsByName)
                 {
                     if (!NamesLikelyMatch(employeeNameKey, kvp.Key)) continue;
-                    zoomMetric = kvp.Value;
-                    break;
+                    AddZoomCandidate(kvp.Value, 60);
                 }
             }
+
+            var zoomMetric = zoomCandidates.Values
+                .OrderByDescending(v => v.Strength)
+                .ThenByDescending(v => v.Metric.TotalCalls)
+                .ThenByDescending(v => v.Metric.TotalCallMinutes)
+                .ThenByDescending(v => v.Metric.SmsSessionCount)
+                .ThenByDescending(v => v.Metric.MeetingMinutes)
+                .Select(v => v.Metric)
+                .FirstOrDefault();
 
             var zoomUserId = zoomMetric?.ZoomUserId ?? emp.ZoomUserId ?? mappedZoomUserIds.FirstOrDefault();
             var smsCount = 0;
