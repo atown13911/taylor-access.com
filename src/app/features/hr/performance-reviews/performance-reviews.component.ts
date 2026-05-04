@@ -296,6 +296,52 @@ type RosterEmployee = Record<string, any>;
                 <div class="chart-empty">No activity data yet.</div>
               }
             </div>
+            <div class="report-panel">
+              <h3>Communication Mix</h3>
+              @if (reportCommunicationMix().length > 0) {
+                <div class="donut-wrap">
+                  <div class="donut-chart" [style.background]="reportCommunicationPieStyle()"></div>
+                  <div class="donut-legend">
+                    @for (item of reportCommunicationMix(); track item.label) {
+                      <div class="legend-row">
+                        <span class="legend-dot" [style.background]="item.color"></span>
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.value | number:'1.0-0' }}</strong>
+                      </div>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <div class="chart-empty">No communication data yet.</div>
+              }
+            </div>
+            <div class="report-panel">
+              <h3>Activity vs Calls (Scatter)</h3>
+              @if (reportScatterPoints().length > 0) {
+                <div class="scatter-wrap">
+                  <svg viewBox="0 0 320 210" class="scatter-svg" aria-label="Activity vs Calls">
+                    <line x1="32" y1="10" x2="32" y2="182" stroke="rgba(148,163,184,0.4)" stroke-width="1"></line>
+                    <line x1="32" y1="182" x2="302" y2="182" stroke="rgba(148,163,184,0.4)" stroke-width="1"></line>
+                    @for (point of reportScatterPoints(); track point.employeeId) {
+                      <circle
+                        [attr.cx]="point.x"
+                        [attr.cy]="point.y"
+                        [attr.r]="point.r"
+                        [attr.fill]="point.color"
+                        fill-opacity="0.8">
+                        <title>{{ point.label }}</title>
+                      </circle>
+                    }
+                  </svg>
+                  <div class="scatter-axis">
+                    <span>Low Calls</span>
+                    <span>High Calls</span>
+                  </div>
+                </div>
+              } @else {
+                <div class="chart-empty">Not enough points for scatter plot.</div>
+              }
+            </div>
             <div class="report-panel report-panel-wide">
               <h3>Top Performers (Activity %)</h3>
               <div class="report-table-head">
@@ -331,6 +377,24 @@ type RosterEmployee = Record<string, any>;
                 </div>
               } @else {
                 <div class="chart-empty">No daily activity data for this period yet.</div>
+              }
+            </div>
+            <div class="report-panel report-panel-wide">
+              <h3>Top Call Volume (Bar Chart)</h3>
+              @if (reportCallLeaders().length > 0) {
+                <div class="daily-chart">
+                  @for (row of reportCallLeaders(); track row.employeeId) {
+                    <div class="daily-row">
+                      <span class="daily-label">{{ row.label }}</span>
+                      <div class="daily-bar-wrap">
+                        <div class="daily-bar calls" [style.width.%]="row.percent"></div>
+                      </div>
+                      <strong>{{ row.callVolume }}</strong>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="chart-empty">No call volume yet for this period.</div>
               }
             </div>
           </div>
@@ -1172,11 +1236,35 @@ type RosterEmployee = Record<string, any>;
     .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     .report-row { display: grid; grid-template-columns: 140px 1fr 46px; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .report-row span { color: #cbd5e1; font-size: 0.82rem; }
+    .donut-wrap { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: center; padding: 12px; }
+    .donut-chart {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      position: relative;
+      border: 1px solid rgba(148,163,184,0.3);
+    }
+    .donut-chart::after {
+      content: '';
+      position: absolute;
+      inset: 24px;
+      background: #0f172a;
+      border-radius: 50%;
+      border: 1px solid rgba(148,163,184,0.2);
+    }
+    .donut-legend { display: grid; gap: 6px; }
+    .legend-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; font-size: 0.8rem; color: #cbd5e1; }
+    .legend-dot { width: 8px; height: 8px; border-radius: 999px; }
+    .legend-row strong { color: #e2e8f0; font-size: 0.78rem; }
+    .scatter-wrap { padding: 10px; }
+    .scatter-svg { width: 100%; height: 210px; background: rgba(2, 6, 23, 0.55); border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; }
+    .scatter-axis { display: flex; justify-content: space-between; margin-top: 6px; color: #8aa0b8; font-size: 0.72rem; }
     .daily-chart { padding: 8px 10px 12px; }
     .daily-row { display: grid; grid-template-columns: 120px 1fr 60px; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .daily-label { color: #cbd5e1; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .daily-bar-wrap { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
     .daily-bar { height: 100%; background: linear-gradient(90deg, #38bdf8, #22d3ee); border-radius: 999px; }
+    .daily-bar.calls { background: linear-gradient(90deg, #22c55e, #16a34a); }
     .report-row strong { color: #e2e8f0; text-align: right; font-size: 0.82rem; }
     .report-bar-wrap { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
     .report-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0ea5e9); border-radius: 999px; }
@@ -1655,6 +1743,63 @@ export class PerformanceReviewsComponent implements OnInit {
     const points = this.dailyActivitySeries();
     if (!points.length) return 0;
     return points.reduce((max, p) => Math.max(max, Number(p.activeHours || 0)), 0);
+  });
+  reportCommunicationMix = computed(() => {
+    const rows = this.metricRows();
+    const calls = rows.reduce((sum, row) => sum + Number(row.callVolume || 0), 0);
+    const texts = rows.reduce((sum, row) => sum + Number(row.textVolume || 0), 0);
+    const meetings = rows.reduce((sum, row) => sum + Number(row.meetingsHosted || 0), 0);
+    return [
+      { label: 'Calls', value: calls, color: '#22c55e' },
+      { label: 'Texts', value: texts, color: '#fbbf24' },
+      { label: 'Meetings', value: meetings, color: '#38bdf8' }
+    ].filter(x => x.value > 0);
+  });
+  reportCommunicationPieStyle = computed(() => {
+    const items = this.reportCommunicationMix();
+    if (!items.length) return 'conic-gradient(rgba(148,163,184,0.25) 0deg 360deg)';
+    const total = items.reduce((sum, item) => sum + item.value, 0);
+    let start = 0;
+    const segments = items.map((item) => {
+      const angle = (item.value / total) * 360;
+      const end = start + angle;
+      const segment = `${item.color} ${start}deg ${end}deg`;
+      start = end;
+      return segment;
+    });
+    return `conic-gradient(${segments.join(', ')})`;
+  });
+  reportScatterPoints = computed(() => {
+    const rows = this.metricRows()
+      .filter(row => Number(row.callVolume || 0) > 0 || Number(row.activityRate || 0) > 0)
+      .sort((a, b) => Number(b.callVolume || 0) - Number(a.callVolume || 0))
+      .slice(0, 36);
+    if (!rows.length) return [] as Array<{ employeeId: number; x: number; y: number; r: number; color: string; label: string }>;
+    const maxCalls = Math.max(...rows.map(r => Number(r.callVolume || 0)), 1);
+    return rows.map((row) => {
+      const calls = Number(row.callVolume || 0);
+      const activity = Math.max(0, Math.min(1, Number(row.activityRate || 0)));
+      const x = 32 + Math.round((calls / maxCalls) * 270);
+      const y = 182 - Math.round(activity * 160);
+      const r = 3 + Math.round((calls / maxCalls) * 4);
+      const color = row.score >= 80 ? '#22c55e' : row.score >= 60 ? '#fbbf24' : '#ef4444';
+      const label = `${row.employeeName || ('Employee #' + row.employeeId)} | Calls: ${calls}, Activity: ${(activity * 100).toFixed(0)}%`;
+      return { employeeId: Number(row.employeeId), x, y, r, color, label };
+    });
+  });
+  reportCallLeaders = computed(() => {
+    const rows = this.metricRows()
+      .slice()
+      .sort((a, b) => Number(b.callVolume || 0) - Number(a.callVolume || 0))
+      .slice(0, 10);
+    if (!rows.length) return [] as Array<{ employeeId: number; label: string; callVolume: number; percent: number }>;
+    const maxCalls = Math.max(...rows.map(r => Number(r.callVolume || 0)), 1);
+    return rows.map((row) => ({
+      employeeId: Number(row.employeeId),
+      label: String(row.employeeName || `Employee #${row.employeeId}`),
+      callVolume: Number(row.callVolume || 0),
+      percent: Math.max(2, Math.round((Number(row.callVolume || 0) / maxCalls) * 100))
+    }));
   });
   totalInvoicedRevenue30d = computed(() => {
     const seriesTotal = this.revenueSeries().reduce(
