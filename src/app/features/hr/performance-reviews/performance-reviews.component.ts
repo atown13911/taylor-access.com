@@ -911,42 +911,47 @@ type RosterEmployee = Record<string, any>;
         <div class="modal-overlay" (click)="viewingReview.set(null)">
           <div class="modal" (click)="$event.stopPropagation()">
             <div class="modal-header">
-              <h3>Performance Review</h3>
+              <h3>Employee Details</h3>
               <button class="close-btn" (click)="viewingReview.set(null)"><i class='bx bx-x'></i></button>
             </div>
             <div class="modal-body">
-              <div class="view-header">
-                <h2>{{ viewingReview()!.employeeName }}</h2>
-                <div class="view-meta">
-                  <span class="type-badge">{{ viewingReview()!.reviewType | titlecase }}</span>
-                  <span class="status-badge" [class]="viewingReview()!.status">{{ viewingReview()!.status | titlecase }}</span>
-                  <span>{{ viewingReview()!.period }}</span>
+              @if (viewingEmployee()) {
+                <div class="employee-modal-header">
+                  <div class="employee-avatar"><i class='bx bx-user'></i></div>
+                  <div>
+                    <h2>{{ viewingEmployee()!.name || viewingReview()!.employeeName }}</h2>
+                    <div class="view-meta">
+                      <span class="type-badge">{{ viewingEmployee()!.positionName || viewingEmployee()!.jobTitle || viewingEmployee()!.role || 'Employee' }}</span>
+                      <span class="status-badge completed">{{ (viewingEmployee()!.status || 'active') | titlecase }}</span>
+                      <span>#{{ viewingEmployee()!.id || viewingReview()!.employeeId }}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div class="view-rating">
-                @for (star of stars; track star) {
-                  <i class='bx bxs-star'
-                     [class.filled]="star <= viewingReview()!.overallRating"
-                     [class.empty]="star > viewingReview()!.overallRating"></i>
-                }
-                <span>{{ viewingReview()!.overallRating }}/5</span>
-              </div>
-              <div class="view-section" *ngIf="viewingReview()!.strengths">
-                <h4><i class='bx bx-trophy'></i> Strengths</h4>
-                <p>{{ viewingReview()!.strengths }}</p>
-              </div>
-              <div class="view-section" *ngIf="viewingReview()!.areasForImprovement">
-                <h4><i class='bx bx-target-lock'></i> Areas for Improvement</h4>
-                <p>{{ viewingReview()!.areasForImprovement }}</p>
-              </div>
-              <div class="view-section" *ngIf="viewingReview()!.goals">
-                <h4><i class='bx bx-flag'></i> Goals</h4>
-                <p>{{ viewingReview()!.goals }}</p>
-              </div>
-              <div class="view-section" *ngIf="viewingReview()!.comments">
-                <h4><i class='bx bx-message-detail'></i> Comments</h4>
-                <p>{{ viewingReview()!.comments }}</p>
-              </div>
+                <div class="employee-detail-grid">
+                  <section class="employee-detail-card">
+                    <h4><i class='bx bx-id-card'></i> Basic Information</h4>
+                    <div class="detail-row"><span>Employee ID</span><strong>#{{ viewingEmployee()!.id || viewingReview()!.employeeId }}</strong></div>
+                    <div class="detail-row"><span>Full Name</span><strong>{{ viewingEmployee()!.name || viewingReview()!.employeeName || '—' }}</strong></div>
+                    <div class="detail-row"><span>Alias</span><strong>{{ employeeAlias(viewingEmployee()) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Position</span><strong>{{ viewingEmployee()!.positionName || viewingEmployee()!.jobTitle || viewingEmployee()!.role || '—' }}</strong></div>
+                    <div class="detail-row"><span>Status</span><strong>{{ (viewingEmployee()!.status || 'active') | titlecase }}</strong></div>
+                  </section>
+                  <section class="employee-detail-card">
+                    <h4><i class='bx bx-user-circle'></i> Contact Details</h4>
+                    <div class="detail-row"><span>Work Email</span><strong>{{ viewingEmployee()!.email || viewingEmployee()!.workEmail || '—' }}</strong></div>
+                    <div class="detail-row"><span>Personal Email</span><strong>{{ viewingEmployee()!.personalEmail || '—' }}</strong></div>
+                    <div class="detail-row"><span>Zoom Email</span><strong>{{ viewingEmployee()!.zoomEmail || '—' }}</strong></div>
+                    <div class="detail-row"><span>Work Phone</span><strong>{{ viewingEmployee()!.workPhone || viewingEmployee()!.phone || '—' }}</strong></div>
+                    <div class="detail-row"><span>Cell Phone</span><strong>{{ viewingEmployee()!.cellPhone || viewingEmployee()!.mobilePhone || '—' }}</strong></div>
+                  </section>
+                </div>
+              } @else {
+                <div class="empty-state" style="padding:24px 8px;">
+                  <i class='bx bx-user'></i>
+                  <h3>No roster details found</h3>
+                  <p>This employee is not present in the current roster response.</p>
+                </div>
+              }
             </div>
           </div>
         </div>
@@ -1354,6 +1359,15 @@ type RosterEmployee = Record<string, any>;
     .report-table-head, .report-table-row { display: grid; grid-template-columns: 1.6fr 0.7fr 0.5fr 0.8fr; gap: 10px; align-items: center; padding: 10px 12px; }
     .report-table-head { color: #8aa0b8; text-transform: uppercase; font-size: 0.72rem; border-bottom: 1px solid #2a2a4e; background: #0d0d1a; letter-spacing: 0.04em; }
     .report-table-row { color: #dbeafe; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.84rem; }
+    .employee-modal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .employee-avatar { width: 42px; height: 42px; border-radius: 999px; border: 1px solid #2a2a4e; background: rgba(34,211,238,0.12); color: #22d3ee; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .employee-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .employee-detail-card { border: 1px solid #2a2a4e; border-radius: 10px; background: #0f172a; padding: 12px; }
+    .employee-detail-card h4 { margin: 0 0 10px; font-size: 0.82rem; color: #22d3ee; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .detail-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row span { color: #8aa0b8; font-size: 0.78rem; }
+    .detail-row strong { color: #e2e8f0; font-size: 0.82rem; word-break: break-word; }
     .type-badge { background: rgba(0, 212, 255, 0.1); color: #00d4ff; padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .status-badge { padding: 3px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .status-badge.pending { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
@@ -1385,6 +1399,9 @@ type RosterEmployee = Record<string, any>;
     @media (min-width: 1500px) {
       .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .report-panel-wide { grid-column: 1 / -1; }
+    }
+    @media (max-width: 1100px) {
+      .employee-detail-grid { grid-template-columns: 1fr; }
     }
   `]
 })
@@ -1472,6 +1489,11 @@ export class PerformanceReviewsComponent implements OnInit {
   showModal = signal(false);
   editingReview = signal<Review | null>(null);
   viewingReview = signal<Review | null>(null);
+  viewingEmployee = computed(() => {
+    const review = this.viewingReview();
+    if (!review) return null;
+    return this.employees().find(e => Number(e.id) === Number(review.employeeId)) || null;
+  });
   saving = signal(false);
 
   formData: any = {
@@ -2323,6 +2345,16 @@ export class PerformanceReviewsComponent implements OnInit {
 
   viewReview(review: Review) {
     this.viewingReview.set(review);
+  }
+
+  employeeAlias(employee: any): string {
+    return String(
+      employee?.alias
+      || employee?.preferredName
+      || employee?.nickname
+      || employee?.displayName
+      || ''
+    ).trim();
   }
 
   async saveReview() {
