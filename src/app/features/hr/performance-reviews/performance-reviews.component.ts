@@ -323,23 +323,24 @@ type RosterEmployee = Record<string, any>;
         </div>
       } @else {
         <div class="table-wrap reviews-table-wrap">
-          <div class="source-attribution-bar">
-            <span class="source-title">Attached Sources</span>
-            <span class="source-chip" [class.connected]="zoomApiStatus() === 'connected'" [class.not-connected]="zoomApiStatus() !== 'connected'">
-              Zoom: {{ integrationStatusLabel(zoomApiStatus()) }}
-            </span>
-            <span class="source-chip" [class.connected]="googleApiStatus() === 'connected'" [class.not-connected]="googleApiStatus() !== 'connected'">
-              Gmail: {{ integrationStatusLabel(googleApiStatus()) }}
-            </span>
-            <span class="source-chip" [class.connected]="hasTimeclockSourceData()" [class.not-connected]="!hasTimeclockSourceData()">
-              VanTac/Timeclock: {{ hasTimeclockSourceData() ? 'Attached' : 'No Period Data' }}
-            </span>
-            <span class="source-chip" [class.connected]="hasSnapshotSourceData()" [class.not-connected]="!hasSnapshotSourceData()">
-              Saved Snapshot: {{ hasSnapshotSourceData() ? 'Attached' : 'None Loaded' }}
-            </span>
-          </div>
           <table class="reviews-table">
             <thead>
+              <tr class="source-group-row">
+                <th class="group-label group-base" colspan="1">Team</th>
+                <th class="group-label group-zoom" colspan="4">
+                  Zoom {{ zoomApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                </th>
+                <th class="group-label group-gmail" colspan="5">
+                  Gmail {{ googleApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                </th>
+                <th class="group-label group-timeclock" colspan="3">
+                  VanTac/Timeclock {{ (timeclockSummaries().length > 0) ? 'Attached' : 'No Data' }}
+                </th>
+                <th class="group-label group-finance" colspan="1">Finance</th>
+                <th class="group-label group-review" colspan="3">
+                  Review {{ hasPersistedSnapshotData() ? 'Snapshot Loaded' : 'Live' }}
+                </th>
+              </tr>
               <tr>
                 <th>Employee</th>
                 <th>Calls</th>
@@ -519,23 +520,20 @@ type RosterEmployee = Record<string, any>;
         </div>
       } @else {
         <div class="table-wrap">
-          <div class="source-attribution-bar">
-            <span class="source-title">Attached Sources</span>
-            <span class="source-chip" [class.connected]="zoomApiStatus() === 'connected'" [class.not-connected]="zoomApiStatus() !== 'connected'">
-              Zoom: {{ integrationStatusLabel(zoomApiStatus()) }}
-            </span>
-            <span class="source-chip" [class.connected]="googleApiStatus() === 'connected'" [class.not-connected]="googleApiStatus() !== 'connected'">
-              Gmail: {{ integrationStatusLabel(googleApiStatus()) }}
-            </span>
-            <span class="source-chip" [class.connected]="hasTimeclockSourceData()" [class.not-connected]="!hasTimeclockSourceData()">
-              VanTac/Timeclock: {{ hasTimeclockSourceData() ? 'Attached' : 'No Period Data' }}
-            </span>
-            <span class="source-chip" [class.connected]="hasSnapshotSourceData()" [class.not-connected]="!hasSnapshotSourceData()">
-              Saved Snapshot: {{ hasSnapshotSourceData() ? 'Attached' : 'None Loaded' }}
-            </span>
-          </div>
           <table>
             <thead>
+              <tr class="source-group-row">
+                <th class="group-label group-base" colspan="1">Team</th>
+                <th class="group-label group-zoom" colspan="6">
+                  Zoom {{ zoomApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                </th>
+                <th class="group-label group-gmail" colspan="5">
+                  Gmail {{ googleApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                </th>
+                <th class="group-label group-timeclock" colspan="1">
+                  Activity {{ (timeclockSummaries().length > 0) ? 'Attached' : 'Estimated' }}
+                </th>
+              </tr>
               <tr>
                 <th>Employee</th>
                 <th>Calls</th>
@@ -842,41 +840,23 @@ type RosterEmployee = Record<string, any>;
     .update-filter { display: flex; align-items: center; gap: 8px; }
     .update-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
     .update-meta { font-size: 0.7rem; color: #8aa0b8; white-space: nowrap; }
-    .source-attribution-bar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 10px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-      background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.72));
-    }
-    .source-title {
-      font-size: 0.72rem;
+    .source-group-row th.group-label {
+      font-size: 0.66rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #9fb3c8;
-      margin-right: 4px;
-    }
-    .source-chip {
-      font-size: 0.7rem;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      color: #b6c8da;
-      border-radius: 999px;
-      padding: 3px 8px;
-      background: rgba(15, 23, 42, 0.55);
+      letter-spacing: 0.05em;
+      text-align: center;
+      font-weight: 700;
+      color: #e2e8f0;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+      padding: 6px 8px;
       white-space: nowrap;
     }
-    .source-chip.connected {
-      border-color: rgba(34, 197, 94, 0.45);
-      color: #7ee7a8;
-      background: rgba(34, 197, 94, 0.12);
-    }
-    .source-chip.not-connected {
-      border-color: rgba(244, 63, 94, 0.4);
-      color: #fda4af;
-      background: rgba(244, 63, 94, 0.12);
-    }
+    .source-group-row th.group-base { background: linear-gradient(90deg, #334155, #475569); }
+    .source-group-row th.group-zoom { background: linear-gradient(90deg, #16a34a, #22c55e); color: #06230f; }
+    .source-group-row th.group-gmail { background: linear-gradient(90deg, #f59e0b, #fbbf24); color: #3b2602; }
+    .source-group-row th.group-timeclock { background: linear-gradient(90deg, #0ea5e9, #38bdf8); color: #082f49; }
+    .source-group-row th.group-finance { background: linear-gradient(90deg, #8b5cf6, #a78bfa); color: #271047; }
+    .source-group-row th.group-review { background: linear-gradient(90deg, #e11d48, #f43f5e); color: #3d0917; }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
@@ -1539,11 +1519,7 @@ export class PerformanceReviewsComponent implements OnInit {
     return 'Checking...';
   }
 
-  hasTimeclockSourceData(): boolean {
-    return (this.timeclockSummaries()?.length ?? 0) > 0;
-  }
-
-  hasSnapshotSourceData(): boolean {
+  hasPersistedSnapshotData(): boolean {
     return Object.keys(this.persistedMetricMap() || {}).length > 0;
   }
 
