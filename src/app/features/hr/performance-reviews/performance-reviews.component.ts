@@ -881,50 +881,78 @@ type RosterEmployee = Record<string, any>;
       color: #4c0519 !important;
     }
     /* Brokerage table column tinting by source group (faded) */
-    .reviews-table tr:not(.source-group-row) th:nth-child(2), .reviews-table td:nth-child(2),
-    .reviews-table tr:not(.source-group-row) th:nth-child(3), .reviews-table td:nth-child(3),
-    .reviews-table tr:not(.source-group-row) th:nth-child(4), .reviews-table td:nth-child(4),
-    .reviews-table tr:not(.source-group-row) th:nth-child(5), .reviews-table td:nth-child(5) {
-      background: rgba(34, 197, 94, 0.08);
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(2),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(3),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(4),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(5),
+    .reviews-table tbody td:nth-child(2),
+    .reviews-table tbody td:nth-child(3),
+    .reviews-table tbody td:nth-child(4),
+    .reviews-table tbody td:nth-child(5) {
+      background-color: rgba(34, 197, 94, 0.1) !important;
     }
-    .reviews-table tr:not(.source-group-row) th:nth-child(6), .reviews-table td:nth-child(6),
-    .reviews-table tr:not(.source-group-row) th:nth-child(7), .reviews-table td:nth-child(7),
-    .reviews-table tr:not(.source-group-row) th:nth-child(8), .reviews-table td:nth-child(8),
-    .reviews-table tr:not(.source-group-row) th:nth-child(9), .reviews-table td:nth-child(9),
-    .reviews-table tr:not(.source-group-row) th:nth-child(10), .reviews-table td:nth-child(10) {
-      background: rgba(251, 191, 36, 0.08);
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(6),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(7),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(8),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(9),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(10),
+    .reviews-table tbody td:nth-child(6),
+    .reviews-table tbody td:nth-child(7),
+    .reviews-table tbody td:nth-child(8),
+    .reviews-table tbody td:nth-child(9),
+    .reviews-table tbody td:nth-child(10) {
+      background-color: rgba(251, 191, 36, 0.1) !important;
     }
-    .reviews-table tr:not(.source-group-row) th:nth-child(11), .reviews-table td:nth-child(11),
-    .reviews-table tr:not(.source-group-row) th:nth-child(12), .reviews-table td:nth-child(12),
-    .reviews-table tr:not(.source-group-row) th:nth-child(13), .reviews-table td:nth-child(13) {
-      background: rgba(56, 189, 248, 0.08);
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(11),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(12),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(13),
+    .reviews-table tbody td:nth-child(11),
+    .reviews-table tbody td:nth-child(12),
+    .reviews-table tbody td:nth-child(13) {
+      background-color: rgba(56, 189, 248, 0.1) !important;
     }
-    .reviews-table tr:not(.source-group-row) th:nth-child(14), .reviews-table td:nth-child(14) {
-      background: rgba(167, 139, 250, 0.08);
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(14),
+    .reviews-table tbody td:nth-child(14) {
+      background-color: rgba(167, 139, 250, 0.1) !important;
     }
-    .reviews-table tr:not(.source-group-row) th:nth-child(15), .reviews-table td:nth-child(15),
-    .reviews-table tr:not(.source-group-row) th:nth-child(16), .reviews-table td:nth-child(16),
-    .reviews-table tr:not(.source-group-row) th:nth-child(17), .reviews-table td:nth-child(17) {
-      background: rgba(244, 63, 94, 0.08);
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(15),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(16),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(17),
+    .reviews-table tbody td:nth-child(15),
+    .reviews-table tbody td:nth-child(16),
+    .reviews-table tbody td:nth-child(17) {
+      background-color: rgba(244, 63, 94, 0.1) !important;
     }
     /* Management table column tinting by source group (faded) */
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(2), .management-metrics-table td:nth-child(2),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(3), .management-metrics-table td:nth-child(3),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(4), .management-metrics-table td:nth-child(4),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(5), .management-metrics-table td:nth-child(5),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(6), .management-metrics-table td:nth-child(6),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(12), .management-metrics-table td:nth-child(12) {
-      background: rgba(34, 197, 94, 0.08);
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(2),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(3),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(4),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(5),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(6),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(12),
+    .management-metrics-table tbody td:nth-child(2),
+    .management-metrics-table tbody td:nth-child(3),
+    .management-metrics-table tbody td:nth-child(4),
+    .management-metrics-table tbody td:nth-child(5),
+    .management-metrics-table tbody td:nth-child(6),
+    .management-metrics-table tbody td:nth-child(12) {
+      background-color: rgba(34, 197, 94, 0.1) !important;
     }
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(7), .management-metrics-table td:nth-child(7),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(8), .management-metrics-table td:nth-child(8),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(9), .management-metrics-table td:nth-child(9),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(10), .management-metrics-table td:nth-child(10),
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(11), .management-metrics-table td:nth-child(11) {
-      background: rgba(251, 191, 36, 0.08);
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(7),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(8),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(9),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(10),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(11),
+    .management-metrics-table tbody td:nth-child(7),
+    .management-metrics-table tbody td:nth-child(8),
+    .management-metrics-table tbody td:nth-child(9),
+    .management-metrics-table tbody td:nth-child(10),
+    .management-metrics-table tbody td:nth-child(11) {
+      background-color: rgba(251, 191, 36, 0.1) !important;
     }
-    .management-metrics-table tr:not(.source-group-row) th:nth-child(13), .management-metrics-table td:nth-child(13) {
-      background: rgba(56, 189, 248, 0.08);
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(13),
+    .management-metrics-table tbody td:nth-child(13) {
+      background-color: rgba(56, 189, 248, 0.1) !important;
     }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
