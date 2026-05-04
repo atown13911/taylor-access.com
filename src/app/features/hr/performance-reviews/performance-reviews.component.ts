@@ -226,7 +226,12 @@ type RosterEmployee = Record<string, any>;
           <label>&nbsp;</label>
           <div class="update-stack">
             <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
-              {{ updatingMetrics() ? 'Updating...' : 'Update' }}
+              @if (updatingMetrics()) {
+                <span class="btn-spinner" aria-hidden="true"></span>
+                <span>Updating...</span>
+              } @else {
+                <span>Update</span>
+              }
             </button>
             <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
           </div>
@@ -649,7 +654,12 @@ type RosterEmployee = Record<string, any>;
           <label>&nbsp;</label>
           <div class="update-stack">
             <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
-              {{ updatingMetrics() ? 'Updating...' : 'Update' }}
+              @if (updatingMetrics()) {
+                <span class="btn-spinner" aria-hidden="true"></span>
+                <span>Updating...</span>
+              } @else {
+                <span>Update</span>
+              }
             </button>
             <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
           </div>
@@ -1017,7 +1027,9 @@ type RosterEmployee = Record<string, any>;
     .page-header h1 { color: #fff; font-size: 1.8rem; margin: 0; display: flex; align-items: center; gap: 12px; i { color: #00d4ff; } }
     .subtitle { color: #888; margin: 6px 0 0; font-size: 0.9rem; }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); color: #0a0a14; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; &:disabled { opacity: 0.5; } }
-    .btn-secondary { padding: 10px 20px; background: #2a2a4e; color: #aaa; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .btn-secondary { padding: 10px 20px; background: #2a2a4e; color: #aaa; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 108px; &:disabled { opacity: 0.75; cursor: not-allowed; } }
+    .btn-spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.28); border-top-color: #e0f2fe; border-radius: 999px; display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
     .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
     .status-item { background: #131a2e; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
