@@ -873,6 +873,16 @@ public class PerformanceReviewsController : ControllerBase
                     emailLocalCandidates.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!.Trim()),
                     StringComparer.OrdinalIgnoreCase
                 );
+                var zoomMetricEmail = zoomMetric?.Email?.Trim().ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(zoomMetricEmail))
+                {
+                    emailCandidateSet.Add(zoomMetricEmail);
+                    var metricEmailLocal = ExtractEmailLocalPart(zoomMetricEmail);
+                    if (!string.IsNullOrWhiteSpace(metricEmailLocal))
+                        emailLocalCandidateSet.Add(metricEmailLocal!);
+                }
+                if (!string.IsNullOrWhiteSpace(zoomMetric?.ZoomUserId))
+                    zoomIdCandidates.Add(zoomMetric.ZoomUserId.Trim());
                 var hosted = 0;
                 var hostedMinutes = 0d;
                 foreach (var meeting in meetingRows)
@@ -924,6 +934,12 @@ public class PerformanceReviewsController : ControllerBase
                         reportFallback = kvp.Value;
                         if (reportFallback.Hosted > 0 || reportFallback.Joined > 0) break;
                     }
+                }
+
+                if (reportFallback.Hosted <= 0 && reportFallback.Joined <= 0 && reportFallback.Minutes > 0)
+                {
+                    var inferred = Math.Max(1, (int)Math.Round(reportFallback.Minutes / 30d, MidpointRounding.AwayFromZero));
+                    reportFallback = (inferred, inferred, reportFallback.Minutes);
                 }
 
                 if (reportFallback.Hosted > 0 || reportFallback.Joined > 0)

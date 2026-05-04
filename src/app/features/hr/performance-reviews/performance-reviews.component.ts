@@ -224,9 +224,12 @@ type RosterEmployee = Record<string, any>;
         }
         <div class="update-filter">
           <label>&nbsp;</label>
-          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
-            {{ updatingMetrics() ? 'Updating...' : 'Update' }}
-          </button>
+          <div class="update-stack">
+            <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+              {{ updatingMetrics() ? 'Updating...' : 'Update' }}
+            </button>
+            <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+          </div>
         </div>
       </div>
 
@@ -483,9 +486,12 @@ type RosterEmployee = Record<string, any>;
         </div>
         <div class="update-filter">
           <label>&nbsp;</label>
-          <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
-            {{ updatingMetrics() ? 'Updating...' : 'Update' }}
-          </button>
+          <div class="update-stack">
+            <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+              {{ updatingMetrics() ? 'Updating...' : 'Update' }}
+            </button>
+            <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+          </div>
         </div>
       </div>
 
@@ -804,6 +810,8 @@ type RosterEmployee = Record<string, any>;
     .search-filter { display: flex; align-items: center; gap: 8px; }
     .sort-filter { display: flex; align-items: center; gap: 8px; }
     .update-filter { display: flex; align-items: center; gap: 8px; }
+    .update-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+    .update-meta { font-size: 0.7rem; color: #8aa0b8; white-space: nowrap; }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
@@ -986,12 +994,14 @@ export class PerformanceReviewsComponent implements OnInit {
   private confirm = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
   private readonly managementTabsStorageKey = 'ta.performanceReviews.managementTabs.v1';
+  private readonly metricsLastUpdateStorageKey = 'ta.performanceReviews.lastUpdateAt.v1';
 
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
   reviews = signal<Review[]>([]);
   loadingReviews = signal<boolean>(true);
   updatingMetrics = signal<boolean>(false);
+  lastMetricsUpdateAt = signal<string>('');
   timeclockSummaries = signal<any[]>([]);
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
@@ -1448,8 +1458,14 @@ export class PerformanceReviewsComponent implements OnInit {
   ngOnInit() {
     this.initializeCurrentWeekSelection();
     this.restoreManagementTabs();
+    this.restoreMetricsLastUpdateAt();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
+  }
+
+  private restoreMetricsLastUpdateAt(): void {
+    const saved = localStorage.getItem(this.metricsLastUpdateStorageKey);
+    if (saved) this.lastMetricsUpdateAt.set(saved);
   }
 
   integrationStatusLabel(status: IntegrationState): string {
@@ -1725,6 +1741,9 @@ export class PerformanceReviewsComponent implements OnInit {
         this.loadReviews(),
         this.loadPersistedDailyMetrics()
       ]);
+      const nowLabel = new Date().toLocaleString();
+      this.lastMetricsUpdateAt.set(nowLabel);
+      localStorage.setItem(this.metricsLastUpdateStorageKey, nowLabel);
       this.toast.success('Performance metrics updated');
     } catch {
       this.toast.error('Failed to update performance metrics');
