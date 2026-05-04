@@ -404,15 +404,31 @@ public class PerformanceReviewsController : ControllerBase
                     if (TryGetPropertyIgnoreCase(item, "user", out var userNode) && userNode.ValueKind == JsonValueKind.Object)
                         userElement = userNode;
 
-                    var totalCalls = ReadIntAny(metricElement, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
-                    if (totalCalls <= 0)
+                    var metricTotalCalls = ReadIntAny(metricElement, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
+                    var metricOutboundCalls = ReadIntAny(metricElement, "outboundCalls", "outbound_calls");
+                    var metricInboundCalls = ReadIntAny(metricElement, "inboundCalls", "inbound_calls");
+                    var metricAnsweredCalls = ReadIntAny(metricElement, "answeredCalls", "answered_calls");
+                    var metricMissedCalls = ReadIntAny(metricElement, "missedCalls", "missed_calls");
+
+                    var itemTotalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
+                    var itemOutboundCalls = ReadIntAny(item, "outboundCalls", "outbound_calls");
+                    var itemInboundCalls = ReadIntAny(item, "inboundCalls", "inbound_calls");
+                    var itemAnsweredCalls = ReadIntAny(item, "answeredCalls", "answered_calls");
+                    var itemMissedCalls = ReadIntAny(item, "missedCalls", "missed_calls");
+
+                    var totalCalls = new[]
                     {
-                        var outboundCalls = ReadIntAny(metricElement, "outboundCalls", "outbound_calls");
-                        var inboundCalls = ReadIntAny(metricElement, "inboundCalls", "inbound_calls");
-                        totalCalls = outboundCalls + inboundCalls;
-                    }
-                    if (totalCalls <= 0)
-                        totalCalls = ReadIntAny(item, "totalCalls", "total_calls", "calls", "callCount", "call_count", "phoneCalls", "phone_calls");
+                        metricTotalCalls,
+                        itemTotalCalls,
+                        metricOutboundCalls,
+                        itemOutboundCalls,
+                        metricInboundCalls,
+                        itemInboundCalls,
+                        metricOutboundCalls + metricInboundCalls,
+                        itemOutboundCalls + itemInboundCalls,
+                        metricAnsweredCalls + metricMissedCalls,
+                        itemAnsweredCalls + itemMissedCalls
+                    }.Max();
                     var totalCallMinutes = ReadDoubleAny(metricElement, "totalCallMinutes", "total_call_minutes", "callDurationMinutes", "call_duration_minutes", "totalCallDuration", "total_call_duration");
                     if (totalCallMinutes <= 0)
                         totalCallMinutes = ReadDoubleAny(item, "totalCallMinutes", "total_call_minutes", "callDurationMinutes", "call_duration_minutes", "totalCallDuration", "total_call_duration");
