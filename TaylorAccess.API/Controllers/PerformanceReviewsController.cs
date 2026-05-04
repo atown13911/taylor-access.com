@@ -882,7 +882,7 @@ public class PerformanceReviewsController : ControllerBase
                         (!string.IsNullOrWhiteSpace(meeting.HostId) && zoomIdCandidates.Contains(meeting.HostId))
                         || (!string.IsNullOrWhiteSpace(meeting.HostEmail) && emailCandidateSet.Contains(meeting.HostEmail))
                         || (!string.IsNullOrWhiteSpace(meetingHostLocal) && emailLocalCandidateSet.Contains(meetingHostLocal!))
-                        || (!string.IsNullOrWhiteSpace(employeeNameKey) && !string.IsNullOrWhiteSpace(meeting.HostName) && string.Equals(meeting.HostName, employeeNameKey, StringComparison.OrdinalIgnoreCase));
+                        || (!string.IsNullOrWhiteSpace(employeeNameKey) && !string.IsNullOrWhiteSpace(meeting.HostName) && NamesLikelyMatch(employeeNameKey, meeting.HostName));
                     if (hostMatched)
                     {
                         hosted++;
