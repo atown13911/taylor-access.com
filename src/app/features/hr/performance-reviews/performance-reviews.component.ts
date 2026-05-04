@@ -261,6 +261,14 @@ type RosterEmployee = Record<string, any>;
               <span>Average Activity</span>
               <strong>{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</strong>
             </article>
+            <article class="report-card">
+              <span>Busiest Day</span>
+              <strong>{{ reportBusiestDayLabel() }}</strong>
+            </article>
+            <article class="report-card">
+              <span>Peak Daily Hours</span>
+              <strong>{{ reportPeakDailyHours() | number:'1.1-1' }} h</strong>
+            </article>
           </div>
 
           <div class="report-grid">
@@ -305,6 +313,24 @@ type RosterEmployee = Record<string, any>;
                 </div>
               } @empty {
                 <div class="chart-empty">No ranked rows available.</div>
+              }
+            </div>
+            <div class="report-panel report-panel-wide">
+              <h3>Busy Days (Timeclock Active Hours)</h3>
+              @if (reportBusyDays().length > 0) {
+                <div class="daily-chart">
+                  @for (day of reportBusyDays(); track day.dateKey) {
+                    <div class="daily-row">
+                      <span class="daily-label">{{ day.label }}</span>
+                      <div class="daily-bar-wrap">
+                        <div class="daily-bar" [style.width.%]="day.percent"></div>
+                      </div>
+                      <strong>{{ day.activeHours | number:'1.1-1' }} h</strong>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="chart-empty">No daily activity data for this period yet.</div>
               }
             </div>
           </div>
@@ -1146,6 +1172,11 @@ type RosterEmployee = Record<string, any>;
     .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     .report-row { display: grid; grid-template-columns: 140px 1fr 46px; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .report-row span { color: #cbd5e1; font-size: 0.82rem; }
+    .daily-chart { padding: 8px 10px 12px; }
+    .daily-row { display: grid; grid-template-columns: 120px 1fr 60px; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .daily-label { color: #cbd5e1; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .daily-bar-wrap { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
+    .daily-bar { height: 100%; background: linear-gradient(90deg, #38bdf8, #22d3ee); border-radius: 999px; }
     .report-row strong { color: #e2e8f0; text-align: right; font-size: 0.82rem; }
     .report-bar-wrap { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
     .report-bar { height: 100%; background: linear-gradient(90deg, #22d3ee, #0ea5e9); border-radius: 999px; }
@@ -1198,6 +1229,7 @@ export class PerformanceReviewsComponent implements OnInit {
   updatingMetrics = signal<boolean>(false);
   lastMetricsUpdateAt = signal<string>('');
   timeclockSummaries = signal<any[]>([]);
+  dailyActivitySeries = signal<Array<{ dateKey: string; label: string; activeHours: number }>>([]);
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
   zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
@@ -1601,6 +1633,29 @@ export class PerformanceReviewsComponent implements OnInit {
       .sort((a, b) => (b.activityRate - a.activityRate) || (b.callVolume - a.callVolume))
       .slice(0, 8);
   });
+  reportBusyDays = computed(() => {
+    const points = this.dailyActivitySeries();
+    if (!points.length) return [] as Array<{ dateKey: string; label: string; activeHours: number; percent: number }>;
+    const maxHours = Math.max(...points.map(p => Number(p.activeHours || 0)), 1);
+    return points
+      .slice()
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+      .map((p) => ({
+        ...p,
+        percent: Math.max(2, Math.round((Number(p.activeHours || 0) / maxHours) * 100))
+      }));
+  });
+  reportBusiestDayLabel = computed(() => {
+    const points = this.dailyActivitySeries();
+    if (!points.length) return '—';
+    const best = points.reduce((top, p) => Number(p.activeHours || 0) > Number(top.activeHours || 0) ? p : top, points[0]);
+    return best?.label || '—';
+  });
+  reportPeakDailyHours = computed(() => {
+    const points = this.dailyActivitySeries();
+    if (!points.length) return 0;
+    return points.reduce((max, p) => Math.max(max, Number(p.activeHours || 0)), 0);
+  });
   totalInvoicedRevenue30d = computed(() => {
     const seriesTotal = this.revenueSeries().reduce(
       (sum: number, point: any) => sum + Number(point?.value ?? point?.revenue ?? 0),
@@ -1711,7 +1766,9 @@ export class PerformanceReviewsComponent implements OnInit {
       const range = this.parseMonthKey(this.selectedReviewMonth());
       const dates = this.enumerateDateKeys(range.from, range.to);
       const merged = new Map<string, any>();
+      const daily = new Map<string, { dateKey: string; label: string; activeHours: number }>();
       for (const date of dates) {
+        let dayActiveSeconds = 0;
         try {
           const res: any = await this.http.get(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`).toPromise();
           const rows: any[] = Array.isArray(res?.data) ? res.data : [];
@@ -1732,15 +1789,25 @@ export class PerformanceReviewsComponent implements OnInit {
             existing.activeSeconds += Number(row?.activeSeconds || 0);
             existing.idleSeconds += Number(row?.idleSeconds || 0);
             existing.totalSeconds += Number(row?.totalSeconds || 0);
+            dayActiveSeconds += Number(row?.activeSeconds || 0);
             merged.set(key, existing);
           }
+          const parsed = new Date(`${date}T00:00:00`);
+          const label = parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          daily.set(date, {
+            dateKey: date,
+            label,
+            activeHours: Number((dayActiveSeconds / 3600).toFixed(1))
+          });
         } catch {
           // Keep aggregating other dates.
         }
       }
       this.timeclockSummaries.set(Array.from(merged.values()));
+      this.dailyActivitySeries.set(Array.from(daily.values()));
     } catch {
       this.timeclockSummaries.set([]);
+      this.dailyActivitySeries.set([]);
     }
   }
 
