@@ -840,23 +840,46 @@ type RosterEmployee = Record<string, any>;
     .update-filter { display: flex; align-items: center; gap: 8px; }
     .update-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
     .update-meta { font-size: 0.7rem; color: #8aa0b8; white-space: nowrap; }
-    .source-group-row th.group-label {
+    table thead tr.source-group-row th.group-label {
       font-size: 0.66rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       text-align: center;
       font-weight: 700;
       color: #e2e8f0;
-      border-bottom: 1px solid rgba(15, 23, 42, 0.8);
-      padding: 6px 8px;
+      border-bottom: 2px solid rgba(15, 23, 42, 0.9);
+      padding: 7px 8px;
       white-space: nowrap;
+      box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
     }
-    .source-group-row th.group-base { background: linear-gradient(90deg, #334155, #475569); }
-    .source-group-row th.group-zoom { background: linear-gradient(90deg, #16a34a, #22c55e); color: #06230f; }
-    .source-group-row th.group-gmail { background: linear-gradient(90deg, #f59e0b, #fbbf24); color: #3b2602; }
-    .source-group-row th.group-timeclock { background: linear-gradient(90deg, #0ea5e9, #38bdf8); color: #082f49; }
-    .source-group-row th.group-finance { background: linear-gradient(90deg, #8b5cf6, #a78bfa); color: #271047; }
-    .source-group-row th.group-review { background: linear-gradient(90deg, #e11d48, #f43f5e); color: #3d0917; }
+    table thead tr.source-group-row th.group-base {
+      background: linear-gradient(90deg, #475569, #64748b) !important;
+      color: #f8fafc !important;
+    }
+    table thead tr.source-group-row th.group-zoom {
+      background: linear-gradient(90deg, #16a34a, #22c55e) !important;
+      color: #052e16 !important;
+      border-right: 1px solid rgba(6, 78, 59, 0.35);
+    }
+    table thead tr.source-group-row th.group-gmail {
+      background: linear-gradient(90deg, #f59e0b, #fbbf24) !important;
+      color: #422006 !important;
+      border-right: 1px solid rgba(120, 53, 15, 0.35);
+    }
+    table thead tr.source-group-row th.group-timeclock {
+      background: linear-gradient(90deg, #0ea5e9, #38bdf8) !important;
+      color: #082f49 !important;
+      border-right: 1px solid rgba(12, 74, 110, 0.35);
+    }
+    table thead tr.source-group-row th.group-finance {
+      background: linear-gradient(90deg, #8b5cf6, #a78bfa) !important;
+      color: #2e1065 !important;
+      border-right: 1px solid rgba(76, 29, 149, 0.35);
+    }
+    table thead tr.source-group-row th.group-review {
+      background: linear-gradient(90deg, #e11d48, #f43f5e) !important;
+      color: #4c0519 !important;
+    }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
