@@ -328,17 +328,34 @@ type RosterEmployee = Record<string, any>;
               <tr class="source-group-row">
                 <th class="group-label group-base" colspan="1">Team</th>
                 <th class="group-label group-zoom" colspan="4">
-                  Zoom {{ zoomApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                  <span class="group-content">
+                    <span class="group-name">Zoom</span>
+                    <span class="status-dot" [class.online]="zoomApiStatus() === 'connected'" [class.offline]="zoomApiStatus() !== 'connected'"></span>
+                  </span>
                 </th>
                 <th class="group-label group-gmail" colspan="5">
-                  Gmail {{ googleApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                  <span class="group-content">
+                    <span class="group-name">Gmail</span>
+                    <span class="status-dot" [class.online]="googleApiStatus() === 'connected'" [class.offline]="googleApiStatus() !== 'connected'"></span>
+                  </span>
                 </th>
                 <th class="group-label group-timeclock" colspan="3">
-                  VanTac/Timeclock {{ (timeclockSummaries().length > 0) ? 'Attached' : 'No Data' }}
+                  <span class="group-content">
+                    <span class="group-name">VanTac/Timeclock</span>
+                    <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
+                  </span>
                 </th>
-                <th class="group-label group-finance" colspan="1">Finance</th>
+                <th class="group-label group-finance" colspan="1">
+                  <span class="group-content">
+                    <span class="group-name">Finance</span>
+                    <span class="status-dot" [class.online]="hasFinanceSourceData()" [class.offline]="!hasFinanceSourceData()"></span>
+                  </span>
+                </th>
                 <th class="group-label group-review" colspan="3">
-                  Review {{ hasPersistedSnapshotData() ? 'Snapshot Loaded' : 'Live' }}
+                  <span class="group-content">
+                    <span class="group-name">Review</span>
+                    <span class="status-dot" [class.online]="hasPersistedSnapshotData()" [class.offline]="!hasPersistedSnapshotData()"></span>
+                  </span>
                 </th>
               </tr>
               <tr>
@@ -525,13 +542,22 @@ type RosterEmployee = Record<string, any>;
               <tr class="source-group-row">
                 <th class="group-label group-base" colspan="1">Team</th>
                 <th class="group-label group-zoom" colspan="6">
-                  Zoom {{ zoomApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                  <span class="group-content">
+                    <span class="group-name">Zoom</span>
+                    <span class="status-dot" [class.online]="zoomApiStatus() === 'connected'" [class.offline]="zoomApiStatus() !== 'connected'"></span>
+                  </span>
                 </th>
                 <th class="group-label group-gmail" colspan="5">
-                  Gmail {{ googleApiStatus() === 'connected' ? 'Connected' : 'Not Connected' }}
+                  <span class="group-content">
+                    <span class="group-name">Gmail</span>
+                    <span class="status-dot" [class.online]="googleApiStatus() === 'connected'" [class.offline]="googleApiStatus() !== 'connected'"></span>
+                  </span>
                 </th>
                 <th class="group-label group-timeclock" colspan="1">
-                  Activity {{ (timeclockSummaries().length > 0) ? 'Attached' : 'Estimated' }}
+                  <span class="group-content">
+                    <span class="group-name">Activity</span>
+                    <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
+                  </span>
                 </th>
               </tr>
               <tr>
@@ -851,6 +877,33 @@ type RosterEmployee = Record<string, any>;
       padding: 7px 8px;
       white-space: nowrap;
       box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .group-content {
+      position: relative;
+      display: block;
+      width: 100%;
+      padding-right: 14px;
+    }
+    .group-name {
+      display: block;
+      text-align: center;
+    }
+    .status-dot {
+      position: absolute;
+      right: 2px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      transform: translateY(-50%);
+      border: 1px solid rgba(15, 23, 42, 0.5);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.35);
+    }
+    .status-dot.online {
+      background: #22c55e;
+    }
+    .status-dot.offline {
+      background: #ef4444;
     }
     table thead tr.source-group-row th.group-base {
       background: linear-gradient(90deg, rgba(100, 116, 139, 0.38), rgba(71, 85, 105, 0.28)) !important;
@@ -1618,6 +1671,14 @@ export class PerformanceReviewsComponent implements OnInit {
 
   hasPersistedSnapshotData(): boolean {
     return Object.keys(this.persistedMetricMap() || {}).length > 0;
+  }
+
+  hasTimeclockDataAttached(): boolean {
+    return (this.timeclockSummaries()?.length ?? 0) > 0;
+  }
+
+  hasFinanceSourceData(): boolean {
+    return Number(this.totalInvoicedRevenue30d() || 0) > 0;
   }
 
   async loadEmployees() {
