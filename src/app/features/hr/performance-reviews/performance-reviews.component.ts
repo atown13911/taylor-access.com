@@ -927,24 +927,77 @@ type RosterEmployee = Record<string, any>;
                     </div>
                   </div>
                 </div>
-                <div class="employee-detail-grid">
-                  <section class="employee-detail-card">
-                    <h4><i class='bx bx-id-card'></i> Basic Information</h4>
-                    <div class="detail-row"><span>Employee ID</span><strong>#{{ viewingEmployee()!.id || viewingReview()!.employeeId }}</strong></div>
-                    <div class="detail-row"><span>Full Name</span><strong>{{ viewingEmployee()!.name || viewingReview()!.employeeName || '—' }}</strong></div>
-                    <div class="detail-row"><span>Alias</span><strong>{{ employeeAlias(viewingEmployee()) || '—' }}</strong></div>
-                    <div class="detail-row"><span>Position</span><strong>{{ viewingEmployee()!.positionName || viewingEmployee()!.jobTitle || viewingEmployee()!.role || '—' }}</strong></div>
-                    <div class="detail-row"><span>Status</span><strong>{{ (viewingEmployee()!.status || 'active') | titlecase }}</strong></div>
-                  </section>
-                  <section class="employee-detail-card">
-                    <h4><i class='bx bx-user-circle'></i> Contact Details</h4>
-                    <div class="detail-row"><span>Work Email</span><strong>{{ viewingEmployee()!.email || viewingEmployee()!.workEmail || '—' }}</strong></div>
-                    <div class="detail-row"><span>Personal Email</span><strong>{{ viewingEmployee()!.personalEmail || '—' }}</strong></div>
-                    <div class="detail-row"><span>Zoom Email</span><strong>{{ viewingEmployee()!.zoomEmail || '—' }}</strong></div>
-                    <div class="detail-row"><span>Work Phone</span><strong>{{ viewingEmployee()!.workPhone || viewingEmployee()!.phone || '—' }}</strong></div>
-                    <div class="detail-row"><span>Cell Phone</span><strong>{{ viewingEmployee()!.cellPhone || viewingEmployee()!.mobilePhone || '—' }}</strong></div>
-                  </section>
+                <div class="employee-tabs">
+                  <button class="employee-tab-btn" [class.active]="employeeViewTab() === 'details'" (click)="employeeViewTab.set('details')"><i class='bx bx-detail'></i> Details</button>
+                  <button class="employee-tab-btn" [class.active]="employeeViewTab() === 'documents'" (click)="employeeViewTab.set('documents')"><i class='bx bx-file'></i> Documents</button>
+                  <button class="employee-tab-btn" [class.active]="employeeViewTab() === 'onboarding'" (click)="employeeViewTab.set('onboarding')"><i class='bx bx-log-in-circle'></i> Onboarding</button>
+                  <button class="employee-tab-btn" [class.active]="employeeViewTab() === 'offboarding'" (click)="employeeViewTab.set('offboarding')"><i class='bx bx-log-out-circle'></i> Offboarding</button>
+                  <button class="employee-tab-btn" [class.active]="employeeViewTab() === 'evaluations'" (click)="employeeViewTab.set('evaluations')"><i class='bx bx-star'></i> Evaluations</button>
                 </div>
+
+                @if (employeeViewTab() === 'details') {
+                  <div class="employee-detail-grid">
+                    <section class="employee-detail-card">
+                      <h4><i class='bx bx-id-card'></i> Basic Information</h4>
+                      <div class="detail-row"><span>Employee ID</span><strong>#{{ viewingEmployee()!.id || viewingReview()!.employeeId }}</strong></div>
+                      <div class="detail-row"><span>Full Name</span><strong>{{ viewingEmployee()!.name || viewingReview()!.employeeName || '—' }}</strong></div>
+                      <div class="detail-row"><span>Alias</span><strong>{{ employeeAlias(viewingEmployee()) || '—' }}</strong></div>
+                      <div class="detail-row"><span>Position</span><strong>{{ viewingEmployee()!.positionName || viewingEmployee()!.jobTitle || viewingEmployee()!.role || '—' }}</strong></div>
+                      <div class="detail-row"><span>Status</span><strong>{{ (viewingEmployee()!.status || 'active') | titlecase }}</strong></div>
+                    </section>
+                    <section class="employee-detail-card">
+                      <h4><i class='bx bx-user-circle'></i> Contact Details</h4>
+                      <div class="detail-row"><span>Work Email</span><strong>{{ viewingEmployee()!.email || viewingEmployee()!.workEmail || '—' }}</strong></div>
+                      <div class="detail-row"><span>Personal Email</span><strong>{{ viewingEmployee()!.personalEmail || '—' }}</strong></div>
+                      <div class="detail-row"><span>Zoom Email</span><strong>{{ viewingEmployee()!.zoomEmail || '—' }}</strong></div>
+                      <div class="detail-row"><span>Work Phone</span><strong>{{ viewingEmployee()!.workPhone || viewingEmployee()!.phone || '—' }}</strong></div>
+                      <div class="detail-row"><span>Cell Phone</span><strong>{{ viewingEmployee()!.cellPhone || viewingEmployee()!.mobilePhone || '—' }}</strong></div>
+                    </section>
+                  </div>
+                } @else if (employeeViewTab() === 'documents') {
+                  <section class="employee-detail-card">
+                    <h4><i class='bx bx-folder-open'></i> Documents</h4>
+                    @if (employeeDocuments(viewingEmployee()).length > 0) {
+                      @for (doc of employeeDocuments(viewingEmployee()); track doc.name) {
+                        <div class="detail-row"><span>{{ doc.name }}</span><strong>{{ doc.value }}</strong></div>
+                      }
+                    } @else {
+                      <div class="chart-empty">No document metadata found in roster for this employee.</div>
+                    }
+                  </section>
+                } @else if (employeeViewTab() === 'onboarding') {
+                  <section class="employee-detail-card">
+                    <h4><i class='bx bx-log-in-circle'></i> Onboarding</h4>
+                    <div class="detail-row"><span>Status</span><strong>{{ employeeMeta(viewingEmployee(), ['onboardingStatus', 'onboarding_state', 'onboarding']) || 'Not set' }}</strong></div>
+                    <div class="detail-row"><span>Started</span><strong>{{ employeeMeta(viewingEmployee(), ['onboardingStartDate', 'onboarding_started_at', 'hireDate', 'hiredAt']) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Completed</span><strong>{{ employeeMeta(viewingEmployee(), ['onboardingCompletedDate', 'onboarding_completed_at']) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Assigned By</span><strong>{{ employeeMeta(viewingEmployee(), ['onboardingAssignedBy', 'onboarding_assigned_by']) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Notes</span><strong>{{ employeeMeta(viewingEmployee(), ['onboardingNotes', 'onboarding_notes']) || '—' }}</strong></div>
+                  </section>
+                } @else if (employeeViewTab() === 'offboarding') {
+                  <section class="employee-detail-card">
+                    <h4><i class='bx bx-log-out-circle'></i> Offboarding</h4>
+                    <div class="detail-row"><span>Status</span><strong>{{ employeeMeta(viewingEmployee(), ['offboardingStatus', 'offboarding_state', 'offboarding']) || 'Not set' }}</strong></div>
+                    <div class="detail-row"><span>Planned Date</span><strong>{{ employeeMeta(viewingEmployee(), ['offboardingDate', 'terminationDate', 'terminatedAt']) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Reason</span><strong>{{ employeeMeta(viewingEmployee(), ['offboardingReason', 'terminationReason']) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Handled By</span><strong>{{ employeeMeta(viewingEmployee(), ['offboardingHandledBy', 'offboarding_handled_by']) || '—' }}</strong></div>
+                    <div class="detail-row"><span>Notes</span><strong>{{ employeeMeta(viewingEmployee(), ['offboardingNotes', 'offboarding_notes']) || '—' }}</strong></div>
+                  </section>
+                } @else {
+                  <section class="employee-detail-card">
+                    <h4><i class='bx bx-star'></i> Evaluations</h4>
+                    @if (employeeEvaluationHistory().length > 0) {
+                      @for (item of employeeEvaluationHistory(); track item.id) {
+                        <div class="detail-row">
+                          <span>{{ item.period || '—' }}</span>
+                          <strong>{{ item.score }}/100 • {{ item.status | titlecase }}</strong>
+                        </div>
+                      }
+                    } @else {
+                      <div class="chart-empty">No evaluation records found for this employee.</div>
+                    }
+                  </section>
+                }
               } @else {
                 <div class="empty-state" style="padding:24px 8px;">
                   <i class='bx bx-user'></i>
@@ -1361,6 +1414,9 @@ type RosterEmployee = Record<string, any>;
     .report-table-row { color: #dbeafe; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.84rem; }
     .employee-modal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
     .employee-avatar { width: 42px; height: 42px; border-radius: 999px; border: 1px solid #2a2a4e; background: rgba(34,211,238,0.12); color: #22d3ee; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .employee-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .employee-tab-btn { border: 1px solid #334155; background: #0f172a; color: #93c5fd; border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+    .employee-tab-btn.active { background: #1e293b; border-color: #22d3ee; color: #e0f2fe; }
     .employee-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .employee-detail-card { border: 1px solid #2a2a4e; border-radius: 10px; background: #0f172a; padding: 12px; }
     .employee-detail-card h4 { margin: 0 0 10px; font-size: 0.82rem; color: #22d3ee; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1489,10 +1545,29 @@ export class PerformanceReviewsComponent implements OnInit {
   showModal = signal(false);
   editingReview = signal<Review | null>(null);
   viewingReview = signal<Review | null>(null);
+  employeeViewTab = signal<'details' | 'documents' | 'onboarding' | 'offboarding' | 'evaluations'>('details');
   viewingEmployee = computed(() => {
     const review = this.viewingReview();
     if (!review) return null;
     return this.employees().find(e => Number(e.id) === Number(review.employeeId)) || null;
+  });
+  employeeEvaluationHistory = computed(() => {
+    const review = this.viewingReview();
+    if (!review) return [] as Array<{ id: number; period?: string; score: number; status: string }>;
+    return this.reviews()
+      .filter(r => Number(r.employeeId) === Number(review.employeeId))
+      .sort((a, b) => {
+        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTs - aTs;
+      })
+      .slice(0, 12)
+      .map(r => ({
+        id: Number(r.id || 0),
+        period: r.period,
+        score: Number(r.score || 0),
+        status: String(r.status || 'pending')
+      }));
   });
   saving = signal(false);
 
@@ -2344,6 +2419,7 @@ export class PerformanceReviewsComponent implements OnInit {
   }
 
   viewReview(review: Review) {
+    this.employeeViewTab.set('details');
     this.viewingReview.set(review);
   }
 
@@ -2355,6 +2431,31 @@ export class PerformanceReviewsComponent implements OnInit {
       || employee?.displayName
       || ''
     ).trim();
+  }
+
+  employeeMeta(employee: any, keys: string[]): string {
+    for (const key of keys) {
+      const value = employee?.[key];
+      if (value == null) continue;
+      const text = String(value).trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
+  employeeDocuments(employee: any): Array<{ name: string; value: string }> {
+    if (!employee) return [];
+    const candidates: Array<{ name: string; keys: string[] }> = [
+      { name: 'ID Document', keys: ['idDocument', 'id_document', 'governmentId'] },
+      { name: 'Driver License', keys: ['driverLicense', 'driver_license'] },
+      { name: 'Medical Card', keys: ['medicalCard', 'medical_card'] },
+      { name: 'Background Check', keys: ['backgroundCheck', 'background_check'] },
+      { name: 'Contract', keys: ['contractStatus', 'contract_status', 'contract'] },
+      { name: 'W9 / Tax Form', keys: ['w9Status', 'w9_status', 'taxFormStatus', 'tax_form_status'] }
+    ];
+    return candidates
+      .map(c => ({ name: c.name, value: this.employeeMeta(employee, c.keys) }))
+      .filter(c => !!c.value);
   }
 
   async saveReview() {
