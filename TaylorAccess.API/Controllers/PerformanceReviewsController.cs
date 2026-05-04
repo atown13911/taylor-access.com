@@ -472,7 +472,13 @@ public class PerformanceReviewsController : ControllerBase
                             + ReadIntAny(metricElement, "smsReceivedCount", "sms_received_count", "smsSentCount", "sms_sent_count"),
                         MeetingsHosted = meetingsHosted,
                         MeetingsJoined = meetingsJoined,
-                        MeetingMinutes = Math.Max(0, meetingMinutes)
+                        MeetingMinutes = Math.Max(0, meetingMinutes),
+                        HasDateBucket = !string.IsNullOrWhiteSpace(ReadStringAny(
+                            metricElement,
+                            "date", "day", "metricDate", "metric_date", "periodDate", "period_date", "startDate", "start_date", "startTime", "start_time"))
+                            || !string.IsNullOrWhiteSpace(ReadStringAny(
+                                item,
+                                "date", "day", "metricDate", "metric_date", "periodDate", "period_date", "startDate", "start_date", "startTime", "start_time"))
                     };
                     if (row.SmsSessionCount <= 0)
                         row.SmsSessionCount = ReadIntAny(item, "smsSessionCount", "sms_session_count", "smsCount", "sms_count", "textCount", "text_count");
@@ -480,24 +486,46 @@ public class PerformanceReviewsController : ControllerBase
                     if (!string.IsNullOrWhiteSpace(row.Email))
                     {
                         var emailKey = row.Email!.Trim().ToLower();
-                        metricsByEmail[emailKey] = row;
+                        if (metricsByEmail.TryGetValue(emailKey, out var existingByEmail))
+                            metricsByEmail[emailKey] = MergeZoomMetrics(existingByEmail, row);
+                        else
+                            metricsByEmail[emailKey] = row;
                         var localPart = ExtractEmailLocalPart(emailKey);
                         if (!string.IsNullOrWhiteSpace(localPart))
                         {
-                            metricsByEmailLocal[localPart] = row;
+                            if (metricsByEmailLocal.TryGetValue(localPart, out var existingByLocal))
+                                metricsByEmailLocal[localPart] = PickStrongerMetric(existingByLocal, row);
+                            else
+                                metricsByEmailLocal[localPart] = row;
                             var guessedNameKey = NormalizeName(localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' '));
                             if (!string.IsNullOrWhiteSpace(guessedNameKey))
-                                metricsByName[guessedNameKey] = row;
+                            {
+                                if (metricsByName.TryGetValue(guessedNameKey, out var existingByGuessedName))
+                                    metricsByName[guessedNameKey] = PickStrongerMetric(existingByGuessedName, row);
+                                else
+                                    metricsByName[guessedNameKey] = row;
+                            }
                         }
                     }
                     if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
-                        metricsByZoomUserId[row.ZoomUserId!.Trim()] = row;
+                    {
+                        var zoomUserIdKey = row.ZoomUserId!.Trim();
+                        if (metricsByZoomUserId.TryGetValue(zoomUserIdKey, out var existingByZoomUserId))
+                            metricsByZoomUserId[zoomUserIdKey] = MergeZoomMetrics(existingByZoomUserId, row);
+                        else
+                            metricsByZoomUserId[zoomUserIdKey] = row;
+                    }
                     var nameKey = NormalizeName(
                         ReadStringAny(userElement, "displayName", "display_name", "userName", "user_name", "name")
                         ?? ReadStringAny(item, "displayName", "display_name", "userName", "user_name", "name")
                     );
                     if (!string.IsNullOrWhiteSpace(nameKey))
-                        metricsByName[nameKey] = row;
+                    {
+                        if (metricsByName.TryGetValue(nameKey, out var existingByName))
+                            metricsByName[nameKey] = PickStrongerMetric(existingByName, row);
+                        else
+                            metricsByName[nameKey] = row;
+                    }
                     if (row.TotalCalls > 0) crmMetricsRowsWithCalls++;
                     if (row.SmsSessionCount > 0) crmMetricsRowsWithTexts++;
                 }
@@ -1720,6 +1748,40 @@ public class PerformanceReviewsController : ControllerBase
         return 0;
     }
 
+    private static ZoomUserMetricLite MergeZoomMetrics(ZoomUserMetricLite existing, ZoomUserMetricLite incoming)
+    {
+        var sumByBucket = existing.HasDateBucket || incoming.HasDateBucket;
+        return new ZoomUserMetricLite
+        {
+            ZoomUserId = !string.IsNullOrWhiteSpace(existing.ZoomUserId) ? existing.ZoomUserId : incoming.ZoomUserId,
+            Email = !string.IsNullOrWhiteSpace(existing.Email) ? existing.Email : incoming.Email,
+            TotalCalls = sumByBucket ? SaturatingAdd(existing.TotalCalls, incoming.TotalCalls) : Math.Max(existing.TotalCalls, incoming.TotalCalls),
+            TotalCallMinutes = sumByBucket ? Math.Max(0, existing.TotalCallMinutes + incoming.TotalCallMinutes) : Math.Max(existing.TotalCallMinutes, incoming.TotalCallMinutes),
+            SmsSessionCount = sumByBucket ? SaturatingAdd(existing.SmsSessionCount, incoming.SmsSessionCount) : Math.Max(existing.SmsSessionCount, incoming.SmsSessionCount),
+            MeetingsHosted = sumByBucket ? SaturatingAdd(existing.MeetingsHosted, incoming.MeetingsHosted) : Math.Max(existing.MeetingsHosted, incoming.MeetingsHosted),
+            MeetingsJoined = sumByBucket ? SaturatingAdd(existing.MeetingsJoined, incoming.MeetingsJoined) : Math.Max(existing.MeetingsJoined, incoming.MeetingsJoined),
+            MeetingMinutes = sumByBucket ? Math.Max(0, existing.MeetingMinutes + incoming.MeetingMinutes) : Math.Max(existing.MeetingMinutes, incoming.MeetingMinutes),
+            HasDateBucket = sumByBucket
+        };
+    }
+
+    private static ZoomUserMetricLite PickStrongerMetric(ZoomUserMetricLite a, ZoomUserMetricLite b)
+        => ZoomMetricSignal(b) > ZoomMetricSignal(a) ? b : a;
+
+    private static double ZoomMetricSignal(ZoomUserMetricLite metric)
+        => Math.Max(0, metric.TotalCalls)
+           + Math.Max(0, metric.SmsSessionCount)
+           + (Math.Max(0, metric.TotalCallMinutes) / 2d)
+           + (Math.Max(0, metric.MeetingMinutes) / 3d);
+
+    private static int SaturatingAdd(int left, int right)
+    {
+        var total = (long)left + right;
+        if (total > int.MaxValue) return int.MaxValue;
+        if (total < 0) return 0;
+        return (int)total;
+    }
+
     private static bool IsActiveEmploymentStatus(string? employmentStatus)
     {
         var status = (employmentStatus ?? string.Empty).Trim().ToLowerInvariant();
@@ -1805,6 +1867,7 @@ internal class ZoomUserMetricLite
     public int MeetingsHosted { get; set; }
     public int MeetingsJoined { get; set; }
     public double MeetingMinutes { get; set; }
+    public bool HasDateBucket { get; set; }
 }
 
 public class BulkMonthlyPerformanceMetricsSnapshotRequest
