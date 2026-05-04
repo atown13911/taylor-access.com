@@ -853,32 +853,32 @@ type RosterEmployee = Record<string, any>;
       box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
     }
     table thead tr.source-group-row th.group-base {
-      background: linear-gradient(90deg, #475569, #64748b) !important;
+      background: linear-gradient(90deg, rgba(100, 116, 139, 0.38), rgba(71, 85, 105, 0.28)) !important;
       color: #f8fafc !important;
     }
     table thead tr.source-group-row th.group-zoom {
-      background: linear-gradient(90deg, #16a34a, #22c55e) !important;
-      color: #052e16 !important;
+      background: linear-gradient(90deg, rgba(34, 197, 94, 0.24), rgba(34, 197, 94, 0.14)) !important;
+      color: #bbf7d0 !important;
       border-right: 1px solid rgba(6, 78, 59, 0.35);
     }
     table thead tr.source-group-row th.group-gmail {
-      background: linear-gradient(90deg, #f59e0b, #fbbf24) !important;
-      color: #422006 !important;
+      background: linear-gradient(90deg, rgba(251, 191, 36, 0.24), rgba(251, 191, 36, 0.14)) !important;
+      color: #fde68a !important;
       border-right: 1px solid rgba(120, 53, 15, 0.35);
     }
     table thead tr.source-group-row th.group-timeclock {
-      background: linear-gradient(90deg, #0ea5e9, #38bdf8) !important;
-      color: #082f49 !important;
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.24), rgba(56, 189, 248, 0.14)) !important;
+      color: #bae6fd !important;
       border-right: 1px solid rgba(12, 74, 110, 0.35);
     }
     table thead tr.source-group-row th.group-finance {
-      background: linear-gradient(90deg, #8b5cf6, #a78bfa) !important;
-      color: #2e1065 !important;
+      background: linear-gradient(90deg, rgba(167, 139, 250, 0.24), rgba(167, 139, 250, 0.14)) !important;
+      color: #ddd6fe !important;
       border-right: 1px solid rgba(76, 29, 149, 0.35);
     }
     table thead tr.source-group-row th.group-review {
-      background: linear-gradient(90deg, #e11d48, #f43f5e) !important;
-      color: #4c0519 !important;
+      background: linear-gradient(90deg, rgba(244, 63, 94, 0.24), rgba(244, 63, 94, 0.14)) !important;
+      color: #fecdd3 !important;
     }
     /* Brokerage table column tinting by source group (faded) */
     .reviews-table thead tr:not(.source-group-row) th:nth-child(2),
