@@ -305,7 +305,7 @@ type RosterEmployee = Record<string, any>;
               }
             </div>
             <div class="report-panel">
-              <h3>Communication Mix</h3>
+              <h3>Communication Mix (incl. Email)</h3>
               @if (reportCommunicationMix().length > 0) {
                 <div class="donut-wrap">
                   <div class="donut-chart" [style.background]="reportCommunicationPieStyle()"></div>
@@ -1856,10 +1856,12 @@ export class PerformanceReviewsComponent implements OnInit {
     const calls = rows.reduce((sum, row) => sum + Number(row.callVolume || 0), 0);
     const texts = rows.reduce((sum, row) => sum + Number(row.textVolume || 0), 0);
     const meetings = rows.reduce((sum, row) => sum + Number(row.meetingsHosted || 0), 0);
+    const emails = rows.reduce((sum, row) => sum + Number(row.sentCount || 0) + Number(row.replyCount || 0), 0);
     return [
       { label: 'Calls', value: calls, color: '#22c55e' },
       { label: 'Texts', value: texts, color: '#fbbf24' },
-      { label: 'Meetings', value: meetings, color: '#38bdf8' }
+      { label: 'Meetings', value: meetings, color: '#38bdf8' },
+      { label: 'Emails', value: emails, color: '#a78bfa' }
     ].filter(x => x.value > 0);
   });
   reportCommunicationPieStyle = computed(() => {
