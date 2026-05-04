@@ -236,6 +236,14 @@ type RosterEmployee = Record<string, any>;
       <!-- Reviews Table -->
       @if (showReportsTab()) {
         <section class="report-view">
+          <div class="report-toolbar">
+            <div class="report-title">Performance Analytics</div>
+            <div class="report-controls">
+              <span>View Data By:</span>
+              <button class="mini-toggle" [class.active]="reportMetricMode() === 'hours'" (click)="reportMetricMode.set('hours')">Hours</button>
+              <button class="mini-toggle" [class.active]="reportMetricMode() === 'staff'" (click)="reportMetricMode.set('staff')">Staff</button>
+            </div>
+          </div>
           <div class="report-cards report-cards-primary">
             <article class="report-card">
               <span>Total Staff</span>
@@ -313,6 +321,24 @@ type RosterEmployee = Record<string, any>;
                 </div>
               } @else {
                 <div class="chart-empty">No communication data yet.</div>
+              }
+            </div>
+            <div class="report-panel report-panel-wide">
+              <h3>{{ reportMetricMode() === 'hours' ? 'Activity Over Time (Hours)' : 'Active Staff Over Time' }}</h3>
+              @if (reportTimelineBars().length > 0) {
+                <div class="timeline-bars">
+                  @for (bar of reportTimelineBars(); track bar.dateKey) {
+                    <div class="timeline-col">
+                      <div class="timeline-bar-wrap">
+                        <div class="timeline-bar" [style.height.%]="bar.percent"></div>
+                      </div>
+                      <strong>{{ bar.valueLabel }}</strong>
+                      <span>{{ bar.label }}</span>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="chart-empty">No time series data available.</div>
               }
             </div>
             <div class="report-panel">
@@ -1226,6 +1252,19 @@ type RosterEmployee = Record<string, any>;
     }
     .reviews-table thead th:first-child { z-index: 3; }
     .report-view { margin-top: 8px; }
+    .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .report-title { color: #e2e8f0; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+    .report-controls { display: inline-flex; align-items: center; gap: 8px; color: #8aa0b8; font-size: 0.76rem; }
+    .mini-toggle {
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #93c5fd;
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .mini-toggle.active { background: #1e293b; border-color: #38bdf8; color: #e0f2fe; }
     .report-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
     .report-card { background: #10192c; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
     .report-card span { color: #8aa0b8; font-size: 0.78rem; }
@@ -1259,6 +1298,35 @@ type RosterEmployee = Record<string, any>;
     .scatter-wrap { padding: 10px; }
     .scatter-svg { width: 100%; height: 210px; background: rgba(2, 6, 23, 0.55); border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; }
     .scatter-axis { display: flex; justify-content: space-between; margin-top: 6px; color: #8aa0b8; font-size: 0.72rem; }
+    .timeline-bars {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+      gap: 8px;
+      align-items: end;
+      padding: 12px;
+      min-height: 210px;
+      background: rgba(2, 6, 23, 0.45);
+      border-top: 1px solid rgba(148,163,184,0.18);
+    }
+    .timeline-col { display: grid; gap: 4px; align-items: end; justify-items: center; }
+    .timeline-col span { font-size: 0.68rem; color: #8aa0b8; }
+    .timeline-col strong { font-size: 0.68rem; color: #dbeafe; }
+    .timeline-bar-wrap {
+      height: 128px;
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid rgba(148,163,184,0.2);
+      background: rgba(15, 23, 42, 0.78);
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+    }
+    .timeline-bar {
+      width: 100%;
+      background: linear-gradient(180deg, #22d3ee, #0ea5e9);
+      border-radius: 6px 6px 0 0;
+      min-height: 4px;
+    }
     .daily-chart { padding: 8px 10px 12px; }
     .daily-row { display: grid; grid-template-columns: 120px 1fr 60px; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .daily-label { color: #cbd5e1; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1317,7 +1385,8 @@ export class PerformanceReviewsComponent implements OnInit {
   updatingMetrics = signal<boolean>(false);
   lastMetricsUpdateAt = signal<string>('');
   timeclockSummaries = signal<any[]>([]);
-  dailyActivitySeries = signal<Array<{ dateKey: string; label: string; activeHours: number }>>([]);
+  dailyActivitySeries = signal<Array<{ dateKey: string; label: string; activeHours: number; activeUsers: number }>>([]);
+  reportMetricMode = signal<'hours' | 'staff'>('hours');
   revenueSeries = signal<any[]>([]);
   zoomMetricMap = signal<Record<number, ZoomMetricRow>>({});
   zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
@@ -1744,6 +1813,26 @@ export class PerformanceReviewsComponent implements OnInit {
     if (!points.length) return 0;
     return points.reduce((max, p) => Math.max(max, Number(p.activeHours || 0)), 0);
   });
+  reportTimelineBars = computed(() => {
+    const mode = this.reportMetricMode();
+    const points = this.dailyActivitySeries();
+    if (!points.length) return [] as Array<{ dateKey: string; label: string; value: number; valueLabel: string; percent: number }>;
+    const values = points.map((p) => mode === 'hours' ? Number(p.activeHours || 0) : Number((p as any).activeUsers || 0));
+    const maxValue = Math.max(...values, 1);
+    return points
+      .slice()
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+      .map((p) => {
+        const value = mode === 'hours' ? Number(p.activeHours || 0) : Number((p as any).activeUsers || 0);
+        return {
+          dateKey: p.dateKey,
+          label: p.label,
+          value,
+          valueLabel: mode === 'hours' ? `${value.toFixed(1)}h` : `${Math.round(value)}`,
+          percent: Math.max(2, Math.round((value / maxValue) * 100))
+        };
+      });
+  });
   reportCommunicationMix = computed(() => {
     const rows = this.metricRows();
     const calls = rows.reduce((sum, row) => sum + Number(row.callVolume || 0), 0);
@@ -1911,9 +2000,10 @@ export class PerformanceReviewsComponent implements OnInit {
       const range = this.parseMonthKey(this.selectedReviewMonth());
       const dates = this.enumerateDateKeys(range.from, range.to);
       const merged = new Map<string, any>();
-      const daily = new Map<string, { dateKey: string; label: string; activeHours: number }>();
+      const daily = new Map<string, { dateKey: string; label: string; activeHours: number; activeUsers: number }>();
       for (const date of dates) {
         let dayActiveSeconds = 0;
+        const dayActiveUsers = new Set<string>();
         try {
           const res: any = await this.http.get(`${this.apiUrl}/api/v1/timeclock/daily-summary?date=${date}`).toPromise();
           const rows: any[] = Array.isArray(res?.data) ? res.data : [];
@@ -1935,6 +2025,7 @@ export class PerformanceReviewsComponent implements OnInit {
             existing.idleSeconds += Number(row?.idleSeconds || 0);
             existing.totalSeconds += Number(row?.totalSeconds || 0);
             dayActiveSeconds += Number(row?.activeSeconds || 0);
+            if (Number(row?.activeSeconds || 0) > 0) dayActiveUsers.add(key);
             merged.set(key, existing);
           }
           const parsed = new Date(`${date}T00:00:00`);
@@ -1942,7 +2033,8 @@ export class PerformanceReviewsComponent implements OnInit {
           daily.set(date, {
             dateKey: date,
             label,
-            activeHours: Number((dayActiveSeconds / 3600).toFixed(1))
+            activeHours: Number((dayActiveSeconds / 3600).toFixed(1)),
+            activeUsers: dayActiveUsers.size
           });
         } catch {
           // Keep aggregating other dates.
