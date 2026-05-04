@@ -346,8 +346,15 @@ type RosterEmployee = Record<string, any>;
               @if (reportScatterPoints().length > 0) {
                 <div class="scatter-wrap">
                   <svg viewBox="0 0 320 210" class="scatter-svg" aria-label="Activity vs Calls">
+                    <rect x="32" y="10" width="135" height="86" fill="rgba(34,197,94,0.08)"></rect>
+                    <rect x="167" y="10" width="135" height="86" fill="rgba(251,191,36,0.08)"></rect>
+                    <rect x="32" y="96" width="135" height="86" fill="rgba(14,165,233,0.08)"></rect>
+                    <rect x="167" y="96" width="135" height="86" fill="rgba(244,63,94,0.08)"></rect>
                     <line x1="32" y1="10" x2="32" y2="182" stroke="rgba(148,163,184,0.4)" stroke-width="1"></line>
                     <line x1="32" y1="182" x2="302" y2="182" stroke="rgba(148,163,184,0.4)" stroke-width="1"></line>
+                    <line x1="167" y1="10" x2="167" y2="182" stroke="rgba(148,163,184,0.2)" stroke-width="1" stroke-dasharray="4 4"></line>
+                    <line x1="32" y1="96" x2="302" y2="96" stroke="rgba(148,163,184,0.2)" stroke-width="1" stroke-dasharray="4 4"></line>
+                    <path [attr.d]="reportScatterTrendPath()" fill="none" stroke="rgba(148,163,184,0.75)" stroke-width="1.5"></path>
                     @for (point of reportScatterPoints(); track point.employeeId) {
                       <circle
                         [attr.cx]="point.x"
@@ -362,6 +369,11 @@ type RosterEmployee = Record<string, any>;
                   <div class="scatter-axis">
                     <span>Low Calls</span>
                     <span>High Calls</span>
+                  </div>
+                  <div class="scatter-legend">
+                    <span><i class="legend-dot" style="background:#22c55e"></i> High Score</span>
+                    <span><i class="legend-dot" style="background:#fbbf24"></i> Medium Score</span>
+                    <span><i class="legend-dot" style="background:#ef4444"></i> Needs Attention</span>
                   </div>
                 </div>
               } @else {
@@ -1269,7 +1281,7 @@ type RosterEmployee = Record<string, any>;
     .report-card { background: #10192c; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
     .report-card span { color: #8aa0b8; font-size: 0.78rem; }
     .report-card strong { color: #e0f2fe; font-size: 1.12rem; }
-    .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .report-panel { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; background: #0f172a; }
     .report-panel-wide { grid-column: 1 / -1; }
     .report-panel h3 { margin: 0; padding: 10px 12px; font-size: 0.88rem; color: #cbd5e1; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
@@ -1298,6 +1310,8 @@ type RosterEmployee = Record<string, any>;
     .scatter-wrap { padding: 10px; }
     .scatter-svg { width: 100%; height: 210px; background: rgba(2, 6, 23, 0.55); border: 1px solid rgba(148,163,184,0.18); border-radius: 8px; }
     .scatter-axis { display: flex; justify-content: space-between; margin-top: 6px; color: #8aa0b8; font-size: 0.72rem; }
+    .scatter-legend { display: flex; gap: 12px; margin-top: 6px; color: #8aa0b8; font-size: 0.72rem; flex-wrap: wrap; }
+    .scatter-legend .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 5px; vertical-align: middle; }
     .timeline-bars {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
@@ -1368,6 +1382,10 @@ type RosterEmployee = Record<string, any>;
     .view-meta { display: flex; gap: 10px; align-items: center; }
     .view-rating { margin-bottom: 20px; display: flex; align-items: center; gap: 4px; i { font-size: 1.5rem; color: #fbbf24; &.empty { color: #333; } } span { color: #888; margin-left: 8px; font-size: 0.9rem; } }
     .view-section { background: rgba(0,0,0,0.2); border-radius: 10px; padding: 16px; margin-bottom: 12px; h4 { color: #00d4ff; margin: 0 0 8px; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; } p { color: #ccc; margin: 0; white-space: pre-wrap; line-height: 1.6; } }
+    @media (min-width: 1500px) {
+      .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .report-panel-wide { grid-column: 1 / -1; }
+    }
   `]
 })
 export class PerformanceReviewsComponent implements OnInit {
@@ -1875,6 +1893,18 @@ export class PerformanceReviewsComponent implements OnInit {
       const label = `${row.employeeName || ('Employee #' + row.employeeId)} | Calls: ${calls}, Activity: ${(activity * 100).toFixed(0)}%`;
       return { employeeId: Number(row.employeeId), x, y, r, color, label };
     });
+  });
+  reportScatterTrendPath = computed(() => {
+    const points = this.reportScatterPoints().slice().sort((a, b) => a.x - b.x);
+    if (points.length < 2) return '';
+    const path = [`M ${points[0].x} ${points[0].y}`];
+    for (let i = 1; i < points.length; i++) {
+      const p0 = points[i - 1];
+      const p1 = points[i];
+      const cx = (p0.x + p1.x) / 2;
+      path.push(`Q ${cx} ${p0.y} ${p1.x} ${p1.y}`);
+    }
+    return path.join(' ');
   });
   reportCallLeaders = computed(() => {
     const rows = this.metricRows()
