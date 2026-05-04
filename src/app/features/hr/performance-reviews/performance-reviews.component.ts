@@ -1416,7 +1416,7 @@ export class PerformanceReviewsComponent implements OnInit {
   selectedReviewMonth = signal('current');
   selectedWeekNumber = signal(1);
   selectedWeekYear = signal(new Date().getUTCFullYear());
-  selectedTableSort = signal<ReviewTableSort>('score-desc');
+  selectedTableSort = signal<ReviewTableSort>('employee-asc');
   tableSearchTerm = signal('');
   selectedManagementSort = signal<ManagementTableSort>('calls-desc');
   managementSearchTerm = signal('');
