@@ -2677,6 +2677,7 @@ export class PerformanceReviewsComponent implements OnInit {
   private toMetricRow(review: Review): ReviewMetricRow {
     const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
+    const useSnapshotBlend = this.periodMode() === 'monthly';
     const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
     const {
@@ -2699,25 +2700,41 @@ export class PerformanceReviewsComponent implements OnInit {
 
     const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
-    const callVolume = Math.max(
-      Number(persisted?.callVolume || 0),
-      snapshotCallVolume,
-      liveCallVolume
-    );
+    const callVolume = useSnapshotBlend
+      ? Math.max(
+          Number(persisted?.callVolume || 0),
+          snapshotCallVolume,
+          liveCallVolume
+        )
+      : Math.max(
+          Number(persisted?.callVolume || 0),
+          liveCallVolume
+        );
     const totalCallMinutes = Math.max(0, liveTotalCallMinutes);
     const avgCallMinutes = callVolume > 0 ? (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : totalCallMinutes / callVolume) : 0;
-    const textVolume = Math.max(
-      Number(persisted?.textVolume || 0),
-      snapshotTextVolume,
-      liveTextVolume
-    );
-    const rawTotalHours = persisted?.clockedHours ?? (hasSnapshot ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours) : liveTime.totalHours);
+    const textVolume = useSnapshotBlend
+      ? Math.max(
+          Number(persisted?.textVolume || 0),
+          snapshotTextVolume,
+          liveTextVolume
+        )
+      : Math.max(
+          Number(persisted?.textVolume || 0),
+          liveTextVolume
+        );
+    const rawTotalHours = persisted?.clockedHours
+      ?? (useSnapshotBlend && hasSnapshot
+        ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours)
+        : liveTime.totalHours);
     const activityHoursEstimate = this.estimateActivityHours(callVolume, textVolume, liveMeetingsHosted, assignedWorkHours);
     const totalHours = rawTotalHours > 0 ? Math.min(rawTotalHours, assignedWorkHours) : activityHoursEstimate;
     const activeHours = assignedWorkHours;
     const idleHours = Math.max(0, activeHours - totalHours);
     const activityRate = activeHours > 0 ? Math.min(1, totalHours / activeHours) : 0;
-    const invoicedRevenue = persisted?.invoicedRevenue ?? (hasSnapshot ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue) : liveRevenue);
+    const invoicedRevenue = persisted?.invoicedRevenue
+      ?? (useSnapshotBlend && hasSnapshot
+        ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue)
+        : liveRevenue);
     const computedScore = this.computePerformanceScore(
       callVolume,
       textVolume,
@@ -2731,7 +2748,10 @@ export class PerformanceReviewsComponent implements OnInit {
       liveInternalCount,
       liveExternalCount
     );
-    const score = persisted?.score ?? (hasSnapshot ? Math.max(Number(review.score || 0), computedScore) : computedScore);
+    const score = persisted?.score
+      ?? (useSnapshotBlend && hasSnapshot
+        ? Math.max(Number(review.score || 0), computedScore)
+        : computedScore);
 
     return {
       ...review,
