@@ -323,6 +323,21 @@ type RosterEmployee = Record<string, any>;
         </div>
       } @else {
         <div class="table-wrap reviews-table-wrap">
+          <div class="source-attribution-bar">
+            <span class="source-title">Attached Sources</span>
+            <span class="source-chip" [class.connected]="zoomApiStatus() === 'connected'" [class.not-connected]="zoomApiStatus() !== 'connected'">
+              Zoom: {{ integrationStatusLabel(zoomApiStatus()) }}
+            </span>
+            <span class="source-chip" [class.connected]="googleApiStatus() === 'connected'" [class.not-connected]="googleApiStatus() !== 'connected'">
+              Gmail: {{ integrationStatusLabel(googleApiStatus()) }}
+            </span>
+            <span class="source-chip" [class.connected]="hasTimeclockSourceData()" [class.not-connected]="!hasTimeclockSourceData()">
+              VanTac/Timeclock: {{ hasTimeclockSourceData() ? 'Attached' : 'No Period Data' }}
+            </span>
+            <span class="source-chip" [class.connected]="hasSnapshotSourceData()" [class.not-connected]="!hasSnapshotSourceData()">
+              Saved Snapshot: {{ hasSnapshotSourceData() ? 'Attached' : 'None Loaded' }}
+            </span>
+          </div>
           <table class="reviews-table">
             <thead>
               <tr>
@@ -504,6 +519,21 @@ type RosterEmployee = Record<string, any>;
         </div>
       } @else {
         <div class="table-wrap">
+          <div class="source-attribution-bar">
+            <span class="source-title">Attached Sources</span>
+            <span class="source-chip" [class.connected]="zoomApiStatus() === 'connected'" [class.not-connected]="zoomApiStatus() !== 'connected'">
+              Zoom: {{ integrationStatusLabel(zoomApiStatus()) }}
+            </span>
+            <span class="source-chip" [class.connected]="googleApiStatus() === 'connected'" [class.not-connected]="googleApiStatus() !== 'connected'">
+              Gmail: {{ integrationStatusLabel(googleApiStatus()) }}
+            </span>
+            <span class="source-chip" [class.connected]="hasTimeclockSourceData()" [class.not-connected]="!hasTimeclockSourceData()">
+              VanTac/Timeclock: {{ hasTimeclockSourceData() ? 'Attached' : 'No Period Data' }}
+            </span>
+            <span class="source-chip" [class.connected]="hasSnapshotSourceData()" [class.not-connected]="!hasSnapshotSourceData()">
+              Saved Snapshot: {{ hasSnapshotSourceData() ? 'Attached' : 'None Loaded' }}
+            </span>
+          </div>
           <table>
             <thead>
               <tr>
@@ -812,6 +842,41 @@ type RosterEmployee = Record<string, any>;
     .update-filter { display: flex; align-items: center; gap: 8px; }
     .update-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
     .update-meta { font-size: 0.7rem; color: #8aa0b8; white-space: nowrap; }
+    .source-attribution-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.72));
+    }
+    .source-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #9fb3c8;
+      margin-right: 4px;
+    }
+    .source-chip {
+      font-size: 0.7rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #b6c8da;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: rgba(15, 23, 42, 0.55);
+      white-space: nowrap;
+    }
+    .source-chip.connected {
+      border-color: rgba(34, 197, 94, 0.45);
+      color: #7ee7a8;
+      background: rgba(34, 197, 94, 0.12);
+    }
+    .source-chip.not-connected {
+      border-color: rgba(244, 63, 94, 0.4);
+      color: #fda4af;
+      background: rgba(244, 63, 94, 0.12);
+    }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
@@ -1472,6 +1537,14 @@ export class PerformanceReviewsComponent implements OnInit {
     if (status === 'connected') return 'Connected';
     if (status === 'not-connected') return 'Not Connected';
     return 'Checking...';
+  }
+
+  hasTimeclockSourceData(): boolean {
+    return (this.timeclockSummaries()?.length ?? 0) > 0;
+  }
+
+  hasSnapshotSourceData(): boolean {
+    return Object.keys(this.persistedMetricMap() || {}).length > 0;
   }
 
   async loadEmployees() {
