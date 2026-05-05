@@ -33,7 +33,7 @@ interface ApplicantPosition {
 
 interface ApplicantGoal {
   id: number;
-  position: string;
+  sources: string[];
   period: GoalPeriod;
   targetApplicants: number;
   targetInterviews: number;
@@ -305,7 +305,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <h3>Applicant Goals</h3>
               <p>Set manual weekly/monthly targets for recruiting positions.</p>
             </div>
-            <button class="btn-secondary" (click)="addApplicantGoal()"><i class='bx bx-plus'></i> Add Goal</button>
+            <button class="btn-secondary" (click)="addApplicantGoal()">
+              <i class='bx' [class.bx-plus]="applicantGoals().length === 0" [class.bx-edit-alt]="applicantGoals().length > 0"></i>
+              {{ applicantGoals().length === 0 ? 'Add Goal' : 'Edit Goal' }}
+            </button>
           </div>
           <div class="goals-summary">
             <article class="pipeline-tile">
@@ -375,7 +378,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             @for (goal of applicantGoalProgressRows(); track goal.id) {
               <article class="goal-section-card">
                 <div class="goal-section-head">
-                  <strong>{{ goal.position || 'Unassigned Position' }}</strong>
+                  <strong>{{ goalSourceLabel(goal.sources) }}</strong>
                   <span class="goal-period-chip">{{ goal.period | titlecase }}</span>
                 </div>
                 <div class="goal-section-row">
@@ -412,7 +415,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <table class="goals-table">
               <thead>
                 <tr>
-                  <th>Position</th>
+                  <th>Sources</th>
                   <th>Period</th>
                   <th>Applicants</th>
                   <th>Actual Apps</th>
@@ -433,12 +436,42 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 @for (goal of applicantGoalProgressRows(); track goal.id) {
                   <tr>
                     <td>
-                      <select [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.position" (ngModelChange)="updateApplicantGoal(goal.id, 'position', $event)">
-                        <option value="">Select position</option>
-                        @for (position of goalPositionOptions(); track position) {
-                          <option [value]="position">{{ position }}</option>
+                      <div class="goal-source-editor">
+                        <div class="goal-source-list">
+                          @for (source of goal.sources; track source) {
+                            <span class="goal-source-chip">
+                              {{ source }}
+                              @if (isGoalEditing(goal.id)) {
+                                <button
+                                  class="goal-source-remove"
+                                  (click)="removeGoalSource(goal.id, source)"
+                                  title="Remove source"
+                                >
+                                  <i class='bx bx-x'></i>
+                                </button>
+                              }
+                            </span>
+                          } @empty {
+                            <span class="goal-source-empty">All sources</span>
+                          }
+                        </div>
+                        @if (isGoalEditing(goal.id)) {
+                          <div class="goal-source-actions">
+                            <select
+                              [ngModel]="goalSourceDraft(goal.id)"
+                              (ngModelChange)="setGoalSourceDraft(goal.id, $event)"
+                            >
+                              <option value="">Select source</option>
+                              @for (source of goalSourceOptions(); track source) {
+                                <option [value]="source">{{ source }}</option>
+                              }
+                            </select>
+                            <button class="icon-btn" (click)="addGoalSource(goal.id)" title="Add source">
+                              <i class='bx bx-plus'></i>
+                            </button>
+                          </div>
                         }
-                      </select>
+                      </div>
                     </td>
                     <td>
                       <select [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.period" (ngModelChange)="updateApplicantGoal(goal.id, 'period', $event)">
@@ -1001,6 +1034,12 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goals-table select, .goals-table input { width: 100%; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; font-size: 0.8rem; }
     .goals-table select:disabled, .goals-table input:disabled { opacity: 0.7; cursor: default; background: #0f172a; color: #94a3b8; }
     .icon-btn.active { border-color: #22d3ee; color: #67e8f9; background: rgba(34, 211, 238, 0.12); }
+    .goal-source-editor { display: grid; gap: 6px; min-width: 200px; }
+    .goal-source-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .goal-source-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 999px; border: 1px solid #334155; background: #0f172a; color: #cbd5e1; font-size: 0.7rem; }
+    .goal-source-remove { border: none; background: transparent; color: #93c5fd; cursor: pointer; padding: 0; display: inline-flex; align-items: center; }
+    .goal-source-empty { color: #8aa0b8; font-size: 0.72rem; }
+    .goal-source-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
     .goal-progress-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 2px 8px; border-radius: 999px; background: rgba(34, 211, 238, 0.12); color: #67e8f9; border: 1px solid rgba(34, 211, 238, 0.35); font-size: 0.74rem; font-weight: 700; }
     .goal-progress-track { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; margin-bottom: 4px; }
     .goal-progress-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #22d3ee); border-radius: 999px; min-width: 2px; }
@@ -1096,6 +1135,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionStateFilter = signal<'active' | 'inactive' | 'report' | 'goals'>('active');
   applicantGoals = signal<ApplicantGoal[]>([]);
   editingGoalIds = signal<number[]>([]);
+  goalSourceDrafts = signal<Record<number, string>>({});
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
@@ -1364,11 +1404,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   tableWorkingCount = computed(() => this.tableScopeRows().filter((r) => r.status !== 'rejected').length);
   tableRejectedCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'rejected').length);
   tableHiredCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'hired').length);
-  goalPositionOptions = computed(() =>
-    this.allPositions()
-      .filter((p) => p.isActive)
-      .map((p) => p.name)
-      .sort((a, b) => a.localeCompare(b))
+  goalSourceOptions = computed(() =>
+    Array.from(
+      new Set(
+        this.rows()
+          .map((row) => this.normalizePositionName(row.source))
+          .filter((value) => !!value)
+      )
+    ).sort((a, b) => a.localeCompare(b))
   );
   applicantGoalSummary = computed(() => {
     const goals = this.applicantGoalProgressRows();
@@ -1389,13 +1432,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const rows = this.rows();
     return this.applicantGoals().map((goal) => {
       const range = this.getGoalRange(goal.period);
-      const positionKey = this.normalizePositionName(goal.position).toLowerCase();
+      const sourceKeys = new Set(goal.sources.map((source) => this.normalizePositionName(source).toLowerCase()).filter((value) => !!value));
       const scoped = rows.filter((row) => {
         const parsed = this.parseDateOnly(row.appliedDate);
         if (!parsed) return false;
         if (parsed < range.start || parsed > range.end) return false;
-        if (!positionKey) return true;
-        return this.normalizePositionName(row.position).toLowerCase() === positionKey;
+        if (sourceKeys.size === 0) return true;
+        return sourceKeys.has(this.normalizePositionName(row.source).toLowerCase());
       });
       const actualApplicants = scoped.length;
       const actualInterviews = scoped.filter((row) => row.status === 'interview' || row.status === 'offer' || row.status === 'hired').length;
@@ -1674,12 +1717,17 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   addApplicantGoal(): void {
+    if (this.applicantGoals().length > 0) {
+      const existingId = this.applicantGoals()[0]?.id;
+      if (existingId) this.editingGoalIds.update((ids) => (ids.includes(existingId) ? ids : [existingId, ...ids]));
+      return;
+    }
     const nextId = this.applicantGoals().reduce((max, g) => Math.max(max, Number(g.id || 0)), 0) + 1;
-    const defaultPosition = this.goalPositionOptions()[0] || '';
+    const defaultSource = this.goalSourceOptions()[0] || '';
     this.applicantGoals.update((list) => [
       {
         id: nextId,
-        position: defaultPosition,
+        sources: defaultSource ? [defaultSource] : [],
         period: 'weekly',
         targetApplicants: 0,
         targetInterviews: 0,
@@ -1698,7 +1746,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       list.map((goal) => {
         if (goal.id !== id) return goal;
         const next = { ...goal, updatedAt: new Date().toISOString() };
-        if (field === 'position' || field === 'notes') {
+        if (field === 'notes') {
           (next as any)[field] = String(value ?? '').trim();
         } else if (field === 'period') {
           next.period = value === 'monthly' ? 'monthly' : value === 'yearly' ? 'yearly' : 'weekly';
@@ -1715,6 +1763,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   removeApplicantGoal(id: number): void {
     this.applicantGoals.update((list) => list.filter((goal) => goal.id !== id));
     this.editingGoalIds.update((ids) => ids.filter((item) => item !== id));
+    this.goalSourceDrafts.update((drafts) => {
+      const next = { ...drafts };
+      delete next[id];
+      return next;
+    });
     this.persistApplicantGoals();
   }
 
@@ -1726,6 +1779,51 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.editingGoalIds.update((ids) =>
       ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]
     );
+  }
+
+  goalSourceDraft(id: number): string {
+    return this.goalSourceDrafts()[id] || '';
+  }
+
+  setGoalSourceDraft(id: number, value: unknown): void {
+    const normalized = this.normalizePositionName(value);
+    this.goalSourceDrafts.update((drafts) => ({ ...drafts, [id]: normalized }));
+  }
+
+  addGoalSource(id: number): void {
+    const source = this.goalSourceDraft(id);
+    if (!source) return;
+    this.applicantGoals.update((list) =>
+      list.map((goal) => {
+        if (goal.id !== id) return goal;
+        const existing = new Set(goal.sources.map((item) => this.normalizePositionName(item).toLowerCase()));
+        if (existing.has(source.toLowerCase())) return goal;
+        return { ...goal, sources: [...goal.sources, source], updatedAt: new Date().toISOString() };
+      })
+    );
+    this.goalSourceDrafts.update((drafts) => ({ ...drafts, [id]: '' }));
+    this.persistApplicantGoals();
+  }
+
+  removeGoalSource(id: number, source: string): void {
+    const normalized = this.normalizePositionName(source).toLowerCase();
+    this.applicantGoals.update((list) =>
+      list.map((goal) =>
+        goal.id !== id
+          ? goal
+          : {
+              ...goal,
+              sources: goal.sources.filter((item) => this.normalizePositionName(item).toLowerCase() !== normalized),
+              updatedAt: new Date().toISOString()
+            }
+      )
+    );
+    this.persistApplicantGoals();
+  }
+
+  goalSourceLabel(sources: string[]): string {
+    if (!Array.isArray(sources) || sources.length === 0) return 'All Sources';
+    return sources.join(', ');
   }
 
   setPipelineFilter(mode: 'working' | 'rejected' | 'hired'): void {
@@ -2199,7 +2297,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const rows: ApplicantGoal[] = parsed
         .map((item: any): ApplicantGoal => ({
           id: Number(item?.id || 0),
-          position: this.normalizePositionName(item?.position),
+          sources: Array.isArray(item?.sources)
+            ? Array.from(
+                new Set(
+                  item.sources
+                    .map((source: unknown) => this.normalizePositionName(source))
+                    .filter((value: string) => !!value)
+                )
+              )
+            : (this.normalizePositionName(item?.position) ? [this.normalizePositionName(item?.position)] : []),
           period: item?.period === 'monthly' ? 'monthly' : item?.period === 'yearly' ? 'yearly' : 'weekly',
           targetApplicants: Math.max(0, Math.trunc(Number(item?.targetApplicants || 0))),
           targetInterviews: Math.max(0, Math.trunc(Number(item?.targetInterviews || 0))),
@@ -2208,7 +2314,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
           updatedAt: this.normalizePositionName(item?.updatedAt) || new Date().toISOString()
         }))
         .filter((row) => row.id > 0);
-      this.applicantGoals.set(rows);
+      this.applicantGoals.set(rows.slice(0, 1));
     } catch {
       // no-op
     }
