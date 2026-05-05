@@ -824,20 +824,61 @@ public class PerformanceReviewsController : ControllerBase
                 }
             }
 
-            var zoomMetric = zoomCandidates.Values
+            var orderedZoomCandidates = zoomCandidates.Values
                 .OrderByDescending(v => v.Strength)
                 .ThenByDescending(v => v.Metric.TotalCalls)
                 .ThenByDescending(v => v.Metric.TotalCallMinutes)
                 .ThenByDescending(v => v.Metric.SmsSessionCount)
                 .ThenByDescending(v => v.Metric.MeetingMinutes)
-                .Select(v => v.Metric)
-                .FirstOrDefault();
+                .ToList();
+
+            ZoomUserMetricLite? zoomMetric = null;
+            if (orderedZoomCandidates.Count > 0)
+            {
+                // Keep primary identity fields from the strongest candidate, then sum all matched candidate metrics.
+                var primaryMetric = orderedZoomCandidates[0].Metric;
+                zoomMetric = new ZoomUserMetricLite
+                {
+                    ZoomUserId = primaryMetric.ZoomUserId,
+                    Email = primaryMetric.Email,
+                    TotalCalls = 0,
+                    TotalCallMinutes = 0,
+                    SmsSessionCount = 0,
+                    MeetingsHosted = 0,
+                    MeetingsJoined = 0,
+                    MeetingMinutes = 0,
+                    HasDateBucket = orderedZoomCandidates.Any(c => c.Metric.HasDateBucket)
+                };
+                foreach (var candidate in orderedZoomCandidates)
+                {
+                    zoomMetric.TotalCalls = SaturatingAdd(zoomMetric.TotalCalls, candidate.Metric.TotalCalls);
+                    zoomMetric.TotalCallMinutes += Math.Max(0, candidate.Metric.TotalCallMinutes);
+                    zoomMetric.SmsSessionCount = SaturatingAdd(zoomMetric.SmsSessionCount, candidate.Metric.SmsSessionCount);
+                    zoomMetric.MeetingsHosted = SaturatingAdd(zoomMetric.MeetingsHosted, candidate.Metric.MeetingsHosted);
+                    zoomMetric.MeetingsJoined = SaturatingAdd(zoomMetric.MeetingsJoined, candidate.Metric.MeetingsJoined);
+                    zoomMetric.MeetingMinutes += Math.Max(0, candidate.Metric.MeetingMinutes);
+                }
+            }
 
             var zoomUserId = zoomMetric?.ZoomUserId ?? emp.ZoomUserId ?? mappedZoomUserIds.FirstOrDefault();
             var smsCount = 0;
-            if (!string.IsNullOrWhiteSpace(zoomUserId) && smsByOwner.TryGetValue(zoomUserId!, out var mappedSms))
-                smsCount = mappedSms;
-            else
+            var zoomUserIds = orderedZoomCandidates
+                .Select(c => c.Metric.ZoomUserId)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Select(v => v!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (zoomUserIds.Count > 0)
+            {
+                foreach (var candidateZoomUserId in zoomUserIds)
+                {
+                    if (smsByOwner.TryGetValue(candidateZoomUserId, out var mappedSms))
+                        smsCount = SaturatingAdd(smsCount, mappedSms);
+                }
+            }
+            if (smsCount <= 0 && !string.IsNullOrWhiteSpace(zoomUserId) && smsByOwner.TryGetValue(zoomUserId!, out var directMappedSms))
+                smsCount = directMappedSms;
+            if (smsCount <= 0)
                 smsCount = zoomMetric?.SmsSessionCount ?? 0;
 
             if ((zoomMetric?.TotalCalls ?? 0) > 0 || smsCount > 0)
