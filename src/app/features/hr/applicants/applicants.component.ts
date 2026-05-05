@@ -75,7 +75,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           <h1><i class='bx bx-user-plus'></i> Applicants</h1>
           <p>Track Taylor Access candidate pipeline</p>
         </div>
-        @if (positionStateFilter() !== 'goals') {
+        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
           <button class="btn-primary" (click)="openCreate()">
             <i class='bx bx-plus'></i> Add Applicant
           </button>
