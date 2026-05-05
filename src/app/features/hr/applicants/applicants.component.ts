@@ -1451,7 +1451,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const applicantsProgress = this.percentProgress(actualApplicants, targetApplicants);
       const interviewsProgress = this.percentProgress(actualInterviews, goal.targetInterviews);
       const hiresProgress = this.percentProgress(actualHires, goal.targetHires);
-      const overallProgress = (applicantsProgress + interviewsProgress + hiresProgress) / 3;
+      const overallProgress = hiresProgress;
       return {
         ...goal,
         targetApplicants,
