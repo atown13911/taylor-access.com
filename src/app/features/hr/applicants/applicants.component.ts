@@ -303,7 +303,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           <div class="goals-toolbar">
             <div>
               <h3>Applicant Goals</h3>
-              <p>Set manual weekly/monthly targets for recruiting positions.</p>
+              <p>Set manual weekly/monthly/yearly targets for recruiting positions.</p>
             </div>
             <button class="btn-secondary" (click)="addApplicantGoal()">
               <i class='bx' [class.bx-plus]="applicantGoals().length === 0" [class.bx-edit-alt]="applicantGoals().length > 0"></i>
