@@ -1406,11 +1406,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   tableHiredCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'hired').length);
   goalSourceOptions = computed(() =>
     Array.from(
-      new Set(
-        this.rows()
-          .map((row) => this.normalizePositionName(row.source))
-          .filter((value) => !!value)
-      )
+      this.rows().reduce((map, row) => {
+        const display = this.normalizeSourceDisplay(row.source);
+        const key = this.normalizeSourceKey(display);
+        if (!key) return map;
+        if (!map.has(key)) map.set(key, display);
+        return map;
+      }, new Map<string, string>()).values()
     ).sort((a, b) => a.localeCompare(b))
   );
   applicantGoalSummary = computed(() => {
@@ -1432,13 +1434,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const rows = this.rows();
     return this.applicantGoals().map((goal) => {
       const range = this.getGoalRange(goal.period);
-      const sourceKeys = new Set(goal.sources.map((source) => this.normalizePositionName(source).toLowerCase()).filter((value) => !!value));
+      const sourceKeys = new Set(goal.sources.map((source) => this.normalizeSourceKey(source)).filter((value) => !!value));
       const scoped = rows.filter((row) => {
         const parsed = this.parseDateOnly(row.appliedDate);
         if (!parsed) return false;
         if (parsed < range.start || parsed > range.end) return false;
         if (sourceKeys.size === 0) return true;
-        return sourceKeys.has(this.normalizePositionName(row.source).toLowerCase());
+        return sourceKeys.has(this.normalizeSourceKey(row.source));
       });
       const actualApplicants = scoped.length;
       const actualInterviews = scoped.filter((row) => row.status === 'interview' || row.status === 'offer' || row.status === 'hired').length;
@@ -1786,7 +1788,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   setGoalSourceDraft(id: number, value: unknown): void {
-    const normalized = this.normalizePositionName(value);
+    const normalized = this.normalizeSourceDisplay(value);
     this.goalSourceDrafts.update((drafts) => ({ ...drafts, [id]: normalized }));
   }
 
@@ -1796,8 +1798,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.applicantGoals.update((list) =>
       list.map((goal) => {
         if (goal.id !== id) return goal;
-        const existing = new Set(goal.sources.map((item) => this.normalizePositionName(item).toLowerCase()));
-        if (existing.has(source.toLowerCase())) return goal;
+        const existing = new Set(goal.sources.map((item) => this.normalizeSourceKey(item)));
+        if (existing.has(this.normalizeSourceKey(source))) return goal;
         return { ...goal, sources: [...goal.sources, source], updatedAt: new Date().toISOString() };
       })
     );
@@ -1806,14 +1808,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   removeGoalSource(id: number, source: string): void {
-    const normalized = this.normalizePositionName(source).toLowerCase();
+    const normalized = this.normalizeSourceKey(source);
     this.applicantGoals.update((list) =>
       list.map((goal) =>
         goal.id !== id
           ? goal
           : {
               ...goal,
-              sources: goal.sources.filter((item) => this.normalizePositionName(item).toLowerCase() !== normalized),
+              sources: goal.sources.filter((item) => this.normalizeSourceKey(item) !== normalized),
               updatedAt: new Date().toISOString()
             }
       )
@@ -2297,15 +2299,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const rows: ApplicantGoal[] = parsed
         .map((item: any): ApplicantGoal => ({
           id: Number(item?.id || 0),
-          sources: Array.isArray(item?.sources)
-            ? Array.from(
-                new Set(
-                  item.sources
-                    .map((source: unknown) => this.normalizePositionName(source))
-                    .filter((value: string) => !!value)
-                )
-              )
-            : (this.normalizePositionName(item?.position) ? [this.normalizePositionName(item?.position)] : []),
+          sources: this.normalizeGoalSources(
+            Array.isArray(item?.sources)
+              ? item.sources
+              : (this.normalizePositionName(item?.position) ? [this.normalizePositionName(item?.position)] : [])
+          ),
           period: item?.period === 'monthly' ? 'monthly' : item?.period === 'yearly' ? 'yearly' : 'weekly',
           targetApplicants: Math.max(0, Math.trunc(Number(item?.targetApplicants || 0))),
           targetInterviews: Math.max(0, Math.trunc(Number(item?.targetInterviews || 0))),
@@ -2349,6 +2347,25 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const delta = day === 0 ? 6 : day - 1; // shift to Monday start
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - delta, 0, 0, 0, 0);
     return { start, end };
+  }
+
+  private normalizeSourceDisplay(value: unknown): string {
+    return this.normalizePositionName(value).replace(/\s+/g, ' ');
+  }
+
+  private normalizeSourceKey(value: unknown): string {
+    return this.normalizeSourceDisplay(value).toLowerCase();
+  }
+
+  private normalizeGoalSources(values: unknown[]): string[] {
+    const map = new Map<string, string>();
+    for (const value of values) {
+      const display = this.normalizeSourceDisplay(value);
+      const key = this.normalizeSourceKey(display);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, display);
+    }
+    return Array.from(map.values());
   }
 
   private parsePositionPayload(payload: unknown): ApplicantPosition[] {
