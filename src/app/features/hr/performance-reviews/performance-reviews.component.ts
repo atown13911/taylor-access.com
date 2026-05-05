@@ -114,17 +114,6 @@ type ManagementTableSort =
   | 'activity-asc';
 type IntegrationState = 'checking' | 'connected' | 'not-connected';
 type RosterEmployee = Record<string, any>;
-type ApplicantGoalPeriod = 'weekly' | 'monthly';
-interface ApplicantGoalRow {
-  id: number;
-  position: string;
-  period: ApplicantGoalPeriod;
-  targetApplicants: number;
-  targetInterviews: number;
-  targetHires: number;
-  notes: string;
-  updatedAt: string;
-}
 
 @Component({
   selector: 'app-performance-reviews',
@@ -186,10 +175,9 @@ interface ApplicantGoalRow {
             <span class="table-title-chip">Saved Performance Table</span>
           </div>
           <div class="tabs period-mode-tabs">
-            <button class="tab" [class.active]="!showReportsTab() && !showApplicantGoalsTab() && periodMode() === 'weekly'" (click)="showReportsTab.set(false); showApplicantGoalsTab.set(false); onPeriodModeChange('weekly')">Weekly</button>
-            <button class="tab" [class.active]="!showReportsTab() && !showApplicantGoalsTab() && periodMode() === 'monthly'" (click)="showReportsTab.set(false); showApplicantGoalsTab.set(false); onPeriodModeChange('monthly')">Monthly</button>
+            <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'weekly'" (click)="showReportsTab.set(false); onPeriodModeChange('weekly')">Weekly</button>
+            <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'monthly'" (click)="showReportsTab.set(false); onPeriodModeChange('monthly')">Monthly</button>
             <button class="tab" [class.active]="showReportsTab()" (click)="openReportsTab()">Report</button>
-            <button class="tab" [class.active]="showApplicantGoalsTab()" (click)="openApplicantGoalsTab()">Applicant Goals</button>
           </div>
         </div>
         <div class="search-filter">
@@ -224,7 +212,7 @@ interface ApplicantGoalRow {
             </select>
           }
         </div>
-        @if (!showReportsTab() && !showApplicantGoalsTab()) {
+        @if (!showReportsTab()) {
           <div class="sort-filter">
             <label>Sort By</label>
             <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
@@ -453,71 +441,6 @@ interface ApplicantGoalRow {
               }
             </div>
           </div>
-        </section>
-      } @else if (showApplicantGoalsTab()) {
-        <section class="goals-view">
-          <div class="goals-toolbar">
-            <div>
-              <div class="report-title">Applicant Goals</div>
-              <div class="goals-subtitle">Manually set recruiting targets by position.</div>
-            </div>
-            <button class="btn-secondary" (click)="addApplicantGoal()"><i class='bx bx-plus'></i> Add Goal</button>
-          </div>
-          <div class="goals-summary">
-            <article class="report-card"><span>{{ periodMode() | titlecase }} Goals</span><strong>{{ applicantGoalSummary().count }}</strong></article>
-            <article class="report-card"><span>Target Applicants</span><strong>{{ applicantGoalSummary().applicants }}</strong></article>
-            <article class="report-card"><span>Target Interviews</span><strong>{{ applicantGoalSummary().interviews }}</strong></article>
-            <article class="report-card"><span>Target Hires</span><strong>{{ applicantGoalSummary().hires }}</strong></article>
-          </div>
-          @if (applicantGoals().length === 0) {
-            <div class="empty-state" style="padding:24px 8px;">
-              <i class='bx bx-target-lock'></i>
-              <h3>No applicant goals yet</h3>
-              <p>Add recruiting position goals to track weekly/monthly hiring targets.</p>
-            </div>
-          } @else {
-            <div class="table-wrap">
-              <table class="reviews-table goals-table">
-                <thead>
-                  <tr>
-                    <th>Recruiting Position</th>
-                    <th>Period</th>
-                    <th>Applicants</th>
-                    <th>Interviews</th>
-                    <th>Hires</th>
-                    <th>Notes</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (goal of applicantGoals(); track goal.id) {
-                    <tr>
-                      <td>
-                        <input
-                          class="goal-input"
-                          [ngModel]="goal.position"
-                          (ngModelChange)="updateApplicantGoal(goal.id, 'position', $event)"
-                          placeholder="e.g. Driver Recruiter" />
-                      </td>
-                      <td>
-                        <select class="goal-select" [ngModel]="goal.period" (ngModelChange)="updateApplicantGoal(goal.id, 'period', $event)">
-                          <option value="weekly">Weekly</option>
-                          <option value="monthly">Monthly</option>
-                        </select>
-                      </td>
-                      <td><input class="goal-input goal-num" type="number" min="0" [ngModel]="goal.targetApplicants" (ngModelChange)="updateApplicantGoal(goal.id, 'targetApplicants', $event)" /></td>
-                      <td><input class="goal-input goal-num" type="number" min="0" [ngModel]="goal.targetInterviews" (ngModelChange)="updateApplicantGoal(goal.id, 'targetInterviews', $event)" /></td>
-                      <td><input class="goal-input goal-num" type="number" min="0" [ngModel]="goal.targetHires" (ngModelChange)="updateApplicantGoal(goal.id, 'targetHires', $event)" /></td>
-                      <td><input class="goal-input" [ngModel]="goal.notes" (ngModelChange)="updateApplicantGoal(goal.id, 'notes', $event)" placeholder="Optional note" /></td>
-                      <td>{{ goal.updatedAt | date:'short' }}</td>
-                      <td><button class="icon-btn" title="Delete goal" (click)="removeApplicantGoal(goal.id)"><i class='bx bx-trash'></i></button></td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          }
         </section>
       } @else if (loadingReviews()) {
         <div class="loading-state">
@@ -1411,20 +1334,6 @@ interface ApplicantGoalRow {
     }
     .reviews-table thead th:first-child { z-index: 3; }
     .report-view { margin-top: 8px; }
-    .goals-view { margin-top: 8px; }
-    .goals-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .goals-subtitle { color: #8aa0b8; font-size: 0.78rem; margin-top: 2px; }
-    .goals-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
-    .goals-table .goal-input, .goals-table .goal-select {
-      width: 100%;
-      background: #0f172a;
-      color: #e2e8f0;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 6px 8px;
-      font-size: 0.78rem;
-    }
-    .goals-table .goal-num { min-width: 78px; }
     .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .report-title { color: #e2e8f0; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
     .report-controls { display: inline-flex; align-items: center; gap: 8px; color: #8aa0b8; font-size: 0.76rem; }
@@ -1571,8 +1480,6 @@ export class PerformanceReviewsComponent implements OnInit {
   private apiUrl = environment.apiUrl;
   private readonly managementTabsStorageKey = 'ta.performanceReviews.managementTabs.v1';
   private readonly metricsLastUpdateStorageKey = 'ta.performanceReviews.lastUpdateAt.v1';
-  private readonly applicantGoalsStorageKey = 'ta.performanceReviews.applicantGoals.v1';
-  private applicantGoalSeed = 1;
 
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
@@ -1599,10 +1506,8 @@ export class PerformanceReviewsComponent implements OnInit {
   selectedManagementSort = signal<ManagementTableSort>('calls-desc');
   managementSearchTerm = signal('');
   showReportsTab = signal(false);
-  showApplicantGoalsTab = signal(false);
   periodMode = signal<'weekly' | 'monthly'>('weekly');
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
-  applicantGoals = signal<ApplicantGoalRow[]>([]);
   tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
     { value: 'score-desc', label: 'Score: High to Low' },
     { value: 'score-asc', label: 'Score: Low to High' },
@@ -2134,17 +2039,6 @@ export class PerformanceReviewsComponent implements OnInit {
     if (seriesTotal > 0) return seriesTotal;
     return this.reviews().reduce((sum: number, review: any) => sum + Number(review?.invoicedRevenue ?? 0), 0);
   });
-  applicantGoalSummary = computed(() => {
-    const activePeriod = this.periodMode();
-    const rows = this.applicantGoals().filter(g => g.period === activePeriod);
-    return {
-      count: rows.length,
-      applicants: rows.reduce((sum, row) => sum + Number(row.targetApplicants || 0), 0),
-      interviews: rows.reduce((sum, row) => sum + Number(row.targetInterviews || 0), 0),
-      hires: rows.reduce((sum, row) => sum + Number(row.targetHires || 0), 0)
-    };
-  });
-
   reviewPeriodOptions = computed(() => {
     const opts: { value: string; label: string }[] = [];
     const now = new Date();
@@ -2189,7 +2083,6 @@ export class PerformanceReviewsComponent implements OnInit {
     this.initializeCurrentWeekSelection();
     this.restoreManagementTabs();
     this.restoreMetricsLastUpdateAt();
-    this.restoreApplicantGoals();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
   }
@@ -2197,41 +2090,6 @@ export class PerformanceReviewsComponent implements OnInit {
   private restoreMetricsLastUpdateAt(): void {
     const saved = localStorage.getItem(this.metricsLastUpdateStorageKey);
     if (saved) this.lastMetricsUpdateAt.set(saved);
-  }
-
-  private restoreApplicantGoals(): void {
-    try {
-      const raw = localStorage.getItem(this.applicantGoalsStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as ApplicantGoalRow[];
-      const rows: ApplicantGoalRow[] = Array.isArray(parsed)
-        ? parsed
-          .map((row: any): ApplicantGoalRow => ({
-            id: Number(row?.id || 0),
-            position: String(row?.position || '').trim(),
-            period: row?.period === 'monthly' ? 'monthly' : 'weekly',
-            targetApplicants: Math.max(0, Number(row?.targetApplicants || 0)),
-            targetInterviews: Math.max(0, Number(row?.targetInterviews || 0)),
-            targetHires: Math.max(0, Number(row?.targetHires || 0)),
-            notes: String(row?.notes || '').trim(),
-            updatedAt: String(row?.updatedAt || new Date().toISOString())
-          }))
-          .filter((row) => row.id > 0)
-        : [];
-      if (!rows.length) return;
-      this.applicantGoals.set(rows);
-      this.applicantGoalSeed = Math.max(...rows.map(row => row.id), 0) + 1;
-    } catch {
-      // Ignore malformed saved goal payloads.
-    }
-  }
-
-  private persistApplicantGoals(): void {
-    try {
-      localStorage.setItem(this.applicantGoalsStorageKey, JSON.stringify(this.applicantGoals()));
-    } catch {
-      // Ignore storage quota or serialization errors.
-    }
   }
 
   integrationStatusLabel(status: IntegrationState): string {
@@ -2474,7 +2332,6 @@ export class PerformanceReviewsComponent implements OnInit {
     if (this.periodMode() === mode) return;
     this.periodMode.set(mode);
     this.showReportsTab.set(false);
-    this.showApplicantGoalsTab.set(false);
     if (mode === 'weekly') {
       this.initializeCurrentWeekSelection();
       this.selectedReviewMonth.set(this.buildWeekRangeValue(this.selectedWeekYear(), this.selectedWeekNumber()));
@@ -2493,48 +2350,6 @@ export class PerformanceReviewsComponent implements OnInit {
 
   openReportsTab(): void {
     this.showReportsTab.set(true);
-    this.showApplicantGoalsTab.set(false);
-  }
-
-  openApplicantGoalsTab(): void {
-    this.showReportsTab.set(false);
-    this.showApplicantGoalsTab.set(true);
-  }
-
-  addApplicantGoal(): void {
-    const goal: ApplicantGoalRow = {
-      id: this.applicantGoalSeed++,
-      position: '',
-      period: this.periodMode(),
-      targetApplicants: 0,
-      targetInterviews: 0,
-      targetHires: 0,
-      notes: '',
-      updatedAt: new Date().toISOString()
-    };
-    this.applicantGoals.update(rows => [goal, ...rows]);
-    this.persistApplicantGoals();
-  }
-
-  updateApplicantGoal(goalId: number, field: keyof ApplicantGoalRow, value: any): void {
-    this.applicantGoals.update((rows) => rows.map((row) => {
-      if (row.id !== goalId) return row;
-      const updated: ApplicantGoalRow = { ...row, updatedAt: new Date().toISOString() };
-      if (field === 'period') {
-        updated.period = value === 'monthly' ? 'monthly' : 'weekly';
-      } else if (field === 'targetApplicants' || field === 'targetInterviews' || field === 'targetHires') {
-        updated[field] = Math.max(0, Number(value || 0));
-      } else if (field === 'position' || field === 'notes') {
-        updated[field] = String(value || '');
-      }
-      return updated;
-    }));
-    this.persistApplicantGoals();
-  }
-
-  removeApplicantGoal(goalId: number): void {
-    this.applicantGoals.update(rows => rows.filter(row => row.id !== goalId));
-    this.persistApplicantGoals();
   }
 
   async onWeekNumberChange(value: number | string): Promise<void> {
