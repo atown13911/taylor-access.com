@@ -1503,7 +1503,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-    const map = new Map<string, number>();
+    const map = new Map<string, { name: string; count: number }>();
     for (const row of this.goalScopedRows()) {
       const parsed = this.parseDateOnly(row.appliedDate);
       if (!parsed) continue;
@@ -1512,12 +1512,18 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       } else {
         if (parsed < yearStart || parsed > now) continue;
       }
-      const source = this.normalizeSourceDisplay(row.source) || 'Unspecified';
-      map.set(source, (map.get(source) || 0) + 1);
+      const sourceName = this.normalizeSourceDisplay(row.source) || 'Unspecified';
+      const sourceKey = this.normalizeSourceKey(sourceName);
+      const existing = map.get(sourceKey);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(sourceKey, { name: sourceName, count: 1 });
+      }
     }
-    return Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .map((item) => ({ name: `${item.name} (${item.count})`, value: item.count }))
       .slice(0, 12);
   });
   applicantGoalSummary = computed(() => {
