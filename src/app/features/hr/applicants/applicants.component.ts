@@ -433,7 +433,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 @for (goal of applicantGoalProgressRows(); track goal.id) {
                   <tr>
                     <td>
-                      <select [ngModel]="goal.position" (ngModelChange)="updateApplicantGoal(goal.id, 'position', $event)">
+                      <select [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.position" (ngModelChange)="updateApplicantGoal(goal.id, 'position', $event)">
                         <option value="">Select position</option>
                         @for (position of goalPositionOptions(); track position) {
                           <option [value]="position">{{ position }}</option>
@@ -441,19 +441,19 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                       </select>
                     </td>
                     <td>
-                      <select [ngModel]="goal.period" (ngModelChange)="updateApplicantGoal(goal.id, 'period', $event)">
+                      <select [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.period" (ngModelChange)="updateApplicantGoal(goal.id, 'period', $event)">
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
                       </select>
                     </td>
-                    <td><input type="number" min="0" [ngModel]="goal.targetApplicants" (ngModelChange)="updateApplicantGoal(goal.id, 'targetApplicants', $event)" /></td>
+                    <td><input type="number" min="0" [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.targetApplicants" (ngModelChange)="updateApplicantGoal(goal.id, 'targetApplicants', $event)" /></td>
                     <td>{{ goal.actualApplicants }}</td>
                     <td><span class="goal-progress-pill">{{ goal.applicantsProgress | number:'1.0-0' }}%</span></td>
-                    <td><input type="number" min="0" [ngModel]="goal.targetInterviews" (ngModelChange)="updateApplicantGoal(goal.id, 'targetInterviews', $event)" /></td>
+                    <td><input type="number" min="0" [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.targetInterviews" (ngModelChange)="updateApplicantGoal(goal.id, 'targetInterviews', $event)" /></td>
                     <td>{{ goal.actualInterviews }}</td>
                     <td><span class="goal-progress-pill">{{ goal.interviewsProgress | number:'1.0-0' }}%</span></td>
-                    <td><input type="number" min="0" [ngModel]="goal.targetHires" (ngModelChange)="updateApplicantGoal(goal.id, 'targetHires', $event)" /></td>
+                    <td><input type="number" min="0" [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.targetHires" (ngModelChange)="updateApplicantGoal(goal.id, 'targetHires', $event)" /></td>
                     <td>{{ goal.actualHires }}</td>
                     <td><span class="goal-progress-pill">{{ goal.hiresProgress | number:'1.0-0' }}%</span></td>
                     <td>
@@ -462,9 +462,17 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                       </div>
                       <small class="goal-progress-label">{{ goal.overallProgress | number:'1.0-0' }}%</small>
                     </td>
-                    <td><input type="text" [ngModel]="goal.notes" (ngModelChange)="updateApplicantGoal(goal.id, 'notes', $event)" placeholder="Optional" /></td>
+                    <td><input type="text" [disabled]="!isGoalEditing(goal.id)" [ngModel]="goal.notes" (ngModelChange)="updateApplicantGoal(goal.id, 'notes', $event)" placeholder="Optional" /></td>
                     <td>{{ goal.updatedAt | date:'short' }}</td>
                     <td>
+                      <button
+                        class="icon-btn"
+                        [class.active]="isGoalEditing(goal.id)"
+                        (click)="toggleGoalEditing(goal.id)"
+                        [title]="isGoalEditing(goal.id) ? 'Lock goal' : 'Edit goal'"
+                      >
+                        <i class='bx' [class.bx-lock-open-alt]="isGoalEditing(goal.id)" [class.bx-edit-alt]="!isGoalEditing(goal.id)"></i>
+                      </button>
                       <button class="icon-btn danger" (click)="removeApplicantGoal(goal.id)" title="Delete goal">
                         <i class='bx bx-trash'></i>
                       </button>
@@ -472,7 +480,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="14" class="empty">No goals yet. Click "Add Goal" to begin.</td>
+                    <td colspan="15" class="empty">No goals yet. Click "Add Goal" to begin.</td>
                   </tr>
                 }
               </tbody>
@@ -991,6 +999,8 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goal-section-overall strong { color: #e2e8f0; font-size: 0.84rem; }
     .goals-table th, .goals-table td { vertical-align: middle; }
     .goals-table select, .goals-table input { width: 100%; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; font-size: 0.8rem; }
+    .goals-table select:disabled, .goals-table input:disabled { opacity: 0.7; cursor: default; background: #0f172a; color: #94a3b8; }
+    .icon-btn.active { border-color: #22d3ee; color: #67e8f9; background: rgba(34, 211, 238, 0.12); }
     .goal-progress-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 2px 8px; border-radius: 999px; background: rgba(34, 211, 238, 0.12); color: #67e8f9; border: 1px solid rgba(34, 211, 238, 0.35); font-size: 0.74rem; font-weight: 700; }
     .goal-progress-track { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; margin-bottom: 4px; }
     .goal-progress-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #22d3ee); border-radius: 999px; min-width: 2px; }
@@ -1085,6 +1095,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   selectedPosition = signal<string>('all');
   positionStateFilter = signal<'active' | 'inactive' | 'report' | 'goals'>('active');
   applicantGoals = signal<ApplicantGoal[]>([]);
+  editingGoalIds = signal<number[]>([]);
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
@@ -1674,6 +1685,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       },
       ...list
     ]);
+    this.editingGoalIds.update((ids) => (ids.includes(nextId) ? ids : [nextId, ...ids]));
     this.persistApplicantGoals();
   }
 
@@ -1698,7 +1710,18 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   removeApplicantGoal(id: number): void {
     this.applicantGoals.update((list) => list.filter((goal) => goal.id !== id));
+    this.editingGoalIds.update((ids) => ids.filter((item) => item !== id));
     this.persistApplicantGoals();
+  }
+
+  isGoalEditing(id: number): boolean {
+    return this.editingGoalIds().includes(id);
+  }
+
+  toggleGoalEditing(id: number): void {
+    this.editingGoalIds.update((ids) =>
+      ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]
+    );
   }
 
   setPipelineFilter(mode: 'working' | 'rejected' | 'hired'): void {
