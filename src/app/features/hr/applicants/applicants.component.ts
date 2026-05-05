@@ -371,6 +371,43 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               </div>
             </article>
           </div>
+          <div class="goal-sections-grid">
+            @for (goal of applicantGoalProgressRows(); track goal.id) {
+              <article class="goal-section-card">
+                <div class="goal-section-head">
+                  <strong>{{ goal.position || 'Unassigned Position' }}</strong>
+                  <span class="goal-period-chip">{{ goal.period | titlecase }}</span>
+                </div>
+                <div class="goal-section-row">
+                  <span>Applicants</span>
+                  <small>{{ goal.actualApplicants }} / {{ goal.targetApplicants }}</small>
+                </div>
+                <div class="goal-comparison-track">
+                  <div class="goal-comparison-fill" [style.width.%]="goal.applicantsProgress" style="background: linear-gradient(90deg, #22d3ee, #0ea5e9);"></div>
+                </div>
+                <div class="goal-section-row">
+                  <span>Interviews</span>
+                  <small>{{ goal.actualInterviews }} / {{ goal.targetInterviews }}</small>
+                </div>
+                <div class="goal-comparison-track">
+                  <div class="goal-comparison-fill" [style.width.%]="goal.interviewsProgress" style="background: linear-gradient(90deg, #a78bfa, #818cf8);"></div>
+                </div>
+                <div class="goal-section-row">
+                  <span>Hires</span>
+                  <small>{{ goal.actualHires }} / {{ goal.targetHires }}</small>
+                </div>
+                <div class="goal-comparison-track">
+                  <div class="goal-comparison-fill" [style.width.%]="goal.hiresProgress" style="background: linear-gradient(90deg, #22c55e, #16a34a);"></div>
+                </div>
+                <div class="goal-section-overall">
+                  <span>Overall</span>
+                  <strong>{{ goal.overallProgress | number:'1.0-0' }}%</strong>
+                </div>
+              </article>
+            } @empty {
+              <div class="chart-empty">Add a goal to see per-goal tracking sections.</div>
+            }
+          </div>
           <div class="table-wrap">
             <table class="goals-table">
               <thead>
@@ -942,6 +979,16 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goal-comparison-track { grid-area: track; width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
     .goal-comparison-fill { height: 100%; border-radius: 999px; min-width: 2px; }
     .goal-comparison-row strong { grid-area: pct; color: #e2e8f0; font-size: 0.76rem; min-width: 38px; text-align: right; }
+    .goal-sections-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+    .goal-section-card { border: 1px solid #2a2a4e; border-radius: 10px; background: #10192c; padding: 10px; display: grid; gap: 6px; }
+    .goal-section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; }
+    .goal-section-head strong { color: #e2e8f0; font-size: 0.82rem; }
+    .goal-period-chip { border: 1px solid #334155; background: #0f172a; color: #93c5fd; border-radius: 999px; font-size: 0.66rem; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .goal-section-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #cbd5e1; font-size: 0.76rem; }
+    .goal-section-row small { color: #8aa0b8; font-size: 0.7rem; }
+    .goal-section-overall { margin-top: 4px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(148,163,184,0.2); padding-top: 6px; }
+    .goal-section-overall span { color: #8aa0b8; font-size: 0.74rem; }
+    .goal-section-overall strong { color: #e2e8f0; font-size: 0.84rem; }
     .goals-table th, .goals-table td { vertical-align: middle; }
     .goals-table select, .goals-table input { width: 100%; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; font-size: 0.8rem; }
     .goal-progress-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 2px 8px; border-radius: 999px; background: rgba(34, 211, 238, 0.12); color: #67e8f9; border: 1px solid rgba(34, 211, 238, 0.35); font-size: 0.74rem; font-weight: 700; }
