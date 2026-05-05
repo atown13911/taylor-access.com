@@ -1400,12 +1400,16 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const actualApplicants = scoped.length;
       const actualInterviews = scoped.filter((row) => row.status === 'interview' || row.status === 'offer' || row.status === 'hired').length;
       const actualHires = scoped.filter((row) => row.status === 'hired').length;
-      const applicantsProgress = this.percentProgress(actualApplicants, goal.targetApplicants);
+      const targetApplicants = Number(goal.targetApplicants || 0) > 0
+        ? Math.max(0, Math.trunc(Number(goal.targetApplicants || 0)))
+        : actualApplicants;
+      const applicantsProgress = this.percentProgress(actualApplicants, targetApplicants);
       const interviewsProgress = this.percentProgress(actualInterviews, goal.targetInterviews);
       const hiresProgress = this.percentProgress(actualHires, goal.targetHires);
       const overallProgress = (applicantsProgress + interviewsProgress + hiresProgress) / 3;
       return {
         ...goal,
+        targetApplicants,
         actualApplicants,
         actualInterviews,
         actualHires,
