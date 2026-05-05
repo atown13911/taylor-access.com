@@ -7,6 +7,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
 type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'no response' | 'no show';
+type GoalPeriod = 'weekly' | 'monthly';
 
 interface ApplicantRow {
   id: number;
@@ -28,6 +29,17 @@ interface ApplicantPosition {
   name: string;
   isActive: boolean;
   color?: string | null;
+}
+
+interface ApplicantGoal {
+  id: number;
+  position: string;
+  period: GoalPeriod;
+  targetApplicants: number;
+  targetInterviews: number;
+  targetHires: number;
+  notes: string;
+  updatedAt: string;
 }
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
@@ -71,6 +83,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           (click)="setPositionStateFilter('report')"
         >
           Report
+        </button>
+        <button
+          class="state-tab"
+          [class.active]="positionStateFilter() === 'goals'"
+          (click)="setPositionStateFilter('goals')"
+        >
+          Goals
         </button>
       </div>
 
@@ -260,6 +279,84 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <div class="chart-empty">No source data yet.</div>
               }
             </div>
+          </div>
+        </section>
+      } @else if (positionStateFilter() === 'goals') {
+        <section class="goals-view">
+          <div class="goals-toolbar">
+            <div>
+              <h3>Applicant Goals</h3>
+              <p>Set manual weekly/monthly targets for recruiting positions.</p>
+            </div>
+            <button class="btn-secondary" (click)="addApplicantGoal()"><i class='bx bx-plus'></i> Add Goal</button>
+          </div>
+          <div class="goals-summary">
+            <article class="pipeline-tile">
+              <span>Total Goals</span>
+              <strong>{{ applicantGoalSummary().goals }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Target Applicants</span>
+              <strong>{{ applicantGoalSummary().applicants }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Target Interviews</span>
+              <strong>{{ applicantGoalSummary().interviews }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Target Hires</span>
+              <strong>{{ applicantGoalSummary().hires }}</strong>
+            </article>
+          </div>
+          <div class="table-wrap">
+            <table class="goals-table">
+              <thead>
+                <tr>
+                  <th>Position</th>
+                  <th>Period</th>
+                  <th>Applicants</th>
+                  <th>Interviews</th>
+                  <th>Hires</th>
+                  <th>Notes</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (goal of applicantGoals(); track goal.id) {
+                  <tr>
+                    <td>
+                      <select [ngModel]="goal.position" (ngModelChange)="updateApplicantGoal(goal.id, 'position', $event)">
+                        <option value="">Select position</option>
+                        @for (position of goalPositionOptions(); track position) {
+                          <option [value]="position">{{ position }}</option>
+                        }
+                      </select>
+                    </td>
+                    <td>
+                      <select [ngModel]="goal.period" (ngModelChange)="updateApplicantGoal(goal.id, 'period', $event)">
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </td>
+                    <td><input type="number" min="0" [ngModel]="goal.targetApplicants" (ngModelChange)="updateApplicantGoal(goal.id, 'targetApplicants', $event)" /></td>
+                    <td><input type="number" min="0" [ngModel]="goal.targetInterviews" (ngModelChange)="updateApplicantGoal(goal.id, 'targetInterviews', $event)" /></td>
+                    <td><input type="number" min="0" [ngModel]="goal.targetHires" (ngModelChange)="updateApplicantGoal(goal.id, 'targetHires', $event)" /></td>
+                    <td><input type="text" [ngModel]="goal.notes" (ngModelChange)="updateApplicantGoal(goal.id, 'notes', $event)" placeholder="Optional" /></td>
+                    <td>{{ goal.updatedAt | date:'short' }}</td>
+                    <td>
+                      <button class="icon-btn danger" (click)="removeApplicantGoal(goal.id)" title="Delete goal">
+                        <i class='bx bx-trash'></i>
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="8" class="empty">No goals yet. Click "Add Goal" to begin.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
         </section>
       } @else {
@@ -722,6 +819,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-state-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
     .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
     .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .goals-view { display: flex; flex-direction: column; gap: 10px; }
+    .goals-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .goals-toolbar h3 { margin: 0; color: #e2e8f0; font-size: 0.98rem; }
+    .goals-toolbar p { margin: 2px 0 0; color: #8aa0b8; font-size: 0.8rem; }
+    .goals-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .goals-table th, .goals-table td { vertical-align: middle; }
+    .goals-table select, .goals-table input { width: 100%; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; font-size: 0.8rem; }
     .position-tabs-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
     .position-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .position-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 0.84rem; display: inline-flex; align-items: center; gap: 6px; }
@@ -805,11 +909,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly legacyApplicantsStorageKey = 'ta.hr.applicants.v1';
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
+  private readonly localApplicantGoalsStorageKey = 'ta.hr.applicant-goals.v1';
   private readonly apiUrl = environment.apiUrl;
   rows = signal<ApplicantRow[]>([]);
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
-  positionStateFilter = signal<'active' | 'inactive' | 'report'>('active');
+  positionStateFilter = signal<'active' | 'inactive' | 'report' | 'goals'>('active');
+  applicantGoals = signal<ApplicantGoal[]>([]);
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
@@ -1078,6 +1184,21 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   tableWorkingCount = computed(() => this.tableScopeRows().filter((r) => r.status !== 'rejected').length);
   tableRejectedCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'rejected').length);
   tableHiredCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'hired').length);
+  goalPositionOptions = computed(() =>
+    this.allPositions()
+      .filter((p) => p.isActive)
+      .map((p) => p.name)
+      .sort((a, b) => a.localeCompare(b))
+  );
+  applicantGoalSummary = computed(() => {
+    const goals = this.applicantGoals();
+    return {
+      goals: goals.length,
+      applicants: goals.reduce((sum, g) => sum + Number(g.targetApplicants || 0), 0),
+      interviews: goals.reduce((sum, g) => sum + Number(g.targetInterviews || 0), 0),
+      hires: goals.reduce((sum, g) => sum + Number(g.targetHires || 0), 0)
+    };
+  });
 
   filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
@@ -1097,8 +1218,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       // Apply Active/Inactive mode to the All Positions view.
       // This ensures each tab shows only its related position data.
       if (selectedPosition === 'all') {
-        const statePass = mode === 'active' ? isActivePosition : !isActivePosition;
-        if (!statePass) return false;
+        if (mode === 'active' && !isActivePosition) return false;
+        if (mode === 'inactive' && isActivePosition) return false;
       }
 
       const pipelinePass = pipeline === 'working'
@@ -1125,6 +1246,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     } catch {
       // no-op
     }
+    this.restoreApplicantGoals();
 
     void this.loadSharedApplicants();
     void this.loadSharedPositions();
@@ -1291,9 +1413,52 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.selectedPosition.set(position);
   }
 
-  setPositionStateFilter(mode: 'active' | 'inactive' | 'report'): void {
+  setPositionStateFilter(mode: 'active' | 'inactive' | 'report' | 'goals'): void {
     this.positionStateFilter.set(mode);
     this.selectedPosition.set('all');
+  }
+
+  addApplicantGoal(): void {
+    const nextId = this.applicantGoals().reduce((max, g) => Math.max(max, Number(g.id || 0)), 0) + 1;
+    const defaultPosition = this.goalPositionOptions()[0] || '';
+    this.applicantGoals.update((list) => [
+      {
+        id: nextId,
+        position: defaultPosition,
+        period: 'weekly',
+        targetApplicants: 0,
+        targetInterviews: 0,
+        targetHires: 0,
+        notes: '',
+        updatedAt: new Date().toISOString()
+      },
+      ...list
+    ]);
+    this.persistApplicantGoals();
+  }
+
+  updateApplicantGoal(id: number, field: keyof ApplicantGoal, value: unknown): void {
+    this.applicantGoals.update((list) =>
+      list.map((goal) => {
+        if (goal.id !== id) return goal;
+        const next = { ...goal, updatedAt: new Date().toISOString() };
+        if (field === 'position' || field === 'notes') {
+          (next as any)[field] = String(value ?? '').trim();
+        } else if (field === 'period') {
+          next.period = value === 'monthly' ? 'monthly' : 'weekly';
+        } else if (field === 'targetApplicants' || field === 'targetInterviews' || field === 'targetHires') {
+          const num = Number(value);
+          (next as any)[field] = Number.isFinite(num) ? Math.max(0, Math.trunc(num)) : 0;
+        }
+        return next;
+      })
+    );
+    this.persistApplicantGoals();
+  }
+
+  removeApplicantGoal(id: number): void {
+    this.applicantGoals.update((list) => list.filter((goal) => goal.id !== id));
+    this.persistApplicantGoals();
   }
 
   setPipelineFilter(mode: 'working' | 'rejected' | 'hired'): void {
@@ -1753,6 +1918,38 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private persistLocalPositions(): void {
     try {
       localStorage.setItem(this.localFallbackPositionsStorageKey, JSON.stringify(this.customPositions()));
+    } catch {
+      // no-op
+    }
+  }
+
+  private restoreApplicantGoals(): void {
+    try {
+      const raw = localStorage.getItem(this.localApplicantGoalsStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const rows: ApplicantGoal[] = parsed
+        .map((item: any): ApplicantGoal => ({
+          id: Number(item?.id || 0),
+          position: this.normalizePositionName(item?.position),
+          period: item?.period === 'monthly' ? 'monthly' : 'weekly',
+          targetApplicants: Math.max(0, Math.trunc(Number(item?.targetApplicants || 0))),
+          targetInterviews: Math.max(0, Math.trunc(Number(item?.targetInterviews || 0))),
+          targetHires: Math.max(0, Math.trunc(Number(item?.targetHires || 0))),
+          notes: this.normalizePositionName(item?.notes),
+          updatedAt: this.normalizePositionName(item?.updatedAt) || new Date().toISOString()
+        }))
+        .filter((row) => row.id > 0);
+      this.applicantGoals.set(rows);
+    } catch {
+      // no-op
+    }
+  }
+
+  private persistApplicantGoals(): void {
+    try {
+      localStorage.setItem(this.localApplicantGoalsStorageKey, JSON.stringify(this.applicantGoals()));
     } catch {
       // no-op
     }
