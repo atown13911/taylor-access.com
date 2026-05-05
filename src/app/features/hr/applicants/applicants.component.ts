@@ -1298,10 +1298,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     if (!position || position === 'all') return scopedRows;
     return scopedRows.filter((row) => String(row.position || '').trim().toLowerCase() === position.toLowerCase());
   });
+  reportPositionScopedRows = computed(() => {
+    const position = String(this.reportPositionFilter() || 'all').trim().toLowerCase();
+    if (!position || position === 'all') return this.rows();
+    return this.rows().filter((row) => String(row.position || '').trim().toLowerCase() === position);
+  });
 
   activePositionsCount = computed(() => this.allPositions().filter((p) => p.isActive).length);
   inactivePositionsCount = computed(() => this.allPositions().filter((p) => !p.isActive).length);
-  hiredCount = computed(() => this.reportRows().filter((r) => r.status === 'hired').length);
+  hiredCount = computed(() => this.reportPositionScopedRows().filter((r) => r.status === 'hired').length);
   applicantsPerDayTotal = computed(() => this.weekScopedRows().length);
   applicantsPerDayLabel = computed(() => (this.weekScopedRows().length / 7).toFixed(1));
 
