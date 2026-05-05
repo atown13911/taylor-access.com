@@ -61,6 +61,7 @@ interface GoalComparisonItem {
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
 type ChartPoint = { name: string; value: number };
+type ChartSeries = { name: string; series: ChartPoint[] };
 type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
 
 @Component({
@@ -372,6 +373,61 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   </div>
                 }
               </div>
+            </article>
+          </div>
+          <div class="goals-analytics-grid">
+            <article class="report-panel">
+              <h3>Applicants by Month (12 Months)</h3>
+              @if (goalApplicantsTrendSeries().length > 0) {
+                <ngx-charts-line-chart
+                  [results]="goalApplicantsTrendSeries()"
+                  [view]="reportWideChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [autoScale]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [animations]="true">
+                </ngx-charts-line-chart>
+              } @else {
+                <div class="chart-empty">No applicant month data yet.</div>
+              }
+            </article>
+            <article class="report-panel">
+              <h3>
+                Source Counts
+                <span class="goals-analytics-toggle">
+                  <button
+                    class="state-tab"
+                    [class.active]="goalSourceChartMode() === 'ytd'"
+                    (click)="goalSourceChartMode.set('ytd')"
+                  >
+                    YTD
+                  </button>
+                  <button
+                    class="state-tab"
+                    [class.active]="goalSourceChartMode() === 'monthly'"
+                    (click)="goalSourceChartMode.set('monthly')"
+                  >
+                    Monthly
+                  </button>
+                </span>
+              </h3>
+              @if (goalSourceCountsChartData().length > 0) {
+                <ngx-charts-bar-horizontal
+                  [results]="goalSourceCountsChartData()"
+                  [view]="reportWideChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showDataLabel]="true"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
+              } @else {
+                <div class="chart-empty">No source data for selected range.</div>
+              }
             </article>
           </div>
           <div class="goal-sections-grid">
@@ -987,6 +1043,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goals-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     .goals-summary .pipeline-tile { background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(16, 25, 44, 0.92)); border-color: #334155; }
     .goals-visual-grid { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 10px; }
+    .goals-analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .goals-analytics-grid .report-panel h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .goals-analytics-toggle { display: inline-flex; gap: 6px; }
+    .goals-analytics-toggle .state-tab { padding: 4px 10px; font-size: 0.74rem; }
     .goals-panel { border: 1px solid #2a2a4e; border-radius: 10px; background: #10192c; padding: 12px; }
     .goals-panel h4 { margin: 0 0 10px; color: #dbeafe; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .completion-donut-wrap { display: flex; align-items: center; justify-content: center; min-height: 150px; }
@@ -1089,7 +1149,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     ::ng-deep .ngx-charts { text { fill: #a5b4c8 !important; } .gridline-path { stroke: rgba(255,255,255,0.08) !important; } }
     ::ng-deep .ngx-charts .tick text { fill: #8aa0b8 !important; font-size: 10px !important; }
     ::ng-deep .ngx-charts .label { fill: #cbd5e1 !important; font-size: 11px !important; }
-    ::ng-deep ngx-charts-bar-vertical, ::ng-deep ngx-charts-bar-horizontal, ::ng-deep ngx-charts-pie-chart, ::ng-deep ngx-charts-bubble-chart { display: block; position: relative; z-index: 0; }
+    ::ng-deep ngx-charts-bar-vertical, ::ng-deep ngx-charts-bar-horizontal, ::ng-deep ngx-charts-pie-chart, ::ng-deep ngx-charts-bubble-chart, ::ng-deep ngx-charts-line-chart { display: block; position: relative; z-index: 0; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
     td { padding: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
@@ -1136,6 +1196,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   applicantGoals = signal<ApplicantGoal[]>([]);
   editingGoalIds = signal<number[]>([]);
   goalSourceDrafts = signal<Record<number, string>>({});
+  goalSourceChartMode = signal<'ytd' | 'monthly'>('ytd');
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
@@ -1415,6 +1476,50 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       }, new Map<string, string>()).values()
     ).sort((a, b) => a.localeCompare(b))
   );
+  goalScopedRows = computed(() => {
+    const goal = this.applicantGoals()[0];
+    if (!goal) return this.rows();
+    const positionKeys = new Set(goal.sources.map((source) => this.normalizeSourceKey(source)).filter((value) => !!value));
+    if (positionKeys.size === 0) return this.rows();
+    return this.rows().filter((row) => positionKeys.has(this.normalizeSourceKey(row.position)));
+  });
+  goalApplicantsTrendSeries = computed<ChartSeries[]>(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const monthCounts = new Array<number>(12).fill(0);
+    for (const row of this.goalScopedRows()) {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      if (!parsed || parsed.getFullYear() !== year) continue;
+      monthCounts[parsed.getMonth()]++;
+    }
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return [{
+      name: `${year}`,
+      series: monthLabels.map((name, idx) => ({ name, value: monthCounts[idx] }))
+    }];
+  });
+  goalSourceCountsChartData = computed<ChartPoint[]>(() => {
+    const mode = this.goalSourceChartMode();
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    const map = new Map<string, number>();
+    for (const row of this.goalScopedRows()) {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      if (!parsed) continue;
+      if (mode === 'monthly') {
+        if (parsed < monthStart || parsed > now) continue;
+      } else {
+        if (parsed < yearStart || parsed > now) continue;
+      }
+      const source = this.normalizeSourceDisplay(row.source) || 'Unspecified';
+      map.set(source, (map.get(source) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+      .slice(0, 12);
+  });
   applicantGoalSummary = computed(() => {
     const goals = this.applicantGoalProgressRows();
     return {
