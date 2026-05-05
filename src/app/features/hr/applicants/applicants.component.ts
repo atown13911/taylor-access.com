@@ -50,6 +50,14 @@ interface ApplicantGoalProgressRow extends ApplicantGoal {
   hiresProgress: number;
   overallProgress: number;
 }
+interface GoalComparisonItem {
+  key: 'applicants' | 'interviews' | 'hires';
+  label: string;
+  target: number;
+  actual: number;
+  progress: number;
+  color: string;
+}
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
 type ChartPoint = { name: string; value: number };
@@ -331,6 +339,36 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <article class="pipeline-tile">
               <span>Overall Completion</span>
               <strong>{{ applicantGoalSummary().overallProgress | number:'1.0-0' }}%</strong>
+            </article>
+          </div>
+          <div class="goals-visual-grid">
+            <article class="goals-panel goals-panel-donut">
+              <h4>Overall Goal Completion</h4>
+              <div class="completion-donut-wrap">
+                <div class="completion-donut" [style.background]="goalCompletionDonutStyle()">
+                  <div class="completion-donut-center">
+                    <strong>{{ applicantGoalSummary().overallProgress | number:'1.0-0' }}%</strong>
+                    <span>complete</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article class="goals-panel">
+              <h4>Target vs Actual</h4>
+              <div class="goal-comparison-list">
+                @for (item of goalComparisonItems(); track item.key) {
+                  <div class="goal-comparison-row">
+                    <div class="goal-comparison-head">
+                      <span>{{ item.label }}</span>
+                      <small>{{ item.actual }} / {{ item.target }}</small>
+                    </div>
+                    <div class="goal-comparison-track">
+                      <div class="goal-comparison-fill" [style.width.%]="item.progress" [style.background]="item.color"></div>
+                    </div>
+                    <strong>{{ item.progress | number:'1.0-0' }}%</strong>
+                  </div>
+                }
+              </div>
             </article>
           </div>
           <div class="table-wrap">
@@ -869,6 +907,41 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goals-toolbar h3 { margin: 0; color: #e2e8f0; font-size: 0.98rem; }
     .goals-toolbar p { margin: 2px 0 0; color: #8aa0b8; font-size: 0.8rem; }
     .goals-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .goals-summary .pipeline-tile { background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(16, 25, 44, 0.92)); border-color: #334155; }
+    .goals-visual-grid { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 10px; }
+    .goals-panel { border: 1px solid #2a2a4e; border-radius: 10px; background: #10192c; padding: 12px; }
+    .goals-panel h4 { margin: 0 0 10px; color: #dbeafe; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .completion-donut-wrap { display: flex; align-items: center; justify-content: center; min-height: 150px; }
+    .completion-donut {
+      width: 128px;
+      height: 128px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .completion-donut-center {
+      width: 78px;
+      height: 78px;
+      border-radius: 999px;
+      background: #0f172a;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+    }
+    .completion-donut-center strong { color: #e2e8f0; font-size: 1rem; line-height: 1; }
+    .completion-donut-center span { color: #8aa0b8; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .goal-comparison-list { display: grid; gap: 10px; }
+    .goal-comparison-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "head pct" "track pct"; gap: 4px 10px; align-items: center; }
+    .goal-comparison-head { grid-area: head; display: flex; justify-content: space-between; gap: 8px; color: #cbd5e1; font-size: 0.8rem; }
+    .goal-comparison-head small { color: #8aa0b8; font-size: 0.72rem; }
+    .goal-comparison-track { grid-area: track; width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
+    .goal-comparison-fill { height: 100%; border-radius: 999px; min-width: 2px; }
+    .goal-comparison-row strong { grid-area: pct; color: #e2e8f0; font-size: 0.76rem; min-width: 38px; text-align: right; }
     .goals-table th, .goals-table td { vertical-align: middle; }
     .goals-table select, .goals-table input { width: 100%; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; font-size: 0.8rem; }
     .goal-progress-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 2px 8px; border-radius: 999px; background: rgba(34, 211, 238, 0.12); color: #67e8f9; border: 1px solid rgba(34, 211, 238, 0.35); font-size: 0.74rem; font-weight: 700; }
@@ -1284,6 +1357,40 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         overallProgress: Math.max(0, Math.min(100, overallProgress))
       };
     });
+  });
+  goalComparisonItems = computed<GoalComparisonItem[]>(() => {
+    const summary = this.applicantGoalSummary();
+    return [
+      {
+        key: 'applicants',
+        label: 'Applicants',
+        target: Number(summary.applicants || 0),
+        actual: Number(summary.actualApplicants || 0),
+        progress: this.percentProgress(Number(summary.actualApplicants || 0), Number(summary.applicants || 0)),
+        color: 'linear-gradient(90deg, #22d3ee, #0ea5e9)'
+      },
+      {
+        key: 'interviews',
+        label: 'Interviews',
+        target: Number(summary.interviews || 0),
+        actual: Number(summary.actualInterviews || 0),
+        progress: this.percentProgress(Number(summary.actualInterviews || 0), Number(summary.interviews || 0)),
+        color: 'linear-gradient(90deg, #a78bfa, #818cf8)'
+      },
+      {
+        key: 'hires',
+        label: 'Hires',
+        target: Number(summary.hires || 0),
+        actual: Number(summary.actualHires || 0),
+        progress: this.percentProgress(Number(summary.actualHires || 0), Number(summary.hires || 0)),
+        color: 'linear-gradient(90deg, #22c55e, #16a34a)'
+      }
+    ];
+  });
+  goalCompletionDonutStyle = computed(() => {
+    const completion = Math.max(0, Math.min(100, Number(this.applicantGoalSummary().overallProgress || 0)));
+    const angle = (completion / 100) * 360;
+    return `conic-gradient(#22c55e 0deg ${angle}deg, rgba(148,163,184,0.25) ${angle}deg 360deg)`;
   });
 
   filteredRows = computed(() => {
