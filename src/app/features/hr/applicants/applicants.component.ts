@@ -415,7 +415,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <table class="goals-table">
               <thead>
                 <tr>
-                  <th>Sources</th>
+                  <th>Positions</th>
                   <th>Period</th>
                   <th>Applicants</th>
                   <th>Actual Apps</th>
@@ -445,14 +445,14 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                                 <button
                                   class="goal-source-remove"
                                   (click)="removeGoalSource(goal.id, source)"
-                                  title="Remove source"
+                                  title="Remove position"
                                 >
                                   <i class='bx bx-x'></i>
                                 </button>
                               }
                             </span>
                           } @empty {
-                            <span class="goal-source-empty">All sources</span>
+                            <span class="goal-source-empty">All positions</span>
                           }
                         </div>
                         @if (isGoalEditing(goal.id)) {
@@ -461,12 +461,12 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                               [ngModel]="goalSourceDraft(goal.id)"
                               (ngModelChange)="setGoalSourceDraft(goal.id, $event)"
                             >
-                              <option value="">Select source</option>
+                              <option value="">Select position</option>
                               @for (source of goalSourceOptions(); track source) {
                                 <option [value]="source">{{ source }}</option>
                               }
                             </select>
-                            <button class="icon-btn" (click)="addGoalSource(goal.id)" title="Add source">
+                            <button class="icon-btn" (click)="addGoalSource(goal.id)" title="Add position">
                               <i class='bx bx-plus'></i>
                             </button>
                           </div>
@@ -1407,7 +1407,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   goalSourceOptions = computed(() =>
     Array.from(
       this.rows().reduce((map, row) => {
-        const display = this.normalizeSourceDisplay(row.source);
+        const display = this.normalizeSourceDisplay(row.position);
         const key = this.normalizeSourceKey(display);
         if (!key) return map;
         if (!map.has(key)) map.set(key, display);
@@ -1440,7 +1440,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (!parsed) return false;
         if (parsed < range.start || parsed > range.end) return false;
         if (sourceKeys.size === 0) return true;
-        return sourceKeys.has(this.normalizeSourceKey(row.source));
+        return sourceKeys.has(this.normalizeSourceKey(row.position));
       });
       const actualApplicants = scoped.length;
       const actualInterviews = scoped.filter((row) => row.status === 'interview' || row.status === 'offer' || row.status === 'hired').length;
@@ -1824,7 +1824,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   goalSourceLabel(sources: string[]): string {
-    if (!Array.isArray(sources) || sources.length === 0) return 'All Sources';
+    if (!Array.isArray(sources) || sources.length === 0) return 'All Positions';
     return sources.join(', ');
   }
 
