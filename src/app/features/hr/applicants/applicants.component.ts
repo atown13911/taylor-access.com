@@ -7,7 +7,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
 type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'no response' | 'no show';
-type GoalPeriod = 'weekly' | 'monthly';
+type GoalPeriod = 'weekly' | 'monthly' | 'yearly';
 
 interface ApplicantRow {
   id: number;
@@ -40,6 +40,15 @@ interface ApplicantGoal {
   targetHires: number;
   notes: string;
   updatedAt: string;
+}
+interface ApplicantGoalProgressRow extends ApplicantGoal {
+  actualApplicants: number;
+  actualInterviews: number;
+  actualHires: number;
+  applicantsProgress: number;
+  interviewsProgress: number;
+  hiresProgress: number;
+  overallProgress: number;
 }
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
@@ -307,6 +316,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <span>Target Hires</span>
               <strong>{{ applicantGoalSummary().hires }}</strong>
             </article>
+            <article class="pipeline-tile">
+              <span>Actual Applicants</span>
+              <strong>{{ applicantGoalSummary().actualApplicants }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Actual Interviews</span>
+              <strong>{{ applicantGoalSummary().actualInterviews }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Actual Hires</span>
+              <strong>{{ applicantGoalSummary().actualHires }}</strong>
+            </article>
+            <article class="pipeline-tile">
+              <span>Overall Completion</span>
+              <strong>{{ applicantGoalSummary().overallProgress | number:'1.0-0' }}%</strong>
+            </article>
           </div>
           <div class="table-wrap">
             <table class="goals-table">
@@ -315,15 +340,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   <th>Position</th>
                   <th>Period</th>
                   <th>Applicants</th>
+                  <th>Actual Apps</th>
+                  <th>Apps %</th>
                   <th>Interviews</th>
+                  <th>Actual Int</th>
+                  <th>Int %</th>
                   <th>Hires</th>
+                  <th>Actual Hires</th>
+                  <th>Hire %</th>
+                  <th>Progress</th>
                   <th>Notes</th>
                   <th>Updated</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                @for (goal of applicantGoals(); track goal.id) {
+                @for (goal of applicantGoalProgressRows(); track goal.id) {
                   <tr>
                     <td>
                       <select [ngModel]="goal.position" (ngModelChange)="updateApplicantGoal(goal.id, 'position', $event)">
@@ -337,11 +369,24 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                       <select [ngModel]="goal.period" (ngModelChange)="updateApplicantGoal(goal.id, 'period', $event)">
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
                       </select>
                     </td>
                     <td><input type="number" min="0" [ngModel]="goal.targetApplicants" (ngModelChange)="updateApplicantGoal(goal.id, 'targetApplicants', $event)" /></td>
+                    <td>{{ goal.actualApplicants }}</td>
+                    <td><span class="goal-progress-pill">{{ goal.applicantsProgress | number:'1.0-0' }}%</span></td>
                     <td><input type="number" min="0" [ngModel]="goal.targetInterviews" (ngModelChange)="updateApplicantGoal(goal.id, 'targetInterviews', $event)" /></td>
+                    <td>{{ goal.actualInterviews }}</td>
+                    <td><span class="goal-progress-pill">{{ goal.interviewsProgress | number:'1.0-0' }}%</span></td>
                     <td><input type="number" min="0" [ngModel]="goal.targetHires" (ngModelChange)="updateApplicantGoal(goal.id, 'targetHires', $event)" /></td>
+                    <td>{{ goal.actualHires }}</td>
+                    <td><span class="goal-progress-pill">{{ goal.hiresProgress | number:'1.0-0' }}%</span></td>
+                    <td>
+                      <div class="goal-progress-track">
+                        <div class="goal-progress-fill" [style.width.%]="goal.overallProgress"></div>
+                      </div>
+                      <small class="goal-progress-label">{{ goal.overallProgress | number:'1.0-0' }}%</small>
+                    </td>
                     <td><input type="text" [ngModel]="goal.notes" (ngModelChange)="updateApplicantGoal(goal.id, 'notes', $event)" placeholder="Optional" /></td>
                     <td>{{ goal.updatedAt | date:'short' }}</td>
                     <td>
@@ -352,7 +397,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="8" class="empty">No goals yet. Click "Add Goal" to begin.</td>
+                    <td colspan="14" class="empty">No goals yet. Click "Add Goal" to begin.</td>
                   </tr>
                 }
               </tbody>
@@ -826,6 +871,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goals-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     .goals-table th, .goals-table td { vertical-align: middle; }
     .goals-table select, .goals-table input { width: 100%; background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; font-size: 0.8rem; }
+    .goal-progress-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 2px 8px; border-radius: 999px; background: rgba(34, 211, 238, 0.12); color: #67e8f9; border: 1px solid rgba(34, 211, 238, 0.35); font-size: 0.74rem; font-weight: 700; }
+    .goal-progress-track { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; margin-bottom: 4px; }
+    .goal-progress-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #22d3ee); border-radius: 999px; min-width: 2px; }
+    .goal-progress-label { color: #8aa0b8; font-size: 0.7rem; }
     .position-tabs-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
     .position-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
     .position-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 0.84rem; display: inline-flex; align-items: center; gap: 6px; }
@@ -1191,13 +1240,50 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       .sort((a, b) => a.localeCompare(b))
   );
   applicantGoalSummary = computed(() => {
-    const goals = this.applicantGoals();
+    const goals = this.applicantGoalProgressRows();
     return {
       goals: goals.length,
       applicants: goals.reduce((sum, g) => sum + Number(g.targetApplicants || 0), 0),
       interviews: goals.reduce((sum, g) => sum + Number(g.targetInterviews || 0), 0),
-      hires: goals.reduce((sum, g) => sum + Number(g.targetHires || 0), 0)
+      hires: goals.reduce((sum, g) => sum + Number(g.targetHires || 0), 0),
+      actualApplicants: goals.reduce((sum, g) => sum + Number(g.actualApplicants || 0), 0),
+      actualInterviews: goals.reduce((sum, g) => sum + Number(g.actualInterviews || 0), 0),
+      actualHires: goals.reduce((sum, g) => sum + Number(g.actualHires || 0), 0),
+      overallProgress: goals.length
+        ? goals.reduce((sum, g) => sum + Number(g.overallProgress || 0), 0) / goals.length
+        : 0
     };
+  });
+  applicantGoalProgressRows = computed<ApplicantGoalProgressRow[]>(() => {
+    const rows = this.rows();
+    return this.applicantGoals().map((goal) => {
+      const range = this.getGoalRange(goal.period);
+      const positionKey = this.normalizePositionName(goal.position).toLowerCase();
+      const scoped = rows.filter((row) => {
+        const parsed = this.parseDateOnly(row.appliedDate);
+        if (!parsed) return false;
+        if (parsed < range.start || parsed > range.end) return false;
+        if (!positionKey) return true;
+        return this.normalizePositionName(row.position).toLowerCase() === positionKey;
+      });
+      const actualApplicants = scoped.length;
+      const actualInterviews = scoped.filter((row) => row.status === 'interview' || row.status === 'offer' || row.status === 'hired').length;
+      const actualHires = scoped.filter((row) => row.status === 'hired').length;
+      const applicantsProgress = this.percentProgress(actualApplicants, goal.targetApplicants);
+      const interviewsProgress = this.percentProgress(actualInterviews, goal.targetInterviews);
+      const hiresProgress = this.percentProgress(actualHires, goal.targetHires);
+      const overallProgress = (applicantsProgress + interviewsProgress + hiresProgress) / 3;
+      return {
+        ...goal,
+        actualApplicants,
+        actualInterviews,
+        actualHires,
+        applicantsProgress,
+        interviewsProgress,
+        hiresProgress,
+        overallProgress: Math.max(0, Math.min(100, overallProgress))
+      };
+    });
   });
 
   filteredRows = computed(() => {
@@ -1445,7 +1531,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (field === 'position' || field === 'notes') {
           (next as any)[field] = String(value ?? '').trim();
         } else if (field === 'period') {
-          next.period = value === 'monthly' ? 'monthly' : 'weekly';
+          next.period = value === 'monthly' ? 'monthly' : value === 'yearly' ? 'yearly' : 'weekly';
         } else if (field === 'targetApplicants' || field === 'targetInterviews' || field === 'targetHires') {
           const num = Number(value);
           (next as any)[field] = Number.isFinite(num) ? Math.max(0, Math.trunc(num)) : 0;
@@ -1933,7 +2019,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         .map((item: any): ApplicantGoal => ({
           id: Number(item?.id || 0),
           position: this.normalizePositionName(item?.position),
-          period: item?.period === 'monthly' ? 'monthly' : 'weekly',
+          period: item?.period === 'monthly' ? 'monthly' : item?.period === 'yearly' ? 'yearly' : 'weekly',
           targetApplicants: Math.max(0, Math.trunc(Number(item?.targetApplicants || 0))),
           targetInterviews: Math.max(0, Math.trunc(Number(item?.targetInterviews || 0))),
           targetHires: Math.max(0, Math.trunc(Number(item?.targetHires || 0))),
@@ -1953,6 +2039,29 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     } catch {
       // no-op
     }
+  }
+
+  private percentProgress(actual: number, target: number): number {
+    const safeTarget = Math.max(0, Number(target || 0));
+    if (safeTarget <= 0) return actual > 0 ? 100 : 0;
+    return Math.max(0, Math.min(100, (Number(actual || 0) / safeTarget) * 100));
+  }
+
+  private getGoalRange(period: GoalPeriod): { start: Date; end: Date } {
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    if (period === 'yearly') {
+      const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      return { start, end };
+    }
+    if (period === 'monthly') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      return { start, end };
+    }
+    const day = now.getDay(); // Sun=0..Sat=6
+    const delta = day === 0 ? 6 : day - 1; // shift to Monday start
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - delta, 0, 0, 0, 0);
+    return { start, end };
   }
 
   private parsePositionPayload(payload: unknown): ApplicantPosition[] {
