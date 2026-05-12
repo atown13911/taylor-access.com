@@ -1,8 +1,10 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Services;
 using TaylorAccess.API.Converters;
@@ -10,6 +12,11 @@ using TaylorAccess.API.Models;
 using BCrypt.Net;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
+// Railway / Render set PORT at runtime. Apply before host reads ASPNETCORE_URLS.
+var portEnv = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(portEnv))
+    Environment.SetEnvironmentVariable("ASPNETCORE_URLS", $"http://0.0.0.0:{portEnv}");
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -177,7 +184,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
 
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<TaylorAccessDbContext>();
+    .AddDbContextCheck<TaylorAccessDbContext>(
+        name: "database",
+        tags: new[] { "ready" });
 
 builder.Services.AddSingleton<MetricCacheService>();
 builder.Services.AddHttpClient();
@@ -204,7 +213,22 @@ app.UseAuthentication();
 app.UseMiddleware<TaylorAccess.API.Middleware.GatewayRequestVerificationMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
-app.MapHealthChecks("/health");
+// Keep /health as a lightweight liveness probe for Railway deploy checks.
+// Expose database readiness separately at /health/ready.
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = _ => false,
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status200OK,
+        [HealthStatus.Unhealthy] = StatusCodes.Status200OK
+    }
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 // Seed default data
 using (var scope = app.Services.CreateScope())
