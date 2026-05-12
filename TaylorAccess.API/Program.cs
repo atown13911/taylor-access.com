@@ -149,7 +149,9 @@ builder.Services.AddCors(options =>
                     || uri.Host == "taylor-last.com"
                     || uri.Host == "www.taylor-last.com"
                     || uri.Host == "taylorcommlink.com"
-                    || uri.Host == "www.taylorcommlink.com";
+                    || uri.Host == "www.taylorcommlink.com"
+                    || uri.Host == "landmark-trucking.com"
+                    || uri.Host == "www.landmark-trucking.com";
             })
             .AllowAnyMethod()
             .AllowAnyHeader()
