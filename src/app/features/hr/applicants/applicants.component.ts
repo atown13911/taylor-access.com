@@ -1188,6 +1188,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
 export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly legacyApplicantsStorageKey = 'ta.hr.applicants.v1';
+  private readonly legacyImportDoneStorageKey = 'ta.hr.applicants.legacyImportDone';
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
   private readonly localApplicantGoalsStorageKey = 'ta.hr.applicant-goals.v1';
   private readonly apiUrl = environment.apiUrl;
@@ -1666,6 +1667,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
     this.restoreApplicantGoals();
 
+    if (this.isLegacyImportDone()) {
+      this.attemptedLegacyImport = true;
+    }
     void this.loadSharedApplicants();
     void this.loadSharedPositions();
     this.applicantsRefreshTimer = setInterval(() => void this.loadSharedApplicants(), 15000);
@@ -1809,8 +1813,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       this.rows.update((list) => list.filter((r) => r.id !== id));
       this.ensureSelectedApplicantValid();
       this.applicantsSyncError.set('');
+      this.markLegacyImportDone();
     } catch {
-      this.applicantsSyncError.set('Unable to delete applicant from database.');
+      this.applicantsSyncError.set('Unable to delete applicant from database. The row will reappear on the next sync.');
       await this.loadSharedApplicants();
     }
   }
@@ -2331,10 +2336,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       this.rows.set(parsed);
       this.ensureSelectedApplicantValid();
       this.applicantsSyncError.set('');
+      this.attemptedLegacyImport = true;
 
-      // One-time bridge for older local-only applicant entries.
-      if (parsed.length === 0 && !this.attemptedLegacyImport) {
-        this.attemptedLegacyImport = true;
+      // One-time bridge for older local-only applicant entries (never re-run when table is empty after deletes).
+      if (parsed.length === 0 && !this.isLegacyImportDone()) {
         await this.importLegacyApplicantsToDb();
       }
     } catch (err) {
@@ -2349,6 +2354,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   private async importLegacyApplicantsToDb(): Promise<void> {
+    this.attemptedLegacyImport = true;
+    this.markLegacyImportDone();
+
     let legacyRows: ApplicantRow[] = [];
     try {
       const raw = localStorage.getItem(this.legacyApplicantsStorageKey);
@@ -2390,6 +2398,22 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         // no-op
       }
       await this.loadSharedApplicants();
+    }
+  }
+
+  private isLegacyImportDone(): boolean {
+    try {
+      return localStorage.getItem(this.legacyImportDoneStorageKey) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private markLegacyImportDone(): void {
+    try {
+      localStorage.setItem(this.legacyImportDoneStorageKey, '1');
+    } catch {
+      // no-op
     }
   }
 
