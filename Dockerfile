@@ -13,5 +13,4 @@ FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 EXPOSE 8080
-# Railway assigns PORT at runtime — must not bake ASPNETCORE_URLS at image build time.
-ENTRYPOINT ["sh", "-c", "export ASPNETCORE_URLS=http://0.0.0.0:${PORT:-8080}; exec dotnet TaylorAccess.API.dll"]
+ENTRYPOINT ["dotnet", "TaylorAccess.API.dll"]

@@ -177,7 +177,9 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<EncryptionService>();
 // Use GatewayMongoDbService when gateway is configured (production),
 // otherwise fall back to direct MongoDbService (requires MONGODB_URL).
-if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL")))
+var gatewayInternalUrl = Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
+var internalApiKey = Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+if (!string.IsNullOrEmpty(gatewayInternalUrl) && !string.IsNullOrWhiteSpace(internalApiKey))
     builder.Services.AddSingleton<IMongoDbService, GatewayMongoDbService>();
 else
     builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
@@ -196,6 +198,18 @@ builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddMemoryCache();
 
 var app = builder.Build();
+
+// Liveness for Railway: answer before auth/Swagger/DB — must not depend on downstream middleware.
+app.Use(async (context, next) =>
+{
+    if (string.Equals(context.Request.Path.Value, "/health", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsync("ok");
+        return;
+    }
+    await next();
+});
 
 app.UseResponseCompression();
 
@@ -594,6 +608,7 @@ using (var scope = app.Services.CreateScope())
 });
 
 Console.WriteLine("Taylor Access HR API is starting...");
-Console.WriteLine($"Swagger: http://localhost:{(app.Environment.IsDevelopment() ? "5000" : "80")}/swagger");
+Console.WriteLine($"Listening on http://0.0.0.0:{listenPort} (PORT env: {Environment.GetEnvironmentVariable("PORT") ?? "(unset)"})");
+Console.WriteLine($"Swagger: http://localhost:{(app.Environment.IsDevelopment() ? "5000" : listenPort)}/swagger");
 
 app.Run();
