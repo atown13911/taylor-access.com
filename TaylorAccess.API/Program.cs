@@ -199,17 +199,10 @@ builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 
-// Liveness for Railway: answer before auth/Swagger/DB — must not depend on downstream middleware.
-app.Use(async (context, next) =>
-{
-    if (string.Equals(context.Request.Path.Value, "/health", StringComparison.OrdinalIgnoreCase))
-    {
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsync("ok");
-        return;
-    }
-    await next();
-});
+// Liveness for Railway deploy probes — no auth, DB, or compression.
+app.MapMethods("/health", new[] { "GET", "HEAD" }, () => Results.Text("ok", "text/plain"))
+    .AllowAnonymous()
+    .ExcludeFromDescription();
 
 app.UseResponseCompression();
 
@@ -229,26 +222,16 @@ app.UseAuthentication();
 app.UseMiddleware<TaylorAccess.API.Middleware.GatewayRequestVerificationMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
-// Keep /health as a lightweight liveness probe for Railway deploy checks.
-// Expose database readiness separately at /health/ready.
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    Predicate = _ => false,
-    ResultStatusCodes =
-    {
-        [HealthStatus.Healthy] = StatusCodes.Status200OK,
-        [HealthStatus.Degraded] = StatusCodes.Status200OK,
-        [HealthStatus.Unhealthy] = StatusCodes.Status200OK
-    }
-});
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains("ready")
 });
 
-// Run migrations/seeding in background so Railway /health can pass before Postgres work finishes.
-_ = Task.Run(async () =>
+// Run migrations/seeding after the host is listening so deploy health checks are not blocked.
+app.Lifetime.ApplicationStarted.Register(() =>
 {
+    _ = Task.Run(async () =>
+    {
     try
     {
 // Seed default data
@@ -605,6 +588,7 @@ using (var scope = app.Services.CreateScope())
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
         logger.LogError(ex, "Taylor Access database initialization failed");
     }
+    });
 });
 
 Console.WriteLine("Taylor Access HR API is starting...");
