@@ -232,6 +232,11 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     Predicate = check => check.Tags.Contains("ready")
 });
 
+// Run migrations/seeding in background so Railway /health can pass before Postgres work finishes.
+_ = Task.Run(async () =>
+{
+    try
+    {
 // Seed default data
 using (var scope = app.Services.CreateScope())
 {
@@ -579,9 +584,16 @@ using (var scope = app.Services.CreateScope())
         CREATE INDEX IF NOT EXISTS ""IX_TimeclockSessions_UserEmail_Date""
             ON ""TimeclockSessions"" (""UserEmail"", ""Date"");
     ");
-}
+    }
+    }
+    catch (Exception ex)
+    {
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseStartup");
+        logger.LogError(ex, "Taylor Access database initialization failed");
+    }
+});
 
-Console.WriteLine("Taylor Access HR API is running!");
+Console.WriteLine("Taylor Access HR API is starting...");
 Console.WriteLine($"Swagger: http://localhost:{(app.Environment.IsDevelopment() ? "5000" : "80")}/swagger");
 
 app.Run();
