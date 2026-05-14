@@ -13,12 +13,14 @@ using BCrypt.Net;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-// Railway / Render set PORT at runtime. Apply before host reads ASPNETCORE_URLS.
-var portEnv = Environment.GetEnvironmentVariable("PORT");
-if (!string.IsNullOrWhiteSpace(portEnv))
-    Environment.SetEnvironmentVariable("ASPNETCORE_URLS", $"http://0.0.0.0:{portEnv}");
+// Railway assigns PORT at runtime. Override any build-time or stale ASPNETCORE_URLS.
+var listenPort = Environment.GetEnvironmentVariable("PORT");
+if (string.IsNullOrWhiteSpace(listenPort))
+    listenPort = "8080";
+Environment.SetEnvironmentVariable("ASPNETCORE_URLS", $"http://0.0.0.0:{listenPort}");
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls($"http://0.0.0.0:{listenPort}");
 
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Infrastructure", LogLevel.Warning);

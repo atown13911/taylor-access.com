@@ -12,8 +12,6 @@ RUN dotnet publish -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
-# BuildKit requires ARG before ENV references; Railway injects PORT at runtime (see Program.cs).
-ARG PORT=8080
-ENV ASPNETCORE_URLS=http://0.0.0.0:${PORT}
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "TaylorAccess.API.dll"]
+# Railway assigns PORT at runtime — must not bake ASPNETCORE_URLS at image build time.
+ENTRYPOINT ["sh", "-c", "export ASPNETCORE_URLS=http://0.0.0.0:${PORT:-8080}; exec dotnet TaylorAccess.API.dll"]
