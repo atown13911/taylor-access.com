@@ -134,6 +134,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
       @if (positionStateFilter() === 'report') {
         <section class="report-view">
           <div class="report-toolbar">
+            <div class="applicant-mode-tabs-inline">
+              <button
+                class="applicant-mode-tab"
+                [class.active]="applicantSectionMode() === 'application'"
+                (click)="setApplicantSectionMode('application')"
+              >
+                Application
+              </button>
+              <button
+                class="applicant-mode-tab"
+                [class.active]="applicantSectionMode() === 'hiring'"
+                (click)="setApplicantSectionMode('hiring')"
+              >
+                Hiring
+              </button>
+            </div>
             <label for="report-range">Range</label>
             <select
               id="report-range"
@@ -1162,6 +1178,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-view { margin-top: 6px; }
     .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .applicant-mode-tabs-inline { display: inline-flex; gap: 8px; margin-right: 4px; }
     .report-toolbar label { color: #8aa0b8; font-size: 0.8rem; }
     .report-toolbar select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 10px; min-width: 140px; }
     .report-date-range { display: inline-flex; align-items: center; gap: 8px; }
@@ -1331,8 +1348,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
 
     const position = String(this.reportPositionFilter() || 'all').trim();
-    if (!position || position === 'all') return scopedRows;
-    return scopedRows.filter((row) => String(row.position || '').trim().toLowerCase() === position.toLowerCase());
+    if (position && position !== 'all') {
+      scopedRows = scopedRows.filter((row) => String(row.position || '').trim().toLowerCase() === position.toLowerCase());
+    }
+
+    if (this.applicantSectionMode() === 'hiring') {
+      scopedRows = scopedRows.filter((row) => this.isSelectedForHiringStatus(row.status));
+    }
+
+    return scopedRows;
   });
   reportPositionScopedRows = computed(() => {
     const position = String(this.reportPositionFilter() || 'all').trim().toLowerCase();
