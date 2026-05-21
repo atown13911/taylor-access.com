@@ -610,6 +610,22 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         </div>
 
         <div class="filters">
+          <div class="applicant-mode-tabs">
+            <button
+              class="pipeline-tab"
+              [class.active]="applicantSectionMode() === 'application'"
+              (click)="setApplicantSectionMode('application')"
+            >
+              Application
+            </button>
+            <button
+              class="pipeline-tab"
+              [class.active]="applicantSectionMode() === 'hiring'"
+              (click)="setApplicantSectionMode('hiring')"
+            >
+              Hiring
+            </button>
+          </div>
           <div class="pipeline-tiles">
             <article class="pipeline-tile">
               <span>Total</span>
@@ -628,29 +644,31 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <strong>{{ tableHiredCount() }}</strong>
             </article>
           </div>
-          <div class="pipeline-tabs">
-            <button
-              class="pipeline-tab"
-              [class.active]="pipelineFilter() === 'working'"
-              (click)="setPipelineFilter('working')"
-            >
-              Working
-            </button>
-            <button
-              class="pipeline-tab"
-              [class.active]="pipelineFilter() === 'rejected'"
-              (click)="setPipelineFilter('rejected')"
-            >
-              Rejected
-            </button>
-            <button
-              class="pipeline-tab"
-              [class.active]="pipelineFilter() === 'hired'"
-              (click)="setPipelineFilter('hired')"
-            >
-              Hired
-            </button>
-          </div>
+          @if (applicantSectionMode() === 'application') {
+            <div class="pipeline-tabs">
+              <button
+                class="pipeline-tab"
+                [class.active]="pipelineFilter() === 'working'"
+                (click)="setPipelineFilter('working')"
+              >
+                Working
+              </button>
+              <button
+                class="pipeline-tab"
+                [class.active]="pipelineFilter() === 'rejected'"
+                (click)="setPipelineFilter('rejected')"
+              >
+                Rejected
+              </button>
+              <button
+                class="pipeline-tab"
+                [class.active]="pipelineFilter() === 'hired'"
+                (click)="setPipelineFilter('hired')"
+              >
+                Hired
+              </button>
+            </div>
+          }
           <input
             type="text"
             placeholder="Search applicants..."
@@ -1121,6 +1139,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .pipeline-tile { border: 1px solid #2a2a4e; border-radius: 10px; padding: 8px 10px; background: #10192c; display: flex; justify-content: space-between; align-items: baseline; }
     .pipeline-tile span { color: #8aa0b8; font-size: 0.78rem; }
     .pipeline-tile strong { color: #e0f2fe; font-size: 1rem; }
+    .applicant-mode-tabs { display: inline-flex; gap: 6px; margin-right: 4px; }
     .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
@@ -1200,6 +1219,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   editingGoalIds = signal<number[]>([]);
   goalSourceDrafts = signal<Record<number, string>>({});
   goalSourceChartMode = signal<'ytd' | 'monthly'>('ytd');
+  applicantSectionMode = signal<'application' | 'hiring'>('application');
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
@@ -1466,7 +1486,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   tableScopeRows = computed(() => {
     const selectedPosition = this.selectedPosition();
-    return this.rows().filter((r) => selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition);
+    const sectionMode = this.applicantSectionMode();
+    return this.rows().filter((r) => {
+      const positionPass = selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition;
+      if (!positionPass) return false;
+      if (sectionMode === 'hiring') return this.isSelectedForHiringStatus(r.status);
+      return true;
+    });
   });
 
   tableTotalCount = computed(() => this.tableScopeRows().length);
@@ -1624,6 +1650,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const status = this.statusFilter();
     const selectedPosition = this.selectedPosition();
     const mode = this.positionStateFilter();
+    const sectionMode = this.applicantSectionMode();
     const stateMap = new Map<string, boolean>();
     for (const p of this.allPositions()) {
       stateMap.set(p.name.toLowerCase(), !!p.isActive);
@@ -1641,11 +1668,15 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (mode === 'inactive' && isActivePosition) return false;
       }
 
-      const pipelinePass = pipeline === 'working'
-        ? (r.status !== 'rejected' && r.status !== 'hired')
-        : pipeline === 'rejected'
-          ? r.status === 'rejected'
-          : r.status === 'hired';
+      if (sectionMode === 'hiring' && !this.isSelectedForHiringStatus(r.status)) return false;
+
+      const pipelinePass = sectionMode === 'hiring'
+        ? true
+        : pipeline === 'working'
+          ? (r.status !== 'rejected' && r.status !== 'hired')
+          : pipeline === 'rejected'
+            ? r.status === 'rejected'
+            : r.status === 'hired';
       if (!pipelinePass) return false;
       const statusPass = status === 'all' || r.status === status;
       if (!statusPass) return false;
@@ -1953,6 +1984,12 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   setPipelineFilter(mode: 'working' | 'rejected' | 'hired'): void {
     this.pipelineFilter.set(mode);
+    this.selectedApplicantId.set(null);
+    this.showHiredDetails.set(false);
+  }
+
+  setApplicantSectionMode(mode: 'application' | 'hiring'): void {
+    this.applicantSectionMode.set(mode);
     this.selectedApplicantId.set(null);
     this.showHiredDetails.set(false);
   }
@@ -2489,6 +2526,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const delta = day === 0 ? 6 : day - 1; // shift to Monday start
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - delta, 0, 0, 0, 0);
     return { start, end };
+  }
+
+  private isSelectedForHiringStatus(status: ApplicantStatus): boolean {
+    return status === 'offer' || status === 'hired';
   }
 
   private normalizeSourceDisplay(value: unknown): string {
