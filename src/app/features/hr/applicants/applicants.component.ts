@@ -72,21 +72,28 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
   imports: [CommonModule, FormsModule, NgxChartsModule],
   template: `
     <div class="applicants-page">
-      @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
+      @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
         <div class="applicant-mode-tabs-header">
           <button
             class="applicant-mode-tab"
-            [class.active]="applicantSectionMode() === 'application'"
-            (click)="setApplicantSectionMode('application')"
+            [class.active]="positionStateFilter() !== 'historical' && applicantSectionMode() === 'application'"
+            (click)="selectApplicantsTopMode('application')"
           >
             Application
           </button>
           <button
             class="applicant-mode-tab"
-            [class.active]="applicantSectionMode() === 'hiring'"
-            (click)="setApplicantSectionMode('hiring')"
+            [class.active]="positionStateFilter() !== 'historical' && applicantSectionMode() === 'hiring'"
+            (click)="selectApplicantsTopMode('hiring')"
           >
             Hiring
+          </button>
+          <button
+            class="applicant-mode-tab"
+            [class.active]="positionStateFilter() === 'historical'"
+            (click)="setPositionStateFilter('historical')"
+          >
+            Historical
           </button>
         </div>
       }
@@ -116,13 +123,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           (click)="setPositionStateFilter('inactive')"
         >
           Inactive
-        </button>
-        <button
-          class="state-tab"
-          [class.active]="positionStateFilter() === 'historical'"
-          (click)="setPositionStateFilter('historical')"
-        >
-          Historical
         </button>
         <button
           class="state-tab"
@@ -645,35 +645,37 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             Backfill prior applicant records here to improve reporting on previous application and hiring trends.
           </div>
         }
-        <div class="position-tabs-wrap">
-          <div class="position-tabs">
-            @for (position of positionTabs(); track position) {
-              <button
-                class="position-tab"
-                [class.position-colored]="position !== 'all' && !!getPositionColor(position)"
-                [class.active]="selectedPosition() === position"
-                [style.--position-color]="position !== 'all' ? getPositionColor(position) : null"
-                [style.--position-color-soft]="position !== 'all' ? getPositionSoftColor(position) : null"
-                (click)="selectPosition(position)"
-              >
-                @if (position !== 'all' && getPositionColor(position)) {
-                  <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
-                }
-                <span>{{ position === 'all' ? 'All Positions' : position }}</span>
-                @if (position !== 'all') {
-                  <i
-                    class="bx bx-cog position-settings-icon"
-                    (click)="openPositionSettings(position, $event)"
-                    title="Position settings"
-                  ></i>
-                }
-              </button>
-            }
+        @if (positionStateFilter() !== 'historical') {
+          <div class="position-tabs-wrap">
+            <div class="position-tabs">
+              @for (position of positionTabs(); track position) {
+                <button
+                  class="position-tab"
+                  [class.position-colored]="position !== 'all' && !!getPositionColor(position)"
+                  [class.active]="selectedPosition() === position"
+                  [style.--position-color]="position !== 'all' ? getPositionColor(position) : null"
+                  [style.--position-color-soft]="position !== 'all' ? getPositionSoftColor(position) : null"
+                  (click)="selectPosition(position)"
+                >
+                  @if (position !== 'all' && getPositionColor(position)) {
+                    <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
+                  }
+                  <span>{{ position === 'all' ? 'All Positions' : position }}</span>
+                  @if (position !== 'all') {
+                    <i
+                      class="bx bx-cog position-settings-icon"
+                      (click)="openPositionSettings(position, $event)"
+                      title="Position settings"
+                    ></i>
+                  }
+                </button>
+              }
+            </div>
+            <button class="btn-secondary add-position-btn" (click)="openAddPosition()">
+              <i class='bx bx-plus'></i> Position
+            </button>
           </div>
-          <button class="btn-secondary add-position-btn" (click)="openAddPosition()">
-            <i class='bx bx-plus'></i> Position
-          </button>
-        </div>
+        }
 
         <div class="filters">
           <div class="pipeline-tiles">
@@ -869,12 +871,16 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             </div>
             <div class="form-row">
               <label>Position</label>
-              <select [(ngModel)]="draft.position">
-                <option value="">Select position</option>
-                @for (position of positionOptionsForForm(); track position) {
-                  <option [value]="position">{{ position }}</option>
-                }
-              </select>
+              @if (positionStateFilter() === 'historical') {
+                <input type="text" [(ngModel)]="draft.position" placeholder="Enter historical position" />
+              } @else {
+                <select [(ngModel)]="draft.position">
+                  <option value="">Select position</option>
+                  @for (position of positionOptionsForForm(); track position) {
+                    <option [value]="position">{{ position }}</option>
+                  }
+                </select>
+              }
             </div>
             <div class="form-row">
               <label>Source</label>
@@ -1873,6 +1879,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const fullName = String(this.draft.fullName || '').trim();
     if (!fullName) return;
     const position = String(this.draft.position || '').trim();
+    const isHistoricalEntry = this.positionStateFilter() === 'historical';
     const payload = {
       fullName,
       gender: this.normalizePositionName(this.draft.gender) || null,
@@ -1903,7 +1910,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (position) await this.addCustomPosition(position, true, true);
+    if (position && !isHistoricalEntry) await this.addCustomPosition(position, true, true);
     this.showCreate.set(false);
   }
 
@@ -2128,6 +2135,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.applicantSectionMode.set(mode);
     this.selectedApplicantId.set(null);
     this.showHiredDetails.set(false);
+  }
+
+  selectApplicantsTopMode(mode: 'application' | 'hiring'): void {
+    if (this.positionStateFilter() === 'historical') {
+      this.setPositionStateFilter('active');
+    }
+    this.setApplicantSectionMode(mode);
   }
 
   async saveHiredDetails(): Promise<void> {
