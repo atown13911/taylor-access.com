@@ -93,6 +93,7 @@ public class PublicApplicantsController : ControllerBase
             Position = position,
             Source = "Landmark Trucking (website)",
             Status = "new",
+            IsHistorical = false,
             AppliedDate = DateTime.UtcNow,
             Notes = notes,
             CreatedByUserId = null,

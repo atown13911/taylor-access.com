@@ -24,6 +24,7 @@ interface ApplicantRow {
   cvFileName: string;
   cvDataUrl: string;
   hasCv: boolean;
+  isHistorical: boolean;
 }
 
 interface ApplicantPosition {
@@ -110,34 +111,51 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
       </header>
 
       <div class="position-state-tabs">
-        <button
-          class="state-tab"
-          [class.active]="positionStateFilter() === 'active'"
-          (click)="setPositionStateFilter('active')"
-        >
-          Active
-        </button>
-        <button
-          class="state-tab"
-          [class.active]="positionStateFilter() === 'inactive'"
-          (click)="setPositionStateFilter('inactive')"
-        >
-          Inactive
-        </button>
-        <button
-          class="state-tab"
-          [class.active]="positionStateFilter() === 'report'"
-          (click)="setPositionStateFilter('report')"
-        >
-          Report
-        </button>
-        <button
-          class="state-tab"
-          [class.active]="positionStateFilter() === 'goals'"
-          (click)="setPositionStateFilter('goals')"
-        >
-          Goals
-        </button>
+        @if (positionStateFilter() === 'historical') {
+          <button
+            class="state-tab"
+            [class.active]="historicalViewMode() === 'applicants'"
+            (click)="historicalViewMode.set('applicants')"
+          >
+            Applicants
+          </button>
+          <button
+            class="state-tab"
+            [class.active]="historicalViewMode() === 'report'"
+            (click)="historicalViewMode.set('report')"
+          >
+            Report
+          </button>
+        } @else {
+          <button
+            class="state-tab"
+            [class.active]="positionStateFilter() === 'active'"
+            (click)="setPositionStateFilter('active')"
+          >
+            Active
+          </button>
+          <button
+            class="state-tab"
+            [class.active]="positionStateFilter() === 'inactive'"
+            (click)="setPositionStateFilter('inactive')"
+          >
+            Inactive
+          </button>
+          <button
+            class="state-tab"
+            [class.active]="positionStateFilter() === 'report'"
+            (click)="setPositionStateFilter('report')"
+          >
+            Report
+          </button>
+          <button
+            class="state-tab"
+            [class.active]="positionStateFilter() === 'goals'"
+            (click)="setPositionStateFilter('goals')"
+          >
+            Goals
+          </button>
+        }
       </div>
       @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
         <div class="position-group-tabs">
@@ -158,7 +176,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         </div>
       }
 
-      @if (positionStateFilter() === 'report') {
+      @if (positionStateFilter() === 'report' || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')) {
         <section class="report-view">
           <div class="report-toolbar">
             <div class="applicant-mode-tabs-inline">
@@ -1309,6 +1327,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
   positionStateFilter = signal<'active' | 'inactive' | 'historical' | 'report' | 'goals'>('active');
+  historicalViewMode = signal<'applicants' | 'report'>('applicants');
   positionGroupFilter = signal<'office' | 'fleet'>('office');
   applicantGoals = signal<ApplicantGoal[]>([]);
   editingGoalIds = signal<number[]>([]);
@@ -1396,7 +1415,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   reportRows = computed(() => {
     const range = this.reportRange();
-    let scopedRows = this.rows();
+    const useHistorical = this.positionStateFilter() === 'historical';
+    let scopedRows = this.rows().filter((row) => useHistorical ? this.isHistoricalApplicantRow(row) : !this.isHistoricalApplicantRow(row));
 
     if (range === 'custom') {
       const from = this.parseDateOnly(this.reportDateFrom());
@@ -1609,6 +1629,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const mode = this.positionStateFilter();
     return this.rows().filter((r) => {
       if (mode === 'historical' && !this.isHistoricalApplicantRow(r)) return false;
+      if ((mode === 'active' || mode === 'inactive') && this.isHistoricalApplicantRow(r)) return false;
       if (mode === 'active' || mode === 'inactive') {
         const isFleet = this.isFleetPosition(r.position);
         if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
@@ -1794,6 +1815,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (mode === 'inactive' && isActivePosition) return false;
       }
       if (mode === 'historical' && !this.isHistoricalApplicantRow(r)) return false;
+      if ((mode === 'active' || mode === 'inactive') && this.isHistoricalApplicantRow(r)) return false;
       if (mode === 'active' || mode === 'inactive') {
         const isFleet = this.isFleetPosition(normalizedPosition);
         if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
@@ -1866,6 +1888,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       source: row.source,
       trainingGroupAssignment: row.trainingGroupAssignment,
       status: row.status,
+      isHistorical: row.isHistorical,
       appliedDate: row.appliedDate,
       notes: row.notes,
       cvFileName: row.cvFileName,
@@ -1888,6 +1911,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       source: String(this.draft.source || '').trim() || null,
       trainingGroupAssignment: String(this.draft.trainingGroupAssignment || '').trim() || null,
       status: this.draft.status || 'new',
+      isHistorical: isHistoricalEntry,
       appliedDate: this.toIsoDateOnly(this.draft.appliedDate) || null,
       notes: String(this.draft.notes || '').trim() || null,
       cvFileName: String(this.draft.cvFileName || '').trim() || null,
@@ -1951,6 +1975,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       source: this.normalizePositionName(this.editDraft.source) || null,
       trainingGroupAssignment: this.normalizePositionName(this.editDraft.trainingGroupAssignment) || null,
       status: this.normalizeStatus(this.editDraft.status),
+      isHistorical: this.toBoolean(this.editDraft.isHistorical, false),
       appliedDate: this.toIsoDateOnly(this.editDraft.appliedDate) || null,
       notes: this.normalizePositionName(this.editDraft.notes) || null,
       cvFileName: this.normalizePositionName(this.editDraft.cvFileName) || null,
@@ -2008,6 +2033,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   setPositionStateFilter(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals'): void {
     this.positionStateFilter.set(mode);
     this.selectedPosition.set('all');
+    if (mode === 'historical') this.historicalViewMode.set('applicants');
   }
 
   setPositionGroupFilter(mode: 'office' | 'fleet'): void {
@@ -2285,6 +2311,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       position: '',
       source: '',
       trainingGroupAssignment: '',
+      isHistorical: false,
       appliedDate: new Date().toISOString().slice(0, 10),
       notes: '',
       cvFileName: '',
@@ -2569,6 +2596,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
             source: row.source || null,
             trainingGroupAssignment: row.trainingGroupAssignment || null,
             status: row.status,
+            isHistorical: false,
             appliedDate: this.toIsoDateOnly(row.appliedDate) || null,
             notes: row.notes || null,
             cvFileName: row.cvFileName || null,
@@ -2717,11 +2745,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   private isHistoricalApplicantRow(row: ApplicantRow): boolean {
-    const parsed = this.parseDateOnly(row.appliedDate);
-    if (!parsed) return false;
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    return parsed < currentMonthStart;
+    return this.toBoolean(row?.isHistorical, false);
   }
 
   private normalizeSourceDisplay(value: unknown): string {
@@ -2793,7 +2817,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
           notes: this.normalizePositionName(row['notes'] ?? row['Notes']),
           cvFileName: this.normalizePositionName(row['cvFileName'] ?? row['CvFileName']),
           cvDataUrl: this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl']),
-          hasCv: this.toBoolean(row['hasCv'] ?? row['HasCv'], !!this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl']))
+          hasCv: this.toBoolean(row['hasCv'] ?? row['HasCv'], !!this.normalizePositionName(row['cvDataUrl'] ?? row['CvDataUrl'])),
+          isHistorical: this.toBoolean(row['isHistorical'] ?? row['IsHistorical'], false)
         } as ApplicantRow;
       })
       .filter((row): row is ApplicantRow => !!row);

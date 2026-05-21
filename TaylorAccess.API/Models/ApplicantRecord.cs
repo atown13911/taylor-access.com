@@ -28,6 +28,8 @@ public class ApplicantRecord
     [MaxLength(20)]
     public string Status { get; set; } = "new";
 
+    public bool IsHistorical { get; set; } = false;
+
     public DateTime? AppliedDate { get; set; }
 
     public string? Notes { get; set; }

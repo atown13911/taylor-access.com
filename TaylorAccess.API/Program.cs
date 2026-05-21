@@ -252,6 +252,8 @@ using (var scope = app.Services.CreateScope())
     await context.Database.ExecuteSqlRawAsync(@"
         ALTER TABLE IF EXISTS ""ApplicantRecords""
         ADD COLUMN IF NOT EXISTS ""TrainingGroupAssignment"" VARCHAR(200);
+        ALTER TABLE IF EXISTS ""ApplicantRecords""
+        ADD COLUMN IF NOT EXISTS ""IsHistorical"" BOOLEAN NOT NULL DEFAULT FALSE;
 
         CREATE TABLE IF NOT EXISTS ""TimeOffRequests"" (
             ""Id"" SERIAL PRIMARY KEY,
@@ -471,6 +473,7 @@ using (var scope = app.Services.CreateScope())
             ""Position"" VARCHAR(200) NULL,
             ""Source"" VARCHAR(200) NULL,
             ""Status"" VARCHAR(20) NOT NULL DEFAULT 'new',
+            ""IsHistorical"" BOOLEAN NOT NULL DEFAULT FALSE,
             ""AppliedDate"" TIMESTAMP NULL,
             ""Notes"" text NULL,
             ""CvFileName"" VARCHAR(300) NULL,

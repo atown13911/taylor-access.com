@@ -41,6 +41,7 @@ public class ApplicantsController : ControllerBase
                 a.Source,
                 a.TrainingGroupAssignment,
                 a.Status,
+                a.IsHistorical,
                 appliedDate = a.AppliedDate,
                 a.Notes,
                 a.CvFileName,
@@ -72,6 +73,7 @@ public class ApplicantsController : ControllerBase
             Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim(),
             TrainingGroupAssignment = string.IsNullOrWhiteSpace(request.TrainingGroupAssignment) ? null : request.TrainingGroupAssignment.Trim(),
             Status = NormalizeStatus(request.Status),
+            IsHistorical = request.IsHistorical ?? false,
             AppliedDate = request.AppliedDate,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
             CvFileName = string.IsNullOrWhiteSpace(request.CvFileName) ? null : request.CvFileName.Trim(),
@@ -96,6 +98,7 @@ public class ApplicantsController : ControllerBase
                 row.Source,
                 row.TrainingGroupAssignment,
                 row.Status,
+                row.IsHistorical,
                 appliedDate = row.AppliedDate,
                 row.Notes,
                 row.CvFileName,
@@ -141,6 +144,8 @@ public class ApplicantsController : ControllerBase
         row.Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim();
         row.TrainingGroupAssignment = string.IsNullOrWhiteSpace(request.TrainingGroupAssignment) ? null : request.TrainingGroupAssignment.Trim();
         row.Status = NormalizeStatus(request.Status);
+        if (request.IsHistorical.HasValue)
+            row.IsHistorical = request.IsHistorical.Value;
         row.AppliedDate = request.AppliedDate;
         row.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
         row.CvFileName = string.IsNullOrWhiteSpace(request.CvFileName) ? null : request.CvFileName.Trim();
@@ -161,6 +166,7 @@ public class ApplicantsController : ControllerBase
                 row.Source,
                 row.TrainingGroupAssignment,
                 row.Status,
+                row.IsHistorical,
                 appliedDate = row.AppliedDate,
                 row.Notes,
                 row.CvFileName,
@@ -596,6 +602,7 @@ public record CreateApplicantRecordRequest(
     string? Source,
     string? TrainingGroupAssignment,
     string? Status,
+    bool? IsHistorical,
     DateTime? AppliedDate,
     string? Notes,
     string? CvFileName,
@@ -610,6 +617,7 @@ public record UpdateApplicantRecordRequest(
     string? Source,
     string? TrainingGroupAssignment,
     string? Status,
+    bool? IsHistorical,
     DateTime? AppliedDate,
     string? Notes,
     string? CvFileName,
