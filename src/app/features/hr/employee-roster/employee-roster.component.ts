@@ -4441,15 +4441,37 @@ export class EmployeeRosterComponent implements OnInit {
   async loadRoster() {
     try {
       this.loading.set(true);
-      const params = new URLSearchParams({
-        limit: '1000',
+      const limit = 250;
+      const baseParams = new URLSearchParams({
+        limit: String(limit),
         ...(this.statusFilter && { status: this.statusFilter }),
         ...(this.entityFilter && { organizationId: this.entityFilter })
       });
 
-      const url = this.orgContext.addOrgParam(`${this.apiUrl}/api/v1/employee-roster?${params}`);
-      const response: any = await this.http.get(url).toPromise();
-      this.employees.set(response?.data || []);
+      const firstUrl = this.orgContext.addOrgParam(`${this.apiUrl}/api/v1/employee-roster?${baseParams}`);
+      const firstResponse: any = await this.http.get(firstUrl).toPromise();
+      const firstData = Array.isArray(firstResponse?.data) ? firstResponse.data : [];
+      const totalPages = Math.max(1, Number(firstResponse?.meta?.pages || 1));
+      const allRows = [...firstData];
+
+      if (totalPages > 1) {
+        for (let page = 2; page <= totalPages; page++) {
+          const pageParams = new URLSearchParams({
+            limit: String(limit),
+            ...(this.statusFilter && { status: this.statusFilter }),
+            ...(this.entityFilter && { organizationId: this.entityFilter }),
+            page: String(page)
+          });
+          const pageUrl = this.orgContext.addOrgParam(`${this.apiUrl}/api/v1/employee-roster?${pageParams}`);
+          const pageResponse: any = await this.http.get(pageUrl).toPromise();
+          if (Array.isArray(pageResponse?.data) && pageResponse.data.length > 0) {
+            allRows.push(...pageResponse.data);
+          }
+        }
+      }
+
+      this.employees.set(allRows);
+      this.rosterPage.set(1);
       this.loading.set(false);
     } catch (err) {
       console.error('Failed to load roster:', err);
