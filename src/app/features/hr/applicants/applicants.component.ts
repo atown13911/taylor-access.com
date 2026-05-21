@@ -130,6 +130,24 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           Goals
         </button>
       </div>
+      @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
+        <div class="position-group-tabs">
+          <button
+            class="group-tab"
+            [class.active]="positionGroupFilter() === 'office'"
+            (click)="setPositionGroupFilter('office')"
+          >
+            <i class='bx bx-briefcase-alt-2'></i> Office
+          </button>
+          <button
+            class="group-tab"
+            [class.active]="positionGroupFilter() === 'fleet'"
+            (click)="setPositionGroupFilter('fleet')"
+          >
+            <i class='bx bx-car'></i> Fleet
+          </button>
+        </div>
+      }
 
       @if (positionStateFilter() === 'report') {
         <section class="report-view">
@@ -1088,6 +1106,9 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-state-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
     .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
     .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .position-group-tabs { display: inline-flex; gap: 8px; margin: -2px 0 10px; }
+    .group-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
+    .group-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .goals-view { display: flex; flex-direction: column; gap: 10px; }
     .goals-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .goals-toolbar h3 { margin: 0; color: #e2e8f0; font-size: 0.98rem; }
@@ -1247,6 +1268,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
   positionStateFilter = signal<'active' | 'inactive' | 'report' | 'goals'>('active');
+  positionGroupFilter = signal<'office' | 'fleet'>('office');
   applicantGoals = signal<ApplicantGoal[]>([]);
   editingGoalIds = signal<number[]>([]);
   goalSourceDrafts = signal<Record<number, string>>({});
@@ -1302,6 +1324,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const mode = this.positionStateFilter();
     const list = this.allPositions()
       .filter((p) => mode === 'active' ? p.isActive : !p.isActive)
+      .filter((p) => this.positionGroupFilter() === 'fleet'
+        ? this.isFleetPositionName(p.name)
+        : !this.isFleetPositionName(p.name))
       .map((p) => p.name);
     return ['all', ...list];
   });
@@ -1527,6 +1552,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const selectedPosition = this.selectedPosition();
     const sectionMode = this.applicantSectionMode();
     return this.rows().filter((r) => {
+      if (this.positionStateFilter() !== 'report' && this.positionStateFilter() !== 'goals') {
+        const isFleet = this.isFleetPositionName(r.position);
+        if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
+        if (this.positionGroupFilter() === 'office' && isFleet) return false;
+      }
       const positionPass = selectedPosition === 'all' || String(r.position || '').trim() === selectedPosition;
       if (!positionPass) return false;
       if (sectionMode === 'hiring') return this.isSelectedForHiringStatus(r.status);
@@ -1705,6 +1735,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       if (selectedPosition === 'all') {
         if (mode === 'active' && !isActivePosition) return false;
         if (mode === 'inactive' && isActivePosition) return false;
+      }
+      if (mode === 'active' || mode === 'inactive') {
+        const isFleet = this.isFleetPositionName(normalizedPosition);
+        if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
+        if (this.positionGroupFilter() === 'office' && isFleet) return false;
       }
 
       if (sectionMode === 'hiring' && !this.isSelectedForHiringStatus(r.status)) return false;
@@ -1908,6 +1943,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   setPositionStateFilter(mode: 'active' | 'inactive' | 'report' | 'goals'): void {
     this.positionStateFilter.set(mode);
+    this.selectedPosition.set('all');
+  }
+
+  setPositionGroupFilter(mode: 'office' | 'fleet'): void {
+    this.positionGroupFilter.set(mode);
     this.selectedPosition.set('all');
   }
 
@@ -2569,6 +2609,20 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   private isSelectedForHiringStatus(status: ApplicantStatus): boolean {
     return status === 'offer' || status === 'hired';
+  }
+
+  private isFleetPositionName(value: unknown): boolean {
+    const text = this.normalizePositionName(value).toLowerCase();
+    if (!text) return false;
+    return text.includes('driver')
+      || text.includes('fleet')
+      || text.includes('truck')
+      || text.includes('dispatch')
+      || text.includes('broker')
+      || text.includes('carrier')
+      || text.includes('logistics')
+      || text.includes('safety')
+      || text.includes('compliance');
   }
 
   private normalizeSourceDisplay(value: unknown): string {
