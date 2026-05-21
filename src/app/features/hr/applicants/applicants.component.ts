@@ -70,6 +70,24 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
   imports: [CommonModule, FormsModule, NgxChartsModule],
   template: `
     <div class="applicants-page">
+      @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
+        <div class="applicant-mode-tabs-header">
+          <button
+            class="applicant-mode-tab"
+            [class.active]="applicantSectionMode() === 'application'"
+            (click)="setApplicantSectionMode('application')"
+          >
+            Application
+          </button>
+          <button
+            class="applicant-mode-tab"
+            [class.active]="applicantSectionMode() === 'hiring'"
+            (click)="setApplicantSectionMode('hiring')"
+          >
+            Hiring
+          </button>
+        </div>
+      }
       <header class="page-header">
         <div>
           <h1><i class='bx bx-user-plus'></i> Applicants</h1>
@@ -610,22 +628,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         </div>
 
         <div class="filters">
-          <div class="applicant-mode-tabs">
-            <button
-              class="pipeline-tab"
-              [class.active]="applicantSectionMode() === 'application'"
-              (click)="setApplicantSectionMode('application')"
-            >
-              Application
-            </button>
-            <button
-              class="pipeline-tab"
-              [class.active]="applicantSectionMode() === 'hiring'"
-              (click)="setApplicantSectionMode('hiring')"
-            >
-              Hiring
-            </button>
-          </div>
           <div class="pipeline-tiles">
             <article class="pipeline-tile">
               <span>Total</span>
@@ -1049,6 +1051,20 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
   `,
   styles: [`
     .applicants-page { padding: 24px; }
+    .applicant-mode-tabs-header { display: inline-flex; gap: 10px; margin-bottom: 12px; }
+    .applicant-mode-tab {
+      background: #111827;
+      color: #9fb2c8;
+      border: 1px solid #2a2a4e;
+      border-radius: 999px;
+      padding: 9px 18px;
+      cursor: pointer;
+      font-size: 0.92rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      transition: all 0.15s ease;
+    }
+    .applicant-mode-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.14); box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.25) inset; }
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; } } p { margin: 4px 0 0; color: #8aa0b8; } }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); border: none; color: #0a0a14; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
     .btn-secondary { background: #253049; border: none; color: #dbeafe; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
@@ -1139,7 +1155,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .pipeline-tile { border: 1px solid #2a2a4e; border-radius: 10px; padding: 8px 10px; background: #10192c; display: flex; justify-content: space-between; align-items: baseline; }
     .pipeline-tile span { color: #8aa0b8; font-size: 0.78rem; }
     .pipeline-tile strong { color: #e0f2fe; font-size: 1rem; }
-    .applicant-mode-tabs { display: inline-flex; gap: 6px; margin-right: 4px; }
     .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
