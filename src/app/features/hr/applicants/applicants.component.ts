@@ -95,9 +95,9 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           <h1><i class='bx bx-user-plus'></i> Applicants</h1>
           <p>Track Taylor Access candidate pipeline</p>
         </div>
-        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
+        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
           <button class="btn-primary" (click)="openCreate()">
-            <i class='bx bx-plus'></i> Add Applicant
+            <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
           </button>
         }
       </header>
@@ -116,6 +116,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           (click)="setPositionStateFilter('inactive')"
         >
           Inactive
+        </button>
+        <button
+          class="state-tab"
+          [class.active]="positionStateFilter() === 'historical'"
+          (click)="setPositionStateFilter('historical')"
+        >
+          Historical
         </button>
         <button
           class="state-tab"
@@ -633,6 +640,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           </div>
         </section>
       } @else {
+        @if (positionStateFilter() === 'historical') {
+          <div class="historical-banner">
+            Backfill prior applicant records here to improve reporting on previous application and hiring trends.
+          </div>
+        }
         <div class="position-tabs-wrap">
           <div class="position-tabs">
             @for (position of positionTabs(); track position) {
@@ -877,6 +889,19 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <input type="date" [(ngModel)]="draft.appliedDate" />
             </div>
             <div class="form-row">
+              <label>Status</label>
+              <select [(ngModel)]="draft.status">
+                <option value="new">New</option>
+                <option value="screening">Screening</option>
+                <option value="interview">Interview</option>
+                <option value="offer">Offer</option>
+                <option value="hired">Hired</option>
+                <option value="no response">No Response</option>
+                <option value="no show">No Show</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="form-row">
               <label>Notes</label>
               <textarea rows="3" [(ngModel)]="draft.notes"></textarea>
             </div>
@@ -1115,6 +1140,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-state-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
     .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
     .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .historical-banner { margin-bottom: 10px; border: 1px solid #2a2a4e; background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(16, 25, 44, 0.9)); border-radius: 10px; padding: 10px 12px; color: #b9d5f6; font-size: 0.85rem; }
     .position-group-tabs { display: inline-flex; gap: 8px; margin: -2px 0 10px; }
     .group-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
     .group-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
@@ -1276,7 +1302,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   rows = signal<ApplicantRow[]>([]);
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('all');
-  positionStateFilter = signal<'active' | 'inactive' | 'report' | 'goals'>('active');
+  positionStateFilter = signal<'active' | 'inactive' | 'historical' | 'report' | 'goals'>('active');
   positionGroupFilter = signal<'office' | 'fleet'>('office');
   applicantGoals = signal<ApplicantGoal[]>([]);
   editingGoalIds = signal<number[]>([]);
@@ -1343,10 +1369,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionTabs = computed(() => {
     const mode = this.positionStateFilter();
     const list = this.allPositions()
-      .filter((p) => mode === 'active' ? p.isActive : !p.isActive)
-      .filter((p) => this.positionGroupFilter() === 'fleet'
-        ? this.normalizePositionGroup(p.group, p.name) === 'fleet'
-        : this.normalizePositionGroup(p.group, p.name) === 'office')
+      .filter((p) => mode === 'active' ? p.isActive : mode === 'inactive' ? !p.isActive : true)
+      .filter((p) => {
+        if (mode !== 'active' && mode !== 'inactive') return true;
+        return this.positionGroupFilter() === 'fleet'
+          ? this.normalizePositionGroup(p.group, p.name) === 'fleet'
+          : this.normalizePositionGroup(p.group, p.name) === 'office';
+      })
       .map((p) => p.name);
     return ['all', ...list];
   });
@@ -1571,8 +1600,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   tableScopeRows = computed(() => {
     const selectedPosition = this.selectedPosition();
     const sectionMode = this.applicantSectionMode();
+    const mode = this.positionStateFilter();
     return this.rows().filter((r) => {
-      if (this.positionStateFilter() !== 'report' && this.positionStateFilter() !== 'goals') {
+      if (mode === 'historical' && !this.isHistoricalApplicantRow(r)) return false;
+      if (mode === 'active' || mode === 'inactive') {
         const isFleet = this.isFleetPosition(r.position);
         if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
         if (this.positionGroupFilter() === 'office' && isFleet) return false;
@@ -1756,6 +1787,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (mode === 'active' && !isActivePosition) return false;
         if (mode === 'inactive' && isActivePosition) return false;
       }
+      if (mode === 'historical' && !this.isHistoricalApplicantRow(r)) return false;
       if (mode === 'active' || mode === 'inactive') {
         const isFleet = this.isFleetPosition(normalizedPosition);
         if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
@@ -1810,6 +1842,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   openCreate(): void {
     this.draft = this.emptyDraft();
+    if (this.positionStateFilter() === 'historical') {
+      const now = new Date();
+      const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      this.draft.appliedDate = lastDayPrevMonth.toISOString().slice(0, 10);
+    }
     this.showCreate.set(true);
   }
 
@@ -1961,7 +1998,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.selectedPosition.set(position);
   }
 
-  setPositionStateFilter(mode: 'active' | 'inactive' | 'report' | 'goals'): void {
+  setPositionStateFilter(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals'): void {
     this.positionStateFilter.set(mode);
     this.selectedPosition.set('all');
   }
@@ -2663,6 +2700,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     );
     if (match) return this.normalizePositionGroup(match.group, match.name) === 'fleet';
     return this.isFleetPositionName(normalizedName);
+  }
+
+  private isHistoricalApplicantRow(row: ApplicantRow): boolean {
+    const parsed = this.parseDateOnly(row.appliedDate);
+    if (!parsed) return false;
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    return parsed < currentMonthStart;
   }
 
   private normalizeSourceDisplay(value: unknown): string {
