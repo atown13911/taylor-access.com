@@ -232,7 +232,7 @@ public class ApplicantsController : ControllerBase
             .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
         var merged = MergePositions(positions);
 
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color, group = p.Group }).ToList() });
     }
 
     [HttpPost("positions")]
@@ -251,13 +251,14 @@ public class ApplicantsController : ControllerBase
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(new { error = "Position name is required" });
         var color = NormalizeColor(request.Color);
+        var group = ResolveGroup(request.Group, name);
 
         var positions = organizations
             .SelectMany(o => ExtractPositions(ParseSettings(o.Settings)));
         var merged = MergePositions(positions);
 
         if (!merged.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            merged.Add(new ApplicantPositionItem(name, true, color));
+            merged.Add(new ApplicantPositionItem(name, true, color, group));
         merged = MergePositions(merged);
 
         var node = BuildPositionsNode(merged);
@@ -271,7 +272,7 @@ public class ApplicantsController : ControllerBase
         }
         await _context.SaveChangesAsync();
 
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color, group = p.Group }).ToList() });
     }
 
     [HttpPut("positions/status")]
@@ -296,9 +297,9 @@ public class ApplicantsController : ControllerBase
 
         var idx = merged.FindIndex(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (idx >= 0)
-            merged[idx] = new ApplicantPositionItem(merged[idx].Name, request.IsActive, merged[idx].Color);
+            merged[idx] = new ApplicantPositionItem(merged[idx].Name, request.IsActive, merged[idx].Color, merged[idx].Group);
         else
-            merged.Add(new ApplicantPositionItem(name, request.IsActive, null));
+            merged.Add(new ApplicantPositionItem(name, request.IsActive, null, ResolveGroup(null, name)));
         merged = MergePositions(merged);
 
         var node = BuildPositionsNode(merged);
@@ -311,7 +312,7 @@ public class ApplicantsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color, group = p.Group }).ToList() });
     }
 
     [HttpPut("positions")]
@@ -344,7 +345,8 @@ public class ApplicantsController : ControllerBase
             return BadRequest(new { error = "A position with that name already exists" });
 
         var color = NormalizeColor(request.Color) ?? merged[idx].Color;
-        merged[idx] = new ApplicantPositionItem(newName, request.IsActive, color);
+        var group = NormalizeGroup(request.Group) ?? merged[idx].Group ?? ResolveGroup(null, newName);
+        merged[idx] = new ApplicantPositionItem(newName, request.IsActive, color, group);
         merged = MergePositions(merged);
 
         var node = BuildPositionsNode(merged);
@@ -357,7 +359,7 @@ public class ApplicantsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
-        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
+        return Ok(new { data = merged.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color, group = p.Group }).ToList() });
     }
 
     [HttpDelete("positions/{name}")]
@@ -409,7 +411,7 @@ public class ApplicantsController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
-        return Ok(new { data = next.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color }).ToList() });
+        return Ok(new { data = next.Select(p => new { name = p.Name, isActive = p.IsActive, color = p.Color, group = p.Group }).ToList() });
     }
 
     private static JsonObject ParseSettings(string? rawSettings)
@@ -442,7 +444,7 @@ public class ApplicantsController : ControllerBase
                 var raw = item.ToString();
                 var name = string.IsNullOrWhiteSpace(raw) ? string.Empty : raw.Trim();
                 if (!string.IsNullOrWhiteSpace(name))
-                    list.Add(new ApplicantPositionItem(name, true, null));
+                    list.Add(new ApplicantPositionItem(name, true, null, ResolveGroup(null, name)));
                 continue;
             }
 
@@ -458,7 +460,8 @@ public class ApplicantsController : ControllerBase
                     isActive = parsed;
 
                 var color = NormalizeColor(obj["color"]?.ToString() ?? obj["Color"]?.ToString());
-                list.Add(new ApplicantPositionItem(name, isActive, color));
+                var group = ResolveGroup(obj["group"]?.ToString() ?? obj["Group"]?.ToString(), name);
+                list.Add(new ApplicantPositionItem(name, isActive, color, group));
             }
         }
 
@@ -476,10 +479,11 @@ public class ApplicantsController : ControllerBase
             if (map.TryGetValue(name, out var existing))
             {
                 var mergedColor = existing.Color ?? item.Color;
-                map[name] = new ApplicantPositionItem(name, existing.IsActive || item.IsActive, mergedColor);
+                var mergedGroup = existing.Group ?? item.Group ?? ResolveGroup(null, name);
+                map[name] = new ApplicantPositionItem(name, existing.IsActive || item.IsActive, mergedColor, mergedGroup);
             }
             else
-                map[name] = new ApplicantPositionItem(name, item.IsActive, item.Color);
+                map[name] = new ApplicantPositionItem(name, item.IsActive, item.Color, item.Group ?? ResolveGroup(null, name));
         }
 
         return map.Values
@@ -497,10 +501,45 @@ public class ApplicantsController : ControllerBase
             {
                 ["name"] = item.Name,
                 ["isActive"] = item.IsActive,
-                ["color"] = item.Color
+                ["color"] = item.Color,
+                ["group"] = item.Group
             });
         }
         return array;
+    }
+
+    private static string? NormalizeGroup(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var value = raw.Trim().ToLowerInvariant();
+        return value switch
+        {
+            "office" => "office",
+            "fleet" => "fleet",
+            _ => null
+        };
+    }
+
+    private static string ResolveGroup(string? raw, string? positionName)
+    {
+        var normalized = NormalizeGroup(raw);
+        if (!string.IsNullOrWhiteSpace(normalized)) return normalized;
+        return IsFleetPositionName(positionName) ? "fleet" : "office";
+    }
+
+    private static bool IsFleetPositionName(string? raw)
+    {
+        var text = string.IsNullOrWhiteSpace(raw) ? string.Empty : raw.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        return text.Contains("driver")
+            || text.Contains("fleet")
+            || text.Contains("truck")
+            || text.Contains("dispatch")
+            || text.Contains("broker")
+            || text.Contains("carrier")
+            || text.Contains("logistics")
+            || text.Contains("safety")
+            || text.Contains("compliance");
     }
 
     private static string? NormalizeColor(string? raw)
@@ -545,10 +584,10 @@ public class ApplicantsController : ControllerBase
     }
 }
 
-public record AddApplicantPositionRequest(string Name, string? Color);
+public record AddApplicantPositionRequest(string Name, string? Color, string? Group);
 public record UpdateApplicantPositionStatusRequest(string Name, bool IsActive);
-public record UpdateApplicantPositionRequest(string CurrentName, string NewName, bool IsActive, string? Color);
-public record ApplicantPositionItem(string Name, bool IsActive, string? Color);
+public record UpdateApplicantPositionRequest(string CurrentName, string NewName, bool IsActive, string? Color, string? Group);
+public record ApplicantPositionItem(string Name, bool IsActive, string? Color, string? Group);
 public record CreateApplicantRecordRequest(
     string FullName,
     string? Gender,

@@ -8,6 +8,7 @@ import { environment } from '../../../../environments/environment';
 
 type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'no response' | 'no show';
 type GoalPeriod = 'weekly' | 'monthly' | 'yearly';
+type PositionGroup = 'office' | 'fleet';
 
 interface ApplicantRow {
   id: number;
@@ -29,6 +30,7 @@ interface ApplicantPosition {
   name: string;
   isActive: boolean;
   color?: string | null;
+  group?: PositionGroup | null;
 }
 
 interface ApplicantGoal {
@@ -1058,6 +1060,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               </select>
             </div>
             <div class="form-row">
+              <label>Group</label>
+              <select [ngModel]="positionSettingsTargetGroup()" (ngModelChange)="positionSettingsTargetGroup.set($event === 'fleet' ? 'fleet' : 'office')">
+                <option value="office">Office</option>
+                <option value="fleet">Fleet</option>
+              </select>
+            </div>
+            <div class="form-row">
               <label>Color</label>
               <div class="color-field">
                 <input
@@ -1294,6 +1303,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionSettingsTargetName = signal('');
   positionSettingsTargetActive = signal(true);
   positionSettingsTargetColor = signal('#38BDF8');
+  positionSettingsTargetGroup = signal<PositionGroup>('office');
   selectedApplicantId = signal<number | null>(null);
   applicantsSyncError = signal('');
   private positionsRefreshTimer: any;
@@ -1308,13 +1318,23 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     for (const p of this.customPositions()) {
       const normalized = this.normalizePositionName(p?.name);
       if (!normalized) continue;
-      map.set(normalized.toLowerCase(), { name: normalized, isActive: !!p.isActive, color: this.normalizeColorHex(p.color) });
+      map.set(normalized.toLowerCase(), {
+        name: normalized,
+        isActive: !!p.isActive,
+        color: this.normalizeColorHex(p.color),
+        group: this.normalizePositionGroup(p.group, normalized)
+      });
     }
     for (const row of this.rows()) {
       const normalized = this.normalizePositionName(row.position);
       if (!normalized) continue;
       if (!map.has(normalized.toLowerCase())) {
-        map.set(normalized.toLowerCase(), { name: normalized, isActive: true, color: null });
+        map.set(normalized.toLowerCase(), {
+          name: normalized,
+          isActive: true,
+          color: null,
+          group: this.normalizePositionGroup(null, normalized)
+        });
       }
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -1325,8 +1345,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const list = this.allPositions()
       .filter((p) => mode === 'active' ? p.isActive : !p.isActive)
       .filter((p) => this.positionGroupFilter() === 'fleet'
-        ? this.isFleetPositionName(p.name)
-        : !this.isFleetPositionName(p.name))
+        ? this.normalizePositionGroup(p.group, p.name) === 'fleet'
+        : this.normalizePositionGroup(p.group, p.name) === 'office')
       .map((p) => p.name);
     return ['all', ...list];
   });
@@ -1553,7 +1573,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const sectionMode = this.applicantSectionMode();
     return this.rows().filter((r) => {
       if (this.positionStateFilter() !== 'report' && this.positionStateFilter() !== 'goals') {
-        const isFleet = this.isFleetPositionName(r.position);
+        const isFleet = this.isFleetPosition(r.position);
         if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
         if (this.positionGroupFilter() === 'office' && isFleet) return false;
       }
@@ -1737,7 +1757,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (mode === 'inactive' && isActivePosition) return false;
       }
       if (mode === 'active' || mode === 'inactive') {
-        const isFleet = this.isFleetPositionName(normalizedPosition);
+        const isFleet = this.isFleetPosition(normalizedPosition);
         if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
         if (this.positionGroupFilter() === 'office' && isFleet) return false;
       }
@@ -2120,7 +2140,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const value = String(this.newPositionName() || '').trim();
     if (!value) return;
     const color = this.normalizeColorHex(this.newPositionColor());
-    await this.addCustomPosition(value, true, true, color);
+    await this.addCustomPosition(value, true, true, color, this.normalizePositionGroup(null, value));
     this.positionStateFilter.set('active');
     this.selectedPosition.set(value);
     this.newPositionName.set('');
@@ -2135,6 +2155,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     this.positionSettingsTargetName.set(position);
     this.positionSettingsTargetActive.set(target?.isActive ?? true);
     this.positionSettingsTargetColor.set(this.normalizeColorHex(target?.color) || '#38BDF8');
+    this.positionSettingsTargetGroup.set(this.normalizePositionGroup(target?.group, target?.name || position));
     this.showPositionSettings.set(true);
   }
 
@@ -2145,12 +2166,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     if (!currentName) return;
     const isActive = this.positionSettingsTargetActive();
     const color = this.normalizeColorHex(this.positionSettingsTargetColor());
+    const group = this.positionSettingsTargetGroup();
 
     this.customPositions.update((list) => {
       const idx = list.findIndex((p) => p.name.toLowerCase() === currentName.toLowerCase());
       if (idx < 0) return list;
       const next = [...list];
-      next[idx] = { ...next[idx], name: newName, isActive, color };
+      next[idx] = { ...next[idx], name: newName, isActive, color, group };
       return next;
     });
     this.persistLocalPositions();
@@ -2159,7 +2181,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       const res = await firstValueFrom(
         this.http.put<{ data?: unknown[] }>(
           `${this.apiUrl}/api/v1/applicants/positions`,
-          { currentName, newName, isActive, color }
+          { currentName, newName, isActive, color, group }
         )
       );
       this.customPositions.set(this.parsePositionPayload(res?.data));
@@ -2393,18 +2415,19 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async addCustomPosition(position: string, isActive = true, syncToApi = false, color?: string | null): Promise<void> {
+  private async addCustomPosition(position: string, isActive = true, syncToApi = false, color?: string | null, group?: PositionGroup | null): Promise<void> {
     const normalized = this.normalizePositionName(position);
     if (!normalized) return;
     const normalizedColor = this.normalizeColorHex(color);
+    const normalizedGroup = this.normalizePositionGroup(group, normalized);
     this.customPositions.update((list) => {
       const idx = list.findIndex((p) => p.name.toLowerCase() === normalized.toLowerCase());
       if (idx >= 0) {
         const next = [...list];
-        next[idx] = { ...next[idx], isActive, color: normalizedColor ?? next[idx].color ?? null };
+        next[idx] = { ...next[idx], isActive, color: normalizedColor ?? next[idx].color ?? null, group: normalizedGroup };
         return next;
       }
-      return [...list, { name: normalized, isActive, color: normalizedColor ?? null }]
+      return [...list, { name: normalized, isActive, color: normalizedColor ?? null, group: normalizedGroup }]
         .sort((a, b) => a.name.localeCompare(b.name));
     });
     this.persistLocalPositions();
@@ -2413,7 +2436,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
     try {
       const res = await firstValueFrom(
-        this.http.post<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized, color: normalizedColor })
+        this.http.post<{ data?: unknown[] }>(`${this.apiUrl}/api/v1/applicants/positions`, { name: normalized, color: normalizedColor, group: normalizedGroup })
       );
       this.customPositions.set(this.parsePositionPayload(res?.data));
       this.persistLocalPositions();
@@ -2625,6 +2648,23 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       || text.includes('compliance');
   }
 
+  private normalizePositionGroup(value: unknown, positionName?: unknown): PositionGroup {
+    const normalized = this.normalizePositionName(value).toLowerCase();
+    if (normalized === 'fleet') return 'fleet';
+    if (normalized === 'office') return 'office';
+    return this.isFleetPositionName(positionName) ? 'fleet' : 'office';
+  }
+
+  private isFleetPosition(value: unknown): boolean {
+    const normalizedName = this.normalizePositionName(value);
+    if (!normalizedName) return false;
+    const match = this.customPositions().find(
+      (p) => this.normalizePositionName(p.name).toLowerCase() === normalizedName.toLowerCase()
+    );
+    if (match) return this.normalizePositionGroup(match.group, match.name) === 'fleet';
+    return this.isFleetPositionName(normalizedName);
+  }
+
   private normalizeSourceDisplay(value: unknown): string {
     return this.normalizePositionName(value).replace(/\s+/g, ' ');
   }
@@ -2662,7 +2702,8 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         if (!name) continue;
         const isActive = this.toBoolean(row['isActive'] ?? row['IsActive'], true);
         const color = this.normalizeColorHex(row['color'] ?? row['Color']);
-        map.set(name.toLowerCase(), { name, isActive, color });
+        const group = this.normalizePositionGroup(row['group'] ?? row['Group'], name);
+        map.set(name.toLowerCase(), { name, isActive, color, group });
       }
     }
 
