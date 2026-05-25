@@ -66,6 +66,7 @@ type MotivActivityLogEntry = {
   kind: 'info' | 'success' | 'warning' | 'error';
   title: string;
   details: string;
+  driverName?: string | null;
 };
 type FuelWeekOption = {
   key: string;
@@ -404,7 +405,11 @@ type MotivStatusCache = {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let row of activityDriverRows(); let i = index">
+                    <tr
+                      *ngFor="let row of activityDriverRows(); let i = index"
+                      class="activity-driver-row"
+                      [class.selected]="selectedActivityDriverName() === row.name"
+                      (click)="selectActivityDriver(row.name)">
                       <td>{{ i + 1 }}</td>
                       <td>{{ row.name }}</td>
                       <td>{{ row.status }}</td>
@@ -415,6 +420,79 @@ type MotivStatusCache = {
                 </table>
               </div>
               <p class="count" *ngIf="activityDriverRows().length === 0">No drivers available yet. Open the Drivers tab and refresh.</p>
+              <div class="activity-driver-subpanel">
+                <div class="activity-driver-subpanel-head">
+                  <h3>Driver Activity</h3>
+                  <div class="activity-driver-subpanel-actions">
+                    <span class="count" *ngIf="selectedActivityDriverName(); else allDriversLabel">
+                      Selected: <strong>{{ selectedActivityDriverName() }}</strong>
+                    </span>
+                    <ng-template #allDriversLabel>
+                      <span class="count">Selected: <strong>All Drivers</strong></span>
+                    </ng-template>
+                    <button class="refresh-btn" (click)="clearActivityDriverSelection()" [disabled]="!selectedActivityDriverName()">Clear</button>
+                  </div>
+                </div>
+                <div class="activity-driver-filters">
+                  <input
+                    class="filter-input"
+                    type="text"
+                    placeholder="Search activity (title, details, driver, type)"
+                    [value]="activitySearchTerm()"
+                    (input)="activitySearchTerm.set($any($event.target).value)" />
+                  <select
+                    class="filter-input filter-select"
+                    [value]="activityKindFilter()"
+                    (change)="activityKindFilter.set($any($event.target).value)">
+                    <option value="all">All Types</option>
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="error">Error</option>
+                  </select>
+                  <select
+                    class="filter-input filter-select"
+                    [value]="activityScopeFilter()"
+                    (change)="activityScopeFilter.set($any($event.target).value)">
+                    <option value="all">All Scope</option>
+                    <option value="driver">Driver Events</option>
+                    <option value="system">System Events</option>
+                  </select>
+                </div>
+                <div class="available-api-table-wrap" *ngIf="driverActivityRows().length > 0">
+                  <table class="available-api-table">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Driver</th>
+                        <th>Type</th>
+                        <th>Event</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let row of driverActivityRows()">
+                        <td>{{ formatActivityTimestamp(row.timestamp) }}</td>
+                        <td>{{ row.driverName || 'General' }}</td>
+                        <td>
+                          <span class="status-chip"
+                                [class.connected]="row.kind === 'success'"
+                                [class.not-connected]="row.kind === 'error'"
+                                [class.checking]="row.kind === 'info' || row.kind === 'warning'">
+                            {{ row.kind | titlecase }}
+                          </span>
+                        </td>
+                        <td>
+                          <strong>{{ row.title }}</strong>
+                          <div class="activity-details">{{ row.details }}</div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="count" *ngIf="driverActivityRows().length === 0">
+                  No activity logs {{ selectedActivityDriverName() ? ('for ' + selectedActivityDriverName()) : 'for drivers' }}.
+                </p>
+              </div>
             </div>
             <div class="activity-right">
               <h3>Activity Log</h3>
@@ -1199,6 +1277,50 @@ type MotivStatusCache = {
       font-size: 14px;
       color: #dbeafe;
     }
+    .activity-driver-row { cursor: pointer; }
+    .activity-driver-row.selected td {
+      background: rgba(0, 212, 255, 0.14);
+      box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.35);
+    }
+    .activity-driver-subpanel {
+      margin-top: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(8, 15, 28, 0.38);
+    }
+    .activity-driver-subpanel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .activity-driver-subpanel-head h3 {
+      margin: 0;
+      font-size: 13px;
+      color: #dbeafe;
+    }
+    .activity-driver-subpanel-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .activity-driver-filters {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .activity-driver-filters .filter-input {
+      min-width: 220px;
+      flex: 1;
+    }
+    .activity-driver-filters .filter-select {
+      min-width: 150px;
+      flex: 0 0 auto;
+    }
     .activity-details {
       margin-top: 4px;
       color: #94a3b8;
@@ -1287,6 +1409,10 @@ export class MotivComponent implements OnInit {
   motivFuelCards = signal<any[]>([]);
   motivCardTransactions = signal<any[]>([]);
   activityFeed = signal<MotivActivityLogEntry[]>([]);
+  selectedActivityDriverName = signal('');
+  activitySearchTerm = signal('');
+  activityKindFilter = signal<'all' | 'info' | 'success' | 'warning' | 'error'>('all');
+  activityScopeFilter = signal<'all' | 'driver' | 'system'>('all');
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
@@ -1576,7 +1702,8 @@ export class MotivComponent implements OnInit {
           timestamp: dt.getTime(),
           kind: 'info' as const,
           title: `Driver update: ${row.name}`,
-          details: `Status ${row.status} | Vehicle ${row.vehicle} | Location ${row.location}`
+          details: `Status ${row.status} | Vehicle ${row.vehicle} | Location ${row.location}`,
+          driverName: row.name
         });
         return rows;
       }, [])
@@ -1587,6 +1714,36 @@ export class MotivComponent implements OnInit {
       .sort((a, b) => b.timestamp - a.timestamp);
 
     return combined.slice(0, 120);
+  });
+  driverActivityRows = computed<MotivActivityLogEntry[]>(() => {
+    const selected = this.selectedActivityDriverName().trim().toLowerCase();
+    let rows = !selected
+      ? this.activityLogRows()
+      : this.activityLogRows().filter((row) => String(row.driverName || '').trim().toLowerCase() === selected);
+
+    const kind = this.activityKindFilter();
+    if (kind !== 'all') {
+      rows = rows.filter((row) => row.kind === kind);
+    }
+
+    const scope = this.activityScopeFilter();
+    if (scope === 'driver') {
+      rows = rows.filter((row) => !!String(row.driverName || '').trim());
+    } else if (scope === 'system') {
+      rows = rows.filter((row) => !String(row.driverName || '').trim());
+    }
+
+    const term = this.activitySearchTerm().trim().toLowerCase();
+    if (term) {
+      rows = rows.filter((row) =>
+        row.title.toLowerCase().includes(term) ||
+        row.details.toLowerCase().includes(term) ||
+        String(row.driverName || '').toLowerCase().includes(term) ||
+        row.kind.toLowerCase().includes(term)
+      );
+    }
+
+    return rows;
   });
   driverSyncStatusTone = computed<'connected' | 'not-connected' | 'checking'>(() => {
     if (this.syncingDrivers() || this.savingDrivers()) return 'checking';
@@ -1992,12 +2149,27 @@ export class MotivComponent implements OnInit {
     return new Date(value).toLocaleString();
   }
 
-  private appendActivityLog(kind: MotivActivityLogEntry['kind'], title: string, details: string): void {
+  selectActivityDriver(name: string): void {
+    const normalized = String(name || '').trim();
+    if (!normalized) return;
+    if (this.selectedActivityDriverName() === normalized) {
+      this.selectedActivityDriverName.set('');
+      return;
+    }
+    this.selectedActivityDriverName.set(normalized);
+  }
+
+  clearActivityDriverSelection(): void {
+    this.selectedActivityDriverName.set('');
+  }
+
+  private appendActivityLog(kind: MotivActivityLogEntry['kind'], title: string, details: string, driverName?: string | null): void {
     const entry: MotivActivityLogEntry = {
       timestamp: Date.now(),
       kind,
       title,
-      details
+      details,
+      driverName: driverName || null
     };
     this.activityFeed.update((rows) => [entry, ...rows].slice(0, 200));
   }
