@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { timeout } from 'rxjs/operators';
 
-type MotivTab = 'api' | 'drivers' | 'vehicles' | 'users' | 'fuel' | 'fuel-cards';
+type MotivTab = 'api' | 'drivers' | 'activity' | 'vehicles' | 'users' | 'fuel' | 'fuel-cards';
 type MotivDriverTableRow = {
   name: string;
   email: string;
@@ -60,6 +60,12 @@ type MotivFuelCardRow = {
   currency: string;
   purchases: number;
   spend: number;
+};
+type MotivActivityLogEntry = {
+  timestamp: number;
+  kind: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  details: string;
 };
 type FuelWeekOption = {
   key: string;
@@ -122,27 +128,33 @@ type MotivStatusCache = {
         </button>
         <button
           class="tab-btn"
+          [class.active]="activeTab() === 'activity'"
+          (click)="setTab('activity')">
+          3. Activity
+        </button>
+        <button
+          class="tab-btn"
           [class.active]="activeTab() === 'vehicles'"
           (click)="setTab('vehicles')">
-          3. Vehicles
+          4. Vehicles
         </button>
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'users'"
           (click)="setTab('users')">
-          4. Users
+          5. Users
         </button>
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'fuel'"
           (click)="setTab('fuel')">
-          5. Fuel
+          6. Fuel
         </button>
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'fuel-cards'"
           (click)="setTab('fuel-cards')">
-          6. Fuel Cards
+          7. Fuel Cards
         </button>
       </div>
 
@@ -367,6 +379,74 @@ type MotivStatusCache = {
                 <span class="page-counter">Page {{ safeDriverPage() }} / {{ driverTotalPages() }}</span>
                 <button class="refresh-btn" (click)="goToNextDriverPage()" [disabled]="safeDriverPage() >= driverTotalPages()">Next</button>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" *ngIf="activeTab() === 'activity'">
+        <h2>Activity</h2>
+        <p>Driver list on the left with MOTIV activity log on the right.</p>
+        <div class="api-status">
+          <div class="activity-layout">
+            <div class="activity-left">
+              <h3>Drivers</h3>
+              <p class="count">Showing {{ activityDriverRows().length }} of {{ filteredDriverRows().length }} filtered drivers.</p>
+              <div class="available-api-table-wrap" *ngIf="activityDriverRows().length > 0">
+                <table class="available-api-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th>Vehicle</th>
+                      <th>Last Update</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let row of activityDriverRows(); let i = index">
+                      <td>{{ i + 1 }}</td>
+                      <td>{{ row.name }}</td>
+                      <td>{{ row.status }}</td>
+                      <td>{{ row.vehicle }}</td>
+                      <td>{{ row.lastUpdate }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="count" *ngIf="activityDriverRows().length === 0">No drivers available yet. Open the Drivers tab and refresh.</p>
+            </div>
+            <div class="activity-right">
+              <h3>Activity Log</h3>
+              <div class="available-api-table-wrap" *ngIf="activityLogRows().length > 0">
+                <table class="available-api-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Type</th>
+                      <th>Event</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let row of activityLogRows()">
+                      <td>{{ formatActivityTimestamp(row.timestamp) }}</td>
+                      <td>
+                        <span class="status-chip"
+                              [class.connected]="row.kind === 'success'"
+                              [class.not-connected]="row.kind === 'error'"
+                              [class.checking]="row.kind === 'info' || row.kind === 'warning'">
+                          {{ row.kind | titlecase }}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{{ row.title }}</strong>
+                        <div class="activity-details">{{ row.details }}</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="count" *ngIf="activityLogRows().length === 0">No activity logs yet.</p>
             </div>
           </div>
         </div>
@@ -1098,6 +1178,38 @@ type MotivStatusCache = {
     }
     .available-api-table tr:last-child td { border-bottom: none; }
     .available-api-table th { color: #9ccde0; background: rgba(10, 20, 36, 0.7); }
+    .activity-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      gap: 12px;
+      align-items: start;
+    }
+    .activity-left,
+    .activity-right {
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 10px;
+    }
+    .activity-left h3,
+    .activity-right h3 {
+      margin: 0 0 6px;
+      font-size: 14px;
+      color: #dbeafe;
+    }
+    .activity-details {
+      margin-top: 4px;
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    @media (max-width: 1200px) {
+      .activity-layout {
+        grid-template-columns: 1fr;
+      }
+    }
     .status-chip {
       display: inline-block;
       padding: 3px 8px;
@@ -1174,6 +1286,7 @@ export class MotivComponent implements OnInit {
   motivFuelPurchases = signal<any[]>([]);
   motivFuelCards = signal<any[]>([]);
   motivCardTransactions = signal<any[]>([]);
+  activityFeed = signal<MotivActivityLogEntry[]>([]);
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
@@ -1450,6 +1563,30 @@ export class MotivComponent implements OnInit {
     const total = this.filteredDriverRows().length;
     if (!total) return 0;
     return Math.min(this.safeDriverPage() * this.driverPageSize(), total);
+  });
+  activityDriverRows = computed<MotivDriverTableRow[]>(() =>
+    this.filteredDriverRows().slice(0, 120)
+  );
+  activityLogRows = computed<MotivActivityLogEntry[]>(() => {
+    const derivedUpdates = this.driverTableRows()
+      .reduce<MotivActivityLogEntry[]>((rows, row) => {
+        const dt = this.tryParseDate(row.lastUpdate);
+        if (!dt) return rows;
+        rows.push({
+          timestamp: dt.getTime(),
+          kind: 'info' as const,
+          title: `Driver update: ${row.name}`,
+          details: `Status ${row.status} | Vehicle ${row.vehicle} | Location ${row.location}`
+        });
+        return rows;
+      }, [])
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 80);
+
+    const combined = [...this.activityFeed(), ...derivedUpdates]
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    return combined.slice(0, 120);
   });
   driverSyncStatusTone = computed<'connected' | 'not-connected' | 'checking'>(() => {
     if (this.syncingDrivers() || this.savingDrivers()) return 'checking';
@@ -1826,7 +1963,7 @@ export class MotivComponent implements OnInit {
 
   setTab(tab: MotivTab): void {
     this.activeTab.set(tab);
-    if (tab === 'drivers' && this.motivDrivers().length === 0 && !this.loadingDrivers()) {
+    if ((tab === 'drivers' || tab === 'activity') && this.motivDrivers().length === 0 && !this.loadingDrivers()) {
       this.loadDrivers();
     }
     if (tab === 'vehicles' && this.motivVehicles().length === 0 && !this.loadingVehicles()) {
@@ -1848,6 +1985,21 @@ export class MotivComponent implements OnInit {
     if (tab === 'fuel-cards' && this.motivCardTransactions().length === 0) {
       this.loadCardTransactions(true);
     }
+  }
+
+  formatActivityTimestamp(value: number): string {
+    if (!Number.isFinite(value) || value <= 0) return 'N/A';
+    return new Date(value).toLocaleString();
+  }
+
+  private appendActivityLog(kind: MotivActivityLogEntry['kind'], title: string, details: string): void {
+    const entry: MotivActivityLogEntry = {
+      timestamp: Date.now(),
+      kind,
+      title,
+      details
+    };
+    this.activityFeed.update((rows) => [entry, ...rows].slice(0, 200));
   }
 
   loadApiConfig(): void {
@@ -1971,6 +2123,11 @@ export class MotivComponent implements OnInit {
         this.loadedDriverRows.set(activeDriverRows.length);
         this.loadingDrivers.set(false);
         this.syncStatusMessage.set(`Loaded ${activeDriverRows.length} active driver rows from Drivers DB.`);
+        this.appendActivityLog(
+          'info',
+          'Drivers loaded from Access DB',
+          `${activeDriverRows.length} active rows loaded${runBackgroundSync ? ' (background sync queued)' : ''}.`
+        );
         if (runBackgroundSync) {
           this.autoSyncDriversToDb();
         }
@@ -1979,6 +2136,7 @@ export class MotivComponent implements OnInit {
         this.driversError.set(err?.error?.error || 'Unable to load MOTIV drivers.');
         this.loadingDrivers.set(false);
         this.syncStatusMessage.set('Unable to load drivers from Access DB.');
+        this.appendActivityLog('error', 'Driver load failed', this.driversError() || 'Unable to load MOTIV drivers.');
       }
     });
   }
@@ -2002,12 +2160,18 @@ export class MotivComponent implements OnInit {
           `Auto-sync complete - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
         );
         this.syncStatusMessage.set(`Auto-sync complete: ${res?.created ?? 0} created, ${res?.updated ?? 0} updated.`);
+        this.appendActivityLog(
+          'success',
+          'Auto-sync complete',
+          `Fetched ${res?.fetched ?? 0}, created ${res?.created ?? 0}, updated ${res?.updated ?? 0}, skipped ${res?.skipped ?? 0}.`
+        );
         this.loadDriversFromDb(false);
       },
       error: (err) => {
         this.syncingDrivers.set(false);
         this.saveDriversError.set(err?.error?.error || 'Auto-sync failed.');
         this.syncStatusMessage.set('Auto-sync failed.');
+        this.appendActivityLog('error', 'Auto-sync failed', this.saveDriversError() || 'Auto-sync failed.');
       }
     });
   }
@@ -2032,12 +2196,18 @@ export class MotivComponent implements OnInit {
           `Saved to Access DB - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}.`
         );
         this.syncStatusMessage.set(`Manual sync complete: ${res?.created ?? 0} created, ${res?.updated ?? 0} updated.`);
+        this.appendActivityLog(
+          'success',
+          'Manual sync complete',
+          `Fetched ${res?.fetched ?? 0}, created ${res?.created ?? 0}, updated ${res?.updated ?? 0}, skipped ${res?.skipped ?? 0}.`
+        );
         this.loadDriversFromDb(false);
       },
       error: (err) => {
         this.savingDrivers.set(false);
         this.saveDriversError.set(err?.error?.error || 'Unable to save MOTIV drivers to Access DB.');
         this.syncStatusMessage.set('Manual sync failed.');
+        this.appendActivityLog('error', 'Manual sync failed', this.saveDriversError() || 'Unable to save MOTIV drivers.');
       }
     });
   }
