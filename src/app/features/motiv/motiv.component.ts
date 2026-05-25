@@ -505,6 +505,17 @@ type MotivStatusCache = {
             </div>
             <div class="activity-right">
               <h3>Activity Log</h3>
+              <div class="driver-glass-panel" style="margin-bottom: 10px;">
+                <p class="count">
+                  Location diagnostics: {{ locationDiagnostics().withLocation }} / {{ locationDiagnostics().totalDrivers }} drivers with a parsed location.
+                </p>
+                <p class="count">
+                  Drivers with lat/lon: {{ locationDiagnostics().withLatLon }} | Drivers with city/state text: {{ locationDiagnostics().withCityState }}
+                </p>
+                <p class="count" *ngIf="locationDiagnostics().sampleKeys.length > 0">
+                  Sample raw location keys: {{ locationDiagnostics().sampleKeys.join(', ') }}
+                </p>
+              </div>
               <div class="available-api-table-wrap" *ngIf="activityLogRows().length > 0">
                 <div class="activity-scroll-wrap">
                   <table class="available-api-table">
@@ -1497,6 +1508,47 @@ export class MotivComponent implements OnInit {
   driverTableRows = computed<MotivDriverTableRow[]>(() =>
     this.motivDrivers().map((raw) => this.mapDriverRow(raw))
   );
+  locationDiagnostics = computed(() => {
+    const rows = this.motivDrivers();
+    let withLocation = 0;
+    let withLatLon = 0;
+    let withCityState = 0;
+    const sampleKeySet = new Set<string>();
+
+    for (const row of rows) {
+      const mapped = this.mapDriverRow(row);
+      if (mapped.location && mapped.location !== 'N/A') {
+        withLocation++;
+      }
+
+      const seed = this.extractLocationSeed(row) ?? {};
+      const lat = seed?.lat ?? seed?.latitude ?? seed?.Latitude ?? row?.lat ?? row?.latitude ?? row?.Latitude;
+      const lon = seed?.lon ?? seed?.lng ?? seed?.longitude ?? seed?.Longitude ?? row?.lon ?? row?.lng ?? row?.longitude ?? row?.Longitude;
+      if (lat != null && lon != null) {
+        withLatLon++;
+      }
+
+      const city = seed?.city ?? seed?.City ?? seed?.address?.city ?? seed?.address?.City ?? row?.city ?? row?.City;
+      const state = seed?.state ?? seed?.State ?? seed?.address?.state ?? seed?.address?.State ?? row?.state ?? row?.State;
+      if (city || state) {
+        withCityState++;
+      }
+
+      const keys = this.collectLocationKeys(row);
+      for (const key of keys) {
+        if (sampleKeySet.size >= 12) break;
+        sampleKeySet.add(key);
+      }
+    }
+
+    return {
+      totalDrivers: rows.length,
+      withLocation,
+      withLatLon,
+      withCityState,
+      sampleKeys: Array.from(sampleKeySet)
+    };
+  });
   vehicleTableRows = computed<MotivVehicleTableRow[]>(() =>
     this.motivVehicles().map((raw) => this.mapVehicleRow(raw))
   );
@@ -2652,7 +2704,7 @@ export class MotivComponent implements OnInit {
 
     for (const row of motivRows) {
       const mapped = this.mapDriverRow(row);
-      const locationText = mapped.location;
+      const locationText = this.buildLocationDisplayFromRaw(row);
       if (!locationText || locationText === 'N/A') continue;
 
       const emailKey = String(mapped.email || '').trim().toLowerCase();
@@ -2670,12 +2722,13 @@ export class MotivComponent implements OnInit {
 
       const mergedLocation = this.extractLocationSeed(matched);
       const matchedVehicle = matched?.current_vehicle ?? matched?.vehicle ?? null;
+      const matchedLocationText = this.buildLocationDisplayFromRaw(matched);
 
       return {
         ...driver,
         current_location: driver?.current_location ?? mergedLocation,
         currentLocation: driver?.currentLocation ?? mergedLocation,
-        location: driver?.location ?? mergedLocation,
+        location: driver?.location ?? mergedLocation ?? (matchedLocationText !== 'N/A' ? matchedLocationText : null),
         city: driver?.city ?? driver?.City ?? mergedLocation?.city ?? mergedLocation?.City ?? mergedLocation?.address?.city ?? null,
         state: driver?.state ?? driver?.State ?? mergedLocation?.state ?? mergedLocation?.State ?? mergedLocation?.address?.state ?? null,
         lat: driver?.lat ?? mergedLocation?.lat ?? mergedLocation?.latitude ?? mergedLocation?.Latitude ?? null,
@@ -2930,7 +2983,7 @@ export class MotivComponent implements OnInit {
 
   private extractLocationSeed(row: any): any {
     if (!row || typeof row !== 'object') return null;
-    return (
+    const seeded = (
       row?.current_location ??
       row?.currentLocation ??
       row?.location ??
@@ -2944,6 +2997,42 @@ export class MotivComponent implements OnInit {
       row?.coordinates ??
       null
     );
+    if (seeded) return seeded;
+    if (
+      row?.city ?? row?.City ??
+      row?.state ?? row?.State ??
+      row?.address ??
+      row?.formatted_address ??
+      row?.lat ?? row?.latitude ?? row?.Latitude ??
+      row?.lon ?? row?.lng ?? row?.longitude ?? row?.Longitude
+    ) {
+      return row;
+    }
+    return null;
+  }
+
+  private collectLocationKeys(raw: any): string[] {
+    const keys: string[] = [];
+    const seed = this.extractLocationSeed(raw);
+    if (seed && typeof seed === 'object') {
+      for (const key of Object.keys(seed)) {
+        keys.push(`loc.${key}`);
+      }
+      const address = seed?.address;
+      if (address && typeof address === 'object') {
+        for (const key of Object.keys(address)) {
+          keys.push(`loc.address.${key}`);
+        }
+      }
+    }
+    if (raw && typeof raw === 'object') {
+      for (const key of ['city', 'City', 'state', 'State', 'lat', 'latitude', 'lon', 'lng', 'longitude', 'location_name', 'formatted_address']) {
+        if (raw[key] != null) {
+          keys.push(`raw.${key}`);
+        }
+      }
+    }
+    return keys;
   }
 
   private extractMotivUserIdFromNotes(notes: any): string {
@@ -3288,28 +3377,7 @@ export class MotivComponent implements OnInit {
     const email = user?.email ?? user?.Email ?? 'N/A';
     const phone = user?.phone ?? user?.Phone ?? user?.phone_number ?? user?.PhoneNumber ?? 'N/A';
     const status = user?.status ?? user?.Status ?? 'N/A';
-    const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
-    const lon = location?.lon ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
-    const fallbackLocationText = [
-      location?.city ?? location?.City ?? location?.address?.city ?? location?.address?.City ?? raw?.city ?? raw?.City,
-      location?.state ?? location?.State ?? location?.address?.state ?? location?.address?.State ?? raw?.state ?? raw?.State
-    ].filter(Boolean).join(', ');
-    const locationText = String(
-      location?.description ??
-      location?.name ??
-      location?.address ??
-      location?.address?.formatted ??
-      location?.address?.street ??
-      location?.address_line_1 ??
-      location?.street ??
-      raw?.address ??
-      raw?.Address ??
-      location?.formatted_address ??
-      (fallbackLocationText || null) ??
-      (typeof raw?.location === 'string' ? raw.location : null) ??
-      ((lat != null && lon != null) ? `${lat}, ${lon}` : null) ??
-      'N/A'
-    );
+    const locationText = this.buildLocationDisplayFromRaw(raw);
     const vehicleTextParts = [
       vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.truckNumber ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
       vehicle?.year ?? vehicle?.Year ?? raw?.year ?? raw?.truckYear ?? raw?.TruckYear ?? raw?.vehicle_year ?? raw?.vehicleYear,
@@ -3340,6 +3408,59 @@ export class MotivComponent implements OnInit {
       vehicle: vehicleText,
       lastUpdate
     };
+  }
+
+  private buildLocationDisplayFromRaw(raw: any): string {
+    const location = this.extractLocationSeed(raw) ?? {};
+    const city = String(
+      location?.city ??
+      location?.City ??
+      location?.address?.city ??
+      location?.address?.City ??
+      raw?.city ??
+      raw?.City ??
+      ''
+    ).trim();
+    const state = String(
+      location?.state ??
+      location?.State ??
+      location?.address?.state ??
+      location?.address?.State ??
+      raw?.state ??
+      raw?.State ??
+      ''
+    ).trim();
+
+    const cityState = city && state
+      ? `${city}, ${state}`
+      : (city || state || '');
+    if (cityState) return cityState;
+
+    const textLocation = String(
+      location?.description ??
+      location?.name ??
+      location?.address?.formatted ??
+      location?.address?.line1 ??
+      location?.address?.line_1 ??
+      location?.address?.street ??
+      location?.address ??
+      location?.formatted_address ??
+      location?.address_line_1 ??
+      location?.street ??
+      raw?.address ??
+      raw?.Address ??
+      raw?.location_name ??
+      (typeof raw?.location === 'string' ? raw.location : null) ??
+      ''
+    ).trim();
+    if (textLocation) return textLocation;
+
+    const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
+    const lon = location?.lon ?? location?.lng ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
+    if (lat != null && lon != null) {
+      return `${lat}, ${lon}`;
+    }
+    return 'N/A';
   }
 
   private mapVehicleRow(raw: any): MotivVehicleTableRow {
