@@ -2291,18 +2291,31 @@ export class MotivComponent implements OnInit {
         const activeDriverRows = rows.filter((row: any) =>
           this.isActiveLikeStatus(this.mapDriverRow(row).status)
         );
-        this.motivDrivers.set(activeDriverRows);
-        this.loadedDriverRows.set(activeDriverRows.length);
-        this.loadingDrivers.set(false);
-        this.syncStatusMessage.set(`Loaded ${activeDriverRows.length} active driver rows from Drivers DB.`);
-        this.appendActivityLog(
-          'info',
-          'Drivers loaded from Access DB',
-          `${activeDriverRows.length} active rows loaded${runBackgroundSync ? ' (background sync queued)' : ''}.`
-        );
-        if (runBackgroundSync) {
-          this.autoSyncDriversToDb();
-        }
+        this.fetchVehicleLocationRows()
+          .then((locationPayload) => {
+            const enrichedDriverRows = this.enrichDriverRowsWithLocations(activeDriverRows, locationPayload.rows);
+            this.motivDrivers.set(enrichedDriverRows);
+            this.loadedDriverRows.set(enrichedDriverRows.length);
+            this.loadingDrivers.set(false);
+            this.syncStatusMessage.set(`Loaded ${enrichedDriverRows.length} active driver rows from Drivers DB.`);
+            this.appendActivityLog(
+              'info',
+              'Drivers loaded from Access DB',
+              `${enrichedDriverRows.length} active rows loaded${runBackgroundSync ? ' (background sync queued)' : ''}.`
+            );
+            if (runBackgroundSync) {
+              this.autoSyncDriversToDb();
+            }
+          })
+          .catch(() => {
+            this.motivDrivers.set(activeDriverRows);
+            this.loadedDriverRows.set(activeDriverRows.length);
+            this.loadingDrivers.set(false);
+            this.syncStatusMessage.set(`Loaded ${activeDriverRows.length} active driver rows from Drivers DB.`);
+            if (runBackgroundSync) {
+              this.autoSyncDriversToDb();
+            }
+          });
       },
       error: (err) => {
         this.driversError.set(err?.error?.error || 'Unable to load MOTIV drivers.');
@@ -2501,6 +2514,88 @@ export class MotivComponent implements OnInit {
         vehicle: row?.vehicle
           ? { ...row.vehicle, current_location: row?.vehicle?.current_location ?? mergedLocation }
           : row?.vehicle
+      };
+    });
+  }
+
+  private enrichDriverRowsWithLocations(driverRows: any[], locationRows: any[]): any[] {
+    if (!Array.isArray(driverRows) || driverRows.length === 0) return [];
+    if (!Array.isArray(locationRows) || locationRows.length === 0) return driverRows;
+
+    const byUnit = new Map<string, any>();
+    const byVin = new Map<string, any>();
+
+    for (const row of locationRows) {
+      const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
+      const unitNumber = this.normalizeVehicleMatchValue(
+        normalized?.number ??
+        normalized?.fleet_number ??
+        normalized?.fleetNumber ??
+        normalized?.unit ??
+        normalized?.unit_number ??
+        row?.number ??
+        row?.unit ??
+        row?.unit_number
+      );
+      const vin = this.normalizeVehicleMatchValue(
+        normalized?.vin ??
+        normalized?.vehicle_vin ??
+        normalized?.vehicleVin ??
+        row?.vin ??
+        row?.vehicle_vin ??
+        row?.vehicleVin
+      );
+      if (unitNumber && !byUnit.has(unitNumber)) byUnit.set(unitNumber, row);
+      if (vin && !byVin.has(vin)) byVin.set(vin, row);
+    }
+
+    return driverRows.map((driver) => {
+      const unit = this.normalizeVehicleMatchValue(
+        driver?.truckNumber ??
+        driver?.TruckNumber ??
+        driver?.unit ??
+        driver?.Unit ??
+        driver?.vehicleNumber ??
+        driver?.VehicleNumber
+      );
+      const vin = this.normalizeVehicleMatchValue(
+        driver?.truckVin ??
+        driver?.TruckVin ??
+        driver?.vin ??
+        driver?.Vin ??
+        driver?.vehicleVin ??
+        driver?.VehicleVin
+      );
+      const matched = (vin && byVin.get(vin)) || (unit && byUnit.get(unit));
+      if (!matched) return driver;
+
+      const mergedLocation =
+        matched?.current_location ??
+        matched?.currentLocation ??
+        matched?.location ??
+        null;
+      const mergedVehicle =
+        matched?.vehicle ??
+        matched?.current_vehicle ??
+        null;
+
+      return {
+        ...driver,
+        current_location: driver?.current_location ?? mergedLocation,
+        currentLocation: driver?.currentLocation ?? mergedLocation,
+        location: driver?.location ?? mergedLocation,
+        lat: driver?.lat ?? mergedLocation?.lat ?? mergedLocation?.latitude ?? mergedLocation?.Latitude ?? null,
+        lon: driver?.lon ?? driver?.lng ?? mergedLocation?.lon ?? mergedLocation?.lng ?? mergedLocation?.longitude ?? mergedLocation?.Longitude ?? null,
+        lastLocationUpdate:
+          driver?.lastLocationUpdate ??
+          driver?.LastLocationUpdate ??
+          mergedLocation?.located_at ??
+          mergedLocation?.locatedAt ??
+          driver?.updatedAt ??
+          driver?.UpdatedAt ??
+          null,
+        vehicle: driver?.vehicle ?? mergedVehicle,
+        current_vehicle: driver?.current_vehicle ?? mergedVehicle
       };
     });
   }
@@ -2903,7 +2998,18 @@ export class MotivComponent implements OnInit {
     const status = user?.status ?? user?.Status ?? 'N/A';
     const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
     const lon = location?.lon ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
-    const locationText = lat != null && lon != null ? `${lat}, ${lon}` : (location?.description ?? 'N/A');
+    const fallbackLocationText = [location?.city, location?.state].filter(Boolean).join(', ');
+    const locationText = lat != null && lon != null
+      ? `${lat}, ${lon}`
+      : String(
+        location?.description ??
+        location?.name ??
+        location?.address ??
+        location?.formatted_address ??
+        (fallbackLocationText || null) ??
+        (typeof raw?.location === 'string' ? raw.location : null) ??
+        'N/A'
+      );
     const vehicleTextParts = [
       vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.truckNumber ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
       vehicle?.year ?? vehicle?.Year ?? raw?.year ?? raw?.truckYear ?? raw?.TruckYear ?? raw?.vehicle_year ?? raw?.vehicleYear,
