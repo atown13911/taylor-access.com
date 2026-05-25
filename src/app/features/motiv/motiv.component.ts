@@ -2217,14 +2217,17 @@ export class MotivComponent implements OnInit {
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/activity-logs?limit=5000`).subscribe({
       next: (res) => {
         const rows = Array.isArray(res?.rows) ? res.rows : [];
+        const mappedRows = rows
+          .map((row: any) => this.mapPersistedActivityLogRow(row))
+          .filter((row: MotivActivityLogEntry | null): row is MotivActivityLogEntry => !!row)
+          .sort((a: MotivActivityLogEntry, b: MotivActivityLogEntry) => b.timestamp - a.timestamp);
         this.persistedActivityFeed.set(
-          rows
-            .map((row: any) => this.mapPersistedActivityLogRow(row))
-            .filter((row: MotivActivityLogEntry | null): row is MotivActivityLogEntry => !!row)
-            .sort((a: MotivActivityLogEntry, b: MotivActivityLogEntry) => b.timestamp - a.timestamp)
+          mappedRows
         );
-        if (allowBackfill && rows.length < 75) {
-          this.triggerActivityBackfill();
+
+        const rowsWithLocation = mappedRows.filter((row: MotivActivityLogEntry) => this.extractCurrentLocation(row.details) !== 'N/A').length;
+        if (allowBackfill && (rows.length < 75 || (rows.length > 0 && rowsWithLocation === 0))) {
+          this.triggerActivityBackfill(rows.length > 0);
         }
       },
       error: () => {
@@ -2233,11 +2236,12 @@ export class MotivComponent implements OnInit {
     });
   }
 
-  private triggerActivityBackfill(): void {
+  private triggerActivityBackfill(force = false): void {
     if (this.activityBackfillAttempted()) return;
     this.activityBackfillAttempted.set(true);
 
-    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/activity-logs/backfill?days=365`, {}).subscribe({
+    const query = force ? '?days=365&force=true' : '?days=365';
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/activity-logs/backfill${query}`, {}).subscribe({
       next: (res) => {
         const created = Number(res?.created ?? 0);
         if (created > 0) {
@@ -2681,9 +2685,18 @@ export class MotivComponent implements OnInit {
 
     const byUnit = new Map<string, any>();
     const byVin = new Map<string, any>();
+    const byUserId = new Map<string, any>();
 
     for (const row of locationRows) {
       const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
+      const user = row?.user ?? row?.current_user ?? row?.driver ?? row ?? {};
+      const userId = String(
+        user?.id ??
+        user?.user_id ??
+        row?.user_id ??
+        row?.userId ??
+        ''
+      ).trim();
       const unitNumber = this.normalizeVehicleMatchValue(
         normalized?.number ??
         normalized?.fleet_number ??
@@ -2704,9 +2717,11 @@ export class MotivComponent implements OnInit {
       );
       if (unitNumber && !byUnit.has(unitNumber)) byUnit.set(unitNumber, row);
       if (vin && !byVin.has(vin)) byVin.set(vin, row);
+      if (userId && !byUserId.has(userId)) byUserId.set(userId, row);
     }
 
     return driverRows.map((driver) => {
+      const motivUserId = this.extractMotivUserIdFromNotes(driver?.notes ?? driver?.Notes);
       const unit = this.normalizeVehicleMatchValue(
         driver?.truckNumber ??
         driver?.TruckNumber ??
@@ -2723,7 +2738,10 @@ export class MotivComponent implements OnInit {
         driver?.vehicleVin ??
         driver?.VehicleVin
       );
-      const matched = (vin && byVin.get(vin)) || (unit && byUnit.get(unit));
+      const matched =
+        (motivUserId && byUserId.get(motivUserId))
+        || (vin && byVin.get(vin))
+        || (unit && byUnit.get(unit));
       if (!matched) return driver;
 
       const mergedLocation =
@@ -2816,6 +2834,13 @@ export class MotivComponent implements OnInit {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
+  }
+
+  private extractMotivUserIdFromNotes(notes: any): string {
+    const text = String(notes ?? '');
+    if (!text) return '';
+    const match = /userId:\s*([A-Za-z0-9\-_]+)/i.exec(text);
+    return match?.[1]?.trim() || '';
   }
 
   private buildDriverFallbackVehicleRow(driver: any): any {
@@ -3155,18 +3180,24 @@ export class MotivComponent implements OnInit {
     const status = user?.status ?? user?.Status ?? 'N/A';
     const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
     const lon = location?.lon ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
-    const fallbackLocationText = [location?.city, location?.state].filter(Boolean).join(', ');
-    const locationText = lat != null && lon != null
-      ? `${lat}, ${lon}`
-      : String(
-        location?.description ??
-        location?.name ??
-        location?.address ??
-        location?.formatted_address ??
-        (fallbackLocationText || null) ??
-        (typeof raw?.location === 'string' ? raw.location : null) ??
-        'N/A'
-      );
+    const fallbackLocationText = [
+      location?.city ?? raw?.city ?? raw?.City,
+      location?.state ?? raw?.state ?? raw?.State
+    ].filter(Boolean).join(', ');
+    const locationText = String(
+      location?.description ??
+      location?.name ??
+      location?.address ??
+      location?.address_line_1 ??
+      location?.street ??
+      raw?.address ??
+      raw?.Address ??
+      location?.formatted_address ??
+      (fallbackLocationText || null) ??
+      (typeof raw?.location === 'string' ? raw.location : null) ??
+      ((lat != null && lon != null) ? `${lat}, ${lon}` : null) ??
+      'N/A'
+    );
     const vehicleTextParts = [
       vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.truckNumber ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
       vehicle?.year ?? vehicle?.Year ?? raw?.year ?? raw?.truckYear ?? raw?.TruckYear ?? raw?.vehicle_year ?? raw?.vehicleYear,
@@ -3219,19 +3250,17 @@ export class MotivComponent implements OnInit {
     const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
     const lon = location?.lon ?? location?.lng ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
     const fallbackLocationText = [location?.city, location?.state].filter(Boolean).join(', ');
-    const locationText =
-      lat != null && lon != null
-        ? `${lat}, ${lon}`
-        : String(
-          location?.description ??
-          location?.name ??
-          location?.address ??
-          location?.formatted_address ??
-          (fallbackLocationText || null) ??
-          raw?.location_name ??
-          (typeof raw?.location === 'string' ? raw.location : null) ??
-          'N/A'
-        );
+    const locationText = String(
+      location?.description ??
+      location?.name ??
+      location?.address ??
+      location?.formatted_address ??
+      (fallbackLocationText || null) ??
+      raw?.location_name ??
+      (typeof raw?.location === 'string' ? raw.location : null) ??
+      ((lat != null && lon != null) ? `${lat}, ${lon}` : null) ??
+      'N/A'
+    );
     return {
       id: String(vehicle?.id ?? raw?.id ?? raw?.vehicle_id ?? 'N/A'),
       number: String(vehicle?.number ?? vehicle?.fleet_number ?? vehicle?.fleetNumber ?? vehicle?.unit ?? vehicle?.unitNumber ?? raw?.number ?? 'N/A'),

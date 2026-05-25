@@ -1470,6 +1470,10 @@ public class MotivController : ControllerBase
 
     private static string BuildDriverLocationLabel(Driver driver, MotivDriverProfile? profile)
     {
+        var rawLocation = TryExtractLocationFromProfileRawJson(profile?.RawJson);
+        if (!string.IsNullOrWhiteSpace(rawLocation))
+            return rawLocation;
+
         var lat = driver.Latitude ?? profile?.Latitude;
         var lon = driver.Longitude ?? profile?.Longitude;
         if (lat.HasValue && lon.HasValue)
@@ -1504,6 +1508,54 @@ public class MotivController : ControllerBase
         }
 
         return "N/A";
+    }
+
+    private static string? TryExtractLocationFromProfileRawJson(string? rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+            var location = PickNestedObject(root, "current_location")
+                ?? PickNestedObject(root, "location")
+                ?? (root.ValueKind == JsonValueKind.Object ? root : (JsonElement?)null);
+            if (!location.HasValue)
+                return null;
+
+            var loc = location.Value;
+            var locationText = FirstNonEmptyString(
+                PickString(loc, "description", "name", "address", "formatted_address", "street", "address_line_1"),
+                BuildCityState(PickString(loc, "city"), PickString(loc, "state"))
+            );
+            if (!string.IsNullOrWhiteSpace(locationText))
+                return locationText;
+
+            var lat = PickDecimal(loc, "lat", "latitude");
+            var lon = PickDecimal(loc, "lon", "lng", "longitude");
+            if (lat.HasValue && lon.HasValue)
+                return $"{lat.Value:0.####}, {lon.Value:0.####}";
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? BuildCityState(string? city, string? state)
+    {
+        var c = (city ?? "").Trim();
+        var s = (state ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(c) && string.IsNullOrWhiteSpace(s))
+            return null;
+        if (string.IsNullOrWhiteSpace(c))
+            return s;
+        if (string.IsNullOrWhiteSpace(s))
+            return c;
+        return $"{c}, {s}";
     }
 
     private static string? FirstNonEmptyString(params string?[] values)
