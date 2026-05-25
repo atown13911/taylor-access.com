@@ -763,6 +763,290 @@ public class MotivController : ControllerBase
         });
     }
 
+    [HttpGet("activity-logs")]
+    public async Task<IActionResult> GetActivityLogs(
+        [FromQuery] int limit = 1000,
+        [FromQuery] string? search = null,
+        [FromQuery] string? kind = null,
+        [FromQuery] string? scope = null,
+        [FromQuery] string? driverName = null)
+    {
+        var orgId = await ResolveOrganizationId();
+        var cappedLimit = Math.Clamp(limit <= 0 ? 1000 : limit, 1, 5000);
+
+        var normalizedKind = NormalizeActivityKind(kind);
+        var normalizedScope = (scope ?? "").Trim().ToLowerInvariant();
+        var normalizedSearch = (search ?? "").Trim();
+        var normalizedDriver = (driverName ?? "").Trim();
+
+        var query = _db.MotivActivityLogs.AsNoTracking();
+        if (orgId > 0)
+            query = query.Where(x => x.OrganizationId == orgId);
+
+        if (!string.IsNullOrWhiteSpace(normalizedKind))
+            query = query.Where(x => x.Kind == normalizedKind);
+
+        if (!string.IsNullOrWhiteSpace(normalizedDriver))
+            query = query.Where(x => x.DriverName != null && EF.Functions.ILike(x.DriverName, $"%{normalizedDriver}%"));
+
+        if (normalizedScope == "driver")
+            query = query.Where(x => x.DriverName != null && x.DriverName != "");
+        else if (normalizedScope == "system")
+            query = query.Where(x => x.DriverName == null || x.DriverName == "");
+
+        if (!string.IsNullOrWhiteSpace(normalizedSearch))
+        {
+            query = query.Where(x =>
+                EF.Functions.ILike(x.Title, $"%{normalizedSearch}%")
+                || EF.Functions.ILike(x.Details, $"%{normalizedSearch}%")
+                || (x.DriverName != null && EF.Functions.ILike(x.DriverName, $"%{normalizedSearch}%")));
+        }
+
+        var rows = await query
+            .OrderByDescending(x => x.EventAt)
+            .ThenByDescending(x => x.Id)
+            .Take(cappedLimit)
+            .Select(x => new
+            {
+                id = x.Id,
+                kind = x.Kind,
+                title = x.Title,
+                details = x.Details,
+                driverName = x.DriverName,
+                timestamp = x.EventAt
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            rows,
+            count = rows.Count,
+            limit = cappedLimit
+        });
+    }
+
+    [HttpPost("activity-logs")]
+    public async Task<IActionResult> CreateActivityLog([FromBody] MotivActivityLogRequest? request)
+    {
+        if (request == null)
+            return BadRequest(new { error = "Request body is required." });
+
+        var title = (request.Title ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(title))
+            return BadRequest(new { error = "Title is required." });
+
+        var orgId = await ResolveOrganizationId();
+        var entry = new MotivActivityLog
+        {
+            OrganizationId = orgId == 0 ? null : orgId,
+            Kind = NormalizeActivityKind(request.Kind) ?? "info",
+            Title = Truncate(title, 200),
+            DriverName = TruncateNullable(request.DriverName, 200),
+            Details = Truncate((request.Details ?? "").Trim(), 2000),
+            EventAt = request.Timestamp?.ToUniversalTime() ?? DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.MotivActivityLogs.Add(entry);
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            id = entry.Id,
+            kind = entry.Kind,
+            title = entry.Title,
+            details = entry.Details,
+            driverName = entry.DriverName,
+            timestamp = entry.EventAt
+        });
+    }
+
+    [HttpPost("activity-logs/driver-snapshots")]
+    public async Task<IActionResult> IngestDriverSnapshotActivity([FromBody] MotivDriverSnapshotBatchRequest? request)
+    {
+        var rows = request?.Rows ?? new List<MotivDriverSnapshotActivityRequest>();
+        if (rows.Count == 0)
+            return Ok(new { created = 0, skipped = 0, message = "No driver snapshot rows provided." });
+
+        var orgId = await ResolveOrganizationId();
+        var nowUtc = DateTime.UtcNow;
+        var eventAt = request?.CapturedAt?.ToUniversalTime() ?? nowUtc;
+        var dedupeWindowStart = nowUtc.AddHours(-6);
+
+        var recent = await _db.MotivActivityLogs.AsNoTracking()
+            .Where(x =>
+                (orgId == 0 || x.OrganizationId == orgId)
+                && x.EventAt >= dedupeWindowStart
+                && x.Title.StartsWith("Driver update:"))
+            .Select(x => new { x.DriverName, x.Details, x.EventAt })
+            .ToListAsync();
+
+        var created = 0;
+        var skipped = 0;
+        foreach (var row in rows)
+        {
+            var name = (row.DriverName ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                skipped++;
+                continue;
+            }
+
+            var details = BuildDriverSnapshotDetails(row);
+            var hasRecentDuplicate = recent.Any(x =>
+                string.Equals((x.DriverName ?? "").Trim(), name, StringComparison.OrdinalIgnoreCase)
+                && string.Equals((x.Details ?? "").Trim(), details, StringComparison.OrdinalIgnoreCase)
+                && Math.Abs((x.EventAt - eventAt).TotalMinutes) <= 15);
+
+            if (hasRecentDuplicate)
+            {
+                skipped++;
+                continue;
+            }
+
+            var entry = new MotivActivityLog
+            {
+                OrganizationId = orgId == 0 ? null : orgId,
+                Kind = "info",
+                Title = Truncate($"Driver update: {name}", 200),
+                DriverName = Truncate(name, 200),
+                Details = Truncate(details, 2000),
+                EventAt = eventAt,
+                CreatedAt = nowUtc
+            };
+            _db.MotivActivityLogs.Add(entry);
+            recent.Add(new { DriverName = (string?)entry.DriverName, Details = entry.Details, EventAt = entry.EventAt });
+            created++;
+        }
+
+        if (created > 0)
+            await _db.SaveChangesAsync();
+
+        return Ok(new { created, skipped });
+    }
+
+    [HttpPost("activity-logs/backfill")]
+    public async Task<IActionResult> BackfillActivityLogs([FromQuery] int days = 365, [FromQuery] bool force = false)
+    {
+        var orgId = await ResolveOrganizationId();
+        var windowDays = Math.Clamp(days <= 0 ? 365 : days, 30, 1825);
+        var windowStart = DateTime.UtcNow.AddDays(-windowDays);
+
+        var existingCountQuery = _db.MotivActivityLogs.AsNoTracking();
+        if (orgId > 0)
+            existingCountQuery = existingCountQuery.Where(x => x.OrganizationId == orgId);
+        var existingCount = await existingCountQuery.CountAsync();
+        if (existingCount > 0 && !force)
+        {
+            return Ok(new
+            {
+                created = 0,
+                skipped = 0,
+                existingCount,
+                alreadyBackfilled = true,
+                message = "Activity logs already exist. Use force=true to rerun backfill."
+            });
+        }
+
+        var driversQuery = _db.Drivers.AsNoTracking().Where(d => !d.IsDeleted);
+        if (orgId > 0)
+            driversQuery = driversQuery.Where(d => d.OrganizationId == orgId);
+        var drivers = await driversQuery.ToListAsync();
+        if (drivers.Count == 0)
+            return Ok(new { created = 0, skipped = 0, existingCount, message = "No driver rows found for backfill." });
+
+        var profiles = await _db.MotivDriverProfiles.AsNoTracking().ToListAsync();
+        var profileByDriverId = profiles
+            .GroupBy(p => p.DriverId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var existingKeys = await _db.MotivActivityLogs.AsNoTracking()
+            .Where(x => (orgId == 0 || x.OrganizationId == orgId) && x.EventAt >= windowStart)
+            .Select(x => new { x.Title, x.DriverName, x.Details })
+            .ToListAsync();
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var key in existingKeys)
+            seen.Add(BuildActivityDedupeKey(key.Title, key.DriverName, key.Details));
+
+        var now = DateTime.UtcNow;
+        var created = 0;
+        var skipped = 0;
+
+        foreach (var driver in drivers)
+        {
+            var name = string.IsNullOrWhiteSpace(driver.Name) ? $"Driver #{driver.Id}" : driver.Name.Trim();
+            profileByDriverId.TryGetValue(driver.Id, out var profile);
+
+            var profileLinkedAt = profile?.CreatedAt;
+            if (profileLinkedAt.HasValue && profileLinkedAt.Value >= windowStart)
+            {
+                var linkDetails = BuildMotivProfileLinkDetails(driver, profile);
+                var title = Truncate($"Motiv profile linked: {name}", 200);
+                var key = BuildActivityDedupeKey(title, name, linkDetails);
+                if (!seen.Contains(key))
+                {
+                    _db.MotivActivityLogs.Add(new MotivActivityLog
+                    {
+                        OrganizationId = orgId == 0 ? null : orgId,
+                        Kind = "info",
+                        Title = title,
+                        DriverName = Truncate(name, 200),
+                        Details = Truncate(linkDetails, 2000),
+                        EventAt = profileLinkedAt.Value.ToUniversalTime(),
+                        CreatedAt = now
+                    });
+                    seen.Add(key);
+                    created++;
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+
+            var snapshotAt = ResolveDriverSnapshotEventAt(driver, profile, now);
+            if (snapshotAt < windowStart)
+                continue;
+
+            var snapshotDetails = BuildDriverSnapshotDetails(
+                driver.Status,
+                BuildDriverVehicleLabel(driver, profile),
+                BuildDriverLocationLabel(driver, profile));
+            var snapshotTitle = Truncate($"Driver update: {name}", 200);
+            var snapshotKey = BuildActivityDedupeKey(snapshotTitle, name, snapshotDetails);
+            if (seen.Contains(snapshotKey))
+            {
+                skipped++;
+                continue;
+            }
+
+            _db.MotivActivityLogs.Add(new MotivActivityLog
+            {
+                OrganizationId = orgId == 0 ? null : orgId,
+                Kind = "info",
+                Title = snapshotTitle,
+                DriverName = Truncate(name, 200),
+                Details = Truncate(snapshotDetails, 2000),
+                EventAt = snapshotAt,
+                CreatedAt = now
+            });
+            seen.Add(snapshotKey);
+            created++;
+        }
+
+        if (created > 0)
+            await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            created,
+            skipped,
+            existingCount,
+            days = windowDays
+        });
+    }
+
     private async Task<IActionResult> ProxyMotivGet(string path, string endpointName, bool includeIncomingQuery = true)
     {
         var result = await FetchMotivPayload(path, endpointName, includeIncomingQuery);
@@ -1079,6 +1363,102 @@ public class MotivController : ControllerBase
     {
         if (string.IsNullOrEmpty(value) || value.Length <= maxLength) return value;
         return value.Substring(0, maxLength);
+    }
+
+    private static string? TruncateNullable(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+        return Truncate(value.Trim(), maxLength);
+    }
+
+    private static string? NormalizeActivityKind(string? kind)
+    {
+        var normalized = (kind ?? "").Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "info" => "info",
+            "success" => "success",
+            "warning" => "warning",
+            "error" => "error",
+            "" => null,
+            _ => "info"
+        };
+    }
+
+    private static string BuildDriverSnapshotDetails(MotivDriverSnapshotActivityRequest row)
+    {
+        var status = string.IsNullOrWhiteSpace(row.Status) ? "unknown" : row.Status.Trim();
+        var vehicle = string.IsNullOrWhiteSpace(row.Vehicle) ? "N/A" : row.Vehicle.Trim();
+        var location = string.IsNullOrWhiteSpace(row.Location) ? "N/A" : row.Location.Trim();
+        return $"Status: {status} | Vehicle: {vehicle} | Location: {location}";
+    }
+
+    private static string BuildDriverSnapshotDetails(string? status, string? vehicle, string? location)
+    {
+        var statusText = string.IsNullOrWhiteSpace(status) ? "unknown" : status.Trim();
+        var vehicleText = string.IsNullOrWhiteSpace(vehicle) ? "N/A" : vehicle.Trim();
+        var locationText = string.IsNullOrWhiteSpace(location) ? "N/A" : location.Trim();
+        return $"Status: {statusText} | Vehicle: {vehicleText} | Location: {locationText}";
+    }
+
+    private static string BuildMotivProfileLinkDetails(Driver driver, MotivDriverProfile? profile)
+    {
+        var userId = string.IsNullOrWhiteSpace(profile?.MotivUserId) ? "N/A" : profile!.MotivUserId;
+        var vehicleId = string.IsNullOrWhiteSpace(profile?.MotivVehicleId) ? "N/A" : profile!.MotivVehicleId;
+        var status = string.IsNullOrWhiteSpace(profile?.MotivStatus) ? (driver.Status ?? "unknown") : profile!.MotivStatus;
+        return $"Motiv userId: {userId} | Motiv vehicleId: {vehicleId} | Status: {status}";
+    }
+
+    private static DateTime ResolveDriverSnapshotEventAt(Driver driver, MotivDriverProfile? profile, DateTime fallback)
+    {
+        var candidate = driver.LastLocationUpdate
+            ?? profile?.LastLocationUpdate
+            ?? profile?.UpdatedAt
+            ?? driver.UpdatedAt;
+        if (candidate == default)
+            return fallback;
+        return candidate.ToUniversalTime();
+    }
+
+    private static string BuildDriverVehicleLabel(Driver driver, MotivDriverProfile? profile)
+    {
+        var number = FirstNonEmptyString(driver.TruckNumber, profile?.VehicleNumber);
+        var year = driver.TruckYear ?? profile?.VehicleYear;
+        var make = FirstNonEmptyString(driver.TruckMake, profile?.VehicleMake);
+        var model = FirstNonEmptyString(driver.TruckModel, profile?.VehicleModel);
+
+        var parts = new List<string>();
+        if (year.HasValue && year.Value > 0) parts.Add(year.Value.ToString());
+        if (!string.IsNullOrWhiteSpace(number)) parts.Add(number!);
+        if (!string.IsNullOrWhiteSpace(make)) parts.Add(make!);
+        if (!string.IsNullOrWhiteSpace(model)) parts.Add(model!);
+
+        return parts.Count == 0 ? "N/A" : string.Join(" ", parts);
+    }
+
+    private static string BuildDriverLocationLabel(Driver driver, MotivDriverProfile? profile)
+    {
+        var lat = driver.Latitude ?? profile?.Latitude;
+        var lon = driver.Longitude ?? profile?.Longitude;
+        if (lat.HasValue && lon.HasValue)
+            return $"{lat.Value:0.####}, {lon.Value:0.####}";
+        return "N/A";
+    }
+
+    private static string? FirstNonEmptyString(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                return value.Trim();
+        }
+        return null;
+    }
+
+    private static string BuildActivityDedupeKey(string? title, string? driverName, string? details)
+    {
+        return $"{(title ?? "").Trim().ToLowerInvariant()}|{(driverName ?? "").Trim().ToLowerInvariant()}|{(details ?? "").Trim().ToLowerInvariant()}";
     }
 
     private static bool IsReachable(bool success, int statusCode)
@@ -1466,5 +1846,28 @@ public class MotivProbeMethodRequest
 {
     public string? Path { get; set; }
     public string? Method { get; set; }
+}
+
+public class MotivActivityLogRequest
+{
+    public string? Kind { get; set; }
+    public string? Title { get; set; }
+    public string? DriverName { get; set; }
+    public string? Details { get; set; }
+    public DateTime? Timestamp { get; set; }
+}
+
+public class MotivDriverSnapshotBatchRequest
+{
+    public DateTime? CapturedAt { get; set; }
+    public List<MotivDriverSnapshotActivityRequest> Rows { get; set; } = new();
+}
+
+public class MotivDriverSnapshotActivityRequest
+{
+    public string? DriverName { get; set; }
+    public string? Status { get; set; }
+    public string? Vehicle { get; set; }
+    public string? Location { get; set; }
 }
 

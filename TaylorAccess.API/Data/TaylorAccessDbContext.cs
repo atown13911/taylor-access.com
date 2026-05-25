@@ -119,6 +119,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<ApplicantRecord> ApplicantRecords => Set<ApplicantRecord>();
     public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
     public DbSet<MotivDriverProfile> MotivDriverProfiles => Set<MotivDriverProfile>();
+    public DbSet<MotivActivityLog> MotivActivityLogs => Set<MotivActivityLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -62,6 +62,7 @@ type MotivFuelCardRow = {
   spend: number;
 };
 type MotivActivityLogEntry = {
+  id?: number;
   timestamp: number;
   kind: 'info' | 'success' | 'warning' | 'error';
   title: string;
@@ -1422,6 +1423,8 @@ export class MotivComponent implements OnInit {
   motivFuelPurchases = signal<any[]>([]);
   motivFuelCards = signal<any[]>([]);
   motivCardTransactions = signal<any[]>([]);
+  persistedActivityFeed = signal<MotivActivityLogEntry[]>([]);
+  activityBackfillAttempted = signal(false);
   activityFeed = signal<MotivActivityLogEntry[]>([]);
   selectedActivityDriverName = signal('');
   activitySearchTerm = signal('');
@@ -1708,22 +1711,7 @@ export class MotivComponent implements OnInit {
     this.filteredDriverRows()
   );
   activityLogRows = computed<MotivActivityLogEntry[]>(() => {
-    const derivedUpdates = this.driverTableRows()
-      .reduce<MotivActivityLogEntry[]>((rows, row) => {
-        const dt = this.tryParseDate(row.lastUpdate);
-        if (!dt) return rows;
-        rows.push({
-          timestamp: dt.getTime(),
-          kind: 'info' as const,
-          title: `Driver update: ${row.name}`,
-          details: `Status ${row.status} | Vehicle ${row.vehicle} | Location ${row.location}`,
-          driverName: row.name
-        });
-        return rows;
-      }, [])
-      .sort((a, b) => b.timestamp - a.timestamp);
-
-    const combined = [...this.activityFeed(), ...derivedUpdates]
+    const combined = [...this.activityFeed(), ...this.persistedActivityFeed()]
       .sort((a, b) => b.timestamp - a.timestamp);
 
     return combined;
@@ -2133,6 +2121,9 @@ export class MotivComponent implements OnInit {
 
   setTab(tab: MotivTab): void {
     this.activeTab.set(tab);
+    if (tab === 'activity') {
+      this.loadPersistedActivityLogs();
+    }
     if ((tab === 'drivers' || tab === 'activity') && this.motivDrivers().length === 0 && !this.loadingDrivers()) {
       this.loadDrivers();
     }
@@ -2176,6 +2167,72 @@ export class MotivComponent implements OnInit {
     this.selectedActivityDriverName.set('');
   }
 
+  private loadPersistedActivityLogs(allowBackfill = true): void {
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/activity-logs?limit=5000`).subscribe({
+      next: (res) => {
+        const rows = Array.isArray(res?.rows) ? res.rows : [];
+        this.persistedActivityFeed.set(
+          rows
+            .map((row: any) => this.mapPersistedActivityLogRow(row))
+            .filter((row: MotivActivityLogEntry | null): row is MotivActivityLogEntry => !!row)
+            .sort((a: MotivActivityLogEntry, b: MotivActivityLogEntry) => b.timestamp - a.timestamp)
+        );
+        if (allowBackfill && rows.length < 75) {
+          this.triggerActivityBackfill();
+        }
+      },
+      error: () => {
+        // Keep current in-memory feed if persisted logs are unavailable.
+      }
+    });
+  }
+
+  private triggerActivityBackfill(): void {
+    if (this.activityBackfillAttempted()) return;
+    this.activityBackfillAttempted.set(true);
+
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/activity-logs/backfill?days=365`, {}).subscribe({
+      next: (res) => {
+        const created = Number(res?.created ?? 0);
+        if (created > 0) {
+          this.loadPersistedActivityLogs(false);
+        }
+      },
+      error: () => {
+        // Non-blocking: table still works with existing persisted/session logs.
+      }
+    });
+  }
+
+  private mapPersistedActivityLogRow(raw: any): MotivActivityLogEntry | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const timestamp = this.toTimestamp(raw.timestamp ?? raw.eventAt ?? raw.createdAt);
+    if (!timestamp) return null;
+
+    const rawKind = String(raw.kind || '').trim().toLowerCase();
+    const kind: MotivActivityLogEntry['kind'] =
+      rawKind === 'success' || rawKind === 'warning' || rawKind === 'error'
+        ? rawKind
+        : 'info';
+
+    return {
+      id: typeof raw.id === 'number' ? raw.id : undefined,
+      timestamp,
+      kind,
+      title: String(raw.title || '').trim() || 'Activity',
+      details: String(raw.details || '').trim(),
+      driverName: String(raw.driverName || '').trim() || null
+    };
+  }
+
+  private toTimestamp(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value > 9999999999 ? value : value * 1000;
+    }
+    const parsed = this.tryParseDate(String(value || ''));
+    return parsed ? parsed.getTime() : 0;
+  }
+
   private appendActivityLog(kind: MotivActivityLogEntry['kind'], title: string, details: string, driverName?: string | null): void {
     const entry: MotivActivityLogEntry = {
       timestamp: Date.now(),
@@ -2185,6 +2242,45 @@ export class MotivComponent implements OnInit {
       driverName: driverName || null
     };
     this.activityFeed.update((rows) => [entry, ...rows].slice(0, 200));
+    this.saveActivityLogToDb(entry);
+  }
+
+  private saveActivityLogToDb(entry: MotivActivityLogEntry): void {
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/activity-logs`, {
+      kind: entry.kind,
+      title: entry.title,
+      details: entry.details,
+      driverName: entry.driverName || null,
+      timestamp: new Date(entry.timestamp).toISOString()
+    }).subscribe({
+      next: () => {},
+      error: () => {
+        // Non-blocking: UI still shows in-memory activity.
+      }
+    });
+  }
+
+  private saveDriverSnapshotActivity(rows: MotivDriverTableRow[]): void {
+    const payloadRows = rows
+      .map((row) => ({
+        driverName: String(row.name || '').trim(),
+        status: String(row.status || '').trim(),
+        vehicle: String(row.vehicle || '').trim(),
+        location: String(row.location || '').trim()
+      }))
+      .filter((row) => !!row.driverName);
+
+    if (payloadRows.length === 0) return;
+
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/activity-logs/driver-snapshots`, {
+      capturedAt: new Date().toISOString(),
+      rows: payloadRows
+    }).subscribe({
+      next: () => this.loadPersistedActivityLogs(),
+      error: () => {
+        // Non-blocking: still keep current UI logs.
+      }
+    });
   }
 
   loadApiConfig(): void {
@@ -2316,6 +2412,7 @@ export class MotivComponent implements OnInit {
               'Drivers loaded from Access DB',
               `${enrichedDriverRows.length} active rows loaded${runBackgroundSync ? ' (background sync queued)' : ''}.`
             );
+            this.saveDriverSnapshotActivity(this.driverTableRows());
             if (runBackgroundSync) {
               this.autoSyncDriversToDb();
             }
@@ -2325,6 +2422,7 @@ export class MotivComponent implements OnInit {
             this.loadedDriverRows.set(activeDriverRows.length);
             this.loadingDrivers.set(false);
             this.syncStatusMessage.set(`Loaded ${activeDriverRows.length} active driver rows from Drivers DB.`);
+            this.saveDriverSnapshotActivity(this.driverTableRows());
             if (runBackgroundSync) {
               this.autoSyncDriversToDb();
             }

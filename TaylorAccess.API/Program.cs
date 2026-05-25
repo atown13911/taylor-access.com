@@ -357,6 +357,23 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""MotivActivityLogs"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NULL,
+            ""Kind"" VARCHAR(20) NOT NULL DEFAULT 'info',
+            ""Title"" VARCHAR(200) NOT NULL,
+            ""DriverName"" VARCHAR(200) NULL,
+            ""Details"" VARCHAR(2000) NOT NULL DEFAULT '',
+            ""EventAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_MotivActivityLogs_EventAt""
+            ON ""MotivActivityLogs"" (""EventAt"");
+        CREATE INDEX IF NOT EXISTS ""IX_MotivActivityLogs_DriverName""
+            ON ""MotivActivityLogs"" (""DriverName"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""CompanyPermits"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL,
