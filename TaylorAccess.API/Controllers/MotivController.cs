@@ -881,6 +881,25 @@ public class MotivController : ControllerBase
             .Select(x => new { x.DriverName, x.Details, x.EventAt })
             .ToListAsync();
 
+        var latestDriverDetails = await _db.MotivActivityLogs.AsNoTracking()
+            .Where(x =>
+                (orgId == 0 || x.OrganizationId == orgId)
+                && x.DriverName != null
+                && x.DriverName != ""
+                && x.Title.StartsWith("Driver update:"))
+            .OrderByDescending(x => x.EventAt)
+            .ThenByDescending(x => x.Id)
+            .Select(x => new { x.DriverName, x.Details })
+            .ToListAsync();
+
+        var previousLocationByDriver = latestDriverDetails
+            .GroupBy(x => (x.DriverName ?? "").Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .ToDictionary(
+                g => g.Key,
+                g => ExtractCurrentLocationFromDetails(g.First().Details),
+                StringComparer.OrdinalIgnoreCase);
+
         var created = 0;
         var skipped = 0;
         foreach (var row in rows)
@@ -892,7 +911,16 @@ public class MotivController : ControllerBase
                 continue;
             }
 
-            var details = BuildDriverSnapshotDetails(row);
+            var currentLocation = string.IsNullOrWhiteSpace(row.Location) ? "N/A" : row.Location.Trim();
+            var previousLocation = previousLocationByDriver.TryGetValue(name, out var prior)
+                ? prior
+                : "N/A";
+
+            var details = BuildDriverSnapshotDetails(
+                string.IsNullOrWhiteSpace(row.Status) ? "unknown" : row.Status.Trim(),
+                string.IsNullOrWhiteSpace(row.Vehicle) ? "N/A" : row.Vehicle.Trim(),
+                previousLocation,
+                currentLocation);
             var hasRecentDuplicate = recent.Any(x =>
                 string.Equals((x.DriverName ?? "").Trim(), name, StringComparison.OrdinalIgnoreCase)
                 && string.Equals((x.Details ?? "").Trim(), details, StringComparison.OrdinalIgnoreCase)
@@ -916,6 +944,7 @@ public class MotivController : ControllerBase
             };
             _db.MotivActivityLogs.Add(entry);
             recent.Add(new { DriverName = (string?)entry.DriverName, Details = entry.Details, EventAt = entry.EventAt });
+            previousLocationByDriver[name] = currentLocation;
             created++;
         }
 
@@ -1012,6 +1041,7 @@ public class MotivController : ControllerBase
             var snapshotDetails = BuildDriverSnapshotDetails(
                 driver.Status,
                 BuildDriverVehicleLabel(driver, profile),
+                "N/A",
                 BuildDriverLocationLabel(driver, profile));
             var snapshotTitle = Truncate($"Driver update: {name}", 200);
             var snapshotKey = BuildActivityDedupeKey(snapshotTitle, name, snapshotDetails);
@@ -1391,15 +1421,16 @@ public class MotivController : ControllerBase
         var status = string.IsNullOrWhiteSpace(row.Status) ? "unknown" : row.Status.Trim();
         var vehicle = string.IsNullOrWhiteSpace(row.Vehicle) ? "N/A" : row.Vehicle.Trim();
         var location = string.IsNullOrWhiteSpace(row.Location) ? "N/A" : row.Location.Trim();
-        return $"Status: {status} | Vehicle: {vehicle} | Location: {location}";
+        return $"Status: {status} | Vehicle: {vehicle} | Previous Location: N/A | Current Location: {location}";
     }
 
-    private static string BuildDriverSnapshotDetails(string? status, string? vehicle, string? location)
+    private static string BuildDriverSnapshotDetails(string? status, string? vehicle, string? previousLocation, string? currentLocation)
     {
         var statusText = string.IsNullOrWhiteSpace(status) ? "unknown" : status.Trim();
         var vehicleText = string.IsNullOrWhiteSpace(vehicle) ? "N/A" : vehicle.Trim();
-        var locationText = string.IsNullOrWhiteSpace(location) ? "N/A" : location.Trim();
-        return $"Status: {statusText} | Vehicle: {vehicleText} | Location: {locationText}";
+        var previousLocationText = string.IsNullOrWhiteSpace(previousLocation) ? "N/A" : previousLocation.Trim();
+        var currentLocationText = string.IsNullOrWhiteSpace(currentLocation) ? "N/A" : currentLocation.Trim();
+        return $"Status: {statusText} | Vehicle: {vehicleText} | Previous Location: {previousLocationText} | Current Location: {currentLocationText}";
     }
 
     private static string BuildMotivProfileLinkDetails(Driver driver, MotivDriverProfile? profile)
@@ -1443,6 +1474,35 @@ public class MotivController : ControllerBase
         var lon = driver.Longitude ?? profile?.Longitude;
         if (lat.HasValue && lon.HasValue)
             return $"{lat.Value:0.####}, {lon.Value:0.####}";
+        return "N/A";
+    }
+
+    private static string ExtractCurrentLocationFromDetails(string? details)
+    {
+        var text = (details ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return "N/A";
+
+        const string currentPrefix = "Current Location:";
+        var currentIndex = text.IndexOf(currentPrefix, StringComparison.OrdinalIgnoreCase);
+        if (currentIndex >= 0)
+        {
+            var valueStart = currentIndex + currentPrefix.Length;
+            var currentValue = text.Substring(valueStart).Trim();
+            if (!string.IsNullOrWhiteSpace(currentValue))
+                return currentValue;
+        }
+
+        const string legacyPrefix = "Location:";
+        var legacyIndex = text.IndexOf(legacyPrefix, StringComparison.OrdinalIgnoreCase);
+        if (legacyIndex >= 0)
+        {
+            var valueStart = legacyIndex + legacyPrefix.Length;
+            var legacyValue = text.Substring(valueStart).Trim();
+            if (!string.IsNullOrWhiteSpace(legacyValue))
+                return legacyValue;
+        }
+
         return "N/A";
     }
 

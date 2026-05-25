@@ -471,6 +471,8 @@ type MotivStatusCache = {
                           <th>Driver</th>
                           <th>Type</th>
                           <th>Event</th>
+                          <th>Previous Location</th>
+                          <th>Current Location</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -487,8 +489,10 @@ type MotivStatusCache = {
                           </td>
                           <td>
                             <strong>{{ row.title }}</strong>
-                            <div class="activity-details">{{ row.details }}</div>
+                            <div class="activity-details">{{ formatActivitySummary(row.details) }}</div>
                           </td>
+                          <td>{{ extractPreviousLocation(row.details) }}</td>
+                          <td>{{ extractCurrentLocation(row.details) }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -507,13 +511,17 @@ type MotivStatusCache = {
                     <thead>
                       <tr>
                         <th>Time</th>
+                        <th>Driver</th>
                         <th>Type</th>
                         <th>Event</th>
+                        <th>Previous Location</th>
+                        <th>Current Location</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr *ngFor="let row of activityLogRows()">
                         <td>{{ formatActivityTimestamp(row.timestamp) }}</td>
+                        <td>{{ row.driverName || 'General' }}</td>
                         <td>
                           <span class="status-chip"
                                 [class.connected]="row.kind === 'success'"
@@ -524,8 +532,10 @@ type MotivStatusCache = {
                         </td>
                         <td>
                           <strong>{{ row.title }}</strong>
-                          <div class="activity-details">{{ row.details }}</div>
+                          <div class="activity-details">{{ formatActivitySummary(row.details) }}</div>
                         </td>
+                        <td>{{ extractPreviousLocation(row.details) }}</td>
+                        <td>{{ extractCurrentLocation(row.details) }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -2151,6 +2161,42 @@ export class MotivComponent implements OnInit {
   formatActivityTimestamp(value: number): string {
     if (!Number.isFinite(value) || value <= 0) return 'N/A';
     return new Date(value).toLocaleString();
+  }
+
+  extractPreviousLocation(details: string): string {
+    return this.extractActivityDetailField(details, 'Previous Location') || 'N/A';
+  }
+
+  extractCurrentLocation(details: string): string {
+    return this.extractActivityDetailField(details, 'Current Location')
+      || this.extractActivityDetailField(details, 'Location')
+      || 'N/A';
+  }
+
+  formatActivitySummary(details: string): string {
+    const status = this.extractActivityDetailField(details, 'Status');
+    const vehicle = this.extractActivityDetailField(details, 'Vehicle');
+    if (status || vehicle) {
+      const parts: string[] = [];
+      if (status) parts.push(`Status: ${status}`);
+      if (vehicle) parts.push(`Vehicle: ${vehicle}`);
+      return parts.join(' | ');
+    }
+    return details || '';
+  }
+
+  private extractActivityDetailField(details: string, key: string): string {
+    const text = String(details || '').trim();
+    if (!text) return '';
+    const keyLower = `${key.toLowerCase()}:`;
+    const segments = text.split('|').map((segment) => segment.trim());
+    for (const segment of segments) {
+      const lower = segment.toLowerCase();
+      if (lower.startsWith(keyLower)) {
+        return segment.slice(key.length + 1).trim();
+      }
+    }
+    return '';
   }
 
   selectActivityDriver(name: string): void {
