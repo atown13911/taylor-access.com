@@ -1526,9 +1526,13 @@ public class MotivController : ControllerBase
                 return null;
 
             var loc = location.Value;
+            var address = PickNestedObject(loc, "address");
             var locationText = FirstNonEmptyString(
                 PickString(loc, "description", "name", "address", "formatted_address", "street", "address_line_1"),
-                BuildCityState(PickString(loc, "city"), PickString(loc, "state"))
+                address.HasValue ? PickString(address.Value, "formatted", "line1", "line_1", "street") : null,
+                BuildCityState(
+                    FirstNonEmptyString(PickString(loc, "city"), address.HasValue ? PickString(address.Value, "city") : null),
+                    FirstNonEmptyString(PickString(loc, "state"), address.HasValue ? PickString(address.Value, "state") : null))
             );
             if (!string.IsNullOrWhiteSpace(locationText))
                 return locationText;

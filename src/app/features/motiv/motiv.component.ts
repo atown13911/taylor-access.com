@@ -2237,7 +2237,7 @@ export class MotivComponent implements OnInit {
   }
 
   private triggerActivityBackfill(force = false): void {
-    if (this.activityBackfillAttempted()) return;
+    if (this.activityBackfillAttempted() && !force) return;
     this.activityBackfillAttempted.set(true);
 
     const query = force ? '?days=365&force=true' : '?days=365';
@@ -2686,10 +2686,17 @@ export class MotivComponent implements OnInit {
     const byUnit = new Map<string, any>();
     const byVin = new Map<string, any>();
     const byUserId = new Map<string, any>();
+    const byDriverName = new Map<string, any>();
 
     for (const row of locationRows) {
       const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
       const user = row?.user ?? row?.current_user ?? row?.driver ?? row ?? {};
+      const userName = this.normalizePersonName(
+        user?.name ??
+        user?.full_name ??
+        user?.fullName ??
+        `${user?.first_name ?? user?.firstName ?? ''} ${user?.last_name ?? user?.lastName ?? ''}`.trim()
+      );
       const userId = String(
         user?.id ??
         user?.user_id ??
@@ -2718,10 +2725,16 @@ export class MotivComponent implements OnInit {
       if (unitNumber && !byUnit.has(unitNumber)) byUnit.set(unitNumber, row);
       if (vin && !byVin.has(vin)) byVin.set(vin, row);
       if (userId && !byUserId.has(userId)) byUserId.set(userId, row);
+      if (userName && !byDriverName.has(userName)) byDriverName.set(userName, row);
     }
 
     return driverRows.map((driver) => {
       const motivUserId = this.extractMotivUserIdFromNotes(driver?.notes ?? driver?.Notes);
+      const driverName = this.normalizePersonName(
+        driver?.name ??
+        driver?.Name ??
+        `${driver?.firstName ?? driver?.FirstName ?? ''} ${driver?.lastName ?? driver?.LastName ?? ''}`.trim()
+      );
       const unit = this.normalizeVehicleMatchValue(
         driver?.truckNumber ??
         driver?.TruckNumber ??
@@ -2741,14 +2754,11 @@ export class MotivComponent implements OnInit {
       const matched =
         (motivUserId && byUserId.get(motivUserId))
         || (vin && byVin.get(vin))
-        || (unit && byUnit.get(unit));
+        || (unit && byUnit.get(unit))
+        || (driverName && byDriverName.get(driverName));
       if (!matched) return driver;
 
-      const mergedLocation =
-        matched?.current_location ??
-        matched?.currentLocation ??
-        matched?.location ??
-        null;
+      const mergedLocation = this.extractLocationSeed(matched);
       const mergedVehicle =
         matched?.vehicle ??
         matched?.current_vehicle ??
@@ -2759,6 +2769,8 @@ export class MotivComponent implements OnInit {
         current_location: driver?.current_location ?? mergedLocation,
         currentLocation: driver?.currentLocation ?? mergedLocation,
         location: driver?.location ?? mergedLocation,
+        city: driver?.city ?? driver?.City ?? mergedLocation?.city ?? mergedLocation?.City ?? mergedLocation?.address?.city ?? null,
+        state: driver?.state ?? driver?.State ?? mergedLocation?.state ?? mergedLocation?.State ?? mergedLocation?.address?.state ?? null,
         lat: driver?.lat ?? mergedLocation?.lat ?? mergedLocation?.latitude ?? mergedLocation?.Latitude ?? null,
         lon: driver?.lon ?? driver?.lng ?? mergedLocation?.lon ?? mergedLocation?.lng ?? mergedLocation?.longitude ?? mergedLocation?.Longitude ?? null,
         lastLocationUpdate:
@@ -2834,6 +2846,31 @@ export class MotivComponent implements OnInit {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
+  }
+
+  private normalizePersonName(value: any): string {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
+  private extractLocationSeed(row: any): any {
+    if (!row || typeof row !== 'object') return null;
+    return (
+      row?.current_location ??
+      row?.currentLocation ??
+      row?.location ??
+      row?.last_known_location ??
+      row?.lastKnownLocation ??
+      row?.latest_location ??
+      row?.latestLocation ??
+      row?.address ??
+      row?.geo ??
+      row?.geocode ??
+      row?.coordinates ??
+      null
+    );
   }
 
   private extractMotivUserIdFromNotes(notes: any): string {
@@ -3169,7 +3206,7 @@ export class MotivComponent implements OnInit {
 
   private mapDriverRow(raw: any): MotivDriverTableRow {
     const user = raw?.user ?? raw ?? {};
-    const location = raw?.current_location ?? raw?.location ?? {};
+    const location = this.extractLocationSeed(raw) ?? raw?.current_location ?? raw?.location ?? {};
     const vehicle = raw?.current_vehicle ?? raw?.vehicle ?? {};
     const firstName = user?.first_name ?? user?.firstName ?? user?.FirstName ?? '';
     const lastName = user?.last_name ?? user?.lastName ?? user?.LastName ?? '';
@@ -3181,13 +3218,15 @@ export class MotivComponent implements OnInit {
     const lat = location?.lat ?? location?.latitude ?? location?.Latitude ?? raw?.lat ?? raw?.latitude ?? raw?.Latitude;
     const lon = location?.lon ?? location?.longitude ?? location?.Longitude ?? raw?.lon ?? raw?.lng ?? raw?.longitude ?? raw?.Longitude;
     const fallbackLocationText = [
-      location?.city ?? raw?.city ?? raw?.City,
-      location?.state ?? raw?.state ?? raw?.State
+      location?.city ?? location?.City ?? location?.address?.city ?? location?.address?.City ?? raw?.city ?? raw?.City,
+      location?.state ?? location?.State ?? location?.address?.state ?? location?.address?.State ?? raw?.state ?? raw?.State
     ].filter(Boolean).join(', ');
     const locationText = String(
       location?.description ??
       location?.name ??
       location?.address ??
+      location?.address?.formatted ??
+      location?.address?.street ??
       location?.address_line_1 ??
       location?.street ??
       raw?.address ??
