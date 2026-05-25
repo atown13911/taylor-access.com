@@ -2450,17 +2450,34 @@ export class MotivComponent implements OnInit {
         const activeDriverRows = rows.filter((row: any) =>
           this.isActiveLikeStatus(this.mapDriverRow(row).status)
         );
-        this.fetchVehicleLocationRows()
-          .then((locationPayload) => {
-            const enrichedDriverRows = this.enrichDriverRowsWithLocations(activeDriverRows, locationPayload.rows);
+        Promise.allSettled([
+          this.fetchVehicleLocationRows(),
+          this.fetchMotivDriverRows()
+        ])
+          .then((results) => {
+            const locationPayload = results[0].status === 'fulfilled'
+              ? results[0].value
+              : { rows: [], attempted: [], sourcePath: null as string | null };
+            const motivDriverRows = results[1].status === 'fulfilled'
+              ? results[1].value
+              : [];
+
+            let enrichedDriverRows = this.enrichDriverRowsWithLocations(activeDriverRows, locationPayload.rows);
+            enrichedDriverRows = this.mergeDriverRowsWithMotivRows(enrichedDriverRows, motivDriverRows);
+
+            const withLocationCount = enrichedDriverRows.reduce((count, row) => {
+              const locationText = this.mapDriverRow(row).location;
+              return locationText && locationText !== 'N/A' ? count + 1 : count;
+            }, 0);
+
             this.motivDrivers.set(enrichedDriverRows);
             this.loadedDriverRows.set(enrichedDriverRows.length);
             this.loadingDrivers.set(false);
-            this.syncStatusMessage.set(`Loaded ${enrichedDriverRows.length} active driver rows from Drivers DB.`);
+            this.syncStatusMessage.set(`Loaded ${enrichedDriverRows.length} active driver rows from Drivers DB (${withLocationCount} with location).`);
             this.appendActivityLog(
               'info',
               'Drivers loaded from Access DB',
-              `${enrichedDriverRows.length} active rows loaded${runBackgroundSync ? ' (background sync queued)' : ''}.`
+              `${enrichedDriverRows.length} active rows loaded (${withLocationCount} with location)${runBackgroundSync ? ' (background sync queued)' : ''}.`
             );
             this.saveDriverSnapshotActivity(this.driverTableRows());
             if (runBackgroundSync) {
@@ -2611,6 +2628,62 @@ export class MotivComponent implements OnInit {
     } catch {
       return { rows: [], attempted: [], sourcePath: null };
     }
+  }
+
+  private async fetchMotivDriverRows(): Promise<any[]> {
+    try {
+      const res: any = await this.http
+        .get(`${this.apiUrl}/api/v1/motiv/drivers`)
+        .pipe(timeout(15000))
+        .toPromise();
+      const payload = res?.data ?? res;
+      return this.extractRows(payload);
+    } catch {
+      return [];
+    }
+  }
+
+  private mergeDriverRowsWithMotivRows(driverRows: any[], motivRows: any[]): any[] {
+    if (!Array.isArray(driverRows) || driverRows.length === 0) return [];
+    if (!Array.isArray(motivRows) || motivRows.length === 0) return driverRows;
+
+    const byEmail = new Map<string, any>();
+    const byName = new Map<string, any>();
+
+    for (const row of motivRows) {
+      const mapped = this.mapDriverRow(row);
+      const locationText = mapped.location;
+      if (!locationText || locationText === 'N/A') continue;
+
+      const emailKey = String(mapped.email || '').trim().toLowerCase();
+      const nameKey = this.normalizePersonName(mapped.name);
+      if (emailKey && !byEmail.has(emailKey)) byEmail.set(emailKey, row);
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, row);
+    }
+
+    return driverRows.map((driver) => {
+      const mappedDriver = this.mapDriverRow(driver);
+      const emailKey = String(mappedDriver.email || '').trim().toLowerCase();
+      const nameKey = this.normalizePersonName(mappedDriver.name);
+      const matched = (emailKey && byEmail.get(emailKey)) || (nameKey && byName.get(nameKey));
+      if (!matched) return driver;
+
+      const mergedLocation = this.extractLocationSeed(matched);
+      const matchedVehicle = matched?.current_vehicle ?? matched?.vehicle ?? null;
+
+      return {
+        ...driver,
+        current_location: driver?.current_location ?? mergedLocation,
+        currentLocation: driver?.currentLocation ?? mergedLocation,
+        location: driver?.location ?? mergedLocation,
+        city: driver?.city ?? driver?.City ?? mergedLocation?.city ?? mergedLocation?.City ?? mergedLocation?.address?.city ?? null,
+        state: driver?.state ?? driver?.State ?? mergedLocation?.state ?? mergedLocation?.State ?? mergedLocation?.address?.state ?? null,
+        lat: driver?.lat ?? mergedLocation?.lat ?? mergedLocation?.latitude ?? mergedLocation?.Latitude ?? null,
+        lon: driver?.lon ?? driver?.lng ?? mergedLocation?.lon ?? mergedLocation?.lng ?? mergedLocation?.longitude ?? mergedLocation?.Longitude ?? null,
+        current_vehicle: driver?.current_vehicle ?? matchedVehicle,
+        vehicle: driver?.vehicle ?? matchedVehicle
+      };
+    });
   }
 
   private mergeVehicleRowsWithLocations(vehicleRows: any[], locationRows: any[]): any[] {
