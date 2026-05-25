@@ -394,30 +394,32 @@ type MotivStatusCache = {
               <h3>Drivers</h3>
               <p class="count">Showing {{ activityDriverRows().length }} of {{ filteredDriverRows().length }} filtered drivers.</p>
               <div class="available-api-table-wrap" *ngIf="activityDriverRows().length > 0">
-                <table class="available-api-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Name</th>
-                      <th>Status</th>
-                      <th>Vehicle</th>
-                      <th>Last Update</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      *ngFor="let row of activityDriverRows(); let i = index"
-                      class="activity-driver-row"
-                      [class.selected]="selectedActivityDriverName() === row.name"
-                      (click)="selectActivityDriver(row.name)">
-                      <td>{{ i + 1 }}</td>
-                      <td>{{ row.name }}</td>
-                      <td>{{ row.status }}</td>
-                      <td>{{ row.vehicle }}</td>
-                      <td>{{ row.lastUpdate }}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div class="activity-scroll-wrap">
+                  <table class="available-api-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Vehicle</th>
+                        <th>Last Update</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        *ngFor="let row of activityDriverRows(); let i = index"
+                        class="activity-driver-row"
+                        [class.selected]="selectedActivityDriverName() === row.name"
+                        (click)="selectActivityDriver(row.name)">
+                        <td>{{ i + 1 }}</td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.status }}</td>
+                        <td>{{ row.vehicle }}</td>
+                        <td>{{ row.lastUpdate }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
               <p class="count" *ngIf="activityDriverRows().length === 0">No drivers available yet. Open the Drivers tab and refresh.</p>
               <div class="activity-driver-subpanel">
@@ -460,19 +462,57 @@ type MotivStatusCache = {
                   </select>
                 </div>
                 <div class="available-api-table-wrap" *ngIf="driverActivityRows().length > 0">
+                  <div class="activity-scroll-wrap activity-scroll-wrap-compact">
+                    <table class="available-api-table">
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>Driver</th>
+                          <th>Type</th>
+                          <th>Event</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngFor="let row of driverActivityRows()">
+                          <td>{{ formatActivityTimestamp(row.timestamp) }}</td>
+                          <td>{{ row.driverName || 'General' }}</td>
+                          <td>
+                            <span class="status-chip"
+                                  [class.connected]="row.kind === 'success'"
+                                  [class.not-connected]="row.kind === 'error'"
+                                  [class.checking]="row.kind === 'info' || row.kind === 'warning'">
+                              {{ row.kind | titlecase }}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>{{ row.title }}</strong>
+                            <div class="activity-details">{{ row.details }}</div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p class="count" *ngIf="driverActivityRows().length === 0">
+                  No activity logs {{ selectedActivityDriverName() ? ('for ' + selectedActivityDriverName()) : 'for drivers' }}.
+                </p>
+              </div>
+            </div>
+            <div class="activity-right">
+              <h3>Activity Log</h3>
+              <div class="available-api-table-wrap" *ngIf="activityLogRows().length > 0">
+                <div class="activity-scroll-wrap">
                   <table class="available-api-table">
                     <thead>
                       <tr>
                         <th>Time</th>
-                        <th>Driver</th>
                         <th>Type</th>
                         <th>Event</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr *ngFor="let row of driverActivityRows()">
+                      <tr *ngFor="let row of activityLogRows()">
                         <td>{{ formatActivityTimestamp(row.timestamp) }}</td>
-                        <td>{{ row.driverName || 'General' }}</td>
                         <td>
                           <span class="status-chip"
                                 [class.connected]="row.kind === 'success'"
@@ -489,40 +529,6 @@ type MotivStatusCache = {
                     </tbody>
                   </table>
                 </div>
-                <p class="count" *ngIf="driverActivityRows().length === 0">
-                  No activity logs {{ selectedActivityDriverName() ? ('for ' + selectedActivityDriverName()) : 'for drivers' }}.
-                </p>
-              </div>
-            </div>
-            <div class="activity-right">
-              <h3>Activity Log</h3>
-              <div class="available-api-table-wrap" *ngIf="activityLogRows().length > 0">
-                <table class="available-api-table">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Type</th>
-                      <th>Event</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let row of activityLogRows()">
-                      <td>{{ formatActivityTimestamp(row.timestamp) }}</td>
-                      <td>
-                        <span class="status-chip"
-                              [class.connected]="row.kind === 'success'"
-                              [class.not-connected]="row.kind === 'error'"
-                              [class.checking]="row.kind === 'info' || row.kind === 'warning'">
-                          {{ row.kind | titlecase }}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>{{ row.title }}</strong>
-                        <div class="activity-details">{{ row.details }}</div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
               </div>
               <p class="count" *ngIf="activityLogRows().length === 0">No activity logs yet.</p>
             </div>
@@ -1262,6 +1268,14 @@ type MotivStatusCache = {
       gap: 12px;
       align-items: start;
     }
+    .activity-scroll-wrap {
+      max-height: 430px;
+      overflow: auto;
+      border-radius: 8px;
+    }
+    .activity-scroll-wrap-compact {
+      max-height: 260px;
+    }
     .activity-left,
     .activity-right {
       border: 1px solid rgba(148, 163, 184, 0.22);
@@ -1691,7 +1705,7 @@ export class MotivComponent implements OnInit {
     return Math.min(this.safeDriverPage() * this.driverPageSize(), total);
   });
   activityDriverRows = computed<MotivDriverTableRow[]>(() =>
-    this.filteredDriverRows().slice(0, 120)
+    this.filteredDriverRows()
   );
   activityLogRows = computed<MotivActivityLogEntry[]>(() => {
     const derivedUpdates = this.driverTableRows()
@@ -1707,13 +1721,12 @@ export class MotivComponent implements OnInit {
         });
         return rows;
       }, [])
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 80);
+      .sort((a, b) => b.timestamp - a.timestamp);
 
     const combined = [...this.activityFeed(), ...derivedUpdates]
       .sort((a, b) => b.timestamp - a.timestamp);
 
-    return combined.slice(0, 120);
+    return combined;
   });
   driverActivityRows = computed<MotivActivityLogEntry[]>(() => {
     const selected = this.selectedActivityDriverName().trim().toLowerCase();
