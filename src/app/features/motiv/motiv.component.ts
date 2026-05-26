@@ -75,6 +75,20 @@ type FuelWeekOption = {
   year: number;
   week: number;
 };
+type FuelSortColumn =
+  | 'transactionId'
+  | 'date'
+  | 'week'
+  | 'status'
+  | 'amount'
+  | 'merchant'
+  | 'city'
+  | 'state'
+  | 'driverId'
+  | 'vehicleId'
+  | 'cardLabel'
+  | 'category'
+  | 'source';
 type ApiHealthStatus = 'checking' | 'connected' | 'not-connected';
 type ApiHealthRow = {
   name: string;
@@ -852,8 +866,10 @@ type MotivStatusCache = {
                 <span class="value">{{ fuelUniqueCardsCount() }}</span>
               </div>
               <div class="driver-card total">
-                <span class="label">Week Coverage</span>
-                <span class="value">{{ fuelDistinctWeeksCount() }} w / {{ fuelDistinctYearsCount() }} y</span>
+                <span class="label">{{ fuelWeekFilter() === 'all' ? 'Week Coverage' : 'Selected Week Dates' }}</span>
+                <span class="value">
+                  {{ fuelWeekFilter() === 'all' ? (fuelDistinctWeeksCount() + ' w / ' + fuelDistinctYearsCount() + ' y') : fuelSelectedWeekDateRange() }}
+                </span>
               </div>
             </div>
             <div class="driver-actions">
@@ -909,19 +925,19 @@ type MotivStatusCache = {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Transaction</th>
-                  <th>Date</th>
-                  <th>Week #</th>
-                  <th>Status</th>
-                  <th>Amount</th>
-                  <th>Merchant</th>
-                  <th>City</th>
-                  <th>State</th>
-                  <th>Driver</th>
-                  <th>Vehicle</th>
-                  <th>Card</th>
-                  <th>Category</th>
-                  <th>Source</th>
+                  <th class="sortable-th" (click)="setFuelSort('transactionId')">Transaction {{ getFuelSortIndicator('transactionId') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('date')">Date {{ getFuelSortIndicator('date') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('week')">Week # {{ getFuelSortIndicator('week') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('status')">Status {{ getFuelSortIndicator('status') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('amount')">Amount {{ getFuelSortIndicator('amount') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('merchant')">Merchant {{ getFuelSortIndicator('merchant') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('city')">City {{ getFuelSortIndicator('city') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('state')">State {{ getFuelSortIndicator('state') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('driverId')">Driver {{ getFuelSortIndicator('driverId') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('vehicleId')">Vehicle {{ getFuelSortIndicator('vehicleId') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('cardLabel')">Card {{ getFuelSortIndicator('cardLabel') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('category')">Category {{ getFuelSortIndicator('category') }}</th>
+                  <th class="sortable-th" (click)="setFuelSort('source')">Source {{ getFuelSortIndicator('source') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1335,6 +1351,15 @@ type MotivStatusCache = {
     }
     .available-api-table tr:last-child td { border-bottom: none; }
     .available-api-table th { color: #9ccde0; background: rgba(10, 20, 36, 0.7); }
+    .available-api-table th.sortable-th {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .available-api-table th.sortable-th:hover {
+      color: #d5f2ff;
+      background: rgba(0, 212, 255, 0.12);
+    }
     .activity-layout {
       display: grid;
       grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
@@ -1550,6 +1575,8 @@ export class MotivComponent implements OnInit {
   fuelCardFilter = signal<string>('all');
   fuelYearFilter = signal<string>('all');
   fuelWeekFilter = signal<string>('all');
+  fuelSortColumn = signal<FuelSortColumn>('date');
+  fuelSortDirection = signal<'asc' | 'desc'>('desc');
   fuelPage = signal(1);
   fuelPageSize = signal(100);
   fuelCardSearchTerm = signal('');
@@ -1955,6 +1982,18 @@ export class MotivComponent implements OnInit {
     }
     return years.size;
   });
+  fuelSelectedWeekDateRange = computed<string>(() => {
+    if (this.fuelWeekFilter() === 'all') return '';
+    const parsedDates = this.filteredFuelRows()
+      .map((row) => this.tryParseDate(row.date))
+      .filter((dt): dt is Date => !!dt)
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    if (parsedDates.length === 0) return 'No dates';
+    const start = parsedDates[0];
+    const end = parsedDates[parsedDates.length - 1];
+    return `${this.formatShortDate(start)} - ${this.formatShortDate(end)}`;
+  });
   fuelCardOptions = computed<string[]>(() => {
     const cards = new Set<string>();
     for (const row of this.fuelRows()) {
@@ -2038,6 +2077,49 @@ export class MotivComponent implements OnInit {
       return matchesSearch && matchesStatus && matchesSource && matchesCard && matchesYear && matchesWeek;
     });
   });
+  sortedFuelRows = computed<MotivFuelRow[]>(() => {
+    const rows = [...this.filteredFuelRows()];
+    const column = this.fuelSortColumn();
+    const direction = this.fuelSortDirection();
+    const modifier = direction === 'asc' ? 1 : -1;
+
+    rows.sort((a, b) => {
+      let left: string | number = '';
+      let right: string | number = '';
+
+      switch (column) {
+        case 'amount':
+          left = Number.isFinite(a.amountValue) ? a.amountValue : 0;
+          right = Number.isFinite(b.amountValue) ? b.amountValue : 0;
+          break;
+        case 'date': {
+          const ad = this.tryParseDate(a.date)?.getTime() ?? 0;
+          const bd = this.tryParseDate(b.date)?.getTime() ?? 0;
+          left = ad;
+          right = bd;
+          break;
+        }
+        case 'week': {
+          const aw = this.getFuelWeekSortKey(a.date);
+          const bw = this.getFuelWeekSortKey(b.date);
+          left = aw;
+          right = bw;
+          break;
+        }
+        default:
+          left = String(a[column] ?? '').toLowerCase();
+          right = String(b[column] ?? '').toLowerCase();
+          break;
+      }
+
+      if (typeof left === 'number' && typeof right === 'number') {
+        return (left - right) * modifier;
+      }
+      return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' }) * modifier;
+    });
+
+    return rows;
+  });
   fuelTotalPages = computed<number>(() =>
     Math.max(1, Math.ceil(this.filteredFuelRows().length / this.fuelPageSize()))
   );
@@ -2048,7 +2130,7 @@ export class MotivComponent implements OnInit {
     const page = this.safeFuelPage();
     const size = this.fuelPageSize();
     const start = (page - 1) * size;
-    return this.filteredFuelRows().slice(start, start + size);
+    return this.sortedFuelRows().slice(start, start + size);
   });
   fuelPageStartIndex = computed<number>(() => {
     const total = this.filteredFuelRows().length;
@@ -3496,6 +3578,21 @@ export class MotivComponent implements OnInit {
     this.fuelPage.set(1);
   }
 
+  setFuelSort(column: FuelSortColumn): void {
+    if (this.fuelSortColumn() === column) {
+      this.fuelSortDirection.set(this.fuelSortDirection() === 'asc' ? 'desc' : 'asc');
+    } else {
+      this.fuelSortColumn.set(column);
+      this.fuelSortDirection.set(column === 'date' || column === 'week' || column === 'amount' ? 'desc' : 'asc');
+    }
+    this.fuelPage.set(1);
+  }
+
+  getFuelSortIndicator(column: FuelSortColumn): string {
+    if (this.fuelSortColumn() !== column) return '';
+    return this.fuelSortDirection() === 'asc' ? '↑' : '↓';
+  }
+
   setFuelPageSize(value: number): void {
     if (!Number.isFinite(value) || value <= 0) return;
     this.fuelPageSize.set(value);
@@ -4305,11 +4402,21 @@ export class MotivComponent implements OnInit {
     return { year, week, key: `${year}-W${String(week).padStart(2, '0')}` };
   }
 
+  private formatShortDate(date: Date): string {
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   getFuelWeekLabel(value: string): string {
     const dt = this.tryParseDate(value);
     if (!dt) return 'N/A';
     const info = this.getIsoWeekInfo(dt);
     return `W${String(info.week).padStart(2, '0')}`;
+  }
+
+  private getFuelWeekSortKey(value: string): string {
+    const dt = this.tryParseDate(value);
+    if (!dt) return '';
+    return this.getIsoWeekInfo(dt).key;
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
