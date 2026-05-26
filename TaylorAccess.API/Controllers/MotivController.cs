@@ -63,6 +63,24 @@ public class MotivController : ControllerBase
             });
         }
 
+        JsonElement? sampleDriver = enriched.Rows.Count > 0 ? enriched.Rows[0] : null;
+        AppendDebugLog(
+            runId: "run-activity-location",
+            hypothesisId: "H1",
+            location: "MotivController.GetDrivers",
+            message: "GetDrivers enriched payload summary",
+            data: new
+            {
+                enrichedRows = enriched.Rows.Count,
+                userRows = enriched.UserRows,
+                locationRows = enriched.LocationRows,
+                vehicleRows = enriched.VehicleRows,
+                sourcePath = enriched.SourcePath,
+                sampleTopKeys = GetJsonKeys(sampleDriver, 20),
+                sampleUserKeys = sampleDriver.HasValue ? GetJsonKeys(PickNestedObject(sampleDriver.Value, "user"), 20) : new List<string>(),
+                sampleCurrentLocationKeys = sampleDriver.HasValue ? GetJsonKeys(PickNestedObject(sampleDriver.Value, "current_location"), 20) : new List<string>()
+            });
+
         return Ok(new
         {
             source = "motiv",
@@ -124,6 +142,21 @@ public class MotivController : ControllerBase
 
             if (fetch.Success && fetch.Rows.Count > 0)
             {
+                JsonElement? sampleRow = fetch.Rows.Count > 0 ? fetch.Rows[0] : null;
+                AppendDebugLog(
+                    runId: "run-activity-location",
+                    hypothesisId: "H2",
+                    location: "MotivController.GetVehicleLocations",
+                    message: "Vehicle locations payload summary",
+                    data: new
+                    {
+                        path,
+                        rows = fetch.Rows.Count,
+                        sampleTopKeys = GetJsonKeys(sampleRow, 20),
+                        sampleVehicleKeys = sampleRow.HasValue ? GetJsonKeys(PickNestedObject(sampleRow.Value, "vehicle") ?? PickNestedObject(sampleRow.Value, "current_vehicle"), 20) : new List<string>(),
+                        sampleCurrentLocationKeys = sampleRow.HasValue ? GetJsonKeys(PickNestedObject(sampleRow.Value, "current_location"), 20) : new List<string>()
+                    });
+
                 return Ok(new
                 {
                     source = "motiv",
@@ -135,6 +168,16 @@ public class MotivController : ControllerBase
                 });
             }
         }
+
+        AppendDebugLog(
+            runId: "run-activity-location",
+            hypothesisId: "H2",
+            location: "MotivController.GetVehicleLocations",
+            message: "Vehicle locations empty after path attempts",
+            data: new
+            {
+                attempted = attempted.Count
+            });
 
         return Ok(new
         {
@@ -1679,6 +1722,24 @@ public class MotivController : ControllerBase
         if (mergedRows.Count == 0)
             mergedRows = locationRows;
 
+        JsonElement? mergedSample = mergedRows.Count > 0 ? mergedRows[0] : null;
+        AppendDebugLog(
+            runId: "run-activity-location",
+            hypothesisId: "H3",
+            location: "MotivController.FetchEnrichedDriverRows",
+            message: "FetchEnrichedDriverRows merge summary",
+            data: new
+            {
+                endpointPrefix,
+                usersRows = usersRows.Count,
+                locationRows = locationRows.Count,
+                vehicleRows = vehiclesRows.Count,
+                mergedRows = mergedRows.Count,
+                selectedPath,
+                mergedSampleTopKeys = GetJsonKeys(mergedSample, 20),
+                mergedSampleLocationKeys = mergedSample.HasValue ? GetJsonKeys(PickNestedObject(mergedSample.Value, "current_location"), 20) : new List<string>()
+            });
+
         return (true, 200, null, mergedRows, selectedPath, usersRows.Count, locationRows.Count, vehiclesRows.Count);
     }
 
@@ -1955,6 +2016,40 @@ public class MotivController : ControllerBase
                 return false;
         }
         return true;
+    }
+
+    private static List<string> GetJsonKeys(JsonElement? element, int max = 20)
+    {
+        if (!element.HasValue || element.Value.ValueKind != JsonValueKind.Object)
+            return new List<string>();
+
+        return element.Value.EnumerateObject()
+            .Take(max)
+            .Select(p => p.Name)
+            .ToList();
+    }
+
+    private static void AppendDebugLog(string runId, string hypothesisId, string location, string message, object data)
+    {
+        try
+        {
+            var payload = new
+            {
+                sessionId = "ff188a",
+                runId,
+                hypothesisId,
+                location,
+                message,
+                data,
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+            var line = JsonSerializer.Serialize(payload) + Environment.NewLine;
+            System.IO.File.AppendAllText(@"C:\Users\atayl\Desktop\taylor-access.com\debug-ff188a.log", line);
+        }
+        catch
+        {
+            // Debug logging must never break API execution.
+        }
     }
 }
 

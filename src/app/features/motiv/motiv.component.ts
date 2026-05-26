@@ -2566,6 +2566,19 @@ export class MotivComponent implements OnInit {
               const locationText = this.mapDriverRow(row).location;
               return locationText && locationText !== 'N/A' ? count + 1 : count;
             }, 0);
+            const mappedRows = enrichedDriverRows.map((row) => this.mapDriverRow(row));
+            const latLonOnlyCount = mappedRows.filter((row) => this.isLatLonLocation(row.location)).length;
+            const sampleLatLon = mappedRows
+              .filter((row) => this.isLatLonLocation(row.location))
+              .slice(0, 5)
+              .map((row) => row.location);
+
+            // #region agent log
+            fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H4',location:'motiv.component.ts:loadDriversFromDb:withLocationCount',message:'Post-merge driver location coverage',data:{activeDriverRows:activeDriverRows.length,locationRows:locationPayload.rows.length,motivDriverRows:motivDriverRows.length,enrichedDriverRows:enrichedDriverRows.length,withLocationCount},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+            // #region agent log
+            fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H6',location:'motiv.component.ts:loadDriversFromDb:latLonOnly',message:'Lat/lon-only location coverage (reverse geocode candidate)',data:{totalMapped:mappedRows.length,latLonOnlyCount,sampleLatLon},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
 
             this.motivDrivers.set(enrichedDriverRows);
             this.loadedDriverRows.set(enrichedDriverRows.length);
@@ -2717,8 +2730,18 @@ export class MotivComponent implements OnInit {
         .pipe(timeout(15000))
         .toPromise();
       const payload = res?.data ?? res;
+      const rows = this.extractRows(payload);
+      const sample = rows[0] ?? null;
+      const sampleKeys = sample && typeof sample === 'object' ? Object.keys(sample).slice(0, 20) : [];
+      const sampleVehicleKeys = sample?.vehicle && typeof sample.vehicle === 'object' ? Object.keys(sample.vehicle).slice(0, 20) : [];
+      const sampleLocationKeys = sample?.current_location && typeof sample.current_location === 'object' ? Object.keys(sample.current_location).slice(0, 20) : [];
+
+      // #region agent log
+      fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H1',location:'motiv.component.ts:fetchVehicleLocationRows:success',message:'Vehicle location payload shape',data:{sourcePath:typeof payload?.sourcePath==='string'?payload.sourcePath:null,attemptedCount:Array.isArray(payload?.attempted)?payload.attempted.length:0,rows:rows.length,sampleKeys,sampleVehicleKeys,sampleLocationKeys},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
       return {
-        rows: this.extractRows(payload),
+        rows,
         attempted: Array.isArray(payload?.attempted) ? payload.attempted : [],
         sourcePath: typeof payload?.sourcePath === 'string' ? payload.sourcePath : null
       };
@@ -2734,7 +2757,18 @@ export class MotivComponent implements OnInit {
         .pipe(timeout(15000))
         .toPromise();
       const payload = res?.data ?? res;
-      return this.extractRows(payload);
+      const rows = this.extractRows(payload);
+      const sample = rows[0] ?? null;
+      const sampleKeys = sample && typeof sample === 'object' ? Object.keys(sample).slice(0, 20) : [];
+      const sampleUserKeys = sample?.user && typeof sample.user === 'object' ? Object.keys(sample.user).slice(0, 20) : [];
+      const sampleVehicleKeys = sample?.current_vehicle && typeof sample.current_vehicle === 'object' ? Object.keys(sample.current_vehicle).slice(0, 20) : [];
+      const sampleLocationKeys = sample?.current_location && typeof sample.current_location === 'object' ? Object.keys(sample.current_location).slice(0, 20) : [];
+
+      // #region agent log
+      fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H2',location:'motiv.component.ts:fetchMotivDriverRows:success',message:'MOTIV drivers payload shape',data:{rows:rows.length,sampleKeys,sampleUserKeys,sampleVehicleKeys,sampleLocationKeys},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      return rows;
     } catch {
       return [];
     }
@@ -2749,6 +2783,9 @@ export class MotivComponent implements OnInit {
     const byVehicleId = new Map<string, any>();
     const byUnit = new Map<string, any>();
     const byVin = new Map<string, any>();
+    let matchedLocationCount = 0;
+    let candidateWithLocationCount = 0;
+    let placeholderLocationOverrides = 0;
 
     for (const row of locationRows || []) {
       const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
@@ -2808,6 +2845,7 @@ export class MotivComponent implements OnInit {
       const matchedLocation = (vehicleId && byVehicleId.get(vehicleId))
         || (vin && byVin.get(vin))
         || (unit && byUnit.get(unit));
+      if (matchedLocation) matchedLocationCount++;
 
       const candidate = matchedLocation
         ? {
@@ -2819,6 +2857,7 @@ export class MotivComponent implements OnInit {
 
       const mapped = this.mapDriverRow(candidate);
       const locationText = this.buildLocationDisplayFromRaw(candidate);
+      if (locationText && locationText !== 'N/A') candidateWithLocationCount++;
       if (!locationText || locationText === 'N/A') continue;
 
       const emailKey = String(mapped.email || '').trim().toLowerCase();
@@ -2827,7 +2866,7 @@ export class MotivComponent implements OnInit {
       if (nameKey && !byName.has(nameKey)) byName.set(nameKey, candidate);
     }
 
-    return driverRows.map((driver) => {
+    const mergedRows = driverRows.map((driver) => {
       const mappedDriver = this.mapDriverRow(driver);
       const emailKey = String(mappedDriver.email || '').trim().toLowerCase();
       const nameKey = this.normalizePersonName(mappedDriver.name);
@@ -2837,12 +2876,19 @@ export class MotivComponent implements OnInit {
       const mergedLocation = this.extractLocationSeed(matched);
       const matchedVehicle = matched?.current_vehicle ?? matched?.vehicle ?? null;
       const matchedLocationText = this.buildLocationDisplayFromRaw(matched);
+      const primaryLocation = driver?.location;
+      if (typeof primaryLocation === 'string') {
+        const normalized = primaryLocation.trim().toLowerCase();
+        if ((normalized === 'n/a' || normalized === 'unknown') && matchedLocationText !== 'N/A') {
+          placeholderLocationOverrides++;
+        }
+      }
 
       return {
         ...driver,
-        current_location: driver?.current_location ?? mergedLocation,
-        currentLocation: driver?.currentLocation ?? mergedLocation,
-        location: driver?.location ?? mergedLocation ?? (matchedLocationText !== 'N/A' ? matchedLocationText : null),
+        current_location: this.mergePreferredValue(driver?.current_location, mergedLocation),
+        currentLocation: this.mergePreferredValue(driver?.currentLocation, mergedLocation),
+        location: this.mergePreferredValue(driver?.location, mergedLocation ?? (matchedLocationText !== 'N/A' ? matchedLocationText : null)),
         city: driver?.city ?? driver?.City ?? mergedLocation?.city ?? mergedLocation?.City ?? mergedLocation?.address?.city ?? null,
         state: driver?.state ?? driver?.State ?? mergedLocation?.state ?? mergedLocation?.State ?? mergedLocation?.address?.state ?? null,
         lat: driver?.lat ?? mergedLocation?.lat ?? mergedLocation?.latitude ?? mergedLocation?.Latitude ?? null,
@@ -2851,6 +2897,15 @@ export class MotivComponent implements OnInit {
         vehicle: driver?.vehicle ?? matchedVehicle
       };
     });
+
+    // #region agent log
+    fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H3',location:'motiv.component.ts:mergeDriverRowsWithMotivRows:summary',message:'Merge-stage matching and candidate coverage',data:{driverRows:driverRows.length,motivRows:motivRows.length,locationRows:locationRows.length,matchedLocationCount,candidateWithLocationCount,mergeCandidatesByEmail:byEmail.size,mergeCandidatesByName:byName.size,mergedRows:mergedRows.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    // #region agent log
+    fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H5',location:'motiv.component.ts:mergeDriverRowsWithMotivRows:placeholderOverride',message:'Placeholder location override opportunities',data:{placeholderLocationOverrides},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    return mergedRows;
   }
 
   private mergeVehicleRowsWithLocations(vehicleRows: any[], locationRows: any[]): any[] {
@@ -3006,9 +3061,9 @@ export class MotivComponent implements OnInit {
 
       return {
         ...driver,
-        current_location: driver?.current_location ?? mergedLocation,
-        currentLocation: driver?.currentLocation ?? mergedLocation,
-        location: driver?.location ?? mergedLocation,
+        current_location: this.mergePreferredValue(driver?.current_location, mergedLocation),
+        currentLocation: this.mergePreferredValue(driver?.currentLocation, mergedLocation),
+        location: this.mergePreferredValue(driver?.location, mergedLocation),
         city: driver?.city ?? driver?.City ?? mergedLocation?.city ?? mergedLocation?.City ?? mergedLocation?.address?.city ?? null,
         state: driver?.state ?? driver?.State ?? mergedLocation?.state ?? mergedLocation?.State ?? mergedLocation?.address?.state ?? null,
         lat: driver?.lat ?? mergedLocation?.lat ?? mergedLocation?.latitude ?? mergedLocation?.Latitude ?? null,
@@ -3654,6 +3709,22 @@ export class MotivComponent implements OnInit {
   private parseDriverUpdateTime(value: string): number {
     const parsed = this.tryParseDate(String(value || ''));
     return parsed ? parsed.getTime() : 0;
+  }
+
+  private isLatLonLocation(value: string): boolean {
+    const text = String(value || '').trim();
+    return /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(text);
+  }
+
+  private mergePreferredValue(primary: any, fallback: any): any {
+    if (primary == null) return fallback;
+    if (typeof primary === 'string') {
+      const normalized = primary.trim().toLowerCase();
+      if (!normalized || normalized === 'n/a' || normalized === 'unknown' || normalized === 'null') {
+        return fallback ?? primary;
+      }
+    }
+    return primary;
   }
 
   private mapVehicleRow(raw: any): MotivVehicleTableRow {
