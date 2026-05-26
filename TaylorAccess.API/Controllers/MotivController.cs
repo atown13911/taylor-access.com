@@ -121,14 +121,21 @@ public class MotivController : ControllerBase
     }
 
     [HttpGet("vehicle-locations")]
-    public async Task<IActionResult> GetVehicleLocations()
+    public async Task<IActionResult> GetVehicleLocations([FromQuery] string? date = null)
     {
+        var dateUsed = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var parsedDate))
+            dateUsed = parsedDate.ToString("yyyy-MM-dd");
+
         var candidatePaths = new[]
         {
             _config["MOTIV_VEHICLE_LOCATIONS_PATH"] ?? Environment.GetEnvironmentVariable("MOTIV_VEHICLE_LOCATIONS_PATH") ?? "/v1/vehicle_locations",
             "/v2/vehicle_locations",
             "/v3/vehicle_locations",
-            "/v1/freight_visibility/vehicle_locations"
+            "/v1/freight_visibility/vehicle_locations",
+            "/v1/driver_locations",
+            "/v1/asset_locations",
+            "/v1/dispatch_locations"
         };
 
         var attempted = new List<object>();
@@ -162,6 +169,7 @@ public class MotivController : ControllerBase
                     source = "motiv",
                     endpoint = "vehicle-locations",
                     path,
+                    dateUsed,
                     rows = fetch.Rows.Count,
                     data = JsonSerializer.SerializeToElement(fetch.Rows),
                     attempted
@@ -176,13 +184,52 @@ public class MotivController : ControllerBase
             message: "Vehicle locations empty after path attempts",
             data: new
             {
-                attempted = attempted.Count
+                attempted = attempted.Count,
+                dateInput = date,
+                dateUsed
             });
+
+        var byIdFallback = await FetchVehicleLocationsByVehicleIds(dateUsed);
+        attempted.Add(new
+        {
+            path = "vehicle-location-by-id-fallback",
+            status = byIdFallback.StatusCode,
+            rows = byIdFallback.Rows.Count,
+            success = byIdFallback.Success
+        });
+        if (byIdFallback.Success && byIdFallback.Rows.Count > 0)
+        {
+            JsonElement? sampleRow = byIdFallback.Rows.Count > 0 ? byIdFallback.Rows[0] : null;
+            AppendDebugLog(
+                runId: "run-activity-location",
+                hypothesisId: "H2",
+                location: "MotivController.GetVehicleLocations",
+                message: "Vehicle locations by-id fallback summary",
+                data: new
+                {
+                    rows = byIdFallback.Rows.Count,
+                    sampleTopKeys = GetJsonKeys(sampleRow, 20),
+                    sampleVehicleKeys = sampleRow.HasValue ? GetJsonKeys(PickNestedObject(sampleRow.Value, "vehicle") ?? PickNestedObject(sampleRow.Value, "current_vehicle"), 20) : new List<string>(),
+                    sampleCurrentLocationKeys = sampleRow.HasValue ? GetJsonKeys(PickNestedObject(sampleRow.Value, "current_location"), 20) : new List<string>()
+                });
+
+            return Ok(new
+            {
+                source = "motiv",
+                endpoint = "vehicle-locations",
+                path = "vehicle-location-by-id-fallback",
+                dateUsed,
+                rows = byIdFallback.Rows.Count,
+                data = JsonSerializer.SerializeToElement(byIdFallback.Rows),
+                attempted
+            });
+        }
 
         return Ok(new
         {
             source = "motiv",
             endpoint = "vehicle-locations",
+            dateUsed,
             rows = 0,
             data = JsonSerializer.SerializeToElement(new List<JsonElement>()),
             attempted
@@ -1272,7 +1319,7 @@ public class MotivController : ControllerBase
         if (payload.ValueKind != JsonValueKind.Object)
             return new List<JsonElement>();
 
-        foreach (var key in new[] { "driver_locations", "vehicle_locations", "vehicles", "users", "cards", "fuel_cards", "payment_cards", "data", "items", "results", "fuel_purchases", "transactions" })
+        foreach (var key in new[] { "driver_locations", "vehicle_locations", "asset_locations", "dispatch_locations", "vehicles", "users", "cards", "fuel_cards", "payment_cards", "data", "items", "results", "fuel_purchases", "transactions" })
         {
             if (payload.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray().Select(x => x.Clone()).ToList();
@@ -1899,6 +1946,71 @@ public class MotivController : ControllerBase
         }
 
         return (true, 200, null, allRows);
+    }
+
+    private async Task<(bool Success, int StatusCode, string? Error, List<JsonElement> Rows)> FetchVehicleLocationsByVehicleIds(string date)
+    {
+        var vehiclesPath = _config["MOTIV_VEHICLES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_VEHICLES_PATH")
+            ?? "/v1/vehicles";
+
+        var vehicleFetch = await FetchAllMotivRows(vehiclesPath, "vehicle-locations-by-id:vehicles");
+        if (!vehicleFetch.Success || vehicleFetch.Rows.Count == 0)
+            return (false, vehicleFetch.StatusCode, vehicleFetch.Error ?? "No vehicles available for by-id lookup.", new List<JsonElement>());
+
+        var vehicleIds = vehicleFetch.Rows
+            .Select(row =>
+                PickString(row, "id")
+                ?? PickString(PickNestedObject(row, "vehicle") ?? row, "id", "vehicle_id"))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(150)
+            .ToList();
+
+        if (vehicleIds.Count == 0)
+            return (false, 404, "No valid vehicle ids found in vehicles payload.", new List<JsonElement>());
+
+        var rows = new List<JsonElement>();
+        var statusCode = 200;
+
+        foreach (var id in vehicleIds)
+        {
+            var idPaths = new[]
+            {
+                $"/v3/vehicle_locations/{id}",
+                $"/v2/vehicle_locations/{id}",
+                $"/v1/vehicle_locations/{id}?date={date}",
+                $"/v1/vehicle_locations?{id}?date={date}"
+            };
+
+            JsonElement? matched = null;
+            foreach (var path in idPaths)
+            {
+                var result = await FetchMotivPayload(path, $"vehicle-locations-by-id:{id}", includeIncomingQuery: false);
+                statusCode = result.StatusCode;
+                if (!result.Success)
+                    continue;
+
+                var extracted = ExtractRows(result.Payload);
+                if (extracted.Count > 0)
+                {
+                    matched = extracted[0];
+                    break;
+                }
+
+                if (result.Payload.ValueKind == JsonValueKind.Object)
+                {
+                    matched = result.Payload.Clone();
+                    break;
+                }
+            }
+
+            if (matched.HasValue)
+                rows.Add(matched.Value);
+        }
+
+        return (rows.Count > 0, rows.Count > 0 ? 200 : statusCode, rows.Count > 0 ? null : "Vehicle by-id location lookups returned no rows.", rows);
     }
 
     private static bool HasNextPage(JsonElement payload, int pageNo, int currentCount, int perPage)
