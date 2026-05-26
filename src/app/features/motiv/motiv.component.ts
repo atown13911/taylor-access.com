@@ -389,6 +389,11 @@ type MotivStatusCache = {
       <section class="tab-panel" *ngIf="activeTab() === 'activity'">
         <h2>Activity</h2>
         <p>Driver list on the left with MOTIV activity log on the right.</p>
+        <div class="driver-actions">
+          <button class="refresh-btn" (click)="refreshActivityTab()" [disabled]="loadingDrivers() || syncingDrivers()">
+            {{ loadingDrivers() || syncingDrivers() ? 'Refreshing...' : 'Refresh Activity' }}
+          </button>
+        </div>
         <div class="api-status">
           <div class="activity-layout">
             <div class="activity-left">
@@ -2524,6 +2529,11 @@ export class MotivComponent implements OnInit {
     this.loadDriversFromDb(true);
   }
 
+  refreshActivityTab(): void {
+    this.loadPersistedActivityLogs();
+    this.loadDriversFromDb(false);
+  }
+
   private loadDriversFromDb(runBackgroundSync: boolean): void {
     this.loadingDrivers.set(true);
     this.driversError.set('');
@@ -2750,13 +2760,13 @@ export class MotivComponent implements OnInit {
       const sampleLocationKeys = sample?.current_location && typeof sample.current_location === 'object' ? Object.keys(sample.current_location).slice(0, 20) : [];
 
       // #region agent log
-      fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H1',location:'motiv.component.ts:fetchVehicleLocationRows:success',message:'Vehicle location payload shape',data:{sourcePath:typeof payload?.sourcePath==='string'?payload.sourcePath:null,attemptedCount:Array.isArray(payload?.attempted)?payload.attempted.length:0,rows:rows.length,sampleKeys,sampleVehicleKeys,sampleLocationKeys},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H1',location:'motiv.component.ts:fetchVehicleLocationRows:success',message:'Vehicle location payload shape',data:{sourcePath:typeof payload?.sourcePath==='string'?payload.sourcePath:(typeof payload?.path==='string'?payload.path:null),attemptedCount:Array.isArray(payload?.attempted)?payload.attempted.length:0,rows:rows.length,sampleKeys,sampleVehicleKeys,sampleLocationKeys},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
 
       return {
         rows,
         attempted: Array.isArray(payload?.attempted) ? payload.attempted : [],
-        sourcePath: typeof payload?.sourcePath === 'string' ? payload.sourcePath : null
+        sourcePath: typeof payload?.sourcePath === 'string' ? payload.sourcePath : (typeof payload?.path === 'string' ? payload.path : null)
       };
     } catch {
       return { rows: [], attempted: [], sourcePath: null };
@@ -2803,10 +2813,10 @@ export class MotivComponent implements OnInit {
     for (const row of locationRows || []) {
       const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
       const vehicleId = String(
-        normalized?.id ??
-        normalized?.vehicle_id ??
         row?.vehicle_id ??
         row?.vehicleId ??
+        normalized?.vehicle_id ??
+        normalized?.id ??
         ''
       ).trim();
       const unit = this.normalizeVehicleMatchValue(
@@ -2836,10 +2846,10 @@ export class MotivComponent implements OnInit {
     for (const row of motivRows) {
       const vehicleSeed = row?.current_vehicle ?? row?.vehicle ?? {};
       const vehicleId = String(
-        vehicleSeed?.id ??
-        vehicleSeed?.vehicle_id ??
         row?.vehicle_id ??
         row?.vehicleId ??
+        vehicleSeed?.vehicle_id ??
+        vehicleSeed?.id ??
         ''
       ).trim();
       const unit = this.normalizeVehicleMatchValue(
@@ -2864,7 +2874,8 @@ export class MotivComponent implements OnInit {
         ? {
             ...row,
             current_location: row?.current_location ?? matchedLocation?.current_location ?? matchedLocation?.location ?? matchedLocation,
-            location: row?.location ?? matchedLocation?.location ?? matchedLocation?.current_location ?? matchedLocation
+            location: row?.location ?? matchedLocation?.location ?? matchedLocation?.current_location ?? matchedLocation?.vehicle_location ?? matchedLocation,
+            vehicle_location: row?.vehicle_location ?? matchedLocation?.vehicle_location ?? matchedLocation?.current_location ?? matchedLocation?.location
           }
         : row;
 
@@ -2932,10 +2943,10 @@ export class MotivComponent implements OnInit {
     for (const row of locationRows) {
       const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
       const vehicleId = String(
-        normalized?.id ??
-        normalized?.vehicle_id ??
         row?.vehicle_id ??
         row?.vehicleId ??
+        normalized?.vehicle_id ??
+        normalized?.id ??
         ''
       ).trim();
       const unitNumber = String(
@@ -2974,6 +2985,8 @@ export class MotivComponent implements OnInit {
         locationMatch?.current_location ??
         locationMatch?.currentLocation ??
         locationMatch?.location ??
+        locationMatch?.vehicle_location ??
+        locationMatch?.vehicleLocation ??
         null;
 
       return {
@@ -3169,14 +3182,25 @@ export class MotivComponent implements OnInit {
       row?.current_location,
       row?.currentLocation,
       row?.location,
+      row?.vehicle_location,
+      row?.vehicleLocation,
       row?.last_known_location,
       row?.lastKnownLocation,
+      row?.last_known_position,
+      row?.lastKnownPosition,
       row?.latest_location,
       row?.latestLocation,
+      row?.position,
+      row?.gps,
+      row?.point,
       row?.address,
       row?.geo,
       row?.geocode,
-      row?.coordinates
+      row?.coordinates,
+      row?.vehicle?.current_location,
+      row?.vehicle?.location,
+      row?.current_vehicle?.current_location,
+      row?.current_vehicle?.location
     ];
 
     for (const seeded of candidates) {
@@ -3194,6 +3218,9 @@ export class MotivComponent implements OnInit {
       row?.city ?? row?.City ??
       row?.state ?? row?.State ??
       row?.address ??
+      row?.location_name ??
+      row?.place_name ??
+      row?.formatted ??
       row?.formatted_address ??
       row?.lat ?? row?.latitude ?? row?.Latitude ??
       row?.lon ?? row?.lng ?? row?.longitude ?? row?.Longitude
@@ -3218,7 +3245,7 @@ export class MotivComponent implements OnInit {
       }
     }
     if (raw && typeof raw === 'object') {
-      for (const key of ['city', 'City', 'state', 'State', 'lat', 'latitude', 'lon', 'lng', 'longitude', 'location_name', 'formatted_address']) {
+      for (const key of ['city', 'City', 'state', 'State', 'lat', 'latitude', 'lon', 'lng', 'longitude', 'location_name', 'formatted_address', 'vehicle_location', 'vehicleLocation', 'last_known_position', 'position', 'place_name', 'formatted']) {
         if (raw[key] != null) {
           keys.push(`raw.${key}`);
         }
@@ -3545,6 +3572,9 @@ export class MotivComponent implements OnInit {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload?.driver_locations)) return payload.driver_locations;
+    if (Array.isArray(payload?.vehicle_locations)) return payload.vehicle_locations;
+    if (Array.isArray(payload?.asset_locations)) return payload.asset_locations;
+    if (Array.isArray(payload?.dispatch_locations)) return payload.dispatch_locations;
     if (Array.isArray(payload?.vehicles)) return payload.vehicles;
     if (Array.isArray(payload?.users)) return payload.users;
     if (Array.isArray(payload?.cards)) return payload.cards;
@@ -3631,6 +3661,9 @@ export class MotivComponent implements OnInit {
     const textLocation = String(
       location?.description ??
       location?.name ??
+      location?.location_name ??
+      location?.place_name ??
+      location?.formatted ??
       location?.address?.formatted ??
       location?.address?.line1 ??
       location?.address?.line_1 ??
@@ -3642,6 +3675,8 @@ export class MotivComponent implements OnInit {
       raw?.address ??
       raw?.Address ??
       raw?.location_name ??
+      raw?.place_name ??
+      raw?.formatted ??
       (typeof raw?.location === 'string' ? raw.location : null) ??
       ''
     ).trim();
