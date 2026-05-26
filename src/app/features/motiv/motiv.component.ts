@@ -1551,7 +1551,7 @@ export class MotivComponent implements OnInit {
   });
 
   driverTableRows = computed<MotivDriverTableRow[]>(() =>
-    this.motivDrivers().map((raw) => this.mapDriverRow(raw))
+    this.dedupeDriverRows(this.motivDrivers().map((raw) => this.mapDriverRow(raw)))
   );
   locationDiagnostics = computed(() => {
     const rows = this.motivDrivers();
@@ -3506,6 +3506,81 @@ export class MotivComponent implements OnInit {
       return `${lat}, ${lon}`;
     }
     return 'N/A';
+  }
+
+  private dedupeDriverRows(rows: MotivDriverTableRow[]): MotivDriverTableRow[] {
+    const byKey = new Map<string, MotivDriverTableRow>();
+
+    for (const row of rows) {
+      const key = this.buildDriverDedupKey(row);
+      if (!byKey.has(key)) {
+        byKey.set(key, row);
+        continue;
+      }
+
+      const existing = byKey.get(key)!;
+      byKey.set(key, this.pickBestDriverRow(existing, row));
+    }
+
+    return Array.from(byKey.values());
+  }
+
+  private buildDriverDedupKey(row: MotivDriverTableRow): string {
+    const email = String(row.email || '').trim().toLowerCase();
+    if (email && email !== 'n/a') {
+      return `email:${email}`;
+    }
+
+    const name = String(row.name || '').trim().toLowerCase();
+    const phone = String(row.phone || '').trim().toLowerCase();
+    return `name:${name}|phone:${phone}`;
+  }
+
+  private pickBestDriverRow(a: MotivDriverTableRow, b: MotivDriverTableRow): MotivDriverTableRow {
+    const scoreA = this.scoreDriverRow(a);
+    const scoreB = this.scoreDriverRow(b);
+    const preferred = scoreB > scoreA ? b : a;
+    const secondary = preferred === a ? b : a;
+
+    // Keep the preferred base row but patch in missing fields from the secondary row.
+    return {
+      name: this.pickPreferredValue(preferred.name, secondary.name),
+      email: this.pickPreferredValue(preferred.email, secondary.email),
+      phone: this.pickPreferredValue(preferred.phone, secondary.phone),
+      status: this.pickPreferredValue(preferred.status, secondary.status),
+      location: this.pickPreferredValue(preferred.location, secondary.location),
+      vehicle: this.pickPreferredValue(preferred.vehicle, secondary.vehicle),
+      lastUpdate: this.pickPreferredValue(preferred.lastUpdate, secondary.lastUpdate)
+    };
+  }
+
+  private scoreDriverRow(row: MotivDriverTableRow): number {
+    let score = 0;
+    if (this.hasDriverValue(row.vehicle)) score += 4;
+    if (this.hasDriverValue(row.location)) score += 3;
+    if (this.hasDriverValue(row.email)) score += 2;
+    if (this.hasDriverValue(row.phone)) score += 1;
+
+    if (this.isActiveLikeStatus(row.status.toLowerCase())) score += 2;
+    if (this.parseDriverUpdateTime(row.lastUpdate) > 0) score += 1;
+
+    return score;
+  }
+
+  private pickPreferredValue(primary: string, fallback: string): string {
+    if (this.hasDriverValue(primary)) return primary;
+    if (this.hasDriverValue(fallback)) return fallback;
+    return primary || fallback || 'N/A';
+  }
+
+  private hasDriverValue(value: string): boolean {
+    const normalized = String(value || '').trim().toLowerCase();
+    return !!normalized && normalized !== 'n/a' && normalized !== 'unknown';
+  }
+
+  private parseDriverUpdateTime(value: string): number {
+    const parsed = this.tryParseDate(String(value || ''));
+    return parsed ? parsed.getTime() : 0;
   }
 
   private mapVehicleRow(raw: any): MotivVehicleTableRow {
