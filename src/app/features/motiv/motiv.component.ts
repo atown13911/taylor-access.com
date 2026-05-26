@@ -3826,6 +3826,14 @@ export class MotivComponent implements OnInit {
             if (nameKey && !byName.has(nameKey)) byName.set(nameKey, driver);
           }
 
+          const filteredRows = this.filteredFuelRows();
+          const activeMatchedRows = filteredRows.filter((fuelRow) => {
+            const key = this.normalizeFuelReportKey(fuelRow.driverId);
+            return !!key && (byId.has(key) || byName.has(key));
+          });
+          const reportRows = activeMatchedRows.length > 0 ? activeMatchedRows : filteredRows;
+          const reportScope = activeMatchedRows.length > 0 ? 'active-matched' : 'filtered-fallback';
+
           const aggregates = new Map<string, {
             name: string;
             driverId: string;
@@ -3837,13 +3845,16 @@ export class MotivComponent implements OnInit {
             cards: Set<string>;
           }>();
 
-          for (const fuelRow of this.filteredFuelRows()) {
+          for (const fuelRow of reportRows) {
             const key = this.normalizeFuelReportKey(fuelRow.driverId);
             const matchedDriver = (key && byId.get(key)) || (key && byName.get(key));
-            if (!matchedDriver) continue;
 
-            const reportDriverName = this.resolveFuelReportDriverName(matchedDriver);
-            const reportDriverId = String(matchedDriver?.id ?? matchedDriver?.Id ?? matchedDriver?.userId ?? matchedDriver?.UserId ?? fuelRow.driverId ?? 'N/A').trim() || 'N/A';
+            const reportDriverName = matchedDriver
+              ? this.resolveFuelReportDriverName(matchedDriver)
+              : (String(fuelRow.driverId ?? '').trim() || 'Unknown Driver');
+            const reportDriverId = matchedDriver
+              ? (String(matchedDriver?.id ?? matchedDriver?.Id ?? matchedDriver?.userId ?? matchedDriver?.UserId ?? fuelRow.driverId ?? 'N/A').trim() || 'N/A')
+              : (String(fuelRow.driverId ?? '').trim() || 'N/A');
             const aggregateKey = `${reportDriverId}|${reportDriverName}`.toLowerCase();
             if (!aggregates.has(aggregateKey)) {
               aggregates.set(aggregateKey, {
@@ -3875,9 +3886,14 @@ export class MotivComponent implements OnInit {
           const ordered = Array.from(aggregates.values()).sort((a, b) => b.total - a.total);
           const stamp = new Date().toISOString().replace(/[:.]/g, '-');
           const filename = `fuel-active-driver-report-${stamp}.pdf`;
-          await this.openFuelReportPdf(filename, ordered, this.filteredFuelRows().length);
+          await this.openFuelReportPdf(filename, ordered, reportRows, {
+            filteredCount: filteredRows.length,
+            activeMatchedCount: activeMatchedRows.length,
+            scope: reportScope,
+            activeDriverCount: activeDrivers.length
+          });
 
-          this.saveFuelMessage.set(`Fuel report generated for ${ordered.length} active drivers from ${this.filteredFuelRows().length} filtered transactions.`);
+          this.saveFuelMessage.set(`Fuel report generated with ${reportRows.length} transactions and ${ordered.length} driver summaries.`);
         } catch {
           this.saveFuelError.set('Unable to generate fuel report from current data.');
         } finally {
@@ -4644,7 +4660,13 @@ export class MotivComponent implements OnInit {
       unknown: number;
       cards: Set<string>;
     }>,
-    transactionCount: number
+    transactionRows: MotivFuelRow[],
+    context: {
+      filteredCount: number;
+      activeMatchedCount: number;
+      scope: 'active-matched' | 'filtered-fallback';
+      activeDriverCount: number;
+    }
   ): Promise<void> {
     const doc = new jsPDF({
       orientation: 'landscape',
@@ -4657,60 +4679,128 @@ export class MotivComponent implements OnInit {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const bottom = pageHeight - 28;
-    const drawHeader = () => {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(13);
-      doc.text('Fuel Report Per Active Driver', left, top);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, left, top + 14);
-      doc.text(`Included transactions: ${transactionCount.toLocaleString()}`, left, top + 27);
-      doc.text(`Included drivers: ${rows.length.toLocaleString()}`, left, top + 40);
-      doc.text(`Week filter: ${this.fuelWeekFilter() || 'All'} | Year filter: ${this.fuelYearFilter() || 'All'}`, left, top + 53);
+    const totalAmount = transactionRows.reduce((sum, row) => sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0), 0);
+    const fuelAmount = transactionRows.reduce((sum, row) => sum + (this.classifyFuelCharge(row) === 'fuel' ? row.amountValue : 0), 0);
+    const otherAmount = transactionRows.reduce((sum, row) => sum + (this.classifyFuelCharge(row) === 'other' ? row.amountValue : 0), 0);
+    const unknownAmount = transactionRows.reduce((sum, row) => sum + (this.classifyFuelCharge(row) === 'unknown' ? row.amountValue : 0), 0);
+    const uniqueDrivers = new Set(transactionRows.map((row) => this.normalizeFuelReportKey(row.driverId)).filter((x) => !!x)).size;
+    const uniqueVehicles = new Set(transactionRows.map((row) => this.normalizeFuelReportKey(row.vehicleId)).filter((x) => !!x)).size;
+    const uniqueCards = new Set(transactionRows.map((row) => this.normalizeFuelCardKey(row.cardLabel || row.cardId)).filter((x) => !!x)).size;
+
+    let y = top;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('Fuel Statement Report', left, y);
+    y += 16;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, left, y);
+    y += 12;
+    doc.text(`Week filter: ${this.fuelWeekFilter() || 'All'} | Year filter: ${this.fuelYearFilter() || 'All'}`, left, y);
+    y += 12;
+    const scopeLabel = context.scope === 'active-matched'
+      ? `Active-only transactions (${context.activeMatchedCount} matched from ${context.filteredCount} filtered, active drivers loaded: ${context.activeDriverCount})`
+      : `Fallback to all filtered transactions (${context.filteredCount}) because active-driver matching found none`;
+    doc.text(`Scope: ${scopeLabel}`, left, y);
+    y += 16;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Summary', left, y);
+    y += 12;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Transactions: ${transactionRows.length.toLocaleString()}`, left, y);
+    doc.text(`Total: ${this.formatPdfCurrency(totalAmount)}`, left + 180, y);
+    doc.text(`Fuel: ${this.formatPdfCurrency(fuelAmount)}`, left + 320, y);
+    doc.text(`Other: ${this.formatPdfCurrency(otherAmount)}`, left + 450, y);
+    doc.text(`Unknown: ${this.formatPdfCurrency(unknownAmount)}`, left + 580, y);
+    y += 12;
+    doc.text(`Unique Drivers: ${uniqueDrivers.toLocaleString()}`, left, y);
+    doc.text(`Unique Vehicles: ${uniqueVehicles.toLocaleString()}`, left + 180, y);
+    doc.text(`Cards Used: ${uniqueCards.toLocaleString()}`, left + 320, y);
+    y += 18;
+
+    const ensureSpace = (neededHeight: number): void => {
+      if (y + neededHeight > bottom) {
+        doc.addPage();
+        y = top;
+      }
     };
 
-    const columns = [
-      { label: 'Driver', width: 170 },
-      { label: 'Driver ID', width: 88 },
-      { label: 'Txns', width: 44, align: 'right' as const },
-      { label: 'Total', width: 72, align: 'right' as const },
-      { label: 'Fuel', width: 72, align: 'right' as const },
-      { label: 'Other', width: 72, align: 'right' as const },
-      { label: 'Unknown', width: 72, align: 'right' as const },
-      { label: 'Cards', width: 44, align: 'right' as const },
-      { label: 'Card Labels', width: 240 }
+    const driverColumns = [
+      { label: 'Driver', width: 150 },
+      { label: 'Driver ID', width: 80 },
+      { label: 'Txns', width: 40, align: 'right' as const },
+      { label: 'Total', width: 64, align: 'right' as const },
+      { label: 'Fuel', width: 64, align: 'right' as const },
+      { label: 'Other', width: 64, align: 'right' as const },
+      { label: 'Unknown', width: 64, align: 'right' as const },
+      { label: 'Cards', width: 40, align: 'right' as const },
+      { label: 'Card Labels', width: 162 }
+    ];
+    const transactionColumns = [
+      { label: 'Date', width: 64 },
+      { label: 'Driver', width: 110 },
+      { label: 'Txn ID', width: 72 },
+      { label: 'Merchant', width: 110 },
+      { label: 'Location', width: 76 },
+      { label: 'Vehicle', width: 64 },
+      { label: 'Card', width: 80 },
+      { label: 'Category', width: 50 },
+      { label: 'Status', width: 44 },
+      { label: 'Amount', width: 58, align: 'right' as const }
     ];
 
-    let y = top + 74;
-    const drawTableHeader = () => {
+    const drawColumnsHeader = (columns: Array<{ label: string; width: number; align?: 'right' }>): void => {
       doc.setFont('courier', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       let x = left;
       for (const col of columns) {
-        const rendered = this.truncatePdfText(col.label, col.width, doc);
-        doc.text(rendered, x, y);
+        doc.text(col.label, x, y);
         x += col.width;
       }
-      y += 14;
+      y += 12;
       doc.setDrawColor(170, 170, 170);
-      doc.line(left, y - 9, pageWidth - left, y - 9);
+      doc.line(left, y - 8, pageWidth - left, y - 8);
       doc.setFont('courier', 'normal');
+      doc.setFontSize(8.5);
     };
 
-    const ensureSpace = (lineCount = 1) => {
-      const needed = lineCount * 12 + 6;
-      if (y + needed > bottom) {
-        doc.addPage();
-        y = top + 22;
-        drawTableHeader();
+    const drawWrappedRow = (columns: Array<{ width: number; align?: 'right' }>, values: string[]): void => {
+      const wrapped = columns.map((col, idx) => {
+        const text = String(values[idx] ?? '');
+        const parts = doc.splitTextToSize(text, Math.max(8, col.width - 4));
+        return (parts.length ? parts : ['']) as string[];
+      });
+      const lineCount = wrapped.reduce((max, parts) => Math.max(max, parts.length), 1);
+      ensureSpace(lineCount * 11 + 4);
+      for (let line = 0; line < lineCount; line += 1) {
+        let x = left;
+        for (let i = 0; i < columns.length; i += 1) {
+          const col = columns[i];
+          const text = wrapped[i][line] ?? '';
+          if (col.align === 'right') {
+            doc.text(text, x + col.width - 2, y, { align: 'right' });
+          } else {
+            doc.text(text, x, y);
+          }
+          x += col.width;
+        }
+        y += 11;
       }
+      y += 2;
     };
 
-    drawHeader();
-    drawTableHeader();
+    ensureSpace(30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Driver Summary Totals', left, y);
+    y += 12;
+    drawColumnsHeader(driverColumns);
     for (const row of rows) {
       const cardsText = Array.from(row.cards).sort((a, b) => a.localeCompare(b)).join(' | ') || 'N/A';
-      const values = [
+      drawWrappedRow(driverColumns, [
         row.name || 'N/A',
         row.driverId || 'N/A',
         String(row.transactions),
@@ -4720,32 +4810,29 @@ export class MotivComponent implements OnInit {
         this.formatPdfCurrency(row.unknown),
         String(row.cards.size),
         cardsText
-      ];
+      ]);
+    }
 
-      const wrapped = columns.map((col, idx) => {
-        const text = String(values[idx] ?? '');
-        const pieces = doc.splitTextToSize(text, Math.max(8, col.width - 6));
-        return (pieces.length ? pieces : ['']) as string[];
-      });
-
-      const lineCount = wrapped.reduce((max, parts) => Math.max(max, parts.length), 1);
-      ensureSpace(lineCount);
-      for (let line = 0; line < lineCount; line += 1) {
-        let x = left;
-        for (let i = 0; i < columns.length; i += 1) {
-          const col = columns[i];
-          const text = wrapped[i][line] ?? '';
-          const render = this.truncatePdfText(text, col.width - 4, doc);
-          if (col.align === 'right') {
-            doc.text(render, x + col.width - 4, y, { align: 'right' });
-          } else {
-            doc.text(render, x, y);
-          }
-          x += col.width;
-        }
-        y += 12;
-      }
-      y += 2;
+    ensureSpace(36);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Individual Transactions', left, y);
+    y += 12;
+    drawColumnsHeader(transactionColumns);
+    for (const row of transactionRows) {
+      const location = [row.city, row.state].filter((v) => !!v && String(v).trim() !== 'N/A').join(', ') || 'N/A';
+      drawWrappedRow(transactionColumns, [
+        this.formatPdfDate(row.date),
+        String(row.driverId || 'N/A'),
+        String(row.transactionId || 'N/A'),
+        String(row.merchant || 'N/A'),
+        location,
+        String(row.vehicleId || 'N/A'),
+        String(row.cardLabel || row.cardId || 'N/A'),
+        String(row.category || 'N/A'),
+        String(row.status || 'N/A'),
+        this.formatPdfCurrency(Number.isFinite(row.amountValue) ? row.amountValue : 0)
+      ]);
     }
 
     const blob = doc.output('blob');
@@ -4766,15 +4853,10 @@ export class MotivComponent implements OnInit {
     return safeAmount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
   }
 
-  private truncatePdfText(value: string, width: number, doc: jsPDF): string {
-    const text = String(value ?? '');
-    if (!text) return '';
-    if (doc.getTextWidth(text) <= width) return text;
-    let trimmed = text;
-    while (trimmed.length > 0 && doc.getTextWidth(`${trimmed}...`) > width) {
-      trimmed = trimmed.slice(0, -1);
-    }
-    return `${trimmed}...`;
+  private formatPdfDate(value: string): string {
+    const parsed = this.tryParseDate(value);
+    if (!parsed) return 'N/A';
+    return `${parsed.getMonth() + 1}/${parsed.getDate()}/${parsed.getFullYear()}`;
   }
 
   private async saveBlobFile(filename: string, blob: Blob, mimeType: string, extensions: string[]): Promise<void> {
