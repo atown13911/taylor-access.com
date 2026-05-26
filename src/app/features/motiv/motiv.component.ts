@@ -3152,21 +3152,31 @@ export class MotivComponent implements OnInit {
 
   private extractLocationSeed(row: any): any {
     if (!row || typeof row !== 'object') return null;
-    const seeded = (
-      row?.current_location ??
-      row?.currentLocation ??
-      row?.location ??
-      row?.last_known_location ??
-      row?.lastKnownLocation ??
-      row?.latest_location ??
-      row?.latestLocation ??
-      row?.address ??
-      row?.geo ??
-      row?.geocode ??
-      row?.coordinates ??
-      null
-    );
-    if (seeded) return seeded;
+    const candidates = [
+      row?.current_location,
+      row?.currentLocation,
+      row?.location,
+      row?.last_known_location,
+      row?.lastKnownLocation,
+      row?.latest_location,
+      row?.latestLocation,
+      row?.address,
+      row?.geo,
+      row?.geocode,
+      row?.coordinates
+    ];
+
+    for (const seeded of candidates) {
+      if (!seeded) continue;
+      if (typeof seeded === 'object') return seeded;
+      if (typeof seeded === 'string') {
+        const normalized = seeded.trim().toLowerCase();
+        if (normalized && normalized !== 'n/a' && normalized !== 'unknown' && normalized !== 'null') {
+          return { description: seeded };
+        }
+      }
+    }
+
     if (
       row?.city ?? row?.City ??
       row?.state ?? row?.State ??
