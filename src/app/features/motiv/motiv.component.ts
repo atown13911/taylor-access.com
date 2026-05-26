@@ -3532,8 +3532,12 @@ export class MotivComponent implements OnInit {
     }
 
     const name = String(row.name || '').trim().toLowerCase();
+    if (name && name !== 'n/a') {
+      return `name:${name}`;
+    }
+
     const phone = String(row.phone || '').trim().toLowerCase();
-    return `name:${name}|phone:${phone}`;
+    return `phone:${phone}`;
   }
 
   private pickBestDriverRow(a: MotivDriverTableRow, b: MotivDriverTableRow): MotivDriverTableRow {
