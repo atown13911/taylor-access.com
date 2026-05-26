@@ -1986,15 +1986,25 @@ public class MotivController : ControllerBase
         var startIso = startUtc.ToString("O");
         var endIso = endUtc.ToString("O");
 
-        var candidatePaths = new List<string>
+        var basePaths = new List<string>
         {
             basePath,
-            UpsertQueryParam(UpsertQueryParam(basePath, "start_date", startDate), "end_date", endDate),
-            UpsertQueryParam(UpsertQueryParam(basePath, "from_date", startDate), "to_date", endDate),
-            UpsertQueryParam(UpsertQueryParam(basePath, "start_time", startIso), "end_time", endIso),
-            UpsertQueryParam(UpsertQueryParam(basePath, "start_ts", startIso), "end_ts", endIso),
-            UpsertQueryParam(UpsertQueryParam(basePath, "from", startIso), "to", endIso)
+            _config["MOTIV_CARD_TRANSACTIONS_PATH"] ?? Environment.GetEnvironmentVariable("MOTIV_CARD_TRANSACTIONS_PATH") ?? "/motive_card/v2/transactions",
+            "/motive_card/v1/transactions"
         };
+
+        var candidatePaths = new List<string>();
+        foreach (var root in basePaths.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            candidatePaths.Add(root);
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "start_date", startDate), "end_date", endDate));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "from_date", startDate), "to_date", endDate));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "start_time", startIso), "end_time", endIso));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "start_ts", startIso), "end_ts", endIso));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "from", startIso), "to", endIso));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "start", startIso), "end", endIso));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "from", startDate), "to", endDate));
+        }
 
         var allRows = new List<JsonElement>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2050,9 +2060,9 @@ public class MotivController : ControllerBase
             var merchant = PickNestedObject(payload, "merchant_info");
             var firstOrderItem = PickFirstArrayObject(payload, "order_items");
 
-            var txTime = ParseDateTime(PickString(payload, "transaction_time", "created_at", "updated_at"));
-            var postedAt = ParseDateTime(PickString(payload, "posted_at"));
-            var amount = PickDecimal(payload, "total_amount", "authorized_amount", "total_amount_before_rebate");
+            var txTime = ParseDateTime(PickString(payload, "transaction_time", "purchased_at", "processed_at", "occurred_at", "created_at", "updated_at", "date"));
+            var postedAt = ParseDateTime(PickString(payload, "posted_at", "processed_at", "settled_at"));
+            var amount = PickDecimal(payload, "total_amount", "authorized_amount", "total_amount_before_rebate", "amount");
             var quantity = PickDecimal(firstOrderItem ?? payload, "quantity");
 
             if (!byExternalId.TryGetValue(externalId, out var target))

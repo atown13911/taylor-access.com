@@ -851,6 +851,10 @@ type MotivStatusCache = {
                 <span class="label">Cards Used</span>
                 <span class="value">{{ fuelUniqueCardsCount() }}</span>
               </div>
+              <div class="driver-card total">
+                <span class="label">Week Coverage</span>
+                <span class="value">{{ fuelDistinctWeeksCount() }} w / {{ fuelDistinctYearsCount() }} y</span>
+              </div>
             </div>
             <div class="driver-actions">
               <input
@@ -1933,6 +1937,24 @@ export class MotivComponent implements OnInit {
         .filter(x => !!x && x.toLowerCase() !== 'n/a')
     ).size
   );
+  fuelDistinctWeeksCount = computed<number>(() => {
+    const weeks = new Set<string>();
+    for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      if (!dt) continue;
+      weeks.add(this.getIsoWeekInfo(dt).key);
+    }
+    return weeks.size;
+  });
+  fuelDistinctYearsCount = computed<number>(() => {
+    const years = new Set<number>();
+    for (const row of this.fuelRows()) {
+      const dt = this.tryParseDate(row.date);
+      if (!dt) continue;
+      years.add(dt.getUTCFullYear());
+    }
+    return years.size;
+  });
   fuelCardOptions = computed<string[]>(() => {
     const cards = new Set<string>();
     for (const row of this.fuelRows()) {
