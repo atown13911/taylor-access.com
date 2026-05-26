@@ -1946,22 +1946,26 @@ export class MotivComponent implements OnInit {
   });
   fuelAvailableWeeks = computed<FuelWeekOption[]>(() => {
     const selectedYear = this.fuelYearFilter();
-    const weekMap = new Map<string, FuelWeekOption>();
-    for (const row of this.fuelRows()) {
-      const dt = this.tryParseDate(row.date);
-      if (!dt) continue;
-      const info = this.getIsoWeekInfo(dt);
-      if (selectedYear !== 'all' && String(info.year) !== selectedYear) continue;
-      if (!weekMap.has(info.key)) {
-        weekMap.set(info.key, {
-          key: info.key,
-          label: `Week ${String(info.week).padStart(2, '0')} (${info.year})`,
-          year: info.year,
-          week: info.week
+    const years = selectedYear !== 'all'
+      ? [Number(selectedYear)]
+      : this.fuelAvailableYears();
+
+    const resolvedYears = years.length > 0
+      ? years.filter((y) => Number.isFinite(y) && y > 0)
+      : [new Date().getUTCFullYear()];
+
+    const options: FuelWeekOption[] = [];
+    for (const year of resolvedYears.sort((a, b) => b - a)) {
+      for (let week = 52; week >= 1; week--) {
+        options.push({
+          key: `${year}-W${String(week).padStart(2, '0')}`,
+          label: `Week ${String(week).padStart(2, '0')} (${year})`,
+          year,
+          week
         });
       }
     }
-    return Array.from(weekMap.values()).sort((a, b) => b.key.localeCompare(a.key));
+    return options;
   });
   filteredFuelRows = computed<MotivFuelRow[]>(() => {
     const term = this.fuelSearchTerm().trim().toLowerCase();
