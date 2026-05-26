@@ -306,7 +306,7 @@ public class MotivController : ControllerBase
         var orgId = await ResolveOrganizationId();
         var dbQuery = _db.MotivFuelPurchases.AsNoTracking();
         if (orgId > 0)
-            dbQuery = dbQuery.Where(x => x.OrganizationId == orgId);
+            dbQuery = dbQuery.Where(x => x.OrganizationId == orgId || x.OrganizationId == null);
 
         var dbRows = await dbQuery
             .OrderByDescending(x => x.TransactionTime ?? x.PostedAt ?? x.UpdatedAt)
@@ -776,93 +776,52 @@ public class MotivController : ControllerBase
             return Ok(new { fetched = 0, created = 0, updated = 0, skipped = 0, message = "No fuel purchase rows returned by MOTIV." });
         }
 
-        var orgId = await ResolveOrganizationId();
-        var existing = await _db.MotivFuelPurchases.ToListAsync();
-        var byExternalId = existing
-            .Where(x => !string.IsNullOrWhiteSpace(x.ExternalId))
-            .GroupBy(x => x.ExternalId.Trim())
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-        var created = 0;
-        var updated = 0;
-        var skipped = 0;
-
-        foreach (var row in rows)
-        {
-            var externalId = PickString(row, "id", "transaction_id", "uuid");
-            if (string.IsNullOrWhiteSpace(externalId))
-            {
-                skipped++;
-                continue;
-            }
-
-            var merchant = PickNestedObject(row, "merchant_info");
-            var firstOrderItem = PickFirstArrayObject(row, "order_items");
-
-            var txTime = ParseDateTime(PickString(row, "transaction_time", "created_at", "updated_at"));
-            var postedAt = ParseDateTime(PickString(row, "posted_at"));
-            var amount = PickDecimal(row, "total_amount", "authorized_amount", "total_amount_before_rebate");
-            var quantity = PickDecimal(firstOrderItem ?? row, "quantity");
-
-            if (!byExternalId.TryGetValue(externalId, out var target))
-            {
-                target = new MotivFuelPurchase
-                {
-                    OrganizationId = orgId == 0 ? null : orgId,
-                    ExternalId = externalId.Trim(),
-                    TransactionTime = txTime,
-                    PostedAt = postedAt,
-                    DriverId = PickInt(row, "driver_id"),
-                    VehicleId = PickInt(row, "vehicle_id"),
-                    CardId = PickString(row, "card_id", "last_four_digits"),
-                    MerchantName = PickString(merchant ?? row, "name"),
-                    MerchantCity = PickString(merchant ?? row, "city"),
-                    MerchantState = PickString(merchant ?? row, "state"),
-                    Status = PickString(row, "transaction_status", "status"),
-                    Currency = PickString(row, "currency"),
-                    Category = PickString(row, "transaction_type", "type"),
-                    ProductType = PickString(firstOrderItem ?? row, "product_type"),
-                    Quantity = quantity,
-                    Amount = amount,
-                    RawJson = row.ToString(),
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _db.MotivFuelPurchases.Add(target);
-                byExternalId[externalId] = target;
-                created++;
-            }
-            else
-            {
-                target.OrganizationId = orgId == 0 ? target.OrganizationId : orgId;
-                target.TransactionTime = txTime ?? target.TransactionTime;
-                target.PostedAt = postedAt ?? target.PostedAt;
-                target.DriverId = PickInt(row, "driver_id") ?? target.DriverId;
-                target.VehicleId = PickInt(row, "vehicle_id") ?? target.VehicleId;
-                target.CardId = PickString(row, "card_id", "last_four_digits") ?? target.CardId;
-                target.MerchantName = PickString(merchant ?? row, "name") ?? target.MerchantName;
-                target.MerchantCity = PickString(merchant ?? row, "city") ?? target.MerchantCity;
-                target.MerchantState = PickString(merchant ?? row, "state") ?? target.MerchantState;
-                target.Status = PickString(row, "transaction_status", "status") ?? target.Status;
-                target.Currency = PickString(row, "currency") ?? target.Currency;
-                target.Category = PickString(row, "transaction_type", "type") ?? target.Category;
-                target.ProductType = PickString(firstOrderItem ?? row, "product_type") ?? target.ProductType;
-                target.Quantity = quantity ?? target.Quantity;
-                target.Amount = amount ?? target.Amount;
-                target.RawJson = row.ToString();
-                target.UpdatedAt = DateTime.UtcNow;
-                updated++;
-            }
-        }
-
-        await _db.SaveChangesAsync();
+        var upsert = await UpsertFuelPurchaseRows(rows);
 
         return Ok(new
         {
             fetched = rows.Count,
-            created,
-            updated,
-            skipped,
+            created = upsert.Created,
+            updated = upsert.Updated,
+            skipped = upsert.Skipped,
+            totalFuelPurchases = await _db.MotivFuelPurchases.CountAsync()
+        });
+    }
+
+    [HttpPost("fuel-purchases/backfill")]
+    public async Task<IActionResult> BackfillFuelPurchases([FromQuery] int days = 730)
+    {
+        var windowDays = Math.Clamp(days <= 0 ? 730 : days, 30, 1825);
+        var endUtc = DateTime.UtcNow;
+        var startUtc = endUtc.AddDays(-windowDays);
+
+        var basePath = _config["MOTIV_FUEL_PURCHASES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH")
+            ?? "/v1/fuel_purchases";
+
+        var historicalRows = await FetchHistoricalFuelRows(basePath, startUtc, endUtc);
+        if (historicalRows.Count == 0)
+        {
+            return Ok(new
+            {
+                fetched = 0,
+                created = 0,
+                updated = 0,
+                skipped = 0,
+                days = windowDays,
+                message = "No historical fuel rows were returned for backfill."
+            });
+        }
+
+        var upsert = await UpsertFuelPurchaseRows(historicalRows);
+
+        return Ok(new
+        {
+            fetched = historicalRows.Count,
+            created = upsert.Created,
+            updated = upsert.Updated,
+            skipped = upsert.Skipped,
+            days = windowDays,
             totalFuelPurchases = await _db.MotivFuelPurchases.CountAsync()
         });
     }
@@ -2018,6 +1977,137 @@ public class MotivController : ControllerBase
         }
 
         return (true, 200, null, allRows);
+    }
+
+    private async Task<List<JsonElement>> FetchHistoricalFuelRows(string basePath, DateTime startUtc, DateTime endUtc)
+    {
+        var startDate = startUtc.ToString("yyyy-MM-dd");
+        var endDate = endUtc.ToString("yyyy-MM-dd");
+        var startIso = startUtc.ToString("O");
+        var endIso = endUtc.ToString("O");
+
+        var candidatePaths = new List<string>
+        {
+            basePath,
+            UpsertQueryParam(UpsertQueryParam(basePath, "start_date", startDate), "end_date", endDate),
+            UpsertQueryParam(UpsertQueryParam(basePath, "from_date", startDate), "to_date", endDate),
+            UpsertQueryParam(UpsertQueryParam(basePath, "start_time", startIso), "end_time", endIso),
+            UpsertQueryParam(UpsertQueryParam(basePath, "start_ts", startIso), "end_ts", endIso),
+            UpsertQueryParam(UpsertQueryParam(basePath, "from", startIso), "to", endIso)
+        };
+
+        var allRows = new List<JsonElement>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in candidatePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var fetch = await FetchAllMotivRows(path, $"fuel-purchases-backfill:{path}", perPage: 100, maxPages: 200);
+            if (!fetch.Success || fetch.Rows.Count == 0)
+                continue;
+
+            foreach (var row in fetch.Rows)
+            {
+                var key = BuildFuelPurchaseKeyFromJson(row);
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    if (seen.Contains(key))
+                        continue;
+                    seen.Add(key);
+                }
+                allRows.Add(row);
+            }
+        }
+
+        return allRows;
+    }
+
+    private async Task<(int Created, int Updated, int Skipped)> UpsertFuelPurchaseRows(List<JsonElement> rows)
+    {
+        var orgId = await ResolveOrganizationId();
+        var existing = await _db.MotivFuelPurchases.ToListAsync();
+        var byExternalId = existing
+            .Where(x => !string.IsNullOrWhiteSpace(x.ExternalId))
+            .GroupBy(x => x.ExternalId.Trim())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var row in rows)
+        {
+            var payload = PickNestedObject(row, "fuel_purchase") ?? row;
+            var externalId = PickString(payload, "id", "transaction_id", "uuid");
+            if (string.IsNullOrWhiteSpace(externalId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var merchant = PickNestedObject(payload, "merchant_info");
+            var firstOrderItem = PickFirstArrayObject(payload, "order_items");
+
+            var txTime = ParseDateTime(PickString(payload, "transaction_time", "created_at", "updated_at"));
+            var postedAt = ParseDateTime(PickString(payload, "posted_at"));
+            var amount = PickDecimal(payload, "total_amount", "authorized_amount", "total_amount_before_rebate");
+            var quantity = PickDecimal(firstOrderItem ?? payload, "quantity");
+
+            if (!byExternalId.TryGetValue(externalId, out var target))
+            {
+                target = new MotivFuelPurchase
+                {
+                    OrganizationId = orgId == 0 ? null : orgId,
+                    ExternalId = externalId.Trim(),
+                    TransactionTime = txTime,
+                    PostedAt = postedAt,
+                    DriverId = PickInt(payload, "driver_id"),
+                    VehicleId = PickInt(payload, "vehicle_id"),
+                    CardId = PickString(payload, "card_id", "last_four_digits"),
+                    MerchantName = PickString(merchant ?? payload, "name"),
+                    MerchantCity = PickString(merchant ?? payload, "city"),
+                    MerchantState = PickString(merchant ?? payload, "state"),
+                    Status = PickString(payload, "transaction_status", "status"),
+                    Currency = PickString(payload, "currency"),
+                    Category = PickString(payload, "transaction_type", "type"),
+                    ProductType = PickString(firstOrderItem ?? payload, "product_type"),
+                    Quantity = quantity,
+                    Amount = amount,
+                    RawJson = row.ToString(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.MotivFuelPurchases.Add(target);
+                byExternalId[externalId] = target;
+                created++;
+            }
+            else
+            {
+                target.OrganizationId = orgId == 0 ? target.OrganizationId : orgId;
+                target.TransactionTime = txTime ?? target.TransactionTime;
+                target.PostedAt = postedAt ?? target.PostedAt;
+                target.DriverId = PickInt(payload, "driver_id") ?? target.DriverId;
+                target.VehicleId = PickInt(payload, "vehicle_id") ?? target.VehicleId;
+                target.CardId = PickString(payload, "card_id", "last_four_digits") ?? target.CardId;
+                target.MerchantName = PickString(merchant ?? payload, "name") ?? target.MerchantName;
+                target.MerchantCity = PickString(merchant ?? payload, "city") ?? target.MerchantCity;
+                target.MerchantState = PickString(merchant ?? payload, "state") ?? target.MerchantState;
+                target.Status = PickString(payload, "transaction_status", "status") ?? target.Status;
+                target.Currency = PickString(payload, "currency") ?? target.Currency;
+                target.Category = PickString(payload, "transaction_type", "type") ?? target.Category;
+                target.ProductType = PickString(firstOrderItem ?? payload, "product_type") ?? target.ProductType;
+                target.Quantity = quantity ?? target.Quantity;
+                target.Amount = amount ?? target.Amount;
+                target.RawJson = row.ToString();
+                target.UpdatedAt = DateTime.UtcNow;
+                updated++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return (created, updated, skipped);
     }
 
     private static List<JsonElement> MergeFuelPurchaseRows(List<JsonElement> liveRows, List<MotivFuelPurchase> dbRows)

@@ -822,6 +822,9 @@ type MotivStatusCache = {
             <button class="refresh-btn" (click)="saveFuelPurchasesToDb()" [disabled]="savingFuel() || loadingFuel()">
               {{ savingFuel() ? 'Saving...' : 'Save to Access DB' }}
             </button>
+            <button class="refresh-btn" (click)="backfillFuelPurchases()" [disabled]="savingFuel() || loadingFuel()">
+              {{ savingFuel() ? 'Backfilling...' : 'Backfill Fuel History' }}
+            </button>
           </div>
           <p class="error" *ngIf="fuelError()">{{ fuelError() }}</p>
           <p class="ok-note" *ngIf="saveFuelMessage()">{{ saveFuelMessage() }}</p>
@@ -3622,6 +3625,25 @@ export class MotivComponent implements OnInit {
       error: (err) => {
         this.savingFuel.set(false);
         this.saveFuelError.set(err?.error?.error || 'Unable to save MOTIV fuel purchases.');
+      }
+    });
+  }
+
+  backfillFuelPurchases(days = 730): void {
+    this.savingFuel.set(true);
+    this.saveFuelMessage.set('');
+    this.saveFuelError.set('');
+    this.http.post<any>(`${this.apiUrl}/api/v1/motiv/fuel-purchases/backfill?days=${days}`, {}).subscribe({
+      next: (res) => {
+        this.savingFuel.set(false);
+        this.saveFuelMessage.set(
+          `Historical backfill complete - fetched: ${res?.fetched ?? 0}, created: ${res?.created ?? 0}, updated: ${res?.updated ?? 0}, skipped: ${res?.skipped ?? 0}, days: ${res?.days ?? days}.`
+        );
+        this.loadFuelPurchases(true);
+      },
+      error: (err) => {
+        this.savingFuel.set(false);
+        this.saveFuelError.set(err?.error?.error || 'Unable to backfill MOTIV fuel purchases.');
       }
     });
   }
