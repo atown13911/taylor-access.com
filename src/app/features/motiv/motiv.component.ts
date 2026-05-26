@@ -1307,6 +1307,11 @@ type MotivStatusCache = {
       -webkit-backdrop-filter: blur(8px);
       padding: 10px;
     }
+    .activity-left > .available-api-table-wrap:first-of-type {
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
     .activity-left h3,
     .activity-right h3 {
       margin: 0 0 6px;
@@ -1319,11 +1324,12 @@ type MotivStatusCache = {
       box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.35);
     }
     .activity-driver-subpanel {
-      margin-top: 10px;
+      margin-top: 14px;
       border: 1px solid rgba(148, 163, 184, 0.22);
       border-radius: 10px;
-      padding: 10px;
+      padding: 12px;
       background: rgba(8, 15, 28, 0.38);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     }
     .activity-driver-subpanel-head {
       display: flex;
