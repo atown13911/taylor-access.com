@@ -2560,7 +2560,7 @@ export class MotivComponent implements OnInit {
               : [];
 
             let enrichedDriverRows = this.enrichDriverRowsWithLocations(activeDriverRows, locationPayload.rows);
-            enrichedDriverRows = this.mergeDriverRowsWithMotivRows(enrichedDriverRows, motivDriverRows);
+            enrichedDriverRows = this.mergeDriverRowsWithMotivRows(enrichedDriverRows, motivDriverRows, locationPayload.rows);
 
             const withLocationCount = enrichedDriverRows.reduce((count, row) => {
               const locationText = this.mapDriverRow(row).location;
@@ -2740,22 +2740,91 @@ export class MotivComponent implements OnInit {
     }
   }
 
-  private mergeDriverRowsWithMotivRows(driverRows: any[], motivRows: any[]): any[] {
+  private mergeDriverRowsWithMotivRows(driverRows: any[], motivRows: any[], locationRows: any[] = []): any[] {
     if (!Array.isArray(driverRows) || driverRows.length === 0) return [];
     if (!Array.isArray(motivRows) || motivRows.length === 0) return driverRows;
 
     const byEmail = new Map<string, any>();
     const byName = new Map<string, any>();
+    const byVehicleId = new Map<string, any>();
+    const byUnit = new Map<string, any>();
+    const byVin = new Map<string, any>();
+
+    for (const row of locationRows || []) {
+      const normalized = row?.vehicle ?? row?.current_vehicle ?? row ?? {};
+      const vehicleId = String(
+        normalized?.id ??
+        normalized?.vehicle_id ??
+        row?.vehicle_id ??
+        row?.vehicleId ??
+        ''
+      ).trim();
+      const unit = this.normalizeVehicleMatchValue(
+        normalized?.number ??
+        normalized?.fleet_number ??
+        normalized?.fleetNumber ??
+        normalized?.unit ??
+        normalized?.unit_number ??
+        row?.number ??
+        row?.unit ??
+        row?.unit_number
+      );
+      const vin = this.normalizeVehicleMatchValue(
+        normalized?.vin ??
+        normalized?.vehicle_vin ??
+        normalized?.vehicleVin ??
+        row?.vin ??
+        row?.vehicle_vin ??
+        row?.vehicleVin
+      );
+
+      if (vehicleId && !byVehicleId.has(vehicleId)) byVehicleId.set(vehicleId, row);
+      if (unit && !byUnit.has(unit)) byUnit.set(unit, row);
+      if (vin && !byVin.has(vin)) byVin.set(vin, row);
+    }
 
     for (const row of motivRows) {
-      const mapped = this.mapDriverRow(row);
-      const locationText = this.buildLocationDisplayFromRaw(row);
+      const vehicleSeed = row?.current_vehicle ?? row?.vehicle ?? {};
+      const vehicleId = String(
+        vehicleSeed?.id ??
+        vehicleSeed?.vehicle_id ??
+        row?.vehicle_id ??
+        row?.vehicleId ??
+        ''
+      ).trim();
+      const unit = this.normalizeVehicleMatchValue(
+        vehicleSeed?.number ??
+        vehicleSeed?.fleet_number ??
+        vehicleSeed?.fleetNumber ??
+        vehicleSeed?.unit ??
+        vehicleSeed?.unit_number
+      );
+      const vin = this.normalizeVehicleMatchValue(
+        vehicleSeed?.vin ??
+        vehicleSeed?.vehicle_vin ??
+        vehicleSeed?.vehicleVin
+      );
+
+      const matchedLocation = (vehicleId && byVehicleId.get(vehicleId))
+        || (vin && byVin.get(vin))
+        || (unit && byUnit.get(unit));
+
+      const candidate = matchedLocation
+        ? {
+            ...row,
+            current_location: row?.current_location ?? matchedLocation?.current_location ?? matchedLocation?.location ?? matchedLocation,
+            location: row?.location ?? matchedLocation?.location ?? matchedLocation?.current_location ?? matchedLocation
+          }
+        : row;
+
+      const mapped = this.mapDriverRow(candidate);
+      const locationText = this.buildLocationDisplayFromRaw(candidate);
       if (!locationText || locationText === 'N/A') continue;
 
       const emailKey = String(mapped.email || '').trim().toLowerCase();
       const nameKey = this.normalizePersonName(mapped.name);
-      if (emailKey && !byEmail.has(emailKey)) byEmail.set(emailKey, row);
-      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, row);
+      if (emailKey && !byEmail.has(emailKey)) byEmail.set(emailKey, candidate);
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, candidate);
     }
 
     return driverRows.map((driver) => {
