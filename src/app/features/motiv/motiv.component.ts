@@ -2558,14 +2558,27 @@ export class MotivComponent implements OnInit {
             const motivDriverRows = results[1].status === 'fulfilled'
               ? results[1].value
               : [];
+            const motivDriverRowsEnriched = this.enrichDriverRowsWithLocations(motivDriverRows, locationPayload.rows);
 
             let enrichedDriverRows = this.enrichDriverRowsWithLocations(activeDriverRows, locationPayload.rows);
-            enrichedDriverRows = this.mergeDriverRowsWithMotivRows(enrichedDriverRows, motivDriverRows, locationPayload.rows);
+            enrichedDriverRows = this.mergeDriverRowsWithMotivRows(enrichedDriverRows, motivDriverRowsEnriched, locationPayload.rows);
 
             const withLocationCount = enrichedDriverRows.reduce((count, row) => {
               const locationText = this.mapDriverRow(row).location;
               return locationText && locationText !== 'N/A' ? count + 1 : count;
             }, 0);
+            const motivWithLocationCount = motivDriverRowsEnriched.reduce((count, row) => {
+              const locationText = this.mapDriverRow(row).location;
+              return locationText && locationText !== 'N/A' ? count + 1 : count;
+            }, 0);
+            const motivActiveRows = motivDriverRowsEnriched.filter((row: any) =>
+              this.isActiveLikeStatus(this.mapDriverRow(row).status)
+            );
+
+            if (withLocationCount === 0 && motivWithLocationCount > 0) {
+              enrichedDriverRows = motivActiveRows.length > 0 ? motivActiveRows : motivDriverRowsEnriched;
+            }
+
             const mappedRows = enrichedDriverRows.map((row) => this.mapDriverRow(row));
             const latLonOnlyCount = mappedRows.filter((row) => this.isLatLonLocation(row.location)).length;
             const sampleLatLon = mappedRows
