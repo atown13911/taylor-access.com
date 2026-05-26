@@ -2139,7 +2139,11 @@ public class MotivController : ControllerBase
         {
             var key = BuildFuelPurchaseKeyFromJson(row);
             if (!string.IsNullOrWhiteSpace(key))
+            {
+                if (seen.Contains(key))
+                    continue;
                 seen.Add(key);
+            }
             merged.Add(row);
         }
 
