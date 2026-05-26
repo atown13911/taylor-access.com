@@ -1585,8 +1585,8 @@ export class MotivComponent implements OnInit {
   fuelStatusFilter = signal<'all' | 'completed' | 'pending' | 'other'>('all');
   fuelSourceFilter = signal<'all' | 'motive-card' | 'other'>('all');
   fuelCardFilter = signal<string>('all');
-  fuelYearFilter = signal<string>('all');
-  fuelWeekFilter = signal<string>('all');
+  fuelYearFilter = signal<string>(String(this.getIsoWeekInfo(new Date()).year));
+  fuelWeekFilter = signal<string>(this.getIsoWeekInfo(new Date()).key);
   fuelSortColumn = signal<FuelSortColumn>('date');
   fuelSortDirection = signal<'asc' | 'desc'>('desc');
   fuelPage = signal(1);
