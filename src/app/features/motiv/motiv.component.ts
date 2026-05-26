@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { timeout } from 'rxjs/operators';
+import { jsPDF } from 'jspdf';
 
 type MotivTab = 'api' | 'drivers' | 'activity' | 'vehicles' | 'users' | 'fuel' | 'fuel-cards';
 type MotivDriverTableRow = {
@@ -3807,7 +3808,7 @@ export class MotivComponent implements OnInit {
     this.saveFuelError.set('');
 
     this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`).pipe(timeout(30000)).subscribe({
-      next: (res) => {
+      next: async (res) => {
         try {
           const payload = res?.data ?? res;
           const activeDrivers = this.extractRows(payload).filter((row: any) => {
@@ -3872,43 +3873,9 @@ export class MotivComponent implements OnInit {
           }
 
           const ordered = Array.from(aggregates.values()).sort((a, b) => b.total - a.total);
-          const header = [
-            'Driver',
-            'DriverId',
-            'Transactions',
-            'TotalAmount',
-            'FuelSpend',
-            'OtherCharges',
-            'UnknownCharges',
-            'CardsUsed',
-            'Cards'
-          ];
-          const lines = [header.join(',')];
-          for (const row of ordered) {
-            lines.push([
-              this.escapeCsvValue(row.name),
-              this.escapeCsvValue(row.driverId),
-              String(row.transactions),
-              row.total.toFixed(2),
-              row.fuel.toFixed(2),
-              row.other.toFixed(2),
-              row.unknown.toFixed(2),
-              String(row.cards.size),
-              this.escapeCsvValue(Array.from(row.cards).sort((a, b) => a.localeCompare(b)).join(' | '))
-            ].join(','));
-          }
-
-          const csv = `${lines.join('\n')}\n`;
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const anchor = document.createElement('a');
           const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-          anchor.href = url;
-          anchor.download = `fuel-active-driver-report-${stamp}.csv`;
-          document.body.appendChild(anchor);
-          anchor.click();
-          document.body.removeChild(anchor);
-          URL.revokeObjectURL(url);
+          const filename = `fuel-active-driver-report-${stamp}.pdf`;
+          await this.openFuelReportPdf(filename, ordered, this.filteredFuelRows().length);
 
           this.saveFuelMessage.set(`Fuel report generated for ${ordered.length} active drivers from ${this.filteredFuelRows().length} filtered transactions.`);
         } catch {
@@ -4665,12 +4632,177 @@ export class MotivComponent implements OnInit {
     return String(value ?? '').trim().toLowerCase();
   }
 
-  private escapeCsvValue(value: string): string {
-    const text = String(value ?? '');
-    if (text.includes(',') || text.includes('"') || text.includes('\n')) {
-      return `"${text.replace(/"/g, '""')}"`;
+  private async openFuelReportPdf(
+    filename: string,
+    rows: Array<{
+      name: string;
+      driverId: string;
+      transactions: number;
+      total: number;
+      fuel: number;
+      other: number;
+      unknown: number;
+      cards: Set<string>;
+    }>,
+    transactionCount: number
+  ): Promise<void> {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'pt',
+      format: 'letter'
+    });
+
+    const left = 32;
+    const top = 36;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const bottom = pageHeight - 28;
+    const drawHeader = () => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text('Fuel Report Per Active Driver', left, top);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, left, top + 14);
+      doc.text(`Included transactions: ${transactionCount.toLocaleString()}`, left, top + 27);
+      doc.text(`Included drivers: ${rows.length.toLocaleString()}`, left, top + 40);
+      doc.text(`Week filter: ${this.fuelWeekFilter() || 'All'} | Year filter: ${this.fuelYearFilter() || 'All'}`, left, top + 53);
+    };
+
+    const columns = [
+      { label: 'Driver', width: 170 },
+      { label: 'Driver ID', width: 88 },
+      { label: 'Txns', width: 44, align: 'right' as const },
+      { label: 'Total', width: 72, align: 'right' as const },
+      { label: 'Fuel', width: 72, align: 'right' as const },
+      { label: 'Other', width: 72, align: 'right' as const },
+      { label: 'Unknown', width: 72, align: 'right' as const },
+      { label: 'Cards', width: 44, align: 'right' as const },
+      { label: 'Card Labels', width: 240 }
+    ];
+
+    let y = top + 74;
+    const drawTableHeader = () => {
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(9);
+      let x = left;
+      for (const col of columns) {
+        const rendered = this.truncatePdfText(col.label, col.width, doc);
+        doc.text(rendered, x, y);
+        x += col.width;
+      }
+      y += 14;
+      doc.setDrawColor(170, 170, 170);
+      doc.line(left, y - 9, pageWidth - left, y - 9);
+      doc.setFont('courier', 'normal');
+    };
+
+    const ensureSpace = (lineCount = 1) => {
+      const needed = lineCount * 12 + 6;
+      if (y + needed > bottom) {
+        doc.addPage();
+        y = top + 22;
+        drawTableHeader();
+      }
+    };
+
+    drawHeader();
+    drawTableHeader();
+    for (const row of rows) {
+      const cardsText = Array.from(row.cards).sort((a, b) => a.localeCompare(b)).join(' | ') || 'N/A';
+      const values = [
+        row.name || 'N/A',
+        row.driverId || 'N/A',
+        String(row.transactions),
+        this.formatPdfCurrency(row.total),
+        this.formatPdfCurrency(row.fuel),
+        this.formatPdfCurrency(row.other),
+        this.formatPdfCurrency(row.unknown),
+        String(row.cards.size),
+        cardsText
+      ];
+
+      const wrapped = columns.map((col, idx) => {
+        const text = String(values[idx] ?? '');
+        const pieces = doc.splitTextToSize(text, Math.max(8, col.width - 6));
+        return (pieces.length ? pieces : ['']) as string[];
+      });
+
+      const lineCount = wrapped.reduce((max, parts) => Math.max(max, parts.length), 1);
+      ensureSpace(lineCount);
+      for (let line = 0; line < lineCount; line += 1) {
+        let x = left;
+        for (let i = 0; i < columns.length; i += 1) {
+          const col = columns[i];
+          const text = wrapped[i][line] ?? '';
+          const render = this.truncatePdfText(text, col.width - 4, doc);
+          if (col.align === 'right') {
+            doc.text(render, x + col.width - 4, y, { align: 'right' });
+          } else {
+            doc.text(render, x, y);
+          }
+          x += col.width;
+        }
+        y += 12;
+      }
+      y += 2;
     }
-    return text;
+
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      await this.saveBlobFile(filename, blob, 'application/pdf', ['.pdf']);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // Keep the object URL alive long enough for browser PDF viewers to initialize.
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  }
+
+  private formatPdfCurrency(amount: number): string {
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+    return safeAmount.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  }
+
+  private truncatePdfText(value: string, width: number, doc: jsPDF): string {
+    const text = String(value ?? '');
+    if (!text) return '';
+    if (doc.getTextWidth(text) <= width) return text;
+    let trimmed = text;
+    while (trimmed.length > 0 && doc.getTextWidth(`${trimmed}...`) > width) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    return `${trimmed}...`;
+  }
+
+  private async saveBlobFile(filename: string, blob: Blob, mimeType: string, extensions: string[]): Promise<void> {
+    const picker = (window as any)?.showSaveFilePicker;
+    if (typeof picker === 'function') {
+      const handle = await picker({
+        suggestedName: filename,
+        types: [
+          {
+            description: mimeType === 'application/pdf' ? 'PDF file' : 'File',
+            accept: { [mimeType]: extensions }
+          }
+        ]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
