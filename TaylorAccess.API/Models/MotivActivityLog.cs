@@ -21,6 +21,12 @@ public class MotivActivityLog
     [MaxLength(2000)]
     public string Details { get; set; } = string.Empty;
 
+    [MaxLength(300)]
+    public string? PreviousLocation { get; set; }
+
+    [MaxLength(300)]
+    public string? CurrentLocation { get; set; }
+
     public DateTime EventAt { get; set; } = DateTime.UtcNow;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

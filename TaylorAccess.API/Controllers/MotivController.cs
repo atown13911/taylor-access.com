@@ -903,6 +903,8 @@ public class MotivController : ControllerBase
                 title = x.Title,
                 details = x.Details,
                 driverName = x.DriverName,
+                previousLocation = !string.IsNullOrWhiteSpace(x.PreviousLocation) ? x.PreviousLocation : ExtractPreviousLocationFromDetails(x.Details),
+                currentLocation = !string.IsNullOrWhiteSpace(x.CurrentLocation) ? x.CurrentLocation : ExtractCurrentLocationFromDetails(x.Details),
                 timestamp = x.EventAt
             })
             .ToListAsync();
@@ -926,6 +928,8 @@ public class MotivController : ControllerBase
             return BadRequest(new { error = "Title is required." });
 
         var orgId = await ResolveOrganizationId();
+        var previousLocation = NormalizeLocationForStorage(request.PreviousLocation);
+        var currentLocation = NormalizeLocationForStorage(request.CurrentLocation);
         var entry = new MotivActivityLog
         {
             OrganizationId = orgId == 0 ? null : orgId,
@@ -933,6 +937,8 @@ public class MotivController : ControllerBase
             Title = Truncate(title, 200),
             DriverName = TruncateNullable(request.DriverName, 200),
             Details = Truncate((request.Details ?? "").Trim(), 2000),
+            PreviousLocation = previousLocation,
+            CurrentLocation = currentLocation,
             EventAt = request.Timestamp?.ToUniversalTime() ?? DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
@@ -947,6 +953,8 @@ public class MotivController : ControllerBase
             title = entry.Title,
             details = entry.Details,
             driverName = entry.DriverName,
+            previousLocation = entry.PreviousLocation,
+            currentLocation = entry.CurrentLocation,
             timestamp = entry.EventAt
         });
     }
@@ -979,7 +987,7 @@ public class MotivController : ControllerBase
                 && x.Title.StartsWith("Driver update:"))
             .OrderByDescending(x => x.EventAt)
             .ThenByDescending(x => x.Id)
-            .Select(x => new { x.DriverName, x.Details })
+            .Select(x => new { x.DriverName, x.Details, x.CurrentLocation })
             .ToListAsync();
 
         var previousLocationByDriver = latestDriverDetails
@@ -987,7 +995,13 @@ public class MotivController : ControllerBase
             .Where(g => !string.IsNullOrWhiteSpace(g.Key))
             .ToDictionary(
                 g => g.Key,
-                g => ExtractCurrentLocationFromDetails(g.First().Details),
+                g =>
+                {
+                    var first = g.First();
+                    return !string.IsNullOrWhiteSpace(first.CurrentLocation)
+                        ? first.CurrentLocation!
+                        : ExtractCurrentLocationFromDetails(first.Details);
+                },
                 StringComparer.OrdinalIgnoreCase);
 
         var created = 0;
@@ -1029,6 +1043,8 @@ public class MotivController : ControllerBase
                 Title = Truncate($"Driver update: {name}", 200),
                 DriverName = Truncate(name, 200),
                 Details = Truncate(details, 2000),
+                PreviousLocation = NormalizeLocationForStorage(previousLocation),
+                CurrentLocation = NormalizeLocationForStorage(currentLocation),
                 EventAt = eventAt,
                 CreatedAt = nowUtc
             };
@@ -1112,6 +1128,8 @@ public class MotivController : ControllerBase
                         Title = title,
                         DriverName = Truncate(name, 200),
                         Details = Truncate(linkDetails, 2000),
+                        PreviousLocation = null,
+                        CurrentLocation = null,
                         EventAt = profileLinkedAt.Value.ToUniversalTime(),
                         CreatedAt = now
                     });
@@ -1128,11 +1146,13 @@ public class MotivController : ControllerBase
             if (snapshotAt < windowStart)
                 continue;
 
+            var snapshotCurrentLocation = BuildDriverLocationLabel(driver, profile);
+            var snapshotPreviousLocation = "N/A";
             var snapshotDetails = BuildDriverSnapshotDetails(
                 driver.Status,
                 BuildDriverVehicleLabel(driver, profile),
-                "N/A",
-                BuildDriverLocationLabel(driver, profile));
+                snapshotPreviousLocation,
+                snapshotCurrentLocation);
             var snapshotTitle = Truncate($"Driver update: {name}", 200);
             var snapshotKey = BuildActivityDedupeKey(snapshotTitle, name, snapshotDetails);
             if (seen.Contains(snapshotKey))
@@ -1148,6 +1168,8 @@ public class MotivController : ControllerBase
                 Title = snapshotTitle,
                 DriverName = Truncate(name, 200),
                 Details = Truncate(snapshotDetails, 2000),
+                PreviousLocation = NormalizeLocationForStorage(snapshotPreviousLocation),
+                CurrentLocation = NormalizeLocationForStorage(snapshotCurrentLocation),
                 EventAt = snapshotAt,
                 CreatedAt = now
             });
@@ -1598,6 +1620,42 @@ public class MotivController : ControllerBase
         }
 
         return "N/A";
+    }
+
+    private static string ExtractPreviousLocationFromDetails(string? details)
+    {
+        var text = (details ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return "N/A";
+
+        const string previousPrefix = "Previous Location:";
+        var previousIndex = text.IndexOf(previousPrefix, StringComparison.OrdinalIgnoreCase);
+        if (previousIndex >= 0)
+        {
+            var valueStart = previousIndex + previousPrefix.Length;
+            var remaining = text.Substring(valueStart).Trim();
+            var separatorIndex = remaining.IndexOf('|');
+            var previousValue = separatorIndex >= 0
+                ? remaining.Substring(0, separatorIndex).Trim()
+                : remaining;
+            if (!string.IsNullOrWhiteSpace(previousValue))
+                return previousValue;
+        }
+
+        return "N/A";
+    }
+
+    private static string? NormalizeLocationForStorage(string? location)
+    {
+        var value = TruncateNullable(location, 300);
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = value.Trim().ToLowerInvariant();
+        if (normalized is "n/a" or "na" or "unknown" or "null")
+            return "N/A";
+
+        return value;
     }
 
     private static string? TryExtractLocationFromProfileRawJson(string? rawJson)
@@ -2177,6 +2235,8 @@ public class MotivActivityLogRequest
     public string? Title { get; set; }
     public string? DriverName { get; set; }
     public string? Details { get; set; }
+    public string? PreviousLocation { get; set; }
+    public string? CurrentLocation { get; set; }
     public DateTime? Timestamp { get; set; }
 }
 

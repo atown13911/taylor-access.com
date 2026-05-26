@@ -364,9 +364,13 @@ using (var scope = app.Services.CreateScope())
             ""Title"" VARCHAR(200) NOT NULL,
             ""DriverName"" VARCHAR(200) NULL,
             ""Details"" VARCHAR(2000) NOT NULL DEFAULT '',
+            ""PreviousLocation"" VARCHAR(300) NULL,
+            ""CurrentLocation"" VARCHAR(300) NULL,
             ""EventAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
             ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
         );
+        ALTER TABLE ""MotivActivityLogs"" ADD COLUMN IF NOT EXISTS ""PreviousLocation"" VARCHAR(300) NULL;
+        ALTER TABLE ""MotivActivityLogs"" ADD COLUMN IF NOT EXISTS ""CurrentLocation"" VARCHAR(300) NULL;
         CREATE INDEX IF NOT EXISTS ""IX_MotivActivityLogs_EventAt""
             ON ""MotivActivityLogs"" (""EventAt"");
         CREATE INDEX IF NOT EXISTS ""IX_MotivActivityLogs_DriverName""
