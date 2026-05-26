@@ -839,6 +839,9 @@ type MotivStatusCache = {
             <button class="refresh-btn" (click)="backfillFuelPurchases()" [disabled]="savingFuel() || loadingFuel()">
               {{ savingFuel() ? 'Backfilling...' : 'Backfill Fuel History' }}
             </button>
+            <button class="refresh-btn" (click)="generateFuelReportPerActiveDriver()" [disabled]="generatingFuelReport() || loadingFuel()">
+              {{ generatingFuelReport() ? 'Generating...' : 'Generate Active Driver Report' }}
+            </button>
           </div>
           <p class="error" *ngIf="fuelError()">{{ fuelError() }}</p>
           <p class="ok-note" *ngIf="saveFuelMessage()">{{ saveFuelMessage() }}</p>
@@ -1555,6 +1558,7 @@ export class MotivComponent implements OnInit {
   lastDriverSyncSummary = signal<DriverSyncSummary | null>(null);
   saveFuelMessage = signal('');
   saveFuelError = signal('');
+  generatingFuelReport = signal(false);
   motivDrivers = signal<any[]>([]);
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
@@ -3797,6 +3801,129 @@ export class MotivComponent implements OnInit {
     });
   }
 
+  generateFuelReportPerActiveDriver(): void {
+    this.generatingFuelReport.set(true);
+    this.saveFuelMessage.set('');
+    this.saveFuelError.set('');
+
+    this.http.get<any>(`${this.apiUrl}/api/v1/drivers?limit=2000&page=1`).pipe(timeout(30000)).subscribe({
+      next: (res) => {
+        try {
+          const payload = res?.data ?? res;
+          const activeDrivers = this.extractRows(payload).filter((row: any) => {
+            const status = String(row?.status ?? row?.Status ?? '').trim();
+            return this.isActiveLikeStatus(status);
+          });
+
+          const byId = new Map<string, any>();
+          const byName = new Map<string, any>();
+          for (const driver of activeDrivers) {
+            const idKey = this.normalizeFuelReportKey(driver?.id ?? driver?.Id ?? driver?.userId ?? driver?.UserId);
+            const name = this.resolveFuelReportDriverName(driver);
+            const nameKey = this.normalizeFuelReportKey(name);
+            if (idKey && !byId.has(idKey)) byId.set(idKey, driver);
+            if (nameKey && !byName.has(nameKey)) byName.set(nameKey, driver);
+          }
+
+          const aggregates = new Map<string, {
+            name: string;
+            driverId: string;
+            transactions: number;
+            total: number;
+            fuel: number;
+            other: number;
+            unknown: number;
+            cards: Set<string>;
+          }>();
+
+          for (const fuelRow of this.filteredFuelRows()) {
+            const key = this.normalizeFuelReportKey(fuelRow.driverId);
+            const matchedDriver = (key && byId.get(key)) || (key && byName.get(key));
+            if (!matchedDriver) continue;
+
+            const reportDriverName = this.resolveFuelReportDriverName(matchedDriver);
+            const reportDriverId = String(matchedDriver?.id ?? matchedDriver?.Id ?? matchedDriver?.userId ?? matchedDriver?.UserId ?? fuelRow.driverId ?? 'N/A').trim() || 'N/A';
+            const aggregateKey = `${reportDriverId}|${reportDriverName}`.toLowerCase();
+            if (!aggregates.has(aggregateKey)) {
+              aggregates.set(aggregateKey, {
+                name: reportDriverName,
+                driverId: reportDriverId,
+                transactions: 0,
+                total: 0,
+                fuel: 0,
+                other: 0,
+                unknown: 0,
+                cards: new Set<string>()
+              });
+            }
+
+            const agg = aggregates.get(aggregateKey)!;
+            const amount = Number.isFinite(fuelRow.amountValue) ? fuelRow.amountValue : 0;
+            agg.transactions += 1;
+            agg.total += amount;
+            const kind = this.classifyFuelCharge(fuelRow);
+            if (kind === 'fuel') agg.fuel += amount;
+            else if (kind === 'other') agg.other += amount;
+            else agg.unknown += amount;
+            const card = String(fuelRow.cardLabel ?? '').trim();
+            if (card && card.toLowerCase() !== 'n/a') {
+              agg.cards.add(card);
+            }
+          }
+
+          const ordered = Array.from(aggregates.values()).sort((a, b) => b.total - a.total);
+          const header = [
+            'Driver',
+            'DriverId',
+            'Transactions',
+            'TotalAmount',
+            'FuelSpend',
+            'OtherCharges',
+            'UnknownCharges',
+            'CardsUsed',
+            'Cards'
+          ];
+          const lines = [header.join(',')];
+          for (const row of ordered) {
+            lines.push([
+              this.escapeCsvValue(row.name),
+              this.escapeCsvValue(row.driverId),
+              String(row.transactions),
+              row.total.toFixed(2),
+              row.fuel.toFixed(2),
+              row.other.toFixed(2),
+              row.unknown.toFixed(2),
+              String(row.cards.size),
+              this.escapeCsvValue(Array.from(row.cards).sort((a, b) => a.localeCompare(b)).join(' | '))
+            ].join(','));
+          }
+
+          const csv = `${lines.join('\n')}\n`;
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+          anchor.href = url;
+          anchor.download = `fuel-active-driver-report-${stamp}.csv`;
+          document.body.appendChild(anchor);
+          anchor.click();
+          document.body.removeChild(anchor);
+          URL.revokeObjectURL(url);
+
+          this.saveFuelMessage.set(`Fuel report generated for ${ordered.length} active drivers from ${this.filteredFuelRows().length} filtered transactions.`);
+        } catch {
+          this.saveFuelError.set('Unable to generate fuel report from current data.');
+        } finally {
+          this.generatingFuelReport.set(false);
+        }
+      },
+      error: (err) => {
+        this.generatingFuelReport.set(false);
+        this.saveFuelError.set(err?.error?.error || 'Unable to load active drivers for fuel report.');
+      }
+    });
+  }
+
   private extractRows(payload: any): any[] {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
@@ -4524,6 +4651,26 @@ export class MotivComponent implements OnInit {
     }
 
     return 'other';
+  }
+
+  private resolveFuelReportDriverName(raw: any): string {
+    const first = String(raw?.firstName ?? raw?.FirstName ?? raw?.first_name ?? '').trim();
+    const last = String(raw?.lastName ?? raw?.LastName ?? raw?.last_name ?? '').trim();
+    const full = `${first} ${last}`.trim();
+    if (full) return full;
+    return String(raw?.name ?? raw?.Name ?? raw?.full_name ?? raw?.FullName ?? raw?.email ?? raw?.Email ?? 'Unknown Driver').trim();
+  }
+
+  private normalizeFuelReportKey(value: any): string {
+    return String(value ?? '').trim().toLowerCase();
+  }
+
+  private escapeCsvValue(value: string): string {
+    const text = String(value ?? '');
+    if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
