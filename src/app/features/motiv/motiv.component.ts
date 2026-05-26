@@ -394,6 +394,30 @@ type MotivStatusCache = {
             <div class="activity-left">
               <h3>Drivers</h3>
               <p class="count">Showing {{ activityDriverRows().length }} of {{ filteredDriverRows().length }} filtered drivers.</p>
+              <div class="activity-top-filters">
+                <input
+                  class="filter-input"
+                  type="text"
+                  placeholder="Search drivers (name, email, phone, vehicle)"
+                  [value]="driverSearchTerm()"
+                  (input)="driverSearchTerm.set($any($event.target).value)" />
+                <select
+                  class="filter-input filter-select"
+                  [value]="driverStatusFilter()"
+                  (change)="driverStatusFilter.set($any($event.target).value)">
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="deactivated">Deactivated</option>
+                </select>
+                <select
+                  class="filter-input filter-select"
+                  [value]="driverEmailFilter()"
+                  (change)="driverEmailFilter.set($any($event.target).value)">
+                  <option value="all">All Email</option>
+                  <option value="with-email">With Email</option>
+                  <option value="without-email">Without Email</option>
+                </select>
+              </div>
               <div class="available-api-table-wrap" *ngIf="activityDriverRows().length > 0">
                 <div class="activity-scroll-wrap">
                   <table class="available-api-table">
@@ -1348,6 +1372,21 @@ type MotivStatusCache = {
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+    }
+    .activity-top-filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 8px 0 10px;
+    }
+    .activity-top-filters .filter-input {
+      flex: 1 1 220px;
+      min-width: 180px;
+    }
+    .activity-top-filters .filter-select {
+      flex: 0 0 160px;
+      min-width: 140px;
     }
     .activity-driver-filters {
       display: flex;
