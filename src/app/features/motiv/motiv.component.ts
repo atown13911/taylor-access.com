@@ -3827,7 +3827,7 @@ export class MotivComponent implements OnInit {
     const name = `${firstName} ${lastName}`.trim() || fallbackName;
     const email = user?.email ?? user?.Email ?? 'N/A';
     const phone = user?.phone ?? user?.Phone ?? user?.phone_number ?? user?.PhoneNumber ?? 'N/A';
-    const status = user?.status ?? user?.Status ?? 'N/A';
+    const status = this.resolveDriverDisplayStatus(raw, user);
     const locationText = this.buildLocationDisplayFromRaw(raw);
     const vehicleTextParts = [
       vehicle?.number ?? vehicle?.Number ?? raw?.number ?? raw?.truckNumber ?? raw?.TruckNumber ?? raw?.fleet_number ?? raw?.fleetNumber ?? raw?.unit ?? raw?.unitNumber,
@@ -3859,6 +3859,45 @@ export class MotivComponent implements OnInit {
       vehicle: vehicleText,
       lastUpdate
     };
+  }
+
+  private resolveDriverDisplayStatus(raw: any, user: any): string {
+    const explicitStatus = String(
+      raw?.status ??
+      raw?.Status ??
+      raw?.driverStatus ??
+      raw?.DriverStatus ??
+      raw?.employmentStatus ??
+      raw?.EmploymentStatus ??
+      ''
+    ).trim();
+
+    const userStatus = String(user?.status ?? user?.Status ?? '').trim();
+    const resolved = explicitStatus || userStatus || 'N/A';
+
+    const activeFlag =
+      raw?.isActive ??
+      raw?.IsActive ??
+      raw?.active ??
+      raw?.Active;
+    const deletedFlag =
+      raw?.isDeleted ??
+      raw?.IsDeleted ??
+      false;
+    const deactivatedAt =
+      raw?.deactivatedAt ??
+      raw?.DeactivatedAt ??
+      null;
+
+    if (deletedFlag === true || activeFlag === false || !!deactivatedAt) {
+      return 'deactivated';
+    }
+
+    if (this.isVehicleDeactivatedStatus(resolved)) {
+      return 'deactivated';
+    }
+
+    return resolved || 'N/A';
   }
 
   private buildLocationDisplayFromRaw(raw: any): string {
@@ -3962,11 +4001,22 @@ export class MotivComponent implements OnInit {
       name: this.pickPreferredValue(preferred.name, secondary.name),
       email: this.pickPreferredValue(preferred.email, secondary.email),
       phone: this.pickPreferredValue(preferred.phone, secondary.phone),
-      status: this.pickPreferredValue(preferred.status, secondary.status),
+      status: this.pickPreferredStatus(preferred.status, secondary.status),
       location: this.pickPreferredValue(preferred.location, secondary.location),
       vehicle: this.pickPreferredValue(preferred.vehicle, secondary.vehicle),
       lastUpdate: this.pickPreferredValue(preferred.lastUpdate, secondary.lastUpdate)
     };
+  }
+
+  private pickPreferredStatus(primary: string, fallback: string): string {
+    const primaryNormalized = String(primary ?? '').trim().toLowerCase();
+    const fallbackNormalized = String(fallback ?? '').trim().toLowerCase();
+
+    if (this.isVehicleDeactivatedStatus(primaryNormalized) || this.isVehicleDeactivatedStatus(fallbackNormalized)) {
+      return 'deactivated';
+    }
+
+    return this.pickPreferredValue(primary, fallback);
   }
 
   private scoreDriverRow(row: MotivDriverTableRow): number {
