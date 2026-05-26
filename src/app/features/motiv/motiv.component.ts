@@ -904,6 +904,7 @@ type MotivStatusCache = {
                   <th>#</th>
                   <th>Transaction</th>
                   <th>Date</th>
+                  <th>Week #</th>
                   <th>Status</th>
                   <th>Amount</th>
                   <th>Merchant</th>
@@ -921,6 +922,7 @@ type MotivStatusCache = {
                   <td>{{ fuelPageStartIndex() + i }}</td>
                   <td>{{ row.transactionId }}</td>
                   <td>{{ row.date }}</td>
+                  <td>{{ getFuelWeekLabel(row.date) }}</td>
                   <td>{{ row.status }}</td>
                   <td>{{ row.amount }} {{ row.currency }}</td>
                   <td>{{ row.merchant }}</td>
@@ -4257,6 +4259,13 @@ export class MotivComponent implements OnInit {
     const week = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
     const year = d.getUTCFullYear();
     return { year, week, key: `${year}-W${String(week).padStart(2, '0')}` };
+  }
+
+  getFuelWeekLabel(value: string): string {
+    const dt = this.tryParseDate(value);
+    if (!dt) return 'N/A';
+    const info = this.getIsoWeekInfo(dt);
+    return `W${String(info.week).padStart(2, '0')}`;
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
