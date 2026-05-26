@@ -853,6 +853,18 @@ type MotivStatusCache = {
                 <span class="label">Total Amount</span>
                 <span class="value">{{ fuelTotalAmount() | number:'1.0-2' }}</span>
               </div>
+              <div class="driver-card active">
+                <span class="label">Fuel Spend</span>
+                <span class="value">{{ fuelSpendAmount() | number:'1.0-2' }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Other Charges</span>
+                <span class="value">{{ fuelOtherChargesAmount() | number:'1.0-2' }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">Unknown Charges</span>
+                <span class="value">{{ fuelUnknownChargesAmount() | number:'1.0-2' }}</span>
+              </div>
               <div class="driver-card info">
                 <span class="label">Unique Drivers</span>
                 <span class="value">{{ fuelUniqueDriversCount() }}</span>
@@ -1942,6 +1954,24 @@ export class MotivComponent implements OnInit {
   );
   fuelTotalAmount = computed<number>(() =>
     this.filteredFuelRows().reduce((sum, row) => sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0), 0)
+  );
+  fuelSpendAmount = computed<number>(() =>
+    this.filteredFuelRows().reduce((sum, row) =>
+      this.classifyFuelCharge(row) === 'fuel'
+        ? sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0)
+        : sum, 0)
+  );
+  fuelOtherChargesAmount = computed<number>(() =>
+    this.filteredFuelRows().reduce((sum, row) =>
+      this.classifyFuelCharge(row) === 'other'
+        ? sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0)
+        : sum, 0)
+  );
+  fuelUnknownChargesAmount = computed<number>(() =>
+    this.filteredFuelRows().reduce((sum, row) =>
+      this.classifyFuelCharge(row) === 'unknown'
+        ? sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0)
+        : sum, 0)
   );
   fuelUniqueDriversCount = computed<number>(() =>
     new Set(
@@ -4417,6 +4447,33 @@ export class MotivComponent implements OnInit {
     const dt = this.tryParseDate(value);
     if (!dt) return '';
     return this.getIsoWeekInfo(dt).key;
+  }
+
+  private classifyFuelCharge(row: MotivFuelRow): 'fuel' | 'other' | 'unknown' {
+    const category = String(row.category ?? '').trim().toLowerCase();
+    const merchant = String(row.merchant ?? '').trim().toLowerCase();
+    const source = String(row.source ?? '').trim().toLowerCase();
+
+    if (!category || category === 'n/a' || category === 'unknown' || category === 'other') {
+      if (merchant.includes('fuel') || merchant.includes('diesel') || merchant.includes('truck stop')) {
+        return 'fuel';
+      }
+      if (source === 'access-db' || source === 'motive-card' || source === 'motive card') {
+        return 'unknown';
+      }
+      return 'unknown';
+    }
+
+    if (
+      category.includes('diesel')
+      || category.includes('gas')
+      || category.includes('fuel')
+      || category.includes('def')
+    ) {
+      return 'fuel';
+    }
+
+    return 'other';
   }
 
   private setApiStatus(route: string, status: 'connected' | 'not-connected'): void {
