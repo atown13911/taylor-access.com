@@ -1914,32 +1914,32 @@ export class MotivComponent implements OnInit {
     this.motivFuelPurchases().map((raw) => this.mapFuelRow(raw))
   );
   fuelTotalAmount = computed<number>(() =>
-    this.fuelRows().reduce((sum, row) => sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0), 0)
+    this.filteredFuelRows().reduce((sum, row) => sum + (Number.isFinite(row.amountValue) ? row.amountValue : 0), 0)
   );
   fuelUniqueDriversCount = computed<number>(() =>
     new Set(
-      this.fuelRows()
+      this.filteredFuelRows()
         .map(x => x.driverId)
         .filter(x => !!x && x.toLowerCase() !== 'n/a')
     ).size
   );
   fuelUniqueVehiclesCount = computed<number>(() =>
     new Set(
-      this.fuelRows()
+      this.filteredFuelRows()
         .map(x => x.vehicleId)
         .filter(x => !!x && x.toLowerCase() !== 'n/a')
     ).size
   );
   fuelUniqueCardsCount = computed<number>(() =>
     new Set(
-      this.fuelRows()
+      this.filteredFuelRows()
         .map(x => x.cardId)
         .filter(x => !!x && x.toLowerCase() !== 'n/a')
     ).size
   );
   fuelDistinctWeeksCount = computed<number>(() => {
     const weeks = new Set<string>();
-    for (const row of this.fuelRows()) {
+    for (const row of this.filteredFuelRows()) {
       const dt = this.tryParseDate(row.date);
       if (!dt) continue;
       weeks.add(this.getIsoWeekInfo(dt).key);
@@ -1948,7 +1948,7 @@ export class MotivComponent implements OnInit {
   });
   fuelDistinctYearsCount = computed<number>(() => {
     const years = new Set<number>();
-    for (const row of this.fuelRows()) {
+    for (const row of this.filteredFuelRows()) {
       const dt = this.tryParseDate(row.date);
       if (!dt) continue;
       years.add(dt.getUTCFullYear());
