@@ -303,12 +303,26 @@ public class MotivController : ControllerBase
             });
         }
 
+        var orgId = await ResolveOrganizationId();
+        var dbQuery = _db.MotivFuelPurchases.AsNoTracking();
+        if (orgId > 0)
+            dbQuery = dbQuery.Where(x => x.OrganizationId == orgId);
+
+        var dbRows = await dbQuery
+            .OrderByDescending(x => x.TransactionTime ?? x.PostedAt ?? x.UpdatedAt)
+            .Take(10000)
+            .ToListAsync();
+
+        var mergedRows = MergeFuelPurchaseRows(fetch.Rows, dbRows);
+
         return Ok(new
         {
-            source = "motiv",
+            source = dbRows.Count > 0 ? "motiv+access-db" : "motiv",
             endpoint = "fuel-purchases",
-            rows = fetch.Rows.Count,
-            data = JsonSerializer.SerializeToElement(fetch.Rows)
+            rows = mergedRows.Count,
+            liveRows = fetch.Rows.Count,
+            dbRows = dbRows.Count,
+            data = JsonSerializer.SerializeToElement(mergedRows)
         });
     }
 
@@ -2004,6 +2018,82 @@ public class MotivController : ControllerBase
         }
 
         return (true, 200, null, allRows);
+    }
+
+    private static List<JsonElement> MergeFuelPurchaseRows(List<JsonElement> liveRows, List<MotivFuelPurchase> dbRows)
+    {
+        var merged = new List<JsonElement>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in liveRows)
+        {
+            var key = BuildFuelPurchaseKeyFromJson(row);
+            if (!string.IsNullOrWhiteSpace(key))
+                seen.Add(key);
+            merged.Add(row);
+        }
+
+        foreach (var row in dbRows)
+        {
+            var key = BuildFuelPurchaseKeyFromDb(row);
+            if (!string.IsNullOrWhiteSpace(key) && seen.Contains(key))
+                continue;
+
+            var dbJson = MapFuelPurchaseDbRow(row);
+            if (!string.IsNullOrWhiteSpace(key))
+                seen.Add(key);
+            merged.Add(dbJson);
+        }
+
+        return merged;
+    }
+
+    private static string BuildFuelPurchaseKeyFromJson(JsonElement row)
+    {
+        var direct = PickString(row, "id", "transaction_id", "uuid");
+        if (!string.IsNullOrWhiteSpace(direct))
+            return direct.Trim();
+
+        var nested = PickString(PickNestedObject(row, "fuel_purchase") ?? row, "id", "transaction_id", "uuid");
+        if (!string.IsNullOrWhiteSpace(nested))
+            return nested.Trim();
+
+        return string.Empty;
+    }
+
+    private static string BuildFuelPurchaseKeyFromDb(MotivFuelPurchase row)
+    {
+        return string.IsNullOrWhiteSpace(row.ExternalId)
+            ? string.Empty
+            : row.ExternalId.Trim();
+    }
+
+    private static JsonElement MapFuelPurchaseDbRow(MotivFuelPurchase row)
+    {
+        return JsonSerializer.SerializeToElement(new
+        {
+            id = row.ExternalId,
+            transaction_id = row.ExternalId,
+            transaction_time = row.TransactionTime?.ToUniversalTime().ToString("O"),
+            posted_at = row.PostedAt?.ToUniversalTime().ToString("O"),
+            total_amount = row.Amount,
+            currency = row.Currency,
+            transaction_status = row.Status,
+            transaction_type = row.Category,
+            product_type = row.ProductType,
+            driver_id = row.DriverId,
+            vehicle_id = row.VehicleId,
+            card_id = row.CardId,
+            merchant_info = new
+            {
+                name = row.MerchantName,
+                city = row.MerchantCity,
+                state = row.MerchantState
+            },
+            source = "access-db",
+            created_at = row.CreatedAt.ToUniversalTime().ToString("O"),
+            updated_at = row.UpdatedAt.ToUniversalTime().ToString("O")
+        });
     }
 
     private async Task<(bool Success, int StatusCode, string? Error, List<JsonElement> Rows)> FetchVehicleLocationsByVehicleIds(string date)
