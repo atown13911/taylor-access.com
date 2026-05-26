@@ -472,6 +472,18 @@ type MotivStatusCache = {
                     placeholder="Search activity (title, details, driver, type)"
                     [value]="activitySearchTerm()"
                     (input)="activitySearchTerm.set($any($event.target).value)" />
+                  <input
+                    class="filter-input filter-date"
+                    type="date"
+                    [value]="activityDateFromFilter()"
+                    (change)="activityDateFromFilter.set($any($event.target).value)"
+                    title="Filter from date" />
+                  <input
+                    class="filter-input filter-date"
+                    type="date"
+                    [value]="activityDateToFilter()"
+                    (change)="activityDateToFilter.set($any($event.target).value)"
+                    title="Filter to date" />
                   <select
                     class="filter-input filter-select"
                     [value]="activityKindFilter()"
@@ -490,6 +502,7 @@ type MotivStatusCache = {
                     <option value="driver">Driver Events</option>
                     <option value="system">System Events</option>
                   </select>
+                  <button class="refresh-btn filter-clear-btn" (click)="clearActivityDateRangeFilter()" [disabled]="!activityDateFromFilter() && !activityDateToFilter()">Clear Dates</button>
                 </div>
                 <div class="available-api-table-wrap" *ngIf="driverActivityRows().length > 0">
                   <div class="activity-scroll-wrap activity-scroll-wrap-compact">
@@ -1403,8 +1416,16 @@ type MotivStatusCache = {
       min-width: 220px;
       flex: 1;
     }
+    .activity-driver-filters .filter-date {
+      min-width: 170px;
+      flex: 0 0 auto;
+    }
     .activity-driver-filters .filter-select {
       min-width: 150px;
+      flex: 0 0 auto;
+    }
+    .activity-driver-filters .filter-clear-btn {
+      margin-bottom: 0;
       flex: 0 0 auto;
     }
     .activity-details {
@@ -1499,6 +1520,8 @@ export class MotivComponent implements OnInit {
   activityFeed = signal<MotivActivityLogEntry[]>([]);
   selectedActivityDriverName = signal('');
   activitySearchTerm = signal('');
+  activityDateFromFilter = signal('');
+  activityDateToFilter = signal('');
   activityKindFilter = signal<'all' | 'info' | 'success' | 'warning' | 'error'>('all');
   activityScopeFilter = signal<'all' | 'driver' | 'system'>('all');
   loadedDriverRows = signal(0);
@@ -1833,6 +1856,12 @@ export class MotivComponent implements OnInit {
     let rows = !selected
       ? this.activityLogRows()
       : this.activityLogRows().filter((row) => String(row.driverName || '').trim().toLowerCase() === selected);
+
+    const fromDate = this.activityDateFromFilter().trim();
+    const toDate = this.activityDateToFilter().trim();
+    if (fromDate || toDate) {
+      rows = rows.filter((row) => this.isTimestampWithinLocalDateRange(row.timestamp, fromDate, toDate));
+    }
 
     const kind = this.activityKindFilter();
     if (kind !== 'all') {
@@ -2301,6 +2330,24 @@ export class MotivComponent implements OnInit {
     return '';
   }
 
+  private toLocalDateKey(timestamp: number): string | null {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+    const value = new Date(timestamp);
+    if (Number.isNaN(value.getTime())) return null;
+    const yyyy = value.getFullYear();
+    const mm = String(value.getMonth() + 1).padStart(2, '0');
+    const dd = String(value.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  private isTimestampWithinLocalDateRange(timestamp: number, fromDate: string, toDate: string): boolean {
+    const key = this.toLocalDateKey(timestamp);
+    if (!key) return false;
+    if (fromDate && key < fromDate) return false;
+    if (toDate && key > toDate) return false;
+    return true;
+  }
+
   selectActivityDriver(name: string): void {
     const normalized = String(name || '').trim();
     if (!normalized) return;
@@ -2313,6 +2360,11 @@ export class MotivComponent implements OnInit {
 
   clearActivityDriverSelection(): void {
     this.selectedActivityDriverName.set('');
+  }
+
+  clearActivityDateRangeFilter(): void {
+    this.activityDateFromFilter.set('');
+    this.activityDateToFilter.set('');
   }
 
   private loadPersistedActivityLogs(allowBackfill = true): void {
