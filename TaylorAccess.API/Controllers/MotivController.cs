@@ -2049,7 +2049,11 @@ public class MotivController : ControllerBase
 
         foreach (var row in rows)
         {
-            var payload = PickNestedObject(row, "fuel_purchase") ?? row;
+            var payload =
+                PickNestedObject(row, "fuel_purchase")
+                ?? PickNestedObject(row, "transaction")
+                ?? PickNestedObject(row, "card_transaction")
+                ?? row;
             var externalId = PickString(payload, "id", "transaction_id", "uuid");
             if (string.IsNullOrWhiteSpace(externalId))
             {
@@ -2057,12 +2061,18 @@ public class MotivController : ControllerBase
                 continue;
             }
 
-            var merchant = PickNestedObject(payload, "merchant_info");
+            var merchant =
+                PickNestedObject(payload, "merchant_info")
+                ?? PickNestedObject(payload, "merchant")
+                ?? PickNestedObject(row, "merchant_info")
+                ?? PickNestedObject(row, "merchant");
             var firstOrderItem = PickFirstArrayObject(payload, "order_items");
+            var driverObject = PickNestedObject(payload, "driver") ?? PickNestedObject(row, "driver");
+            var vehicleObject = PickNestedObject(payload, "vehicle") ?? PickNestedObject(row, "vehicle");
 
             var txTime = ParseDateTime(PickString(payload, "transaction_time", "purchased_at", "processed_at", "occurred_at", "created_at", "updated_at", "date"));
             var postedAt = ParseDateTime(PickString(payload, "posted_at", "processed_at", "settled_at"));
-            var amount = PickDecimal(payload, "total_amount", "authorized_amount", "total_amount_before_rebate", "amount");
+            var amount = PickDecimal(payload, "total_amount", "authorized_amount", "total_amount_before_rebate", "amount", "total_cost", "cost");
             var quantity = PickDecimal(firstOrderItem ?? payload, "quantity");
 
             if (!byExternalId.TryGetValue(externalId, out var target))
@@ -2073,15 +2083,15 @@ public class MotivController : ControllerBase
                     ExternalId = externalId.Trim(),
                     TransactionTime = txTime,
                     PostedAt = postedAt,
-                    DriverId = PickInt(payload, "driver_id"),
-                    VehicleId = PickInt(payload, "vehicle_id"),
+                    DriverId = PickInt(payload, "driver_id") ?? PickInt(driverObject ?? payload, "id"),
+                    VehicleId = PickInt(payload, "vehicle_id") ?? PickInt(vehicleObject ?? payload, "id"),
                     CardId = PickString(payload, "card_id", "last_four_digits"),
-                    MerchantName = PickString(merchant ?? payload, "name"),
+                    MerchantName = PickString(merchant ?? payload, "name", "merchant_name", "vendor", "display_name"),
                     MerchantCity = PickString(merchant ?? payload, "city"),
                     MerchantState = PickString(merchant ?? payload, "state"),
-                    Status = PickString(payload, "transaction_status", "status"),
+                    Status = PickString(payload, "transaction_status", "status", "state"),
                     Currency = PickString(payload, "currency"),
-                    Category = PickString(payload, "transaction_type", "type"),
+                    Category = PickString(payload, "transaction_type", "type", "category", "fuel_type"),
                     ProductType = PickString(firstOrderItem ?? payload, "product_type"),
                     Quantity = quantity,
                     Amount = amount,
@@ -2098,15 +2108,15 @@ public class MotivController : ControllerBase
                 target.OrganizationId = orgId == 0 ? target.OrganizationId : orgId;
                 target.TransactionTime = txTime ?? target.TransactionTime;
                 target.PostedAt = postedAt ?? target.PostedAt;
-                target.DriverId = PickInt(payload, "driver_id") ?? target.DriverId;
-                target.VehicleId = PickInt(payload, "vehicle_id") ?? target.VehicleId;
+                target.DriverId = PickInt(payload, "driver_id") ?? PickInt(driverObject ?? payload, "id") ?? target.DriverId;
+                target.VehicleId = PickInt(payload, "vehicle_id") ?? PickInt(vehicleObject ?? payload, "id") ?? target.VehicleId;
                 target.CardId = PickString(payload, "card_id", "last_four_digits") ?? target.CardId;
-                target.MerchantName = PickString(merchant ?? payload, "name") ?? target.MerchantName;
+                target.MerchantName = PickString(merchant ?? payload, "name", "merchant_name", "vendor", "display_name") ?? target.MerchantName;
                 target.MerchantCity = PickString(merchant ?? payload, "city") ?? target.MerchantCity;
                 target.MerchantState = PickString(merchant ?? payload, "state") ?? target.MerchantState;
-                target.Status = PickString(payload, "transaction_status", "status") ?? target.Status;
+                target.Status = PickString(payload, "transaction_status", "status", "state") ?? target.Status;
                 target.Currency = PickString(payload, "currency") ?? target.Currency;
-                target.Category = PickString(payload, "transaction_type", "type") ?? target.Category;
+                target.Category = PickString(payload, "transaction_type", "type", "category", "fuel_type") ?? target.Category;
                 target.ProductType = PickString(firstOrderItem ?? payload, "product_type") ?? target.ProductType;
                 target.Quantity = quantity ?? target.Quantity;
                 target.Amount = amount ?? target.Amount;
@@ -2177,13 +2187,22 @@ public class MotivController : ControllerBase
             transaction_time = row.TransactionTime?.ToUniversalTime().ToString("O"),
             posted_at = row.PostedAt?.ToUniversalTime().ToString("O"),
             total_amount = row.Amount,
+            amount = row.Amount,
+            total_cost = row.Amount,
             currency = row.Currency,
             transaction_status = row.Status,
+            status = row.Status,
             transaction_type = row.Category,
+            category = row.Category,
+            fuel_type = row.Category,
             product_type = row.ProductType,
             driver_id = row.DriverId,
             vehicle_id = row.VehicleId,
             card_id = row.CardId,
+            merchant_name = row.MerchantName,
+            vendor = row.MerchantName,
+            city = row.MerchantCity,
+            state = row.MerchantState,
             merchant_info = new
             {
                 name = row.MerchantName,
