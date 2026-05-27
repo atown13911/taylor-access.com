@@ -932,16 +932,20 @@ export class ReportsComponent {
     const rows = rowsInput ?? await this.fetchRows('/api/v1/applicants/records');
     if (!rows.length) throw new Error('No rows');
 
+    const positionGroupMap = await this.getApplicantPositionGroupMap();
+
     const mapped = rows.map((r: any) => {
       const appliedDate = this.asTime(r?.appliedDate ?? r?.applied_date ?? r?.createdAt ?? r?.CreatedAt);
+      const position = this.toPdfSafeText(this.firstText(r?.position) || 'N/A');
       return {
         sortAt: appliedDate,
         name: this.toPdfSafeText(this.firstText(r?.fullName, r?.full_name, r?.name) || 'N/A'),
-        position: this.toPdfSafeText(this.firstText(r?.position) || 'N/A'),
+        position,
         source: this.toPdfSafeText(this.firstText(r?.source) || 'N/A'),
         status: this.toPdfSafeText(this.firstText(r?.status) || 'N/A'),
         appliedAt: this.formatDateTime(appliedDate),
-        hasCv: !!r?.hasCv || !!r?.cvDataUrl || !!r?.CvDataUrl
+        hasCv: !!r?.hasCv || !!r?.cvDataUrl || !!r?.CvDataUrl,
+        section: this.resolveApplicantSection(position, positionGroupMap)
       };
     });
 
@@ -980,6 +984,26 @@ export class ReportsComponent {
       count: g.rows.length,
       pct: mapped.length > 0 ? (g.rows.length / mapped.length) * 100 : 0
     }));
+    const withCvCount = mapped.filter((x) => x.hasCv).length;
+    const topSource = sourceSummaryRows[0];
+    const buildSourceGroups = (rowsForSection: typeof mapped) =>
+      Array.from(
+        rowsForSection.reduce((acc, row) => {
+          const key = row.source || 'N/A';
+          if (!acc.has(key)) acc.set(key, [] as typeof mapped);
+          acc.get(key)!.push(row);
+          return acc;
+        }, new Map<string, typeof mapped>())
+      )
+        .map(([source, rows]) => ({ source, rows: rows.sort((a, b) => b.sortAt - a.sortAt) }))
+        .sort((a, b) => b.rows.length - a.rows.length || a.source.localeCompare(b.source));
+
+    const officeRows = mapped.filter((r) => r.section === 'Office');
+    const fleetRows = mapped.filter((r) => r.section === 'Fleet');
+    const sectionGroups = [
+      { section: 'Office', rows: officeRows, sources: buildSourceGroups(officeRows) },
+      { section: 'Fleet', rows: fleetRows, sources: buildSourceGroups(fleetRows) }
+    ].filter((x) => x.rows.length > 0);
 
     const drawHeader = (): void => {
       doc.setFont('helvetica', 'bold');
@@ -1021,6 +1045,37 @@ export class ReportsComponent {
         y += 10;
       }
       y += 8;
+    };
+
+    const drawDashTiles = (): void => {
+      const gap = 10;
+      const tileWidth = (pageWidth - (left * 2) - (gap * 3)) / 4;
+      const tileHeight = 48;
+      const tileTop = y;
+      const tileData = [
+        { label: 'Total Applicants', value: mapped.length.toLocaleString() },
+        { label: 'Unique Sources', value: groupsOrdered.length.toLocaleString() },
+        { label: 'With CV', value: `${withCvCount.toLocaleString()} (${mapped.length ? ((withCvCount / mapped.length) * 100).toFixed(1) : '0.0'}%)` },
+        { label: 'Top Source', value: topSource ? `${topSource.source} (${topSource.count})` : 'N/A' }
+      ];
+
+      for (let i = 0; i < tileData.length; i += 1) {
+        const x = left + i * (tileWidth + gap);
+        doc.setFillColor(245, 248, 252);
+        doc.setDrawColor(180, 190, 205);
+        doc.roundedRect(x, tileTop, tileWidth, tileHeight, 4, 4, 'FD');
+        doc.setTextColor(70, 85, 110);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text(tileData[i].label, x + 8, tileTop + 14);
+        doc.setTextColor(24, 39, 68);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        const valueLines = doc.splitTextToSize(String(tileData[i].value), tileWidth - 16);
+        doc.text(valueLines[0] ?? '', x + 8, tileTop + 30);
+      }
+      doc.setTextColor(0, 0, 0);
+      y += tileHeight + 14;
     };
 
     const columns = [
@@ -1082,15 +1137,34 @@ export class ReportsComponent {
       doc.setFont('helvetica', 'normal');
     };
 
-    drawHeader();
-    drawSourceSummary();
-    for (const group of groupsOrdered) {
-      drawSourceHeading(group.source, group.rows.length);
-      drawTableHeader();
-      for (const row of group.rows) {
-        drawRow([row.name, row.position, row.status, row.appliedAt, row.hasCv ? 'Yes' : 'No']);
+    const drawSectionHeading = (sectionName: string, count: number): void => {
+      if (y + 18 > bottom) {
+        doc.addPage();
+        y = 24;
       }
-      y += 6;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(`${sectionName} Section (${count.toLocaleString()})`, left, y);
+      y += 10;
+      doc.setDrawColor(120, 130, 145);
+      doc.line(left, y, pageWidth - left, y);
+      y += 8;
+      doc.setFont('helvetica', 'normal');
+    };
+
+    drawHeader();
+    drawDashTiles();
+    drawSourceSummary();
+    for (const section of sectionGroups) {
+      drawSectionHeading(section.section, section.rows.length);
+      for (const group of section.sources) {
+        drawSourceHeading(group.source, group.rows.length);
+        drawTableHeader();
+        for (const row of group.rows) {
+          drawRow([row.name, row.position, row.status, row.appliedAt, row.hasCv ? 'Yes' : 'No']);
+        }
+        y += 6;
+      }
     }
     await this.openPdf('applicants-summary-report', doc);
   }
@@ -1228,6 +1302,48 @@ export class ReportsComponent {
       .replace(/[^\x20-\x7E]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private async getApplicantPositionGroupMap(): Promise<Map<string, 'office' | 'fleet'>> {
+    try {
+      const rows = await this.fetchRows('/api/v1/applicants/positions');
+      const map = new Map<string, 'office' | 'fleet'>();
+      for (const row of rows) {
+        const name = this.firstText(row?.name, row?.Name).toLowerCase();
+        if (!name) continue;
+        const groupText = this.firstText(row?.group, row?.Group).toLowerCase();
+        const group = groupText === 'office' ? 'office' : 'fleet';
+        map.set(name, group);
+      }
+      return map;
+    } catch {
+      return new Map<string, 'office' | 'fleet'>();
+    }
+  }
+
+  private resolveApplicantSection(
+    position: string,
+    positionGroupMap: Map<string, 'office' | 'fleet'>
+  ): 'Office' | 'Fleet' {
+    const key = this.toPdfSafeText(position).toLowerCase();
+    const mapped = key ? positionGroupMap.get(key) : undefined;
+    if (mapped === 'office') return 'Office';
+    if (mapped === 'fleet') return 'Fleet';
+    return this.isFleetLikePosition(key) ? 'Fleet' : 'Office';
+  }
+
+  private isFleetLikePosition(value: string): boolean {
+    const text = (value || '').toLowerCase();
+    if (!text) return false;
+    return text.includes('driver')
+      || text.includes('fleet')
+      || text.includes('truck')
+      || text.includes('dispatch')
+      || text.includes('broker')
+      || text.includes('carrier')
+      || text.includes('logistics')
+      || text.includes('safety')
+      || text.includes('compliance');
   }
 
   private async openPdf(baseName: string, doc: jsPDF): Promise<void> {
