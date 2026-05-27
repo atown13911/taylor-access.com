@@ -432,6 +432,34 @@ type MotivStatusCache = {
           </button>
         </div>
         <p class="error" *ngIf="activityReportError()">{{ activityReportError() }}</p>
+        <div class="driver-glass-panel" style="margin-bottom: 10px;">
+          <div class="driver-dashboard-cards">
+            <div class="driver-card total">
+              <span class="label">Drivers (Visible)</span>
+              <span class="value">{{ activityVisibleDriversCount() }}</span>
+            </div>
+            <div class="driver-card active">
+              <span class="label">Active Drivers</span>
+              <span class="value">{{ activityActiveDriversCount() }}</span>
+            </div>
+            <div class="driver-card inactive">
+              <span class="label">Inactive Drivers</span>
+              <span class="value">{{ activityInactiveDriversCount() }}</span>
+            </div>
+            <div class="driver-card info">
+              <span class="label">Activity Logs</span>
+              <span class="value">{{ activityLogsTotalCount() }}</span>
+            </div>
+            <div class="driver-card info">
+              <span class="label">Driver Activity Rows</span>
+              <span class="value">{{ driverActivityRows().length }}</span>
+            </div>
+            <div class="driver-card info">
+              <span class="label">Logs With Location</span>
+              <span class="value">{{ activityLogsWithLocationCount() }}</span>
+            </div>
+          </div>
+        </div>
         <div class="api-status">
           <div class="activity-layout">
             <div class="activity-left">
@@ -2241,6 +2269,17 @@ export class MotivComponent implements OnInit {
 
     return rows;
   });
+  activityVisibleDriversCount = computed<number>(() => this.activityDriverRows().length);
+  activityActiveDriversCount = computed<number>(() =>
+    this.activityDriverRows().filter((row) => this.isActiveLikeStatus(String(row.status || '').trim().toLowerCase())).length
+  );
+  activityInactiveDriversCount = computed<number>(() =>
+    this.activityDriverRows().filter((row) => !this.isActiveLikeStatus(String(row.status || '').trim().toLowerCase())).length
+  );
+  activityLogsTotalCount = computed<number>(() => this.activityLogRows().length);
+  activityLogsWithLocationCount = computed<number>(() =>
+    this.activityLogRows().filter((row) => this.extractCurrentLocation(row.details) !== 'N/A').length
+  );
   activityReportDriverOptions = computed<string[]>(() =>
     Array.from(new Set(
       this.driverTableRows()
