@@ -936,19 +936,24 @@ export class ReportsComponent {
       const appliedDate = this.asTime(r?.appliedDate ?? r?.applied_date ?? r?.createdAt ?? r?.CreatedAt);
       return {
         sortAt: appliedDate,
-        name: this.firstText(r?.fullName, r?.full_name, r?.name) || 'N/A',
-        position: this.firstText(r?.position) || 'N/A',
-        source: this.firstText(r?.source) || 'N/A',
-        status: this.firstText(r?.status) || 'N/A',
+        name: this.toPdfSafeText(this.firstText(r?.fullName, r?.full_name, r?.name) || 'N/A'),
+        position: this.toPdfSafeText(this.firstText(r?.position) || 'N/A'),
+        source: this.toPdfSafeText(this.firstText(r?.source) || 'N/A'),
+        status: this.toPdfSafeText(this.firstText(r?.status) || 'N/A'),
         appliedAt: this.formatDateTime(appliedDate),
         hasCv: !!r?.hasCv || !!r?.cvDataUrl || !!r?.CvDataUrl
       };
-    }).sort((a, b) => b.sortAt - a.sortAt);
+    });
 
     const statusSummary = new Map<string, number>();
+    const sourceGroups = new Map<string, typeof mapped>();
     for (const row of mapped) {
       const key = row.status.toLowerCase();
       statusSummary.set(key, (statusSummary.get(key) ?? 0) + 1);
+      const sourceKey = row.source || 'N/A';
+      const list = sourceGroups.get(sourceKey) ?? [];
+      list.push(row);
+      sourceGroups.set(sourceKey, list);
     }
     const statusText = Array.from(statusSummary.entries())
       .sort((a, b) => b[1] - a[1])
@@ -957,22 +962,104 @@ export class ReportsComponent {
       .join(' | ');
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    const left = 24;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const bottom = pageHeight - 24;
+    let y = 34;
+
+    const groupsOrdered = Array.from(sourceGroups.entries())
+      .map(([source, rowsForSource]) => ({
+        source,
+        rows: rowsForSource.sort((a, b) => b.sortAt - a.sortAt)
+      }))
+      .sort((a, b) => b.rows.length - a.rows.length || a.source.localeCompare(b.source));
+
+    const drawHeader = (): void => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text('Applicants Summary Report', left, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, left, y);
+      y += 12;
+      doc.text(
+        `Rows: ${mapped.length.toLocaleString()}${statusText ? ` | ${statusText}` : ''} | Sources: ${groupsOrdered.length}`,
+        left,
+        y
+      );
+      y += 16;
+    };
+
     const columns = [
-      { label: 'Applicant', width: 170 },
-      { label: 'Position', width: 170 },
-      { label: 'Source', width: 120 },
+      { label: 'Applicant', width: 210 },
+      { label: 'Position', width: 220 },
       { label: 'Status', width: 120 },
       { label: 'Applied Date', width: 150 },
       { label: 'CV', width: 50 }
     ];
 
-    this.drawTableReport(
-      doc,
-      'Applicants Summary Report',
-      `Rows: ${mapped.length.toLocaleString()}${statusText ? ` | ${statusText}` : ''}`,
-      columns,
-      mapped.map((r) => [r.name, r.position, r.source, r.status, r.appliedAt, r.hasCv ? 'Yes' : 'No'])
-    );
+    const drawTableHeader = (): void => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      let x = left;
+      for (const col of columns) {
+        doc.text(col.label, x, y);
+        x += col.width;
+      }
+      y += 11;
+      doc.setDrawColor(165, 165, 165);
+      doc.line(left, y - 7, pageWidth - left, y - 7);
+      doc.setFont('helvetica', 'normal');
+    };
+
+    const ensureSpace = (lineCount: number): void => {
+      const needed = Math.max(1, lineCount) * 10 + 10;
+      if (y + needed > bottom) {
+        doc.addPage();
+        y = 24;
+        drawTableHeader();
+      }
+    };
+
+    const drawRow = (values: string[]): void => {
+      const wrapped = columns.map((col, idx) => {
+        const content = String(values[idx] ?? '');
+        const lines = doc.splitTextToSize(content, Math.max(8, col.width - 4));
+        return (lines.length ? lines : ['']) as string[];
+      });
+      const lineCount = wrapped.reduce((max, arr) => Math.max(max, arr.length), 1);
+      ensureSpace(lineCount);
+      for (let line = 0; line < lineCount; line += 1) {
+        let x = left;
+        for (let i = 0; i < columns.length; i += 1) {
+          doc.text(wrapped[i][line] ?? '', x, y);
+          x += columns[i].width;
+        }
+        y += 10;
+      }
+      y += 2;
+    };
+
+    const drawSourceHeading = (source: string, count: number): void => {
+      ensureSpace(2);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(`Source: ${source} (${count.toLocaleString()})`, left, y);
+      y += 12;
+      doc.setFont('helvetica', 'normal');
+    };
+
+    drawHeader();
+    for (const group of groupsOrdered) {
+      drawSourceHeading(group.source, group.rows.length);
+      drawTableHeader();
+      for (const row of group.rows) {
+        drawRow([row.name, row.position, row.status, row.appliedAt, row.hasCv ? 'Yes' : 'No']);
+      }
+      y += 6;
+    }
     await this.openPdf('applicants-summary-report', doc);
   }
 
@@ -1098,6 +1185,17 @@ export class ReportsComponent {
       currency: 'USD',
       minimumFractionDigits: 2
     }).format(Number.isFinite(value) ? value : 0);
+  }
+
+  private toPdfSafeText(value: string): string {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\x20-\x7E]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private async openPdf(baseName: string, doc: jsPDF): Promise<void> {
