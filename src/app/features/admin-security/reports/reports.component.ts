@@ -13,6 +13,31 @@ type MotivReportRow = {
   key: 'activity' | 'safety-detailed' | 'safety-summary' | 'fuel' | 'applicants-summary';
 };
 type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
+type ApplicantsGoalPeriod = 'weekly' | 'monthly' | 'yearly';
+type ApplicantsGoalConfig = {
+  sources: string[];
+  period: ApplicantsGoalPeriod;
+  targetApplicants: number;
+  targetInterviews: number;
+  targetHires: number;
+  notes: string;
+  updatedAt: string;
+};
+type ApplicantsGoalSummary = {
+  period: ApplicantsGoalPeriod;
+  sourceScopeText: string;
+  targetApplicants: number;
+  actualApplicants: number;
+  applicantsProgress: number;
+  targetInterviews: number;
+  actualInterviews: number;
+  interviewsProgress: number;
+  targetHires: number;
+  actualHires: number;
+  hiresProgress: number;
+  notes: string;
+  updatedAtText: string;
+};
 
 @Component({
   selector: 'app-reports',
@@ -437,6 +462,7 @@ type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
 export class ReportsComponent {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
+  private readonly localApplicantGoalsStorageKey = 'ta.hr.applicant-goals.v1';
   selectedReportTile = signal<'none' | 'motiv' | 'applicants'>('none');
   generatingReportKey = signal<MotivReportRow['key'] | ''>('');
   reportError = signal('');
@@ -1004,6 +1030,7 @@ export class ReportsComponent {
       { section: 'Office', rows: officeRows, sources: buildSourceGroups(officeRows) },
       { section: 'Fleet', rows: fleetRows, sources: buildSourceGroups(fleetRows) }
     ].filter((x) => x.rows.length > 0);
+    const goalSummary = this.buildApplicantsGoalSummary(mapped);
     const maxSummarySources = 8;
     const buildSectionSummary = (sectionName: 'Office' | 'Fleet', rowsForSection: typeof mapped) => {
       const ordered = buildSourceGroups(rowsForSection).map((group) => ({
@@ -1126,6 +1153,89 @@ export class ReportsComponent {
       y += tileHeight + 14;
     };
 
+    const drawGoalsSummary = (): void => {
+      if (!goalSummary) return;
+      const titleHeight = 28;
+      const tileGap = 10;
+      const tileHeight = 48;
+      const tileWidth = (pageWidth - (left * 2) - (tileGap * 2)) / 3;
+      const notesLines = goalSummary.notes
+        ? doc.splitTextToSize(`Notes: ${goalSummary.notes}`, pageWidth - (left * 2))
+        : [];
+      const notesHeight = notesLines.length ? (notesLines.length * 10) + 6 : 0;
+      const blockHeight = titleHeight + tileHeight + notesHeight + 8;
+      if (y + blockHeight > bottom) {
+        doc.addPage();
+        y = 24;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Goals Snapshot', left, y);
+      y += 12;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      const periodLabel = goalSummary.period.charAt(0).toUpperCase() + goalSummary.period.slice(1);
+      doc.text(
+        `Period: ${periodLabel} | Scope: ${goalSummary.sourceScopeText} | Updated: ${goalSummary.updatedAtText}`,
+        left,
+        y
+      );
+      y += 10;
+
+      const goalTiles = [
+        {
+          label: 'Applicants',
+          target: goalSummary.targetApplicants,
+          actual: goalSummary.actualApplicants,
+          progress: goalSummary.applicantsProgress
+        },
+        {
+          label: 'Interviews',
+          target: goalSummary.targetInterviews,
+          actual: goalSummary.actualInterviews,
+          progress: goalSummary.interviewsProgress
+        },
+        {
+          label: 'Hires',
+          target: goalSummary.targetHires,
+          actual: goalSummary.actualHires,
+          progress: goalSummary.hiresProgress
+        }
+      ];
+
+      const tileTop = y;
+      for (let i = 0; i < goalTiles.length; i += 1) {
+        const tile = goalTiles[i];
+        const x = left + i * (tileWidth + tileGap);
+        doc.setFillColor(246, 248, 252);
+        doc.setDrawColor(186, 196, 212);
+        doc.roundedRect(x, tileTop, tileWidth, tileHeight, 4, 4, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(67, 82, 109);
+        doc.text(tile.label, x + 8, tileTop + 13);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(25, 39, 63);
+        doc.text(`Target: ${tile.target.toLocaleString()}`, x + 8, tileTop + 26);
+        doc.text(`Actual: ${tile.actual.toLocaleString()}`, x + 8, tileTop + 37);
+        doc.text(`${tile.progress.toFixed(1)}%`, x + tileWidth - 40, tileTop + 37);
+      }
+      doc.setTextColor(0, 0, 0);
+      y += tileHeight + 6;
+
+      if (notesLines.length) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        for (const line of notesLines) {
+          doc.text(line, left, y);
+          y += 10;
+        }
+      }
+      y += 4;
+    };
+
     const columns = [
       { label: 'Applicant', width: 210 },
       { label: 'Position', width: 220 },
@@ -1203,6 +1313,7 @@ export class ReportsComponent {
     drawHeader();
     drawDashTiles();
     drawSourceSummary();
+    drawGoalsSummary();
     for (const section of sectionGroups) {
       drawSectionHeading(section.section, section.rows.length);
       for (const group of section.sources) {
@@ -1392,6 +1503,102 @@ export class ReportsComponent {
       || text.includes('logistics')
       || text.includes('safety')
       || text.includes('compliance');
+  }
+
+  private buildApplicantsGoalSummary(
+    rows: Array<{ sortAt: number; position: string; status: string }>
+  ): ApplicantsGoalSummary | null {
+    const goal = this.getApplicantsGoalConfig();
+    if (!goal) return null;
+
+    const nowMs = Date.now();
+    const range = this.getGoalRange(nowMs, goal.period);
+    const positionKeys = new Set(goal.sources.map((source) => this.normalizeGoalKey(source)).filter((x) => !!x));
+    const scopedRows = rows.filter((row) => {
+      if (!row.sortAt || row.sortAt < range.start || row.sortAt > range.end) return false;
+      if (positionKeys.size === 0) return true;
+      return positionKeys.has(this.normalizeGoalKey(row.position));
+    });
+
+    const actualApplicants = scopedRows.length;
+    const actualInterviews = scopedRows.filter((row) => {
+      const status = this.normalizeGoalKey(row.status);
+      return status === 'interview' || status === 'offer' || status === 'hired';
+    }).length;
+    const actualHires = scopedRows.filter((row) => this.normalizeGoalKey(row.status) === 'hired').length;
+    const sourceScopeText = goal.sources.length
+      ? (goal.sources.length <= 2 ? goal.sources.join(', ') : `${goal.sources.length} positions`)
+      : 'All positions';
+
+    return {
+      period: goal.period,
+      sourceScopeText,
+      targetApplicants: goal.targetApplicants,
+      actualApplicants,
+      applicantsProgress: this.goalProgress(actualApplicants, goal.targetApplicants),
+      targetInterviews: goal.targetInterviews,
+      actualInterviews,
+      interviewsProgress: this.goalProgress(actualInterviews, goal.targetInterviews),
+      targetHires: goal.targetHires,
+      actualHires,
+      hiresProgress: this.goalProgress(actualHires, goal.targetHires),
+      notes: goal.notes,
+      updatedAtText: this.formatDateTime(goal.updatedAt)
+    };
+  }
+
+  private getApplicantsGoalConfig(): ApplicantsGoalConfig | null {
+    try {
+      const raw = localStorage.getItem(this.localApplicantGoalsStorageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length === 0) return null;
+      const item = parsed[0] ?? {};
+      const periodRaw = String(item?.period ?? 'weekly').toLowerCase();
+      const period: ApplicantsGoalPeriod = periodRaw === 'monthly' || periodRaw === 'yearly' ? periodRaw : 'weekly';
+      const sources = Array.isArray(item?.sources)
+        ? item.sources.map((source: unknown) => String(source ?? '').trim()).filter((source: string) => !!source)
+        : [];
+
+      return {
+        sources,
+        period,
+        targetApplicants: Math.max(0, Math.trunc(Number(item?.targetApplicants ?? 0))),
+        targetInterviews: Math.max(0, Math.trunc(Number(item?.targetInterviews ?? 0))),
+        targetHires: Math.max(0, Math.trunc(Number(item?.targetHires ?? 0))),
+        notes: String(item?.notes ?? '').trim(),
+        updatedAt: String(item?.updatedAt ?? '')
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizeGoalKey(value: unknown): string {
+    return this.toPdfSafeText(String(value ?? '')).toLowerCase();
+  }
+
+  private getGoalRange(nowMs: number, period: ApplicantsGoalPeriod): { start: number; end: number } {
+    const now = new Date(nowMs);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+    if (period === 'yearly') {
+      const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0).getTime();
+      return { start, end };
+    }
+    if (period === 'monthly') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).getTime();
+      return { start, end };
+    }
+    const day = now.getDay();
+    const delta = day === 0 ? 6 : day - 1;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - delta, 0, 0, 0, 0).getTime();
+    return { start, end };
+  }
+
+  private goalProgress(actual: number, target: number): number {
+    const safeTarget = Math.max(0, Number(target || 0));
+    if (safeTarget <= 0) return actual > 0 ? 100 : 0;
+    return Math.max(0, Math.min(999.9, (Number(actual || 0) / safeTarget) * 100));
   }
 
   private async openPdf(baseName: string, doc: jsPDF): Promise<void> {
