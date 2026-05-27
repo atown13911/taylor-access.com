@@ -652,6 +652,27 @@ type MotivStatusCache = {
                   <option value="specific">Specific Driver</option>
                 </select>
               </label>
+              <label>
+                Year
+                <select
+                  class="filter-input filter-select"
+                  [value]="activityReportYearFilter()"
+                  (change)="setActivityReportYearFilter($any($event.target).value)">
+                  <option value="all">All Years</option>
+                  <option *ngFor="let y of activityReportAvailableYears()" [value]="y.toString()">{{ y }}</option>
+                </select>
+              </label>
+              <label>
+                Week
+                <select
+                  class="filter-input filter-select"
+                  [disabled]="activityReportYearFilter() === 'all'"
+                  [value]="activityReportWeekFilter()"
+                  (change)="setActivityReportWeekFilter($any($event.target).value)">
+                  <option value="all">All Weeks</option>
+                  <option *ngFor="let w of activityReportAvailableWeeks()" [value]="w.key">{{ w.label }}</option>
+                </select>
+              </label>
               <label *ngIf="activityReportScope() === 'specific'">
                 Driver
                 <select
@@ -1791,6 +1812,8 @@ export class MotivComponent implements OnInit {
   activityReportModalOpen = signal(false);
   activityReportScope = signal<ActivityReportScope>('active');
   activityReportSpecificDriver = signal('');
+  activityReportYearFilter = signal<string>('all');
+  activityReportWeekFilter = signal<string>('all');
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
@@ -2225,6 +2248,32 @@ export class MotivComponent implements OnInit {
         .filter((name) => !!name && name.toLowerCase() !== 'n/a')
     )).sort((a, b) => a.localeCompare(b))
   );
+  activityReportAvailableYears = computed<number[]>(() => {
+    const years = new Set<number>();
+    for (const row of this.activityLogRows()) {
+      const dt = new Date(row.timestamp);
+      if (Number.isNaN(dt.getTime())) continue;
+      years.add(dt.getFullYear());
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  });
+  activityReportAvailableWeeks = computed<FuelWeekOption[]>(() => {
+    const yearFilter = this.activityReportYearFilter();
+    if (yearFilter === 'all') return [];
+    const year = Number(yearFilter);
+    if (!Number.isFinite(year) || year <= 0) return [];
+
+    const options: FuelWeekOption[] = [];
+    for (let week = 52; week >= 1; week -= 1) {
+      options.push({
+        key: `${year}-W${String(week).padStart(2, '0')}`,
+        label: `Week ${String(week).padStart(2, '0')} (${year})`,
+        year,
+        week
+      });
+    }
+    return options;
+  });
   driverSyncStatusTone = computed<'connected' | 'not-connected' | 'checking'>(() => {
     if (this.syncingDrivers() || this.savingDrivers()) return 'checking';
     if (this.saveDriversError()) return 'not-connected';
@@ -2806,6 +2855,8 @@ export class MotivComponent implements OnInit {
   openActivityReportModal(): void {
     this.activityReportError.set('');
     this.activityReportModalError.set('');
+    this.activityReportYearFilter.set('all');
+    this.activityReportWeekFilter.set('all');
     const selected = String(this.selectedActivityDriverName() || '').trim();
     if (selected) {
       this.activityReportScope.set('specific');
@@ -2834,6 +2885,17 @@ export class MotivComponent implements OnInit {
     }
   }
 
+  setActivityReportYearFilter(value: string): void {
+    this.activityReportYearFilter.set(value || 'all');
+    this.activityReportWeekFilter.set('all');
+    this.activityReportModalError.set('');
+  }
+
+  setActivityReportWeekFilter(value: string): void {
+    this.activityReportWeekFilter.set(value || 'all');
+    this.activityReportModalError.set('');
+  }
+
   async generateActivityReport(): Promise<void> {
     this.activityReportModalError.set('');
     this.activityReportError.set('');
@@ -2852,6 +2914,8 @@ export class MotivComponent implements OnInit {
           : scope === 'inactive'
             ? 'All Inactive Drivers'
             : `Specific Driver: ${this.activityReportSpecificDriver()}`;
+      const yearLabel = this.activityReportYearFilter() === 'all' ? 'All Years' : this.activityReportYearFilter();
+      const weekLabel = this.activityReportWeekFilter() === 'all' ? 'All Weeks' : this.activityReportWeekFilter();
       const filename = `motiv-activity-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
       const doc = new jsPDF({
         orientation: 'landscape',
@@ -2874,6 +2938,8 @@ export class MotivComponent implements OnInit {
         doc.text(`Scope: ${scopeLabel}`, left, y);
         y += 12;
         doc.text(`Generated: ${new Date().toLocaleString()}`, left, y);
+        y += 12;
+        doc.text(`Period: ${yearLabel} | ${weekLabel}`, left, y);
         y += 12;
         doc.text(`Rows: ${reportRows.length.toLocaleString()}`, left, y);
         y += 16;
@@ -2962,7 +3028,16 @@ export class MotivComponent implements OnInit {
   }
 
   private getActivityReportRows(): MotivActivityLogEntry[] {
-    const rows = this.activityLogRows();
+    const yearFilter = this.activityReportYearFilter();
+    const weekFilter = this.activityReportWeekFilter();
+    let rows = this.activityLogRows().filter((row) => {
+      const dt = new Date(row.timestamp);
+      if (Number.isNaN(dt.getTime())) return false;
+      const iso = this.getIsoWeekInfo(dt);
+      const yearOk = yearFilter === 'all' || String(iso.year) === yearFilter;
+      const weekOk = weekFilter === 'all' || iso.key === weekFilter;
+      return yearOk && weekOk;
+    });
     const scope = this.activityReportScope();
     const normalizedDriverName = String(this.activityReportSpecificDriver() || '').trim().toLowerCase();
 
