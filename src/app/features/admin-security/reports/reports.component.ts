@@ -2177,15 +2177,14 @@ export class ReportsComponent {
     const filename = `${baseName}-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
     const blob = doc.output('blob');
     const url = URL.createObjectURL(blob);
-    const popup = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!popup) {
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 120000);
+    // Always download directly to avoid in-app/webview tab interception.
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener noreferrer';
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 }
