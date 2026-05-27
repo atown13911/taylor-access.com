@@ -975,6 +975,12 @@ export class ReportsComponent {
       }))
       .sort((a, b) => b.rows.length - a.rows.length || a.source.localeCompare(b.source));
 
+    const sourceSummaryRows = groupsOrdered.map((g) => ({
+      source: g.source,
+      count: g.rows.length,
+      pct: mapped.length > 0 ? (g.rows.length / mapped.length) * 100 : 0
+    }));
+
     const drawHeader = (): void => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(13);
@@ -990,6 +996,31 @@ export class ReportsComponent {
         y
       );
       y += 16;
+    };
+
+    const drawSourceSummary = (): void => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('Per Source Summary', left, y);
+      y += 12;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      for (const summary of sourceSummaryRows) {
+        const text = `${summary.source}: ${summary.count.toLocaleString()} (${summary.pct.toFixed(1)}%)`;
+        if (y + 12 > bottom) {
+          doc.addPage();
+          y = 24;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.text('Per Source Summary (cont.)', left, y);
+          y += 12;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+        }
+        doc.text(text, left + 2, y);
+        y += 10;
+      }
+      y += 8;
     };
 
     const columns = [
@@ -1052,6 +1083,7 @@ export class ReportsComponent {
     };
 
     drawHeader();
+    drawSourceSummary();
     for (const group of groupsOrdered) {
       drawSourceHeading(group.source, group.rows.length);
       drawTableHeader();
