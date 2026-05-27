@@ -65,6 +65,7 @@ type MotivFuelCardRow = {
 type MotivSafetyEventRow = {
   eventId: string;
   eventAt: string;
+  eventTimestamp: number;
   eventType: string;
   severity: string;
   driver: string;
@@ -83,6 +84,8 @@ type MotivActivityLogEntry = {
   driverName?: string | null;
 };
 type ActivityReportScope = 'active' | 'inactive' | 'specific';
+type SafetyReportScope = 'active' | 'inactive' | 'specific';
+type SafetyReportFormat = 'detailed' | 'summary';
 type FuelWeekOption = {
   key: string;
   label: string;
@@ -942,6 +945,9 @@ type MotivStatusCache = {
             <button class="refresh-btn" (click)="loadSafetyEvents()" [disabled]="loadingSafety()">
               {{ loadingSafety() ? 'Loading...' : 'Refresh Safety Events' }}
             </button>
+            <button class="refresh-btn" (click)="openSafetyReportModal()" [disabled]="generatingSafetyReport() || loadingSafety()">
+              {{ generatingSafetyReport() ? 'Generating...' : 'Safety Report' }}
+            </button>
             <select
               class="filter-input filter-select"
               [value]="safetyDaysFilter()"
@@ -961,6 +967,7 @@ type MotivStatusCache = {
             </select>
           </div>
           <p class="error" *ngIf="safetyError()">{{ safetyError() }}</p>
+          <p class="error" *ngIf="safetyReportError()">{{ safetyReportError() }}</p>
           <div class="driver-glass-panel" *ngIf="safetyRows().length > 0">
             <div class="driver-dashboard-cards">
               <div class="driver-card total">
@@ -1030,6 +1037,73 @@ type MotivStatusCache = {
             </table>
           </div>
           <p class="count" *ngIf="!loadingSafety() && filteredSafetyRows().length === 0">No safety events found for the selected filters.</p>
+        </div>
+
+        <div class="activity-report-modal-backdrop" *ngIf="safetyReportModalOpen()" (click)="closeSafetyReportModal()">
+          <div class="activity-report-modal" (click)="$event.stopPropagation()">
+            <h3>Generate Safety Report</h3>
+            <p>Select scope and date period for the safety events report PDF.</p>
+            <div class="activity-report-grid">
+              <label>
+                Scope
+                <select
+                  class="filter-input filter-select"
+                  [value]="safetyReportScope()"
+                  (change)="setSafetyReportScope($any($event.target).value)">
+                  <option value="active">All Active Drivers</option>
+                  <option value="inactive">All Inactive Drivers</option>
+                  <option value="specific">Specific Driver</option>
+                </select>
+              </label>
+              <label>
+                Format
+                <select
+                  class="filter-input filter-select"
+                  [value]="safetyReportFormat()"
+                  (change)="setSafetyReportFormat($any($event.target).value)">
+                  <option value="detailed">Detailed Events</option>
+                  <option value="summary">Summary Only</option>
+                </select>
+              </label>
+              <label *ngIf="safetyReportScope() === 'specific'">
+                Driver
+                <select
+                  class="filter-input filter-select"
+                  [value]="safetyReportSpecificDriver()"
+                  (change)="safetyReportSpecificDriver.set($any($event.target).value); safetyReportModalError.set('')">
+                  <option value="">Select driver</option>
+                  <option *ngFor="let name of safetyReportDriverOptions()" [value]="name">{{ name }}</option>
+                </select>
+              </label>
+              <label>
+                Year
+                <select
+                  class="filter-input filter-select"
+                  [value]="safetyReportYearFilter()"
+                  (change)="setSafetyReportYearFilter($any($event.target).value)">
+                  <option value="all">All Years</option>
+                  <option *ngFor="let y of safetyReportAvailableYears()" [value]="y.toString()">{{ y }}</option>
+                </select>
+              </label>
+              <label>
+                Week
+                <select
+                  class="filter-input filter-select"
+                  [value]="safetyReportWeekFilter()"
+                  (change)="setSafetyReportWeekFilter($any($event.target).value)">
+                  <option value="all">All Weeks</option>
+                  <option *ngFor="let w of safetyReportAvailableWeeks()" [value]="w.key">{{ w.label }}</option>
+                </select>
+              </label>
+            </div>
+            <p class="error" *ngIf="safetyReportModalError()">{{ safetyReportModalError() }}</p>
+            <div class="activity-report-actions">
+              <button class="refresh-btn" (click)="closeSafetyReportModal()">Cancel</button>
+              <button class="refresh-btn" (click)="generateSafetyReport()" [disabled]="generatingSafetyReport()">
+                {{ generatingSafetyReport() ? 'Generating...' : 'Generate PDF' }}
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1801,6 +1875,7 @@ export class MotivComponent implements OnInit {
   loadingSafety = signal(false);
   loadingFuelCards = signal(false);
   generatingActivityReport = signal(false);
+  generatingSafetyReport = signal(false);
   savingDrivers = signal(false);
   syncingDrivers = signal(false);
   loadingFuel = signal(false);
@@ -1814,6 +1889,8 @@ export class MotivComponent implements OnInit {
   fuelCardsError = signal('');
   activityReportError = signal('');
   activityReportModalError = signal('');
+  safetyReportError = signal('');
+  safetyReportModalError = signal('');
   saveDriversMessage = signal('');
   saveDriversError = signal('');
   syncStatusMessage = signal('Ready.');
@@ -1878,6 +1955,12 @@ export class MotivComponent implements OnInit {
   safetyTypeFilter = signal<string>('all');
   safetyVideoFilter = signal<'all' | 'with-video' | 'without-video'>('all');
   safetyDaysFilter = signal(30);
+  safetyReportModalOpen = signal(false);
+  safetyReportScope = signal<SafetyReportScope>('active');
+  safetyReportFormat = signal<SafetyReportFormat>('detailed');
+  safetyReportSpecificDriver = signal('');
+  safetyReportYearFilter = signal<string>('all');
+  safetyReportWeekFilter = signal<string>('all');
   strictMode405 = signal(false);
   availableApis = signal<ApiHealthRow[]>(this.createApiRows());
   phase2Apis = signal<Phase2Row[]>(this.createPhase2Rows());
@@ -2058,11 +2141,45 @@ export class MotivComponent implements OnInit {
     this.motivSafetyEvents()
       .map((raw) => this.mapSafetyEventRow(raw))
       .sort((a, b) => {
-        const at = this.tryParseDate(a.eventAt)?.getTime() ?? 0;
-        const bt = this.tryParseDate(b.eventAt)?.getTime() ?? 0;
+        const at = a.eventTimestamp;
+        const bt = b.eventTimestamp;
         return bt - at;
       })
   );
+  safetyReportDriverOptions = computed<string[]>(() => {
+    const unique = new Set<string>();
+    for (const row of this.safetyRows()) {
+      const name = String(row.driver || '').trim();
+      if (!name || name.toLowerCase() === 'n/a') continue;
+      unique.add(name);
+    }
+    return Array.from(unique).sort((a, b) => a.localeCompare(b));
+  });
+  safetyReportAvailableYears = computed<number[]>(() => {
+    const years = new Set<number>();
+    for (const row of this.safetyRows()) {
+      if (!row.eventTimestamp) continue;
+      const dt = new Date(row.eventTimestamp);
+      if (Number.isNaN(dt.getTime())) continue;
+      years.add(this.getIsoWeekInfo(dt).year);
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  });
+  safetyReportAvailableWeeks = computed<{ key: string; label: string }[]>(() => {
+    const yearFilter = this.safetyReportYearFilter();
+    const weekMap = new Map<string, string>();
+    for (const row of this.safetyRows()) {
+      if (!row.eventTimestamp) continue;
+      const dt = new Date(row.eventTimestamp);
+      if (Number.isNaN(dt.getTime())) continue;
+      const iso = this.getIsoWeekInfo(dt);
+      if (yearFilter !== 'all' && String(iso.year) !== yearFilter) continue;
+      weekMap.set(iso.key, `W${iso.week} (${iso.year})`);
+    }
+    return Array.from(weekMap.entries())
+      .map(([key, label]) => ({ key, label }))
+      .sort((a, b) => b.key.localeCompare(a.key));
+  });
   safetyEventTypeOptions = computed<string[]>(() =>
     Array.from(new Set(
       this.safetyRows()
@@ -3103,6 +3220,321 @@ export class MotivComponent implements OnInit {
     return rows.filter((row) => {
       const name = String(row.driverName || '').trim().toLowerCase();
       if (!name) return false;
+      return allowedNames.has(name);
+    });
+  }
+
+  openSafetyReportModal(): void {
+    this.safetyReportError.set('');
+    this.safetyReportModalError.set('');
+    this.safetyReportYearFilter.set('all');
+    this.safetyReportWeekFilter.set('all');
+    this.safetyReportFormat.set('detailed');
+    this.safetyReportSpecificDriver.set('');
+    this.safetyReportScope.set('active');
+    this.safetyReportModalOpen.set(true);
+  }
+
+  closeSafetyReportModal(): void {
+    this.safetyReportModalOpen.set(false);
+    this.safetyReportModalError.set('');
+  }
+
+  setSafetyReportScope(value: SafetyReportScope): void {
+    const normalized: SafetyReportScope =
+      value === 'inactive' || value === 'specific'
+        ? value
+        : 'active';
+    this.safetyReportScope.set(normalized);
+    this.safetyReportModalError.set('');
+    if (normalized !== 'specific') {
+      this.safetyReportSpecificDriver.set('');
+    }
+  }
+
+  setSafetyReportFormat(value: SafetyReportFormat): void {
+    const normalized: SafetyReportFormat = value === 'summary' ? 'summary' : 'detailed';
+    this.safetyReportFormat.set(normalized);
+    this.safetyReportModalError.set('');
+  }
+
+  setSafetyReportYearFilter(value: string): void {
+    this.safetyReportYearFilter.set(value || 'all');
+    this.safetyReportWeekFilter.set('all');
+    this.safetyReportModalError.set('');
+  }
+
+  setSafetyReportWeekFilter(value: string): void {
+    this.safetyReportWeekFilter.set(value || 'all');
+    this.safetyReportModalError.set('');
+  }
+
+  async generateSafetyReport(): Promise<void> {
+    this.safetyReportModalError.set('');
+    this.safetyReportError.set('');
+    this.generatingSafetyReport.set(true);
+    try {
+      const reportRows = this.getSafetyReportRows();
+      if (reportRows.length === 0) {
+        this.safetyReportModalError.set('No safety events found for that report scope.');
+        return;
+      }
+
+      const scope = this.safetyReportScope();
+      const scopeLabel =
+        scope === 'active'
+          ? 'All Active Drivers'
+          : scope === 'inactive'
+            ? 'All Inactive Drivers'
+            : `Specific Driver: ${this.safetyReportSpecificDriver()}`;
+      const format = this.safetyReportFormat();
+      const formatLabel = format === 'summary' ? 'Summary Only' : 'Detailed Events';
+      const yearLabel = this.safetyReportYearFilter() === 'all' ? 'All Years' : this.safetyReportYearFilter();
+      const weekLabel = this.safetyReportWeekFilter() === 'all' ? 'All Weeks' : this.safetyReportWeekFilter();
+      const filename = `motiv-safety-report-${format}-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'letter'
+      });
+      const left = 24;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const bottom = pageHeight - 24;
+      let y = 34;
+
+      const drawHeader = () => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.text('MOTIV Safety Events Report', left, y);
+        y += 14;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Scope: ${scopeLabel}`, left, y);
+        y += 12;
+        doc.text(`Format: ${formatLabel}`, left, y);
+        y += 12;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, left, y);
+        y += 12;
+        doc.text(`Period: ${yearLabel} | ${weekLabel}`, left, y);
+        y += 12;
+        doc.text(`Rows: ${reportRows.length.toLocaleString()}`, left, y);
+        y += 16;
+      };
+
+      const columns = [
+        { label: 'Date', width: 84 },
+        { label: 'Event', width: 122 },
+        { label: 'Severity', width: 58 },
+        { label: 'Driver', width: 104 },
+        { label: 'Vehicle', width: 56 },
+        { label: 'Location', width: 204 },
+        { label: 'Status', width: 90 },
+        { label: 'Media', width: 54 }
+      ];
+
+      const drawTableHeader = () => {
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(8.5);
+        let x = left;
+        for (const col of columns) {
+          doc.text(col.label, x, y);
+          x += col.width;
+        }
+        y += 11;
+        doc.setDrawColor(165, 165, 165);
+        doc.line(left, y - 7, pageWidth - left, y - 7);
+        doc.setFont('courier', 'normal');
+      };
+
+      const ensureSpace = (lines: number): void => {
+        const needed = Math.max(1, lines) * 10 + 8;
+        if (y + needed > bottom) {
+          doc.addPage();
+          y = 24;
+          drawTableHeader();
+        }
+      };
+
+      const drawRow = (values: string[]): void => {
+        const wrapped = columns.map((col, idx) => {
+          const content = String(values[idx] ?? '');
+          const lines = doc.splitTextToSize(content, Math.max(8, col.width - 4));
+          return (lines.length ? lines : ['']) as string[];
+        });
+        const lineCount = wrapped.reduce((max, arr) => Math.max(max, arr.length), 1);
+        ensureSpace(lineCount);
+        for (let line = 0; line < lineCount; line += 1) {
+          let x = left;
+          for (let i = 0; i < columns.length; i += 1) {
+            doc.text(wrapped[i][line] ?? '', x, y);
+            x += columns[i].width;
+          }
+          y += 10;
+        }
+        y += 2;
+      };
+
+      drawHeader();
+      if (format === 'summary') {
+        this.drawSafetySummaryReport(doc, reportRows, left, pageWidth, bottom, y);
+      } else {
+        drawTableHeader();
+        for (const row of reportRows) {
+          drawRow([
+            row.eventAt,
+            row.eventType,
+            row.severity,
+            row.driver,
+            row.vehicle,
+            row.location,
+            row.status,
+            row.hasVideo ? 'Video' : 'N/A'
+          ]);
+        }
+      }
+
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const popup = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!popup) {
+        await this.saveBlobFile(filename, blob, 'application/pdf', ['.pdf']);
+        URL.revokeObjectURL(url);
+      } else {
+        setTimeout(() => URL.revokeObjectURL(url), 120000);
+      }
+
+      this.safetyReportModalOpen.set(false);
+    } catch {
+      this.safetyReportError.set('Unable to generate safety report.');
+    } finally {
+      this.generatingSafetyReport.set(false);
+    }
+  }
+
+  private drawSafetySummaryReport(
+    doc: jsPDF,
+    rows: MotivSafetyEventRow[],
+    left: number,
+    pageWidth: number,
+    bottom: number,
+    startY: number
+  ): void {
+    let y = startY;
+    const right = pageWidth - left;
+
+    const ensureSpace = (needed: number): void => {
+      if (y + needed > bottom) {
+        doc.addPage();
+        y = 24;
+      }
+    };
+
+    const writeHeading = (text: string): void => {
+      ensureSpace(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(text, left, y);
+      y += 12;
+      doc.setDrawColor(165, 165, 165);
+      doc.line(left, y - 6, right, y - 6);
+    };
+
+    const writeLine = (text: string): void => {
+      ensureSpace(12);
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(9);
+      doc.text(text, left, y);
+      y += 10;
+    };
+
+    const byEventType = new Map<string, number>();
+    const byDriver = new Map<string, number>();
+    const byStatus = new Map<string, number>();
+    let withVideo = 0;
+    const drivers = new Set<string>();
+    const vehicles = new Set<string>();
+
+    for (const row of rows) {
+      const eventType = String(row.eventType || 'N/A').trim() || 'N/A';
+      byEventType.set(eventType, (byEventType.get(eventType) ?? 0) + 1);
+
+      const driver = String(row.driver || 'N/A').trim() || 'N/A';
+      byDriver.set(driver, (byDriver.get(driver) ?? 0) + 1);
+
+      const status = String(row.status || 'N/A').trim() || 'N/A';
+      byStatus.set(status, (byStatus.get(status) ?? 0) + 1);
+
+      if (row.hasVideo) withVideo += 1;
+      if (driver.toLowerCase() !== 'n/a') drivers.add(driver);
+      const vehicle = String(row.vehicle || '').trim();
+      if (vehicle && vehicle.toLowerCase() !== 'n/a') vehicles.add(vehicle);
+    }
+
+    writeHeading('Overall Summary');
+    writeLine(`Total events: ${rows.length.toLocaleString()}`);
+    writeLine(`Events with video: ${withVideo.toLocaleString()}`);
+    writeLine(`Unique drivers: ${drivers.size.toLocaleString()}`);
+    writeLine(`Unique vehicles: ${vehicles.size.toLocaleString()}`);
+    y += 6;
+
+    writeHeading('Events by Type');
+    Array.from(byEventType.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .forEach(([type, count]) => writeLine(`${String(type).padEnd(30, ' ')} ${count.toLocaleString()}`));
+    y += 6;
+
+    writeHeading('Events by Status');
+    Array.from(byStatus.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .forEach(([status, count]) => writeLine(`${String(status).padEnd(30, ' ')} ${count.toLocaleString()}`));
+    y += 6;
+
+    writeHeading('Top Drivers by Event Count');
+    Array.from(byDriver.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 20)
+      .forEach(([driver, count]) => writeLine(`${String(driver).padEnd(30, ' ')} ${count.toLocaleString()}`));
+  }
+
+  private getSafetyReportRows(): MotivSafetyEventRow[] {
+    const yearFilter = this.safetyReportYearFilter();
+    const weekFilter = this.safetyReportWeekFilter();
+    let rows = this.safetyRows().filter((row) => {
+      if (!row.eventTimestamp) return false;
+      const dt = new Date(row.eventTimestamp);
+      if (Number.isNaN(dt.getTime())) return false;
+      const iso = this.getIsoWeekInfo(dt);
+      const yearOk = yearFilter === 'all' || String(iso.year) === yearFilter;
+      const weekOk = weekFilter === 'all' || iso.key === weekFilter;
+      return yearOk && weekOk;
+    });
+
+    const scope = this.safetyReportScope();
+    const normalizedDriverName = String(this.safetyReportSpecificDriver() || '').trim().toLowerCase();
+    if (scope === 'specific') {
+      if (!normalizedDriverName) {
+        this.safetyReportModalError.set('Choose a specific driver to generate the report.');
+        return [];
+      }
+      return rows.filter((row) => String(row.driver || '').trim().toLowerCase() === normalizedDriverName);
+    }
+
+    const allowedNames = new Set(
+      this.driverTableRows()
+        .filter((row) => {
+          const status = String(row.status || '').trim().toLowerCase();
+          return scope === 'active'
+            ? this.isActiveLikeStatus(status)
+            : this.isVehicleDeactivatedStatus(status) || status === 'deactivated';
+        })
+        .map((row) => String(row.name || '').trim().toLowerCase())
+        .filter((name) => !!name)
+    );
+
+    return rows.filter((row) => {
+      const name = String(row.driver || '').trim().toLowerCase();
+      if (!name || name === 'n/a') return false;
       return allowedNames.has(name);
     });
   }
@@ -4927,8 +5359,11 @@ export class MotivComponent implements OnInit {
       event?.event_at,
       event?.occurred_at,
       event?.created_at,
-      event?.timestamp
+      event?.timestamp,
+      event?.start_time,
+      event?.startTime
     );
+    const eventTimestamp = this.tryParseDate(eventAtRaw)?.getTime() ?? 0;
     const eventAt = this.formatSafetyTimestamp(eventAtRaw);
 
     const driverName = this.firstText(
@@ -4965,6 +5400,7 @@ export class MotivComponent implements OnInit {
     return {
       eventId: this.firstText(event?.id, event?.event_id, event?.uuid) || 'N/A',
       eventAt,
+      eventTimestamp,
       eventType: String(eventType),
       severity: String(severity),
       driver: String(driverName),
