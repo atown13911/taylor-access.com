@@ -10,7 +10,16 @@ type MotivReportRow = {
   section: string;
   filters: string;
   output: string;
-  key: 'activity' | 'safety-detailed' | 'safety-summary' | 'fuel' | 'applicants-summary';
+  key:
+    | 'activity'
+    | 'safety-detailed'
+    | 'safety-summary'
+    | 'fuel'
+    | 'applicants-summary'
+    | 'compliance-doc-summary'
+    | 'compliance-expiring-docs'
+    | 'hr-roster-summary'
+    | 'hr-timeclock-summary';
 };
 type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
 type ApplicantsGoalPeriod = 'weekly' | 'monthly' | 'yearly';
@@ -51,7 +60,10 @@ type ApplicantsGoalSummary = {
       </div>
 
       <div class="reports-grid">
-        <section class="report-card">
+        <section
+          class="report-card report-card-action"
+          [class.active]="selectedReportTile() === 'compliance'"
+          (click)="selectReportTile('compliance')">
           <h3><i class="bx bx-shield-quarter"></i> Compliance Reports</h3>
           <p>DOT, insurance, and driver compliance rollups.</p>
           <ul>
@@ -59,9 +71,15 @@ type ApplicantsGoalSummary = {
             <li>DOT document status</li>
             <li>Insurance expiration overview</li>
           </ul>
+          <button class="report-btn" type="button">
+            {{ selectedReportTile() === 'compliance' ? 'Showing Reports' : 'View Compliance Reports' }}
+          </button>
         </section>
 
-        <section class="report-card">
+        <section
+          class="report-card report-card-action"
+          [class.active]="selectedReportTile() === 'hr'"
+          (click)="selectReportTile('hr')">
           <h3><i class="bx bx-group"></i> HR Reports</h3>
           <p>Employee and recruiting reporting snapshots.</p>
           <ul>
@@ -69,6 +87,9 @@ type ApplicantsGoalSummary = {
             <li>Applicant conversion overview</li>
             <li>Time clock productivity summary</li>
           </ul>
+          <button class="report-btn" type="button">
+            {{ selectedReportTile() === 'hr' ? 'Showing Reports' : 'View HR Reports' }}
+          </button>
         </section>
 
         <section class="report-card">
@@ -114,6 +135,86 @@ type ApplicantsGoalSummary = {
         </section>
       </div>
 
+      <div class="motiv-reports-panel" *ngIf="selectedReportTile() === 'compliance'">
+        <div class="panel-header">
+          <h2><i class="bx bx-table"></i> Available Compliance Reports</h2>
+          <p>Current report options available from Compliance.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="reports-table">
+            <thead>
+              <tr>
+                <th>Report</th>
+                <th>Section</th>
+                <th>Scope / Filters</th>
+                <th>Output</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of complianceReports">
+                <td>{{ row.name }}</td>
+                <td>{{ row.section }}</td>
+                <td>{{ row.filters }}</td>
+                <td>{{ row.output }}</td>
+                <td>
+                  <button
+                    class="action-icon-btn"
+                    type="button"
+                    [attr.aria-label]="'Generate ' + row.name"
+                    [title]="'Generate ' + row.name"
+                    [disabled]="generatingReportKey() === row.key"
+                    (click)="onReportAction(row)">
+                    <i class="bx" [ngClass]="generatingReportKey() === row.key ? 'bx-loader-alt bx-spin' : 'bx-play-circle'"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="error" *ngIf="reportError()">{{ reportError() }}</p>
+      </div>
+
+      <div class="motiv-reports-panel" *ngIf="selectedReportTile() === 'hr'">
+        <div class="panel-header">
+          <h2><i class="bx bx-table"></i> Available HR Reports</h2>
+          <p>Current report options available from HR.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="reports-table">
+            <thead>
+              <tr>
+                <th>Report</th>
+                <th>Section</th>
+                <th>Scope / Filters</th>
+                <th>Output</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of hrReports">
+                <td>{{ row.name }}</td>
+                <td>{{ row.section }}</td>
+                <td>{{ row.filters }}</td>
+                <td>{{ row.output }}</td>
+                <td>
+                  <button
+                    class="action-icon-btn"
+                    type="button"
+                    [attr.aria-label]="'Generate ' + row.name"
+                    [title]="'Generate ' + row.name"
+                    [disabled]="generatingReportKey() === row.key"
+                    (click)="onReportAction(row)">
+                    <i class="bx" [ngClass]="generatingReportKey() === row.key ? 'bx-loader-alt bx-spin' : 'bx-play-circle'"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="error" *ngIf="reportError()">{{ reportError() }}</p>
+      </div>
+
       <div class="motiv-reports-panel" *ngIf="selectedReportTile() === 'motiv'">
         <div class="panel-header">
           <h2><i class="bx bx-table"></i> Available MOTIV Reports</h2>
@@ -143,7 +244,7 @@ type ApplicantsGoalSummary = {
                     [attr.aria-label]="'Generate ' + row.name"
                     [title]="'Generate ' + row.name"
                     [disabled]="generatingReportKey() === row.key"
-                    (click)="openCriteriaModal(row)">
+                    (click)="onReportAction(row)">
                     <i class="bx" [ngClass]="generatingReportKey() === row.key ? 'bx-loader-alt bx-spin' : 'bx-play-circle'"></i>
                   </button>
                 </td>
@@ -183,7 +284,7 @@ type ApplicantsGoalSummary = {
                     [attr.aria-label]="'Generate ' + row.name"
                     [title]="'Generate ' + row.name"
                     [disabled]="generatingReportKey() === row.key"
-                    (click)="openCriteriaModal(row)">
+                    (click)="onReportAction(row)">
                     <i class="bx" [ngClass]="generatingReportKey() === row.key ? 'bx-loader-alt bx-spin' : 'bx-play-circle'"></i>
                   </button>
                 </td>
@@ -463,7 +564,7 @@ export class ReportsComponent {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
   private readonly localApplicantGoalsStorageKey = 'ta.hr.applicant-goals.v1';
-  selectedReportTile = signal<'none' | 'motiv' | 'applicants'>('none');
+  selectedReportTile = signal<'none' | 'compliance' | 'hr' | 'motiv' | 'applicants'>('none');
   generatingReportKey = signal<MotivReportRow['key'] | ''>('');
   reportError = signal('');
   criteriaModalOpen = signal(false);
@@ -522,8 +623,59 @@ export class ReportsComponent {
     }
   ];
 
-  selectReportTile(tile: 'motiv' | 'applicants'): void {
+  readonly complianceReports: MotivReportRow[] = [
+    {
+      name: 'Driver Documents Compliance Summary',
+      section: 'Compliance > Driver Documents',
+      filters: 'All categories',
+      output: 'PDF (status summary by category)',
+      key: 'compliance-doc-summary'
+    },
+    {
+      name: 'Expiring / Expired Driver Documents',
+      section: 'Compliance > Driver Documents',
+      filters: 'Status: expiring, expired, pending',
+      output: 'PDF (detailed document list)',
+      key: 'compliance-expiring-docs'
+    }
+  ];
+
+  readonly hrReports: MotivReportRow[] = [
+    {
+      name: 'Employee Roster Summary',
+      section: 'HR > Employee Roster',
+      filters: 'Current organization totals',
+      output: 'PDF (headcount and role/department breakdowns)',
+      key: 'hr-roster-summary'
+    },
+    {
+      name: 'Time Clock Daily Summary',
+      section: 'HR > Time Clock',
+      filters: 'Current daily summary snapshot',
+      output: 'PDF (user-level productivity table)',
+      key: 'hr-timeclock-summary'
+    }
+  ];
+
+  selectReportTile(tile: 'compliance' | 'hr' | 'motiv' | 'applicants'): void {
     this.selectedReportTile.set(this.selectedReportTile() === tile ? 'none' : tile);
+  }
+
+  async onReportAction(row: MotivReportRow): Promise<void> {
+    if (this.generatingReportKey()) return;
+    if (this.requiresCriteria(row.key)) {
+      await this.openCriteriaModal(row);
+      return;
+    }
+    this.reportError.set('');
+    this.generatingReportKey.set(row.key);
+    try {
+      await this.generateReportByKey(row.key);
+    } catch {
+      this.reportError.set('Unable to generate selected report.');
+    } finally {
+      this.generatingReportKey.set('');
+    }
   }
 
   supportsScope(key: MotivReportRow['key']): boolean {
@@ -536,6 +688,14 @@ export class ReportsComponent {
 
   supportsDays(key: MotivReportRow['key']): boolean {
     return key === 'safety-detailed' || key === 'safety-summary';
+  }
+
+  requiresCriteria(key: MotivReportRow['key']): boolean {
+    return key === 'activity'
+      || key === 'safety-detailed'
+      || key === 'safety-summary'
+      || key === 'fuel'
+      || key === 'applicants-summary';
   }
 
   async openCriteriaModal(row: MotivReportRow): Promise<void> {
@@ -593,17 +753,7 @@ export class ReportsComponent {
         this.criteriaError.set('No rows found for the selected criteria.');
         return;
       }
-      if (report.key === 'activity') {
-        await this.generateActivityReport(filteredRows);
-      } else if (report.key === 'safety-detailed') {
-        await this.generateSafetyDetailedReport(filteredRows);
-      } else if (report.key === 'safety-summary') {
-        await this.generateSafetySummaryReport(filteredRows);
-      } else if (report.key === 'applicants-summary') {
-        await this.generateApplicantsSummaryReport(filteredRows);
-      } else {
-        await this.generateFuelStatementReport(filteredRows);
-      }
+      await this.generateReportByKey(report.key, filteredRows);
       this.criteriaModalOpen.set(false);
     } catch {
       this.criteriaError.set('Unable to generate selected report with these criteria.');
@@ -611,6 +761,42 @@ export class ReportsComponent {
       this.criteriaLoading.set(false);
       this.generatingReportKey.set('');
     }
+  }
+
+  private async generateReportByKey(key: MotivReportRow['key'], filteredRows?: any[]): Promise<void> {
+    if (key === 'activity') {
+      await this.generateActivityReport(filteredRows);
+      return;
+    }
+    if (key === 'safety-detailed') {
+      await this.generateSafetyDetailedReport(filteredRows);
+      return;
+    }
+    if (key === 'safety-summary') {
+      await this.generateSafetySummaryReport(filteredRows);
+      return;
+    }
+    if (key === 'fuel') {
+      await this.generateFuelStatementReport(filteredRows);
+      return;
+    }
+    if (key === 'applicants-summary') {
+      await this.generateApplicantsSummaryReport(filteredRows);
+      return;
+    }
+    if (key === 'compliance-doc-summary') {
+      await this.generateComplianceDocSummaryReport();
+      return;
+    }
+    if (key === 'compliance-expiring-docs') {
+      await this.generateComplianceExpiringDocsReport();
+      return;
+    }
+    if (key === 'hr-roster-summary') {
+      await this.generateHrRosterSummaryReport();
+      return;
+    }
+    await this.generateHrTimeclockDailySummaryReport();
   }
 
   private async loadCriteriaRows(): Promise<void> {
@@ -640,6 +826,9 @@ export class ReportsComponent {
     if (key === 'activity') return '/api/v1/motiv/activity-logs?limit=5000';
     if (key === 'fuel') return '/api/v1/motiv/fuel-purchases';
     if (key === 'applicants-summary') return '/api/v1/applicants/records';
+    if (key !== 'safety-detailed' && key !== 'safety-summary') {
+      throw new Error('Criteria data path is not configured for this report type.');
+    }
     const days = Math.max(1, Math.min(365, Number(this.criteriaDays() || 30)));
     return `/api/v1/motiv/safety-events?days=${days}&limit=5000`;
   }
@@ -921,37 +1110,409 @@ export class ReportsComponent {
     const rows = rowsInput ?? await this.fetchRows('/api/v1/motiv/fuel-purchases');
     if (!rows.length) throw new Error('No rows');
     const mapped = rows.map((r: any) => {
-      const dateRaw = this.firstText(r?.transaction_time, r?.date, r?.created_at, r?.timestamp, r?.event_time) || '';
-      const amount = Number(r?.amount ?? r?.total_amount ?? r?.price ?? r?.charge_amount ?? 0);
+      const dateRaw = this.firstText(r?.transaction_time, r?.date, r?.created_at, r?.timestamp, r?.event_time, r?.posted_at) || '';
+      const amount = Number(r?.amount ?? r?.total_amount ?? r?.total_cost ?? r?.price ?? r?.charge_amount ?? 0);
+      const city = this.firstText(r?.city, r?.merchant_info?.city, r?.location?.city);
+      const state = this.firstText(r?.state, r?.merchant_info?.state, r?.location?.state);
+      const location = [city, state].filter((x) => !!x).join(', ') || 'N/A';
+      const category = this.toPdfSafeText(this.firstText(r?.category, r?.transaction_type, r?.fuel_type, r?.product_type) || 'N/A');
+      const card = this.toPdfSafeText(this.firstText(r?.card_label, r?.card_name, r?.card_id) || 'N/A');
+      const driver = this.toPdfSafeText(this.firstText(r?.driver_name, r?.driver_id, r?.driver?.name) || 'N/A');
+      const txnId = this.toPdfSafeText(this.firstText(r?.transaction_id, r?.id, r?.external_id) || 'N/A');
       return {
         sortAt: this.asTime(dateRaw),
         date: this.formatDateTime(dateRaw),
-        merchant: this.firstText(r?.merchant_name, r?.merchant, r?.location_name) || 'N/A',
-        driver: this.firstText(r?.driver_name, r?.driver_id, r?.driver?.name) || 'N/A',
-        vehicle: this.firstText(r?.vehicle_number, r?.vehicle_id, r?.vehicle?.number) || 'N/A',
-        amount: Number.isFinite(amount) ? amount : 0,
-        status: this.firstText(r?.status, r?.transaction_status) || 'N/A'
+        merchant: this.toPdfSafeText(this.firstText(r?.merchant_name, r?.merchant, r?.vendor, r?.location_name) || 'N/A'),
+        driver,
+        vehicle: this.toPdfSafeText(this.firstText(r?.vehicle_number, r?.vehicle_id, r?.vehicle?.number) || 'N/A'),
+        card,
+        category,
+        status: this.toPdfSafeText(this.firstText(r?.status, r?.transaction_status) || 'N/A'),
+        location: this.toPdfSafeText(location),
+        txnId,
+        amount: Number.isFinite(amount) ? amount : 0
       };
     }).sort((a, b) => b.sortAt - a.sortAt);
+
+    const classifyAmount = (category: string): 'fuel' | 'other' | 'unknown' => {
+      const text = (category || '').toLowerCase();
+      if (!text || text === 'n/a' || text === 'unknown') return 'unknown';
+      if (text.includes('diesel') || text.includes('gas') || text.includes('fuel') || text.includes('petrol')) return 'fuel';
+      return 'other';
+    };
+
     const total = mapped.reduce((sum, r) => sum + r.amount, 0);
+    const fuelTotal = mapped.reduce((sum, r) => sum + (classifyAmount(r.category) === 'fuel' ? r.amount : 0), 0);
+    const otherTotal = mapped.reduce((sum, r) => sum + (classifyAmount(r.category) === 'other' ? r.amount : 0), 0);
+    const unknownTotal = mapped.reduce((sum, r) => sum + (classifyAmount(r.category) === 'unknown' ? r.amount : 0), 0);
+    const uniqueDrivers = new Set(mapped.map((r) => r.driver).filter((x) => x && x !== 'N/A')).size;
+    const uniqueVehicles = new Set(mapped.map((r) => r.vehicle).filter((x) => x && x !== 'N/A')).size;
+    const cardsUsed = new Set(mapped.map((r) => r.card).filter((x) => x && x !== 'N/A')).size;
+
+    const driverSummaryRows = Array.from(
+      mapped.reduce((acc, row) => {
+        const key = row.driver || 'N/A';
+        if (!acc.has(key)) {
+          acc.set(key, { driver: key, txns: 0, total: 0, fuel: 0, other: 0, unknown: 0, cards: new Set<string>() });
+        }
+        const item = acc.get(key)!;
+        item.txns += 1;
+        item.total += row.amount;
+        const bucket = classifyAmount(row.category);
+        if (bucket === 'fuel') item.fuel += row.amount;
+        else if (bucket === 'other') item.other += row.amount;
+        else item.unknown += row.amount;
+        if (row.card && row.card !== 'N/A') item.cards.add(row.card);
+        return acc;
+      }, new Map<string, { driver: string; txns: number; total: number; fuel: number; other: number; unknown: number; cards: Set<string> }>())
+    )
+      .map(([, item]) => ({
+        driver: item.driver,
+        txns: item.txns,
+        total: item.total,
+        fuel: item.fuel,
+        other: item.other,
+        unknown: item.unknown,
+        cards: item.cards.size,
+        cardLabels: item.cards.size ? Array.from(item.cards).slice(0, 2).join(', ') : 'N/A'
+      }))
+      .sort((a, b) => b.total - a.total || b.txns - a.txns)
+      .slice(0, 20);
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
-    const columns = [
-      { label: 'Date', width: 115 },
-      { label: 'Merchant', width: 210 },
-      { label: 'Driver', width: 130 },
-      { label: 'Vehicle', width: 80 },
-      { label: 'Amount', width: 80 },
-      { label: 'Status', width: 110 }
+    const left = 24;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const bottom = doc.internal.pageSize.getHeight() - 24;
+    let y = 34;
+
+    const drawHeader = (): void => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text('Fuel Statement Report', left, y);
+      y += 14;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, left, y);
+      y += 12;
+      doc.text(`Transactions: ${mapped.length.toLocaleString()} | Total: ${this.formatCurrency(total)}`, left, y);
+      y += 16;
+    };
+
+    const drawSummaryTiles = (): void => {
+      const gap = 10;
+      const tileWidth = (pageWidth - (left * 2) - (gap * 4)) / 5;
+      const tileHeight = 48;
+      const tileTop = y;
+      const tiles = [
+        { label: 'Transactions', value: mapped.length.toLocaleString() },
+        { label: 'Total Spend', value: this.formatCurrency(total) },
+        { label: 'Fuel', value: this.formatCurrency(fuelTotal) },
+        { label: 'Other / Unknown', value: `${this.formatCurrency(otherTotal)} / ${this.formatCurrency(unknownTotal)}` },
+        { label: 'Drivers / Cards', value: `${uniqueDrivers} / ${cardsUsed}` }
+      ];
+      for (let i = 0; i < tiles.length; i += 1) {
+        const x = left + i * (tileWidth + gap);
+        doc.setFillColor(245, 248, 252);
+        doc.setDrawColor(180, 190, 205);
+        doc.roundedRect(x, tileTop, tileWidth, tileHeight, 4, 4, 'FD');
+        doc.setTextColor(70, 85, 110);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.text(tiles[i].label, x + 8, tileTop + 14);
+        doc.setTextColor(24, 39, 68);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10.5);
+        const valueLines = doc.splitTextToSize(tiles[i].value, tileWidth - 16);
+        doc.text(valueLines[0] ?? '', x + 8, tileTop + 31);
+      }
+      doc.setTextColor(0, 0, 0);
+      y += tileHeight + 16;
+    };
+
+    const drawSectionHeading = (title: string): void => {
+      if (y + 16 > bottom) {
+        doc.addPage();
+        y = 24;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(title, left, y);
+      y += 10;
+      doc.setDrawColor(120, 130, 145);
+      doc.line(left, y, pageWidth - left, y);
+      y += 8;
+      doc.setFont('helvetica', 'normal');
+    };
+
+    const drawTable = (
+      columns: Array<{ label: string; width: number }>,
+      rowsToDraw: string[][]
+    ): void => {
+      const drawHeaderRow = (): void => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        let x = left;
+        for (const col of columns) {
+          doc.text(col.label, x, y);
+          x += col.width;
+        }
+        y += 11;
+        doc.setDrawColor(165, 165, 165);
+        doc.line(left, y - 7, pageWidth - left, y - 7);
+        doc.setFont('helvetica', 'normal');
+      };
+      const ensureSpace = (lineCount: number): void => {
+        const needed = Math.max(1, lineCount) * 10 + 10;
+        if (y + needed > bottom) {
+          doc.addPage();
+          y = 24;
+          drawHeaderRow();
+        }
+      };
+      const drawRow = (values: string[]): void => {
+        const wrapped = columns.map((col, idx) => {
+          const content = String(values[idx] ?? '');
+          const lines = doc.splitTextToSize(content, Math.max(8, col.width - 4));
+          return (lines.length ? lines : ['']) as string[];
+        });
+        const lineCount = wrapped.reduce((max, arr) => Math.max(max, arr.length), 1);
+        ensureSpace(lineCount);
+        for (let line = 0; line < lineCount; line += 1) {
+          let x = left;
+          for (let i = 0; i < columns.length; i += 1) {
+            doc.text(wrapped[i][line] ?? '', x, y);
+            x += columns[i].width;
+          }
+          y += 10;
+        }
+        y += 2;
+      };
+
+      drawHeaderRow();
+      rowsToDraw.forEach((row) => drawRow(row));
+      y += 6;
+    };
+
+    drawHeader();
+    drawSummaryTiles();
+    drawSectionHeading('Driver Summary Totals');
+    drawTable(
+      [
+        { label: 'Driver', width: 170 },
+        { label: 'Txns', width: 45 },
+        { label: 'Total', width: 70 },
+        { label: 'Fuel', width: 70 },
+        { label: 'Other', width: 70 },
+        { label: 'Unknown', width: 70 },
+        { label: 'Cards', width: 50 },
+        { label: 'Card Labels', width: 170 }
+      ],
+      driverSummaryRows.map((r) => [
+        r.driver,
+        String(r.txns),
+        this.formatCurrency(r.total),
+        this.formatCurrency(r.fuel),
+        this.formatCurrency(r.other),
+        this.formatCurrency(r.unknown),
+        String(r.cards),
+        r.cardLabels
+      ])
+    );
+
+    drawSectionHeading('Individual Transactions');
+    drawTable(
+      [
+        { label: 'Date', width: 75 },
+        { label: 'Driver', width: 100 },
+        { label: 'Txn ID', width: 70 },
+        { label: 'Merchant', width: 115 },
+        { label: 'Location', width: 80 },
+        { label: 'Vehicle', width: 50 },
+        { label: 'Card', width: 60 },
+        { label: 'Category', width: 55 },
+        { label: 'Status', width: 50 },
+        { label: 'Amount', width: 65 }
+      ],
+      mapped.map((r) => [
+        r.date,
+        r.driver,
+        r.txnId,
+        r.merchant,
+        r.location,
+        r.vehicle,
+        r.card,
+        r.category,
+        r.status,
+        this.formatCurrency(r.amount)
+      ])
+    );
+
+    await this.openPdf('motiv-fuel-statement-report', doc);
+  }
+
+  private async generateComplianceDocSummaryReport(): Promise<void> {
+    const rows = await this.fetchRows('/api/v1/driver-documents/summary');
+    if (!rows.length) throw new Error('No rows');
+    const mapped = rows.map((r: any) => ({
+      category: this.toPdfSafeText(this.firstText(r?.category) || 'N/A'),
+      total: Math.max(0, Number(r?.total ?? 0) || 0),
+      active: Math.max(0, Number(r?.active ?? 0) || 0),
+      expiring: Math.max(0, Number(r?.expiring ?? 0) || 0),
+      expired: Math.max(0, Number(r?.expired ?? 0) || 0),
+      pending: Math.max(0, Number(r?.pending ?? 0) || 0)
+    })).sort((a, b) => b.total - a.total || a.category.localeCompare(b.category));
+    const totalDocs = mapped.reduce((sum, r) => sum + r.total, 0);
+    const totalExpiring = mapped.reduce((sum, r) => sum + r.expiring, 0);
+    const totalExpired = mapped.reduce((sum, r) => sum + r.expired, 0);
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    this.drawTableReport(
+      doc,
+      'Compliance Driver Documents Summary',
+      `Categories: ${mapped.length.toLocaleString()} | Docs: ${totalDocs.toLocaleString()} | Expiring: ${totalExpiring.toLocaleString()} | Expired: ${totalExpired.toLocaleString()}`,
+      [
+        { label: 'Category', width: 220 },
+        { label: 'Total', width: 80 },
+        { label: 'Active', width: 80 },
+        { label: 'Expiring', width: 80 },
+        { label: 'Expired', width: 80 },
+        { label: 'Pending', width: 80 }
+      ],
+      mapped.map((r) => [
+        r.category,
+        r.total.toLocaleString(),
+        r.active.toLocaleString(),
+        r.expiring.toLocaleString(),
+        r.expired.toLocaleString(),
+        r.pending.toLocaleString()
+      ])
+    );
+    await this.openPdf('compliance-doc-summary-report', doc);
+  }
+
+  private async generateComplianceExpiringDocsReport(): Promise<void> {
+    const rows = await this.fetchRows('/api/v1/driver-documents?limit=2000');
+    if (!rows.length) throw new Error('No rows');
+    const mapped = rows.map((r: any) => {
+      const status = this.toPdfSafeText(this.firstText(r?.status) || 'N/A');
+      const expiryAt = this.asTime(r?.expiryDate ?? r?.expiry_date ?? r?.ExpiryDate);
+      return {
+        driver: this.toPdfSafeText(this.firstText(r?.driverName, r?.driver_name, r?.driver?.name, r?.driverId) || 'N/A'),
+        category: this.toPdfSafeText(this.firstText(r?.category, r?.subCategory) || 'N/A'),
+        document: this.toPdfSafeText(this.firstText(r?.documentName, r?.document_name, r?.documentNumber) || 'N/A'),
+        status,
+        expiryAt,
+        expiry: this.formatDateTime(expiryAt),
+        updated: this.formatDateTime(r?.updatedAt ?? r?.updated_at)
+      };
+    }).filter((r) => {
+      const normalized = r.status.toLowerCase();
+      return normalized === 'expiring' || normalized === 'expired' || normalized === 'pending';
+    }).sort((a, b) => a.expiryAt - b.expiryAt);
+    if (!mapped.length) throw new Error('No rows');
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    this.drawTableReport(
+      doc,
+      'Compliance Expiring / Expired Documents',
+      `Rows: ${mapped.length.toLocaleString()} | Statuses: expiring, expired, pending`,
+      [
+        { label: 'Driver', width: 150 },
+        { label: 'Category', width: 130 },
+        { label: 'Document', width: 220 },
+        { label: 'Status', width: 90 },
+        { label: 'Expiry', width: 120 },
+        { label: 'Updated', width: 120 }
+      ],
+      mapped.map((r) => [r.driver, r.category, r.document, r.status, r.expiry, r.updated])
+    );
+    await this.openPdf('compliance-expiring-docs-report', doc);
+  }
+
+  private async generateHrRosterSummaryReport(): Promise<void> {
+    const payload = await this.fetchPayload('/api/v1/employee-roster/summary');
+    const totalEmployees = Math.max(0, Number(payload?.totalEmployees ?? 0) || 0);
+    const activeEmployees = Math.max(0, Number(payload?.activeEmployees ?? 0) || 0);
+    const byRole = this.extractRows(payload?.byRole).map((r: any) => ({
+      role: this.toPdfSafeText(this.firstText(r?.role) || 'N/A'),
+      count: Math.max(0, Number(r?.count ?? 0) || 0)
+    })).sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
+    const byDepartment = this.extractRows(payload?.byDepartment).map((r: any) => ({
+      department: this.toPdfSafeText(this.firstText(r?.department) || 'N/A'),
+      count: Math.max(0, Number(r?.count ?? 0) || 0)
+    })).sort((a, b) => b.count - a.count || a.department.localeCompare(b.department));
+    const entity = payload?.byEntity ?? {};
+    const corporate = Math.max(0, Number(entity?.corporate ?? 0) || 0);
+    const satellites = Math.max(0, Number(entity?.satellites ?? 0) || 0);
+    const agencies = Math.max(0, Number(entity?.agencies ?? 0) || 0);
+    const terminals = Math.max(0, Number(entity?.terminals ?? 0) || 0);
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    const summaryRows: string[][] = [
+      ['Entity', 'Corporate', corporate.toLocaleString()],
+      ['Entity', 'Satellites', satellites.toLocaleString()],
+      ['Entity', 'Agencies', agencies.toLocaleString()],
+      ['Entity', 'Terminals', terminals.toLocaleString()],
+      ...byRole.map((r) => ['Role', r.role, r.count.toLocaleString()]),
+      ...byDepartment.map((r) => ['Department', r.department, r.count.toLocaleString()])
     ];
     this.drawTableReport(
       doc,
-      'MOTIV Fuel Statement Report',
-      `Transactions: ${mapped.length.toLocaleString()} | Total: ${this.formatCurrency(total)}`,
-      columns,
-      mapped.map((r) => [r.date, r.merchant, r.driver, r.vehicle, this.formatCurrency(r.amount), r.status])
+      'HR Employee Roster Summary',
+      `Employees: ${totalEmployees.toLocaleString()} | Active: ${activeEmployees.toLocaleString()} | Roles: ${byRole.length.toLocaleString()} | Departments: ${byDepartment.length.toLocaleString()}`,
+      [
+        { label: 'Section', width: 120 },
+        { label: 'Name', width: 280 },
+        { label: 'Count', width: 100 }
+      ],
+      summaryRows
     );
-    await this.openPdf('motiv-fuel-statement-report', doc);
+    await this.openPdf('hr-roster-summary-report', doc);
+  }
+
+  private async generateHrTimeclockDailySummaryReport(): Promise<void> {
+    const payload = await this.fetchPayload('/api/v1/timeclock/daily-summary');
+    const rows = this.extractRows(payload?.data ?? payload);
+    if (!rows.length) throw new Error('No rows');
+    const mapped = rows.map((r: any) => ({
+      name: this.toPdfSafeText(this.firstText(r?.userName, r?.user_name) || 'N/A'),
+      email: this.toPdfSafeText(this.firstText(r?.userEmail, r?.user_email) || 'N/A'),
+      status: this.toPdfSafeText(this.firstText(r?.status) || 'N/A'),
+      sessions: Math.max(0, Number(r?.sessions ?? 0) || 0),
+      active: Math.max(0, Number(r?.activeSeconds ?? 0) || 0),
+      idle: Math.max(0, Number(r?.idleSeconds ?? 0) || 0),
+      total: Math.max(0, Number(r?.totalSeconds ?? 0) || 0),
+      firstLogin: this.formatDateTime(r?.firstLogin ?? r?.first_login),
+      lastLogout: this.formatDateTime(r?.lastLogout ?? r?.last_logout)
+    })).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    const totalTrackedSeconds = mapped.reduce((sum, r) => sum + r.total, 0);
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    this.drawTableReport(
+      doc,
+      'HR Time Clock Daily Summary',
+      `Rows: ${mapped.length.toLocaleString()} | Total tracked: ${this.formatDuration(totalTrackedSeconds)}`,
+      [
+        { label: 'Employee', width: 140 },
+        { label: 'Email', width: 170 },
+        { label: 'Status', width: 55 },
+        { label: 'Sessions', width: 55 },
+        { label: 'Active', width: 65 },
+        { label: 'Idle', width: 65 },
+        { label: 'Total', width: 65 },
+        { label: 'First Login', width: 100 },
+        { label: 'Last Logout', width: 100 }
+      ],
+      mapped.map((r) => [
+        r.name,
+        r.email,
+        r.status,
+        r.sessions.toLocaleString(),
+        this.formatDuration(r.active),
+        this.formatDuration(r.idle),
+        this.formatDuration(r.total),
+        r.firstLogin,
+        r.lastLogout
+      ])
+    );
+    await this.openPdf('hr-timeclock-daily-summary-report', doc);
   }
 
   private async generateApplicantsSummaryReport(rowsInput?: any[]): Promise<void> {
@@ -1401,6 +1962,10 @@ export class ReportsComponent {
     return this.extractRows(payload);
   }
 
+  private async fetchPayload(path: string): Promise<any> {
+    return await firstValueFrom(this.http.get<any>(`${this.apiUrl}${path}`));
+  }
+
   private extractRows(payload: any): any[] {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
@@ -1450,6 +2015,13 @@ export class ReportsComponent {
       currency: 'USD',
       minimumFractionDigits: 2
     }).format(Number.isFinite(value) ? value : 0);
+  }
+
+  private formatDuration(totalSeconds: number): string {
+    const safe = Math.max(0, Math.trunc(Number(totalSeconds || 0)));
+    const hours = Math.floor(safe / 3600);
+    const minutes = Math.floor((safe % 3600) / 60);
+    return `${hours}h ${minutes}m`;
   }
 
   private toPdfSafeText(value: string): string {
