@@ -984,14 +984,6 @@ export class ReportsComponent {
       count: g.rows.length,
       pct: mapped.length > 0 ? (g.rows.length / mapped.length) * 100 : 0
     }));
-    const maxSummarySources = 8;
-    const topSummaryRows = sourceSummaryRows.slice(0, maxSummarySources);
-    const remainingSummaryRows = sourceSummaryRows.slice(maxSummarySources);
-    const remainingCount = remainingSummaryRows.reduce((sum, row) => sum + row.count, 0);
-    const remainingPct = mapped.length > 0 ? (remainingCount / mapped.length) * 100 : 0;
-    const summaryChartRows = remainingCount > 0
-      ? [...topSummaryRows, { source: `Other (${remainingSummaryRows.length})`, count: remainingCount, pct: remainingPct }]
-      : topSummaryRows;
     const withCvCount = mapped.filter((x) => x.hasCv).length;
     const topSource = sourceSummaryRows[0];
     const buildSourceGroups = (rowsForSection: typeof mapped) =>
@@ -1012,6 +1004,31 @@ export class ReportsComponent {
       { section: 'Office', rows: officeRows, sources: buildSourceGroups(officeRows) },
       { section: 'Fleet', rows: fleetRows, sources: buildSourceGroups(fleetRows) }
     ].filter((x) => x.rows.length > 0);
+    const maxSummarySources = 8;
+    const buildSectionSummary = (sectionName: 'Office' | 'Fleet', rowsForSection: typeof mapped) => {
+      const ordered = buildSourceGroups(rowsForSection).map((group) => ({
+        source: group.source,
+        count: group.rows.length,
+        pct: rowsForSection.length > 0 ? (group.rows.length / rowsForSection.length) * 100 : 0
+      }));
+      const topRows = ordered.slice(0, maxSummarySources);
+      const otherRows = ordered.slice(maxSummarySources);
+      const otherCount = otherRows.reduce((sum, row) => sum + row.count, 0);
+      const otherPct = rowsForSection.length > 0 ? (otherCount / rowsForSection.length) * 100 : 0;
+      const rows = otherCount > 0
+        ? [...topRows, { source: `Other (${otherRows.length})`, count: otherCount, pct: otherPct }]
+        : topRows;
+      return {
+        section: sectionName,
+        sourceCount: ordered.length,
+        hasOther: otherCount > 0,
+        rows
+      };
+    };
+    const sourceSummaryBlocks = [
+      buildSectionSummary('Office', officeRows),
+      buildSectionSummary('Fleet', fleetRows)
+    ].filter((block) => block.rows.length > 0);
 
     const drawHeader = (): void => {
       doc.setFont('helvetica', 'bold');
@@ -1031,49 +1048,51 @@ export class ReportsComponent {
     };
 
     const drawSourceSummary = (): void => {
-      const title = remainingSummaryRows.length
-        ? `Per Source Summary (Top ${topSummaryRows.length} + Other)`
-        : 'Per Source Summary';
       const rowHeight = 13;
-      const summaryHeight = summaryChartRows.length * rowHeight + 22;
-      if (y + summaryHeight > bottom) {
-        doc.addPage();
-        y = 24;
-      }
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text(title, left, y);
-      y += 12;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-
       const chartLeft = left + 2;
       const labelWidth = 205;
       const barMaxWidth = 260;
       const valueX = chartLeft + labelWidth + barMaxWidth + 10;
-      const maxCount = Math.max(...summaryChartRows.map((x) => x.count), 1);
 
-      for (const [idx, summary] of summaryChartRows.entries()) {
-        const rowY = y + (idx * rowHeight);
-        const label = summary.source.length > 34 ? `${summary.source.slice(0, 31)}...` : summary.source;
-        const barX = chartLeft + labelWidth;
-        const barY = rowY + 1;
-        const fillWidth = Math.max(1, Math.round((summary.count / maxCount) * barMaxWidth));
+      for (const block of sourceSummaryBlocks) {
+        const title = block.hasOther
+          ? `${block.section} Source Summary (Top ${maxSummarySources} + Other)`
+          : `${block.section} Source Summary`;
+        const summaryHeight = block.rows.length * rowHeight + 26;
+        if (y + summaryHeight > bottom) {
+          doc.addPage();
+          y = 24;
+        }
 
-        doc.setTextColor(35, 47, 67);
-        doc.text(label, chartLeft, rowY + 8);
-        doc.setFillColor(232, 237, 246);
-        doc.rect(barX, barY, barMaxWidth, 8, 'F');
-        doc.setFillColor(77, 131, 245);
-        doc.rect(barX, barY, fillWidth, 8, 'F');
-        doc.setTextColor(30, 45, 75);
-        doc.text(`${summary.count.toLocaleString()} (${summary.pct.toFixed(1)}%)`, valueX, rowY + 8);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(`${title} - ${block.sourceCount} Sources`, left, y);
+        y += 12;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+
+        const maxCount = Math.max(...block.rows.map((x) => x.count), 1);
+        const barColor = block.section === 'Office' ? [77, 131, 245] : [16, 185, 129];
+        for (const [idx, summary] of block.rows.entries()) {
+          const rowY = y + (idx * rowHeight);
+          const label = summary.source.length > 34 ? `${summary.source.slice(0, 31)}...` : summary.source;
+          const barX = chartLeft + labelWidth;
+          const barY = rowY + 1;
+          const fillWidth = Math.max(1, Math.round((summary.count / maxCount) * barMaxWidth));
+
+          doc.setTextColor(35, 47, 67);
+          doc.text(label, chartLeft, rowY + 8);
+          doc.setFillColor(232, 237, 246);
+          doc.rect(barX, barY, barMaxWidth, 8, 'F');
+          doc.setFillColor(barColor[0], barColor[1], barColor[2]);
+          doc.rect(barX, barY, fillWidth, 8, 'F');
+          doc.setTextColor(30, 45, 75);
+          doc.text(`${summary.count.toLocaleString()} (${summary.pct.toFixed(1)}%)`, valueX, rowY + 8);
+        }
+        doc.setTextColor(0, 0, 0);
+        y += block.rows.length * rowHeight;
+        y += 10;
       }
-
-      doc.setTextColor(0, 0, 0);
-      y += summaryChartRows.length * rowHeight;
-      y += 8;
     };
 
     const drawDashTiles = (): void => {
