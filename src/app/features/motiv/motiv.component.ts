@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { timeout } from 'rxjs/operators';
 import { jsPDF } from 'jspdf';
 
-type MotivTab = 'api' | 'drivers' | 'activity' | 'vehicles' | 'users' | 'fuel' | 'fuel-cards';
+type MotivTab = 'api' | 'drivers' | 'activity' | 'vehicles' | 'users' | 'safety' | 'fuel' | 'fuel-cards';
 type MotivDriverTableRow = {
   name: string;
   email: string;
@@ -61,6 +61,18 @@ type MotivFuelCardRow = {
   currency: string;
   purchases: number;
   spend: number;
+};
+type MotivSafetyEventRow = {
+  eventId: string;
+  eventAt: string;
+  eventType: string;
+  severity: string;
+  driver: string;
+  vehicle: string;
+  location: string;
+  status: string;
+  hasVideo: boolean;
+  videoUrl: string;
 };
 type MotivActivityLogEntry = {
   id?: number;
@@ -163,15 +175,21 @@ type MotivStatusCache = {
         </button>
         <button
           class="tab-btn"
+          [class.active]="activeTab() === 'safety'"
+          (click)="setTab('safety')">
+          6. Safety Cam
+        </button>
+        <button
+          class="tab-btn"
           [class.active]="activeTab() === 'fuel'"
           (click)="setTab('fuel')">
-          6. Fuel
+          7. Fuel
         </button>
         <button
           class="tab-btn"
           [class.active]="activeTab() === 'fuel-cards'"
           (click)="setTab('fuel-cards')">
-          7. Fuel Cards
+          8. Fuel Cards
         </button>
       </div>
 
@@ -823,6 +841,105 @@ type MotivStatusCache = {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" *ngIf="activeTab() === 'safety'">
+        <h2>Safety & Dash Cam Events</h2>
+        <p>Driver performance safety events from MOTIV, including camera media availability.</p>
+        <div class="api-status">
+          <div class="driver-actions">
+            <button class="refresh-btn" (click)="loadSafetyEvents()" [disabled]="loadingSafety()">
+              {{ loadingSafety() ? 'Loading...' : 'Refresh Safety Events' }}
+            </button>
+            <select
+              class="filter-input filter-select"
+              [value]="safetyDaysFilter()"
+              (change)="setSafetyDaysFilter(+$any($event.target).value)">
+              <option [value]="7">Last 7 days</option>
+              <option [value]="14">Last 14 days</option>
+              <option [value]="30">Last 30 days</option>
+              <option [value]="90">Last 90 days</option>
+            </select>
+            <select
+              class="filter-input filter-select"
+              [value]="safetyVideoFilter()"
+              (change)="setSafetyVideoFilter($any($event.target).value)">
+              <option value="all">All Media</option>
+              <option value="with-video">With Video</option>
+              <option value="without-video">Without Video</option>
+            </select>
+          </div>
+          <p class="error" *ngIf="safetyError()">{{ safetyError() }}</p>
+          <div class="driver-glass-panel" *ngIf="safetyRows().length > 0">
+            <div class="driver-dashboard-cards">
+              <div class="driver-card total">
+                <span class="label">Events</span>
+                <span class="value">{{ filteredSafetyRows().length }}</span>
+              </div>
+              <div class="driver-card active">
+                <span class="label">With Video</span>
+                <span class="value">{{ safetyWithVideoCount() }}</span>
+              </div>
+              <div class="driver-card inactive">
+                <span class="label">Unique Drivers</span>
+                <span class="value">{{ safetyUniqueDriversCount() }}</span>
+              </div>
+              <div class="driver-card info">
+                <span class="label">Unique Vehicles</span>
+                <span class="value">{{ safetyUniqueVehiclesCount() }}</span>
+              </div>
+            </div>
+            <div class="driver-actions">
+              <input
+                class="filter-input"
+                type="text"
+                placeholder="Search events (driver, vehicle, event type, location)"
+                [value]="safetySearchTerm()"
+                (input)="setSafetySearchTerm($any($event.target).value)" />
+              <select
+                class="filter-input filter-select"
+                [value]="safetyTypeFilter()"
+                (change)="setSafetyTypeFilter($any($event.target).value)">
+                <option value="all">All Event Types</option>
+                <option *ngFor="let t of safetyEventTypeOptions()" [value]="t">{{ t }}</option>
+              </select>
+            </div>
+            <p class="count">Rows: {{ filteredSafetyRows().length }} / {{ safetyRows().length }}</p>
+          </div>
+
+          <div class="available-api-table-wrap" *ngIf="filteredSafetyRows().length > 0">
+            <table class="available-api-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Event</th>
+                  <th>Severity</th>
+                  <th>Driver</th>
+                  <th>Vehicle</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Media</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let row of filteredSafetyRows()">
+                  <td>{{ row.eventAt }}</td>
+                  <td>{{ row.eventType }}</td>
+                  <td>{{ row.severity }}</td>
+                  <td>{{ row.driver }}</td>
+                  <td>{{ row.vehicle }}</td>
+                  <td>{{ row.location }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>
+                    <a *ngIf="row.videoUrl; else noSafetyVideo" [href]="row.videoUrl" target="_blank" rel="noopener noreferrer">Open</a>
+                    <ng-template #noSafetyVideo>{{ row.hasVideo ? 'Available' : 'N/A' }}</ng-template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="count" *ngIf="!loadingSafety() && filteredSafetyRows().length === 0">No safety events found for the selected filters.</p>
         </div>
       </section>
 
@@ -1542,6 +1659,7 @@ export class MotivComponent implements OnInit {
   loadingDrivers = signal(false);
   loadingVehicles = signal(false);
   loadingUsers = signal(false);
+  loadingSafety = signal(false);
   loadingFuelCards = signal(false);
   savingDrivers = signal(false);
   syncingDrivers = signal(false);
@@ -1551,6 +1669,7 @@ export class MotivComponent implements OnInit {
   vehiclesError = signal('');
   vehicleLocationSyncMessage = signal('');
   usersError = signal('');
+  safetyError = signal('');
   fuelError = signal('');
   fuelCardsError = signal('');
   saveDriversMessage = signal('');
@@ -1563,6 +1682,7 @@ export class MotivComponent implements OnInit {
   motivDrivers = signal<any[]>([]);
   motivVehicles = signal<any[]>([]);
   motivUsers = signal<any[]>([]);
+  motivSafetyEvents = signal<any[]>([]);
   motivFuelPurchases = signal<any[]>([]);
   motivFuelCards = signal<any[]>([]);
   motivCardTransactions = signal<any[]>([]);
@@ -1607,6 +1727,10 @@ export class MotivComponent implements OnInit {
   userTypeFilter = signal<'all' | 'driver' | 'admin' | 'other'>('all');
   userPage = signal(1);
   userPageSize = signal(100);
+  safetySearchTerm = signal('');
+  safetyTypeFilter = signal<string>('all');
+  safetyVideoFilter = signal<'all' | 'with-video' | 'without-video'>('all');
+  safetyDaysFilter = signal(30);
   strictMode405 = signal(false);
   availableApis = signal<ApiHealthRow[]>(this.createApiRows());
   phase2Apis = signal<Phase2Row[]>(this.createPhase2Rows());
@@ -1782,6 +1906,64 @@ export class MotivComponent implements OnInit {
   );
   usersWithEmailCount = computed<number>(() =>
     this.userTableRows().filter(x => x.email && x.email.toLowerCase() !== 'n/a').length
+  );
+  safetyRows = computed<MotivSafetyEventRow[]>(() =>
+    this.motivSafetyEvents()
+      .map((raw) => this.mapSafetyEventRow(raw))
+      .sort((a, b) => {
+        const at = this.tryParseDate(a.eventAt)?.getTime() ?? 0;
+        const bt = this.tryParseDate(b.eventAt)?.getTime() ?? 0;
+        return bt - at;
+      })
+  );
+  safetyEventTypeOptions = computed<string[]>(() =>
+    Array.from(new Set(
+      this.safetyRows()
+        .map((row) => row.eventType)
+        .filter((value) => !!value && value.toLowerCase() !== 'n/a')
+    )).sort((a, b) => a.localeCompare(b))
+  );
+  filteredSafetyRows = computed<MotivSafetyEventRow[]>(() => {
+    const term = this.safetySearchTerm().trim().toLowerCase();
+    const type = this.safetyTypeFilter();
+    const video = this.safetyVideoFilter();
+
+    return this.safetyRows().filter((row) => {
+      const matchesSearch =
+        !term
+        || row.eventType.toLowerCase().includes(term)
+        || row.driver.toLowerCase().includes(term)
+        || row.vehicle.toLowerCase().includes(term)
+        || row.location.toLowerCase().includes(term)
+        || row.status.toLowerCase().includes(term)
+        || row.severity.toLowerCase().includes(term)
+        || row.eventId.toLowerCase().includes(term);
+
+      const matchesType = type === 'all' || row.eventType === type;
+      const matchesVideo =
+        video === 'all'
+        || (video === 'with-video' && row.hasVideo)
+        || (video === 'without-video' && !row.hasVideo);
+
+      return matchesSearch && matchesType && matchesVideo;
+    });
+  });
+  safetyWithVideoCount = computed<number>(() =>
+    this.filteredSafetyRows().filter((row) => row.hasVideo).length
+  );
+  safetyUniqueDriversCount = computed<number>(() =>
+    new Set(
+      this.filteredSafetyRows()
+        .map((row) => row.driver.toLowerCase())
+        .filter((value) => !!value && value !== 'n/a')
+    ).size
+  );
+  safetyUniqueVehiclesCount = computed<number>(() =>
+    new Set(
+      this.filteredSafetyRows()
+        .map((row) => row.vehicle.toLowerCase())
+        .filter((value) => !!value && value !== 'n/a')
+    ).size
   );
   userTotalPages = computed<number>(() =>
     Math.max(1, Math.ceil(this.filteredUserRows().length / this.userPageSize()))
@@ -2422,6 +2604,9 @@ export class MotivComponent implements OnInit {
     if (tab === 'users' && this.motivUsers().length === 0 && !this.loadingUsers()) {
       this.loadUsers();
     }
+    if (tab === 'safety' && this.motivSafetyEvents().length === 0 && !this.loadingSafety()) {
+      this.loadSafetyEvents();
+    }
     if (tab === 'fuel' && this.motivFuelPurchases().length === 0 && !this.loadingFuel()) {
       this.loadFuelPurchases();
     }
@@ -2664,6 +2849,7 @@ export class MotivComponent implements OnInit {
     setTimeout(() => {
       if (!this.loadingVehicles() && this.motivVehicles().length === 0) this.loadVehicles(true);
       if (!this.loadingUsers() && this.motivUsers().length === 0) this.loadUsers(true);
+      if (!this.loadingSafety() && this.motivSafetyEvents().length === 0) this.loadSafetyEvents(true);
       if (!this.loadingFuel() && this.motivFuelPurchases().length === 0) this.loadFuelPurchases(true);
       if (!this.loadingFuelCards() && this.motivFuelCards().length === 0) this.loadFuelCards(true);
       if (this.motivCardTransactions().length === 0) this.loadCardTransactions(true);
@@ -3553,6 +3739,25 @@ export class MotivComponent implements OnInit {
     });
   }
 
+  loadSafetyEvents(background = false): void {
+    this.loadingSafety.set(true);
+    if (!background) this.safetyError.set('');
+    const days = Math.max(1, Math.min(365, Number(this.safetyDaysFilter() || 30)));
+    this.http.get<any>(`${this.apiUrl}/api/v1/motiv/safety-events?days=${days}&limit=5000`).subscribe({
+      next: (res) => {
+        const payload = res?.data ?? res;
+        this.motivSafetyEvents.set(this.extractRows(payload));
+        this.loadingSafety.set(false);
+      },
+      error: (err) => {
+        if (!background) {
+          this.safetyError.set(err?.error?.error || 'Unable to load MOTIV safety events.');
+        }
+        this.loadingSafety.set(false);
+      }
+    });
+  }
+
   setDriverSearchTerm(value: string): void {
     this.driverSearchTerm.set(value ?? '');
     this.driverPage.set(1);
@@ -3690,6 +3895,24 @@ export class MotivComponent implements OnInit {
   setUserTypeFilter(value: 'all' | 'driver' | 'admin' | 'other'): void {
     this.userTypeFilter.set(value ?? 'all');
     this.userPage.set(1);
+  }
+
+  setSafetySearchTerm(value: string): void {
+    this.safetySearchTerm.set(value ?? '');
+  }
+
+  setSafetyTypeFilter(value: string): void {
+    this.safetyTypeFilter.set(value ?? 'all');
+  }
+
+  setSafetyVideoFilter(value: 'all' | 'with-video' | 'without-video'): void {
+    this.safetyVideoFilter.set(value ?? 'all');
+  }
+
+  setSafetyDaysFilter(value: number): void {
+    const normalized = Math.max(1, Math.min(365, Number(value || 30)));
+    this.safetyDaysFilter.set(normalized);
+    this.loadSafetyEvents();
   }
 
   setUserPageSize(value: number): void {
@@ -4249,6 +4472,106 @@ export class MotivComponent implements OnInit {
       status: String(user?.status ?? user?.Status ?? 'N/A'),
       role: roleLabel
     };
+  }
+
+  private mapSafetyEventRow(raw: any): MotivSafetyEventRow {
+    const event = raw?.driver_performance_event ?? raw?.event ?? raw ?? {};
+    const driver = event?.driver ?? raw?.driver ?? {};
+    const vehicle = event?.vehicle ?? raw?.vehicle ?? {};
+    const video = event?.downloadable_videos ?? event?.media?.downloadable_videos ?? raw?.downloadable_videos ?? {};
+    const eventType = this.firstText(
+      event?.event_type,
+      event?.type,
+      event?.primary_behavior?.[0],
+      event?.behaviors?.[0],
+      event?.coachable_behaviors?.[0]
+    ) || 'N/A';
+    const severity = this.firstText(
+      event?.severity,
+      event?.priority,
+      event?.risk_level,
+      event?.intensity
+    ) || 'N/A';
+    const status = this.firstText(
+      event?.coaching_status,
+      event?.status,
+      event?.state
+    ) || 'N/A';
+    const eventAtRaw = this.firstText(
+      event?.event_time,
+      event?.event_at,
+      event?.occurred_at,
+      event?.created_at,
+      event?.timestamp
+    );
+    const eventAt = this.formatSafetyTimestamp(eventAtRaw);
+
+    const driverName = this.firstText(
+      `${driver?.first_name ?? ''} ${driver?.last_name ?? ''}`.trim(),
+      driver?.name,
+      event?.driver_name,
+      event?.driver_id
+    ) || 'N/A';
+    const vehicleLabel = this.firstText(
+      vehicle?.number,
+      vehicle?.unit_number,
+      vehicle?.fleet_number,
+      event?.vehicle_number,
+      event?.vehicle_id
+    ) || 'N/A';
+    const location = this.firstText(
+      event?.location,
+      event?.city && event?.state ? `${event.city}, ${event.state}` : '',
+      event?.address,
+      event?.place_name
+    ) || 'N/A';
+
+    const videoUrl = this.firstText(
+      video?.dual_facing_enhanced_ai_url,
+      video?.dual_facing_plain_url,
+      video?.front_facing_plain_url,
+      video?.driver_facing_plain_url,
+      event?.video_url,
+      raw?.video_url
+    ) || '';
+
+    const hasVideo = !!videoUrl || !!event?.downloadable_videos || !!event?.media;
+
+    return {
+      eventId: this.firstText(event?.id, event?.event_id, event?.uuid) || 'N/A',
+      eventAt,
+      eventType: String(eventType),
+      severity: String(severity),
+      driver: String(driverName),
+      vehicle: String(vehicleLabel),
+      location: String(location),
+      status: String(status),
+      hasVideo,
+      videoUrl
+    };
+  }
+
+  private firstText(...values: any[]): string {
+    for (const value of values) {
+      if (Array.isArray(value)) {
+        const nested = this.firstText(...value);
+        if (nested) return nested;
+        continue;
+      }
+      const text = String(value ?? '').trim();
+      if (!text) continue;
+      const normalized = text.toLowerCase();
+      if (normalized === 'n/a' || normalized === 'null' || normalized === 'undefined') continue;
+      return text;
+    }
+    return '';
+  }
+
+  private formatSafetyTimestamp(value: string): string {
+    if (!value) return 'N/A';
+    const parsed = this.tryParseDate(value);
+    if (!parsed) return value;
+    return parsed.toLocaleString();
   }
 
   private isDriverUser(raw: any): boolean {

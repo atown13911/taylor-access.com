@@ -286,6 +286,89 @@ public class MotivController : ControllerBase
         return StatusCode(500, new { error = "MOTIV users request failed: no valid users path configured." });
     }
 
+    [HttpGet("safety-events")]
+    public async Task<IActionResult> GetSafetyEvents([FromQuery] int days = 30, [FromQuery] int limit = 2000)
+    {
+        var safeDays = Math.Clamp(days, 1, 365);
+        var safeLimit = Math.Clamp(limit, 1, 10000);
+        var endUtc = DateTime.UtcNow;
+        var startUtc = endUtc.AddDays(-safeDays);
+        var startDate = startUtc.ToString("yyyy-MM-dd");
+        var endDate = endUtc.ToString("yyyy-MM-dd");
+        var startIso = startUtc.ToString("O");
+        var endIso = endUtc.ToString("O");
+
+        var configuredPath = _config["MOTIV_SAFETY_EVENTS_PATH"]
+            ?? _config["MOTIV_DRIVER_PERFORMANCE_EVENTS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_SAFETY_EVENTS_PATH")
+            ?? Environment.GetEnvironmentVariable("MOTIV_DRIVER_PERFORMANCE_EVENTS_PATH");
+
+        var basePaths = new[]
+        {
+            configuredPath,
+            "/v2/driver_performance_events",
+            "/v1/driver_performance_events"
+        };
+
+        var candidatePaths = new List<string>();
+        foreach (var root in basePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            candidatePaths.Add(root);
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "start_date", startDate), "end_date", endDate));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "from_date", startDate), "to_date", endDate));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "start_time", startIso), "end_time", endIso));
+            candidatePaths.Add(UpsertQueryParam(UpsertQueryParam(root, "from", startIso), "to", endIso));
+        }
+
+        (bool Success, int StatusCode, string? Error, List<JsonElement> Rows)? lastFailure = null;
+        var attempted = new List<object>();
+        foreach (var path in candidatePaths
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var fetch = await FetchAllMotivRows(path, $"safety-events:{path}", perPage: 100, maxPages: 60);
+            attempted.Add(new { path, status = fetch.StatusCode, rows = fetch.Rows.Count, success = fetch.Success });
+            if (!fetch.Success)
+            {
+                lastFailure = fetch;
+                continue;
+            }
+
+            var scopedRows = fetch.Rows.Take(safeLimit).ToList();
+            return Ok(new
+            {
+                source = "motiv",
+                endpoint = "safety-events",
+                path,
+                days = safeDays,
+                startDate,
+                endDate,
+                rows = scopedRows.Count,
+                totalFetched = fetch.Rows.Count,
+                attempted,
+                data = JsonSerializer.SerializeToElement(scopedRows)
+            });
+        }
+
+        if (lastFailure.HasValue)
+        {
+            var fail = lastFailure.Value;
+            return StatusCode(fail.StatusCode, new
+            {
+                error = "MOTIV safety-events request failed.",
+                status = fail.StatusCode,
+                details = fail.Error,
+                attempted
+            });
+        }
+
+        return StatusCode(500, new { error = "MOTIV safety-events request failed: no valid safety events path configured.", attempted });
+    }
+
     [HttpGet("fuel-purchases")]
     public async Task<IActionResult> GetFuelPurchases()
     {
