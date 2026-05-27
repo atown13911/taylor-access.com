@@ -120,6 +120,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
     public DbSet<MotivDriverProfile> MotivDriverProfiles => Set<MotivDriverProfile>();
     public DbSet<MotivActivityLog> MotivActivityLogs => Set<MotivActivityLog>();
+    public DbSet<MotivSafetyEvent> MotivSafetyEvents => Set<MotivSafetyEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -211,6 +212,13 @@ public class TaylorAccessDbContext : DbContext
 
         modelBuilder.Entity<MotivDriverProfile>()
             .HasIndex(m => m.MotivUserId);
+
+        modelBuilder.Entity<MotivSafetyEvent>()
+            .HasIndex(m => m.ExternalId)
+            .IsUnique();
+
+        modelBuilder.Entity<MotivSafetyEvent>()
+            .HasIndex(m => m.EventAt);
 
         modelBuilder.Entity<PerformanceReview>()
             .HasIndex(r => new { r.OrganizationId, r.EmployeeId, r.Year, r.Month })

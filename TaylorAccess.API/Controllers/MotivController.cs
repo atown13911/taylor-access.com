@@ -339,6 +339,7 @@ public class MotivController : ControllerBase
             }
 
             var scopedRows = fetch.Rows.Take(safeLimit).ToList();
+            var upsert = await UpsertSafetyEventRows(scopedRows);
             return Ok(new
             {
                 source = "motiv",
@@ -349,6 +350,12 @@ public class MotivController : ControllerBase
                 endDate,
                 rows = scopedRows.Count,
                 totalFetched = fetch.Rows.Count,
+                persisted = new
+                {
+                    created = upsert.Created,
+                    updated = upsert.Updated,
+                    skipped = upsert.Skipped
+                },
                 attempted,
                 data = JsonSerializer.SerializeToElement(scopedRows)
             });
@@ -2136,6 +2143,140 @@ public class MotivController : ControllerBase
         }
 
         return allRows;
+    }
+
+    private async Task<(int Created, int Updated, int Skipped)> UpsertSafetyEventRows(List<JsonElement> rows)
+    {
+        var orgId = await ResolveOrganizationId();
+        var existing = await _db.MotivSafetyEvents.ToListAsync();
+        var byExternalId = existing
+            .Where(x => !string.IsNullOrWhiteSpace(x.ExternalId))
+            .GroupBy(x => x.ExternalId.Trim())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var created = 0;
+        var updated = 0;
+        var skipped = 0;
+
+        foreach (var row in rows)
+        {
+            var payload = PickNestedObject(row, "driver_performance_event")
+                ?? PickNestedObject(row, "event")
+                ?? row;
+            var driver = PickNestedObject(payload, "driver") ?? PickNestedObject(row, "driver");
+            var vehicle = PickNestedObject(payload, "vehicle") ?? PickNestedObject(row, "vehicle");
+            var downloadable = PickNestedObject(payload, "downloadable_videos");
+            var media = PickNestedObject(payload, "media");
+            var mediaDownloadable = media.HasValue ? PickNestedObject(media.Value, "downloadable_videos") : null;
+
+            var externalId =
+                PickString(payload, "id", "event_id", "uuid")
+                ?? PickString(row, "id", "event_id", "uuid")
+                ?? BuildSafetyEventCompositeKey(payload, row, driver, vehicle);
+            if (string.IsNullOrWhiteSpace(externalId))
+            {
+                skipped++;
+                continue;
+            }
+
+            var eventAt = ParseDateTime(
+                PickString(payload, "event_time", "event_at", "occurred_at", "created_at", "timestamp", "start_time", "startTime")
+                ?? PickString(row, "event_time", "event_at", "occurred_at", "created_at", "timestamp"));
+            var eventType = FirstNonEmptyString(
+                PickString(payload, "event_type", "type"),
+                PickString(payload, "primary_behavior"),
+                PickString(payload, "coachable_behavior"),
+                PickString(row, "event_type", "type"));
+            var severity = FirstNonEmptyString(
+                PickString(payload, "severity", "priority", "risk_level", "intensity"),
+                PickString(row, "severity", "priority", "risk_level"));
+            var status = FirstNonEmptyString(
+                PickString(payload, "coaching_status", "status", "state"),
+                PickString(row, "coaching_status", "status", "state"));
+            var driverName = FirstNonEmptyString(
+                driver.HasValue ? BuildName(PickString(driver.Value, "first_name", "firstName"), PickString(driver.Value, "last_name", "lastName"), PickString(driver.Value, "name")) : null,
+                PickString(payload, "driver_name", "driver_id"),
+                PickString(row, "driver_name", "driver_id"));
+            var vehicleLabel = FirstNonEmptyString(
+                vehicle.HasValue ? PickString(vehicle.Value, "number", "unit_number", "fleet_number", "vehicle_id", "id") : null,
+                PickString(payload, "vehicle_number", "vehicle_id"),
+                PickString(row, "vehicle_number", "vehicle_id"));
+            var location = FirstNonEmptyString(
+                PickString(payload, "location", "address", "place_name"),
+                PickString(row, "location", "address", "place_name"),
+                BuildCityState(PickString(payload, "city"), PickString(payload, "state")));
+            var videoUrl = FirstNonEmptyString(
+                downloadable.HasValue ? PickString(downloadable.Value, "dual_facing_enhanced_ai_url", "dual_facing_plain_url", "front_facing_plain_url", "driver_facing_plain_url") : null,
+                mediaDownloadable.HasValue ? PickString(mediaDownloadable.Value, "dual_facing_enhanced_ai_url", "dual_facing_plain_url", "front_facing_plain_url", "driver_facing_plain_url") : null,
+                PickString(payload, "video_url"),
+                PickString(row, "video_url"));
+            var hasVideo = !string.IsNullOrWhiteSpace(videoUrl) || downloadable.HasValue || media.HasValue;
+
+            if (!byExternalId.TryGetValue(externalId, out var target))
+            {
+                target = new MotivSafetyEvent
+                {
+                    OrganizationId = orgId == 0 ? null : orgId,
+                    ExternalId = externalId.Trim(),
+                    EventAt = eventAt,
+                    EventType = eventType,
+                    Severity = severity,
+                    DriverName = driverName,
+                    VehicleLabel = vehicleLabel,
+                    Location = location,
+                    Status = status,
+                    HasVideo = hasVideo,
+                    VideoUrl = videoUrl,
+                    RawJson = row.ToString(),
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.MotivSafetyEvents.Add(target);
+                byExternalId[externalId] = target;
+                created++;
+            }
+            else
+            {
+                target.OrganizationId = orgId == 0 ? target.OrganizationId : orgId;
+                target.EventAt = eventAt ?? target.EventAt;
+                target.EventType = eventType ?? target.EventType;
+                target.Severity = severity ?? target.Severity;
+                target.DriverName = driverName ?? target.DriverName;
+                target.VehicleLabel = vehicleLabel ?? target.VehicleLabel;
+                target.Location = location ?? target.Location;
+                target.Status = status ?? target.Status;
+                target.HasVideo = hasVideo || target.HasVideo;
+                target.VideoUrl = videoUrl ?? target.VideoUrl;
+                target.RawJson = row.ToString();
+                target.UpdatedAt = DateTime.UtcNow;
+                updated++;
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return (created, updated, skipped);
+    }
+
+    private static string? BuildSafetyEventCompositeKey(
+        JsonElement payload,
+        JsonElement row,
+        JsonElement? driver,
+        JsonElement? vehicle)
+    {
+        var eventAt = PickString(payload, "event_time", "event_at", "occurred_at", "created_at", "timestamp", "start_time", "startTime")
+            ?? PickString(row, "event_time", "event_at", "occurred_at", "created_at", "timestamp");
+        var eventType = PickString(payload, "event_type", "type") ?? PickString(row, "event_type", "type");
+        var driverName = FirstNonEmptyString(
+            driver.HasValue ? BuildName(PickString(driver.Value, "first_name", "firstName"), PickString(driver.Value, "last_name", "lastName"), PickString(driver.Value, "name")) : null,
+            PickString(payload, "driver_name", "driver_id"),
+            PickString(row, "driver_name", "driver_id"));
+        var vehicleLabel = FirstNonEmptyString(
+            vehicle.HasValue ? PickString(vehicle.Value, "number", "unit_number", "fleet_number", "vehicle_id", "id") : null,
+            PickString(payload, "vehicle_number", "vehicle_id"),
+            PickString(row, "vehicle_number", "vehicle_id"));
+
+        var key = $"{eventAt}|{eventType}|{driverName}|{vehicleLabel}".Trim('|');
+        return string.IsNullOrWhiteSpace(key) ? null : key;
     }
 
     private async Task<(int Created, int Updated, int Skipped)> UpsertFuelPurchaseRows(List<JsonElement> rows)
