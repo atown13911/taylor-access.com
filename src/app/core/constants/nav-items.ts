@@ -101,6 +101,7 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   { label: 'Structure', icon: 'bx-sitemap', route: '/structure' },
   { label: 'Roles & Permissions', icon: 'bx-lock-alt', route: '/admin/roles' },
   { label: 'Audit Logs', icon: 'bx-history', route: '/admin/audit' },
+  { label: 'Admin Reports', icon: 'bx-bar-chart-alt-2', route: '/admin/reports' },
   { label: 'Invite Users', icon: 'bx-user-plus', route: '/admin/invitations' },
   // Accounting
   { label: 'General Ledger', icon: 'bx-book', route: '/accounting/general-ledger', section: 'Accounting' },

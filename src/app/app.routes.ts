@@ -148,6 +148,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin-security/admin/audit-log/audit-log.component').then(m => m.AuditLogComponent)
       },
       {
+        path: 'admin/reports',
+        loadComponent: () => import('./features/admin-security/reports/reports.component').then(m => m.ReportsComponent)
+      },
+      {
         path: 'admin/apps',
         loadComponent: () => import('./features/admin-security/connected-apps/connected-apps.component').then(m => m.ConnectedAppsComponent)
       },
