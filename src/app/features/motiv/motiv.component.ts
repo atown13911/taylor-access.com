@@ -1020,7 +1020,7 @@ type MotivStatusCache = {
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let row of filteredSafetyRows()">
+                <tr *ngFor="let row of pagedSafetyRows()">
                   <td>{{ row.eventAt }}</td>
                   <td>{{ row.eventType }}</td>
                   <td>{{ row.severity }}</td>
@@ -1035,6 +1035,25 @@ type MotivStatusCache = {
                 </tr>
               </tbody>
             </table>
+            <div class="table-pagination">
+              <div class="page-meta">
+                Showing {{ safetyPageStartIndex() }}-{{ safetyPageEndIndex() }} of {{ filteredSafetyRows().length }}
+              </div>
+              <div class="page-controls">
+                <select
+                  class="filter-input filter-select page-size-select"
+                  [value]="safetyPageSize()"
+                  (change)="setSafetyPageSize(+$any($event.target).value)">
+                  <option [value]="10">10 / page</option>
+                  <option [value]="25">25 / page</option>
+                  <option [value]="50">50 / page</option>
+                  <option [value]="100">100 / page</option>
+                </select>
+                <button class="refresh-btn" (click)="goToPreviousSafetyPage()" [disabled]="safetyPage() <= 1">Prev</button>
+                <span class="page-counter">Page {{ safeSafetyPage() }} / {{ safetyTotalPages() }}</span>
+                <button class="refresh-btn" (click)="goToNextSafetyPage()" [disabled]="safeSafetyPage() >= safetyTotalPages()">Next</button>
+              </div>
+            </div>
           </div>
           <p class="count" *ngIf="!loadingSafety() && filteredSafetyRows().length === 0">No safety events found for the selected filters.</p>
         </div>
@@ -1955,6 +1974,8 @@ export class MotivComponent implements OnInit {
   safetyTypeFilter = signal<string>('all');
   safetyVideoFilter = signal<'all' | 'with-video' | 'without-video'>('all');
   safetyDaysFilter = signal(30);
+  safetyPage = signal(1);
+  safetyPageSize = signal(100);
   safetyReportModalOpen = signal(false);
   safetyReportScope = signal<SafetyReportScope>('active');
   safetyReportFormat = signal<SafetyReportFormat>('detailed');
@@ -2229,6 +2250,28 @@ export class MotivComponent implements OnInit {
         .filter((value) => !!value && value !== 'n/a')
     ).size
   );
+  safetyTotalPages = computed<number>(() =>
+    Math.max(1, Math.ceil(this.filteredSafetyRows().length / this.safetyPageSize()))
+  );
+  safeSafetyPage = computed<number>(() =>
+    Math.max(1, Math.min(this.safetyPage(), this.safetyTotalPages()))
+  );
+  pagedSafetyRows = computed<MotivSafetyEventRow[]>(() => {
+    const page = this.safeSafetyPage();
+    const pageSize = this.safetyPageSize();
+    const start = (page - 1) * pageSize;
+    return this.filteredSafetyRows().slice(start, start + pageSize);
+  });
+  safetyPageStartIndex = computed<number>(() => {
+    const total = this.filteredSafetyRows().length;
+    if (!total) return 0;
+    return (this.safeSafetyPage() - 1) * this.safetyPageSize() + 1;
+  });
+  safetyPageEndIndex = computed<number>(() => {
+    const total = this.filteredSafetyRows().length;
+    if (!total) return 0;
+    return Math.min(this.safeSafetyPage() * this.safetyPageSize(), total);
+  });
   userTotalPages = computed<number>(() =>
     Math.max(1, Math.ceil(this.filteredUserRows().length / this.userPageSize()))
   );
@@ -4593,6 +4636,7 @@ export class MotivComponent implements OnInit {
 
   loadSafetyEvents(background = false): void {
     this.loadingSafety.set(true);
+    this.safetyPage.set(1);
     if (!background) this.safetyError.set('');
     const days = Math.max(1, Math.min(365, Number(this.safetyDaysFilter() || 30)));
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/safety-events?days=${days}&limit=5000`).subscribe({
@@ -4751,20 +4795,37 @@ export class MotivComponent implements OnInit {
 
   setSafetySearchTerm(value: string): void {
     this.safetySearchTerm.set(value ?? '');
+    this.safetyPage.set(1);
   }
 
   setSafetyTypeFilter(value: string): void {
     this.safetyTypeFilter.set(value ?? 'all');
+    this.safetyPage.set(1);
   }
 
   setSafetyVideoFilter(value: 'all' | 'with-video' | 'without-video'): void {
     this.safetyVideoFilter.set(value ?? 'all');
+    this.safetyPage.set(1);
   }
 
   setSafetyDaysFilter(value: number): void {
     const normalized = Math.max(1, Math.min(365, Number(value || 30)));
     this.safetyDaysFilter.set(normalized);
     this.loadSafetyEvents();
+  }
+
+  setSafetyPageSize(value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.safetyPageSize.set(value);
+    this.safetyPage.set(1);
+  }
+
+  goToPreviousSafetyPage(): void {
+    this.safetyPage.set(Math.max(1, this.safeSafetyPage() - 1));
+  }
+
+  goToNextSafetyPage(): void {
+    this.safetyPage.set(Math.min(this.safetyTotalPages(), this.safeSafetyPage() + 1));
   }
 
   setUserPageSize(value: number): void {
