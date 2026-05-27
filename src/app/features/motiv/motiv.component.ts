@@ -82,6 +82,7 @@ type MotivActivityLogEntry = {
   details: string;
   driverName?: string | null;
 };
+type ActivityReportScope = 'active' | 'inactive' | 'specific';
 type FuelWeekOption = {
   key: string;
   label: string;
@@ -426,7 +427,11 @@ type MotivStatusCache = {
           <button class="refresh-btn" (click)="refreshActivityTab()" [disabled]="loadingDrivers() || syncingDrivers()">
             {{ loadingDrivers() || syncingDrivers() ? 'Refreshing...' : 'Refresh Activity' }}
           </button>
+          <button class="refresh-btn" (click)="openActivityReportModal()" [disabled]="generatingActivityReport()">
+            {{ generatingActivityReport() ? 'Generating...' : 'Activity Report' }}
+          </button>
         </div>
+        <p class="error" *ngIf="activityReportError()">{{ activityReportError() }}</p>
         <div class="api-status">
           <div class="activity-layout">
             <div class="activity-left">
@@ -628,6 +633,42 @@ type MotivStatusCache = {
                 </div>
               </div>
               <p class="count" *ngIf="activityLogRows().length === 0">No activity logs yet.</p>
+            </div>
+          </div>
+        </div>
+        <div class="activity-report-modal-backdrop" *ngIf="activityReportModalOpen()" (click)="closeActivityReportModal()">
+          <div class="activity-report-modal" (click)="$event.stopPropagation()">
+            <h3>Activity Report Options</h3>
+            <p>Select which driver scope you want included in the activity report.</p>
+            <div class="activity-report-grid">
+              <label>
+                Scope
+                <select
+                  class="filter-input filter-select"
+                  [value]="activityReportScope()"
+                  (change)="setActivityReportScope($any($event.target).value)">
+                  <option value="active">All Active Drivers</option>
+                  <option value="inactive">All Inactive Drivers</option>
+                  <option value="specific">Specific Driver</option>
+                </select>
+              </label>
+              <label *ngIf="activityReportScope() === 'specific'">
+                Driver
+                <select
+                  class="filter-input filter-select"
+                  [value]="activityReportSpecificDriver()"
+                  (change)="activityReportSpecificDriver.set($any($event.target).value)">
+                  <option value="">Select Driver</option>
+                  <option *ngFor="let name of activityReportDriverOptions()" [value]="name">{{ name }}</option>
+                </select>
+              </label>
+            </div>
+            <p class="error" *ngIf="activityReportModalError()">{{ activityReportModalError() }}</p>
+            <div class="activity-report-actions">
+              <button class="refresh-btn" (click)="closeActivityReportModal()">Cancel</button>
+              <button class="refresh-btn" (click)="generateActivityReport()" [disabled]="generatingActivityReport()">
+                {{ generatingActivityReport() ? 'Generating...' : 'Generate Report' }}
+              </button>
             </div>
           </div>
         </div>
@@ -1601,6 +1642,55 @@ type MotivStatusCache = {
       font-size: 12px;
       line-height: 1.35;
     }
+    .activity-report-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.68);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+      padding: 16px;
+    }
+    .activity-report-modal {
+      width: min(560px, 100%);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.96);
+      box-shadow: 0 12px 34px rgba(2, 6, 23, 0.55);
+      padding: 14px;
+    }
+    .activity-report-modal h3 {
+      margin: 0 0 8px;
+      color: #dbeafe;
+      font-size: 15px;
+    }
+    .activity-report-modal p {
+      margin: 0 0 10px;
+      color: #93c5fd;
+      font-size: 12px;
+    }
+    .activity-report-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .activity-report-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+    .activity-report-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
     @media (max-width: 1200px) {
       .activity-layout {
         grid-template-columns: 1fr;
@@ -1661,6 +1751,7 @@ export class MotivComponent implements OnInit {
   loadingUsers = signal(false);
   loadingSafety = signal(false);
   loadingFuelCards = signal(false);
+  generatingActivityReport = signal(false);
   savingDrivers = signal(false);
   syncingDrivers = signal(false);
   loadingFuel = signal(false);
@@ -1672,6 +1763,8 @@ export class MotivComponent implements OnInit {
   safetyError = signal('');
   fuelError = signal('');
   fuelCardsError = signal('');
+  activityReportError = signal('');
+  activityReportModalError = signal('');
   saveDriversMessage = signal('');
   saveDriversError = signal('');
   syncStatusMessage = signal('Ready.');
@@ -1695,6 +1788,9 @@ export class MotivComponent implements OnInit {
   activityDateToFilter = signal('');
   activityKindFilter = signal<'all' | 'info' | 'success' | 'warning' | 'error'>('all');
   activityScopeFilter = signal<'all' | 'driver' | 'system'>('all');
+  activityReportModalOpen = signal(false);
+  activityReportScope = signal<ActivityReportScope>('active');
+  activityReportSpecificDriver = signal('');
   loadedDriverRows = signal(0);
   driverSearchTerm = signal('');
   driverStatusFilter = signal<'all' | 'active' | 'deactivated'>('active');
@@ -2122,6 +2218,13 @@ export class MotivComponent implements OnInit {
 
     return rows;
   });
+  activityReportDriverOptions = computed<string[]>(() =>
+    Array.from(new Set(
+      this.driverTableRows()
+        .map((row) => String(row.name || '').trim())
+        .filter((name) => !!name && name.toLowerCase() !== 'n/a')
+    )).sort((a, b) => a.localeCompare(b))
+  );
   driverSyncStatusTone = computed<'connected' | 'not-connected' | 'checking'>(() => {
     if (this.syncingDrivers() || this.savingDrivers()) return 'checking';
     if (this.saveDriversError()) return 'not-connected';
@@ -2700,6 +2803,196 @@ export class MotivComponent implements OnInit {
     this.activityDateToFilter.set('');
   }
 
+  openActivityReportModal(): void {
+    this.activityReportError.set('');
+    this.activityReportModalError.set('');
+    const selected = String(this.selectedActivityDriverName() || '').trim();
+    if (selected) {
+      this.activityReportScope.set('specific');
+      this.activityReportSpecificDriver.set(selected);
+    } else {
+      this.activityReportScope.set('active');
+      this.activityReportSpecificDriver.set('');
+    }
+    this.activityReportModalOpen.set(true);
+  }
+
+  closeActivityReportModal(): void {
+    this.activityReportModalOpen.set(false);
+    this.activityReportModalError.set('');
+  }
+
+  setActivityReportScope(value: ActivityReportScope): void {
+    const normalized: ActivityReportScope =
+      value === 'inactive' || value === 'specific'
+        ? value
+        : 'active';
+    this.activityReportScope.set(normalized);
+    this.activityReportModalError.set('');
+    if (normalized !== 'specific') {
+      this.activityReportSpecificDriver.set('');
+    }
+  }
+
+  async generateActivityReport(): Promise<void> {
+    this.activityReportModalError.set('');
+    this.activityReportError.set('');
+    this.generatingActivityReport.set(true);
+    try {
+      const reportRows = this.getActivityReportRows();
+      if (reportRows.length === 0) {
+        this.activityReportModalError.set('No activity records found for that report scope.');
+        return;
+      }
+
+      const scope = this.activityReportScope();
+      const scopeLabel =
+        scope === 'active'
+          ? 'All Active Drivers'
+          : scope === 'inactive'
+            ? 'All Inactive Drivers'
+            : `Specific Driver: ${this.activityReportSpecificDriver()}`;
+      const filename = `motiv-activity-report-${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`;
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'letter'
+      });
+      const left = 28;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const bottom = pageHeight - 24;
+      let y = 34;
+
+      const drawHeader = () => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.text('MOTIV Activity Report', left, y);
+        y += 14;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Scope: ${scopeLabel}`, left, y);
+        y += 12;
+        doc.text(`Generated: ${new Date().toLocaleString()}`, left, y);
+        y += 12;
+        doc.text(`Rows: ${reportRows.length.toLocaleString()}`, left, y);
+        y += 16;
+      };
+
+      const columns = [
+        { label: 'Time', width: 110 },
+        { label: 'Driver', width: 120 },
+        { label: 'Type', width: 64 },
+        { label: 'Event', width: 260 },
+        { label: 'Previous Location', width: 120 },
+        { label: 'Current Location', width: 120 }
+      ];
+
+      const ensureSpace = (lines: number): void => {
+        const needed = Math.max(1, lines) * 11 + 8;
+        if (y + needed > bottom) {
+          doc.addPage();
+          y = 24;
+          drawTableHeader();
+        }
+      };
+
+      const drawTableHeader = () => {
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(8.5);
+        let x = left;
+        for (const col of columns) {
+          doc.text(col.label, x, y);
+          x += col.width;
+        }
+        y += 11;
+        doc.setDrawColor(165, 165, 165);
+        doc.line(left, y - 7, pageWidth - left, y - 7);
+        doc.setFont('courier', 'normal');
+      };
+
+      const drawRow = (values: string[]): void => {
+        const wrapped = columns.map((col, idx) => {
+          const content = String(values[idx] ?? '');
+          const lines = doc.splitTextToSize(content, Math.max(8, col.width - 4));
+          return (lines.length ? lines : ['']) as string[];
+        });
+        const lineCount = wrapped.reduce((max, arr) => Math.max(max, arr.length), 1);
+        ensureSpace(lineCount);
+        for (let line = 0; line < lineCount; line += 1) {
+          let x = left;
+          for (let i = 0; i < columns.length; i += 1) {
+            doc.text(wrapped[i][line] ?? '', x, y);
+            x += columns[i].width;
+          }
+          y += 11;
+        }
+        y += 2;
+      };
+
+      drawHeader();
+      drawTableHeader();
+      for (const row of reportRows) {
+        drawRow([
+          this.formatActivityTimestamp(row.timestamp),
+          String(row.driverName || 'General'),
+          row.kind.toUpperCase(),
+          `${row.title} - ${this.formatActivitySummary(row.details)}`,
+          this.extractPreviousLocation(row.details),
+          this.extractCurrentLocation(row.details)
+        ]);
+      }
+
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const popup = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!popup) {
+        await this.saveBlobFile(filename, blob, 'application/pdf', ['.pdf']);
+        URL.revokeObjectURL(url);
+      } else {
+        setTimeout(() => URL.revokeObjectURL(url), 120000);
+      }
+
+      this.activityReportModalOpen.set(false);
+    } catch {
+      this.activityReportError.set('Unable to generate activity report.');
+    } finally {
+      this.generatingActivityReport.set(false);
+    }
+  }
+
+  private getActivityReportRows(): MotivActivityLogEntry[] {
+    const rows = this.activityLogRows();
+    const scope = this.activityReportScope();
+    const normalizedDriverName = String(this.activityReportSpecificDriver() || '').trim().toLowerCase();
+
+    if (scope === 'specific') {
+      if (!normalizedDriverName) {
+        this.activityReportModalError.set('Choose a specific driver to generate the report.');
+        return [];
+      }
+      return rows.filter((row) => String(row.driverName || '').trim().toLowerCase() === normalizedDriverName);
+    }
+
+    const allowedNames = new Set(
+      this.driverTableRows()
+        .filter((row) => {
+          const status = String(row.status || '').trim().toLowerCase();
+          return scope === 'active'
+            ? this.isActiveLikeStatus(status)
+            : this.isVehicleDeactivatedStatus(status) || status === 'deactivated';
+        })
+        .map((row) => String(row.name || '').trim().toLowerCase())
+        .filter((name) => !!name)
+    );
+
+    return rows.filter((row) => {
+      const name = String(row.driverName || '').trim().toLowerCase();
+      if (!name) return false;
+      return allowedNames.has(name);
+    });
+  }
+
   private loadPersistedActivityLogs(allowBackfill = true): void {
     this.http.get<any>(`${this.apiUrl}/api/v1/motiv/activity-logs?limit=5000`).subscribe({
       next: (res) => {
@@ -2939,10 +3232,7 @@ export class MotivComponent implements OnInit {
       next: (res) => {
         const payload = res?.data ?? res;
         const rows = this.extractRows(payload);
-        // Mirror the Drivers page "Active" panel semantics in MOTIV.
-        const activeDriverRows = rows.filter((row: any) =>
-          this.isActiveLikeStatus(this.mapDriverRow(row).status)
-        );
+        const scopedDriverRows = rows;
         Promise.allSettled([
           this.fetchVehicleLocationRows(),
           this.fetchMotivDriverRows()
@@ -2956,7 +3246,7 @@ export class MotivComponent implements OnInit {
               : [];
             const motivDriverRowsEnriched = this.enrichDriverRowsWithLocations(motivDriverRows, locationPayload.rows);
 
-            let enrichedDriverRows = this.enrichDriverRowsWithLocations(activeDriverRows, locationPayload.rows);
+            let enrichedDriverRows = this.enrichDriverRowsWithLocations(scopedDriverRows, locationPayload.rows);
             enrichedDriverRows = this.mergeDriverRowsWithMotivRows(enrichedDriverRows, motivDriverRowsEnriched, locationPayload.rows);
 
             const withLocationCount = enrichedDriverRows.reduce((count, row) => {
@@ -2983,7 +3273,7 @@ export class MotivComponent implements OnInit {
               .map((row) => row.location);
 
             // #region agent log
-            fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H4',location:'motiv.component.ts:loadDriversFromDb:withLocationCount',message:'Post-merge driver location coverage',data:{activeDriverRows:activeDriverRows.length,locationRows:locationPayload.rows.length,motivDriverRows:motivDriverRows.length,enrichedDriverRows:enrichedDriverRows.length,withLocationCount},timestamp:Date.now()})}).catch(()=>{});
+            fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H4',location:'motiv.component.ts:loadDriversFromDb:withLocationCount',message:'Post-merge driver location coverage',data:{driverRows:scopedDriverRows.length,locationRows:locationPayload.rows.length,motivDriverRows:motivDriverRows.length,enrichedDriverRows:enrichedDriverRows.length,withLocationCount},timestamp:Date.now()})}).catch(()=>{});
             // #endregion
             // #region agent log
             fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId:'run-activity-location',hypothesisId:'H6',location:'motiv.component.ts:loadDriversFromDb:latLonOnly',message:'Lat/lon-only location coverage (reverse geocode candidate)',data:{totalMapped:mappedRows.length,latLonOnlyCount,sampleLatLon},timestamp:Date.now()})}).catch(()=>{});
@@ -2992,11 +3282,11 @@ export class MotivComponent implements OnInit {
             this.motivDrivers.set(enrichedDriverRows);
             this.loadedDriverRows.set(enrichedDriverRows.length);
             this.loadingDrivers.set(false);
-            this.syncStatusMessage.set(`Loaded ${enrichedDriverRows.length} active driver rows from Drivers DB (${withLocationCount} with location).`);
+            this.syncStatusMessage.set(`Loaded ${enrichedDriverRows.length} driver rows from Drivers DB (${withLocationCount} with location).`);
             this.appendActivityLog(
               'info',
               'Drivers loaded from Access DB',
-              `${enrichedDriverRows.length} active rows loaded (${withLocationCount} with location)${runBackgroundSync ? ' (background sync queued)' : ''}.`
+              `${enrichedDriverRows.length} rows loaded (${withLocationCount} with location)${runBackgroundSync ? ' (background sync queued)' : ''}.`
             );
             this.saveDriverSnapshotActivity(this.driverTableRows());
             if (runBackgroundSync) {
@@ -3004,10 +3294,10 @@ export class MotivComponent implements OnInit {
             }
           })
           .catch(() => {
-            this.motivDrivers.set(activeDriverRows);
-            this.loadedDriverRows.set(activeDriverRows.length);
+            this.motivDrivers.set(scopedDriverRows);
+            this.loadedDriverRows.set(scopedDriverRows.length);
             this.loadingDrivers.set(false);
-            this.syncStatusMessage.set(`Loaded ${activeDriverRows.length} active driver rows from Drivers DB.`);
+            this.syncStatusMessage.set(`Loaded ${scopedDriverRows.length} driver rows from Drivers DB.`);
             this.saveDriverSnapshotActivity(this.driverTableRows());
             if (runBackgroundSync) {
               this.autoSyncDriversToDb();
@@ -3296,6 +3586,22 @@ export class MotivComponent implements OnInit {
 
       return {
         ...driver,
+        status: this.mergePreferredValue(
+          driver?.status ?? driver?.Status,
+          matched?.status ?? matched?.Status ?? matched?.user?.status ?? matched?.user?.Status
+        ),
+        isActive: this.mergePreferredValue(
+          driver?.isActive ?? driver?.IsActive ?? driver?.active ?? driver?.Active,
+          matched?.isActive ?? matched?.IsActive ?? matched?.active ?? matched?.Active ?? matched?.user?.isActive ?? matched?.user?.is_active
+        ),
+        isDeleted: this.mergePreferredValue(
+          driver?.isDeleted ?? driver?.IsDeleted,
+          matched?.isDeleted ?? matched?.IsDeleted
+        ),
+        deactivatedAt: this.mergePreferredValue(
+          driver?.deactivatedAt ?? driver?.DeactivatedAt,
+          matched?.deactivatedAt ?? matched?.DeactivatedAt
+        ),
         current_location: this.mergePreferredValue(driver?.current_location, mergedLocation),
         currentLocation: this.mergePreferredValue(driver?.currentLocation, mergedLocation),
         location: this.mergePreferredValue(driver?.location, mergedLocation ?? (matchedLocationText !== 'N/A' ? matchedLocationText : null)),
@@ -4309,14 +4615,14 @@ export class MotivComponent implements OnInit {
   }
 
   private buildDriverDedupKey(row: MotivDriverTableRow): string {
-    const email = String(row.email || '').trim().toLowerCase();
-    if (email && email !== 'n/a') {
-      return `email:${email}`;
-    }
-
     const name = String(row.name || '').trim().toLowerCase();
     if (name && name !== 'n/a') {
       return `name:${name}`;
+    }
+
+    const email = String(row.email || '').trim().toLowerCase();
+    if (email && email !== 'n/a') {
+      return `email:${email}`;
     }
 
     const phone = String(row.phone || '').trim().toLowerCase();
