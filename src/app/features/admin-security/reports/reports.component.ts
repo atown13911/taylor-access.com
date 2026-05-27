@@ -12,6 +12,7 @@ type MotivReportRow = {
   output: string;
   key: 'activity' | 'safety-detailed' | 'safety-summary' | 'fuel';
 };
+type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
 
 @Component({
   selector: 'app-reports',
@@ -101,7 +102,7 @@ type MotivReportRow = {
                     [attr.aria-label]="'Generate ' + row.name"
                     [title]="'Generate ' + row.name"
                     [disabled]="generatingReportKey() === row.key"
-                    (click)="generateMotivReport(row)">
+                    (click)="openCriteriaModal(row)">
                     <i class="bx" [ngClass]="generatingReportKey() === row.key ? 'bx-loader-alt bx-spin' : 'bx-play-circle'"></i>
                   </button>
                 </td>
@@ -110,6 +111,61 @@ type MotivReportRow = {
           </table>
         </div>
         <p class="error" *ngIf="reportError()">{{ reportError() }}</p>
+      </div>
+
+      <div class="criteria-modal-backdrop" *ngIf="criteriaModalOpen()" (click)="closeCriteriaModal()">
+        <div class="criteria-modal" (click)="$event.stopPropagation()">
+          <h3>Generate {{ selectedCriteriaReport()?.name || 'Report' }}</h3>
+          <p>Select criteria for this report.</p>
+          <div class="criteria-grid" *ngIf="selectedCriteriaReport() as report">
+            <label *ngIf="supportsScope(report.key)">
+              Scope
+              <select class="criteria-input" [value]="criteriaScope()" (change)="setCriteriaScope($any($event.target).value)">
+                <option value="all">All Drivers</option>
+                <option value="active">All Active Drivers</option>
+                <option value="inactive">All Inactive Drivers</option>
+                <option value="specific">Specific Driver</option>
+              </select>
+            </label>
+            <label *ngIf="supportsScope(report.key) && criteriaScope() === 'specific'">
+              Driver
+              <select class="criteria-input" [value]="criteriaSpecificDriver()" (change)="criteriaSpecificDriver.set($any($event.target).value)">
+                <option value="">Select driver</option>
+                <option *ngFor="let d of criteriaDriverOptions()" [value]="d">{{ d }}</option>
+              </select>
+            </label>
+            <label *ngIf="supportsDays(report.key)">
+              Days
+              <select class="criteria-input" [value]="criteriaDays()" (change)="setCriteriaDays(+$any($event.target).value)">
+                <option [value]="7">Last 7 days</option>
+                <option [value]="14">Last 14 days</option>
+                <option [value]="30">Last 30 days</option>
+                <option [value]="90">Last 90 days</option>
+              </select>
+            </label>
+            <label *ngIf="supportsYearWeek(report.key)">
+              Year
+              <select class="criteria-input" [value]="criteriaYear()" (change)="setCriteriaYear($any($event.target).value)">
+                <option value="all">All Years</option>
+                <option *ngFor="let y of criteriaYearOptions()" [value]="y.toString()">{{ y }}</option>
+              </select>
+            </label>
+            <label *ngIf="supportsYearWeek(report.key)">
+              Week
+              <select class="criteria-input" [value]="criteriaWeek()" (change)="criteriaWeek.set($any($event.target).value)">
+                <option value="all">All Weeks</option>
+                <option *ngFor="let w of criteriaWeekOptions()" [value]="w.key">{{ w.label }}</option>
+              </select>
+            </label>
+          </div>
+          <p class="error" *ngIf="criteriaError()">{{ criteriaError() }}</p>
+          <div class="criteria-actions">
+            <button class="report-btn" type="button" (click)="closeCriteriaModal()">Cancel</button>
+            <button class="report-btn" type="button" (click)="generateFromCriteria()" [disabled]="criteriaLoading() || !selectedCriteriaReport()">
+              {{ criteriaLoading() ? 'Preparing...' : 'Generate' }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -265,6 +321,61 @@ type MotivReportRow = {
       color: #fca5a5;
       font-size: 12px;
     }
+    .criteria-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+      padding: 16px;
+    }
+    .criteria-modal {
+      width: min(680px, 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #0f172a;
+      box-shadow: 0 16px 44px rgba(2, 6, 23, 0.55);
+      padding: 14px;
+    }
+    .criteria-modal h3 {
+      margin: 0;
+      color: #dbeafe;
+      font-size: 16px;
+    }
+    .criteria-modal p {
+      margin: 6px 0 10px;
+      color: #93c5fd;
+      font-size: 12px;
+    }
+    .criteria-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .criteria-grid label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+    .criteria-input {
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+    .criteria-actions {
+      margin-top: 12px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
   `]
 })
 export class ReportsComponent {
@@ -273,6 +384,20 @@ export class ReportsComponent {
   selectedReportTile = signal<'none' | 'motiv'>('none');
   generatingReportKey = signal<MotivReportRow['key'] | ''>('');
   reportError = signal('');
+  criteriaModalOpen = signal(false);
+  criteriaLoading = signal(false);
+  criteriaError = signal('');
+  selectedCriteriaReport = signal<MotivReportRow | null>(null);
+  criteriaRows = signal<any[]>([]);
+  criteriaScope = signal<ReportScope>('all');
+  criteriaSpecificDriver = signal('');
+  criteriaYear = signal<string>('all');
+  criteriaWeek = signal<string>('all');
+  criteriaDays = signal<number>(30);
+  criteriaDriverOptions = signal<string[]>([]);
+  criteriaYearOptions = signal<number[]>([]);
+  criteriaWeekOptions = signal<Array<{ key: string; label: string }>>([]);
+  private driverStatusCache: { active: Set<string>; inactive: Set<string> } | null = null;
 
   readonly motivReports: MotivReportRow[] = [
     {
@@ -309,29 +434,269 @@ export class ReportsComponent {
     this.selectedReportTile.set(this.selectedReportTile() === tile ? 'none' : tile);
   }
 
-  async generateMotivReport(row: MotivReportRow): Promise<void> {
+  supportsScope(key: MotivReportRow['key']): boolean {
+    return key === 'activity' || key === 'safety-detailed' || key === 'safety-summary';
+  }
+
+  supportsYearWeek(key: MotivReportRow['key']): boolean {
+    return key === 'activity' || key === 'safety-detailed' || key === 'safety-summary' || key === 'fuel';
+  }
+
+  supportsDays(key: MotivReportRow['key']): boolean {
+    return key === 'safety-detailed' || key === 'safety-summary';
+  }
+
+  async openCriteriaModal(row: MotivReportRow): Promise<void> {
     if (this.generatingReportKey()) return;
+    this.criteriaError.set('');
     this.reportError.set('');
-    this.generatingReportKey.set(row.key);
+    this.selectedCriteriaReport.set(row);
+    this.criteriaScope.set('all');
+    this.criteriaSpecificDriver.set('');
+    this.criteriaYear.set('all');
+    this.criteriaWeek.set('all');
+    if (!this.supportsDays(row.key)) {
+      this.criteriaDays.set(30);
+    }
+    this.criteriaModalOpen.set(true);
+    await this.loadCriteriaRows();
+  }
+
+  closeCriteriaModal(): void {
+    if (this.criteriaLoading()) return;
+    this.criteriaModalOpen.set(false);
+    this.criteriaError.set('');
+  }
+
+  setCriteriaScope(value: ReportScope): void {
+    const normalized: ReportScope = value === 'active' || value === 'inactive' || value === 'specific' ? value : 'all';
+    this.criteriaScope.set(normalized);
+    if (normalized !== 'specific') this.criteriaSpecificDriver.set('');
+    this.criteriaError.set('');
+  }
+
+  setCriteriaYear(value: string): void {
+    this.criteriaYear.set(value || 'all');
+    this.criteriaWeek.set('all');
+    this.refreshCriteriaWeekOptions();
+    this.criteriaError.set('');
+  }
+
+  async setCriteriaDays(value: number): Promise<void> {
+    const normalized = Math.max(1, Math.min(365, Number(value || 30)));
+    this.criteriaDays.set(normalized);
+    await this.loadCriteriaRows();
+  }
+
+  async generateFromCriteria(): Promise<void> {
+    const report = this.selectedCriteriaReport();
+    if (!report || this.generatingReportKey()) return;
+    this.criteriaError.set('');
+    this.reportError.set('');
+    this.criteriaLoading.set(true);
+    this.generatingReportKey.set(report.key);
     try {
-      if (row.key === 'activity') {
-        await this.generateActivityReport();
-      } else if (row.key === 'safety-detailed') {
-        await this.generateSafetyDetailedReport();
-      } else if (row.key === 'safety-summary') {
-        await this.generateSafetySummaryReport();
-      } else {
-        await this.generateFuelStatementReport();
+      const filteredRows = await this.applyCriteriaFilters(this.criteriaRows(), report.key);
+      if (!filteredRows.length) {
+        this.criteriaError.set('No rows found for the selected criteria.');
+        return;
       }
+      if (report.key === 'activity') {
+        await this.generateActivityReport(filteredRows);
+      } else if (report.key === 'safety-detailed') {
+        await this.generateSafetyDetailedReport(filteredRows);
+      } else if (report.key === 'safety-summary') {
+        await this.generateSafetySummaryReport(filteredRows);
+      } else {
+        await this.generateFuelStatementReport(filteredRows);
+      }
+      this.criteriaModalOpen.set(false);
     } catch {
-      this.reportError.set('Unable to generate selected report. Please try again.');
+      this.criteriaError.set('Unable to generate selected report with these criteria.');
     } finally {
+      this.criteriaLoading.set(false);
       this.generatingReportKey.set('');
     }
   }
 
-  private async generateActivityReport(): Promise<void> {
-    const rows = await this.fetchRows('/api/v1/motiv/activity-logs?limit=5000');
+  private async loadCriteriaRows(): Promise<void> {
+    const report = this.selectedCriteriaReport();
+    if (!report) return;
+    this.criteriaLoading.set(true);
+    this.criteriaError.set('');
+    try {
+      const path = this.getRowsPath(report.key);
+      const rows = await this.fetchRows(path);
+      this.criteriaRows.set(rows);
+      this.criteriaDriverOptions.set(this.collectDriverOptions(rows, report.key));
+      this.criteriaYearOptions.set(this.collectYearOptions(rows, report.key));
+      this.refreshCriteriaWeekOptions();
+    } catch {
+      this.criteriaRows.set([]);
+      this.criteriaDriverOptions.set([]);
+      this.criteriaYearOptions.set([]);
+      this.criteriaWeekOptions.set([]);
+      this.criteriaError.set('Unable to load data for criteria selection.');
+    } finally {
+      this.criteriaLoading.set(false);
+    }
+  }
+
+  private getRowsPath(key: MotivReportRow['key']): string {
+    if (key === 'activity') return '/api/v1/motiv/activity-logs?limit=5000';
+    if (key === 'fuel') return '/api/v1/motiv/fuel-purchases';
+    const days = Math.max(1, Math.min(365, Number(this.criteriaDays() || 30)));
+    return `/api/v1/motiv/safety-events?days=${days}&limit=5000`;
+  }
+
+  private refreshCriteriaWeekOptions(): void {
+    const report = this.selectedCriteriaReport();
+    if (!report || !this.supportsYearWeek(report.key)) {
+      this.criteriaWeekOptions.set([]);
+      return;
+    }
+    const yearFilter = this.criteriaYear();
+    const weekMap = new Map<string, string>();
+    for (const row of this.criteriaRows()) {
+      const ts = this.extractTimestamp(row, report.key);
+      if (!ts) continue;
+      const iso = this.getIsoWeekInfo(new Date(ts));
+      if (yearFilter !== 'all' && String(iso.year) !== yearFilter) continue;
+      weekMap.set(iso.key, `W${iso.week} (${iso.year})`);
+    }
+    this.criteriaWeekOptions.set(
+      Array.from(weekMap.entries()).map(([key, label]) => ({ key, label })).sort((a, b) => b.key.localeCompare(a.key))
+    );
+  }
+
+  private collectDriverOptions(rows: any[], key: MotivReportRow['key']): string[] {
+    const names = new Set<string>();
+    for (const row of rows) {
+      const name = this.extractDriverName(row, key).trim();
+      if (!name || name.toLowerCase() === 'n/a') continue;
+      names.add(name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }
+
+  private collectYearOptions(rows: any[], key: MotivReportRow['key']): number[] {
+    const years = new Set<number>();
+    for (const row of rows) {
+      const ts = this.extractTimestamp(row, key);
+      if (!ts) continue;
+      years.add(this.getIsoWeekInfo(new Date(ts)).year);
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  }
+
+  private async applyCriteriaFilters(rows: any[], key: MotivReportRow['key']): Promise<any[]> {
+    let filtered = [...rows];
+
+    if (this.supportsYearWeek(key)) {
+      const yearFilter = this.criteriaYear();
+      const weekFilter = this.criteriaWeek();
+      filtered = filtered.filter((row) => {
+        const ts = this.extractTimestamp(row, key);
+        if (!ts) return false;
+        const iso = this.getIsoWeekInfo(new Date(ts));
+        const yearOk = yearFilter === 'all' || String(iso.year) === yearFilter;
+        const weekOk = weekFilter === 'all' || iso.key === weekFilter;
+        return yearOk && weekOk;
+      });
+    }
+
+    if (this.supportsScope(key)) {
+      const scope = this.criteriaScope();
+      if (scope === 'specific') {
+        const target = String(this.criteriaSpecificDriver() || '').trim().toLowerCase();
+        if (!target) {
+          this.criteriaError.set('Choose a specific driver.');
+          return [];
+        }
+        filtered = filtered.filter((row) => this.extractDriverName(row, key).trim().toLowerCase() === target);
+      } else if (scope === 'active' || scope === 'inactive') {
+        const set = await this.getDriverStatusSet(scope);
+        filtered = filtered.filter((row) => set.has(this.extractDriverName(row, key).trim().toLowerCase()));
+      }
+    }
+
+    return filtered;
+  }
+
+  private async getDriverStatusSet(scope: 'active' | 'inactive'): Promise<Set<string>> {
+    if (!this.driverStatusCache) {
+      const rows = await this.fetchRows('/api/v1/drivers?limit=2000&page=1');
+      const active = new Set<string>();
+      const inactive = new Set<string>();
+      for (const row of rows) {
+        const status = String(row?.status ?? row?.Status ?? '').trim().toLowerCase();
+        const name = String(row?.name ?? row?.Name ?? row?.full_name ?? row?.FullName ?? '').trim().toLowerCase();
+        if (!name) continue;
+        if (this.isActiveLikeStatus(status)) active.add(name);
+        else inactive.add(name);
+      }
+      this.driverStatusCache = { active, inactive };
+    }
+    return scope === 'active' ? this.driverStatusCache.active : this.driverStatusCache.inactive;
+  }
+
+  private extractTimestamp(row: any, key: MotivReportRow['key']): number {
+    if (key === 'activity') {
+      return this.asTime(row?.timestamp ?? row?.created_at ?? row?.createdAt);
+    }
+    if (key === 'fuel') {
+      return this.asTime(row?.transaction_time ?? row?.date ?? row?.created_at ?? row?.timestamp ?? row?.event_time);
+    }
+    const event = row?.driver_performance_event ?? row?.event ?? row ?? {};
+    return this.asTime(
+      event?.event_time ??
+      event?.event_at ??
+      event?.occurred_at ??
+      event?.created_at ??
+      event?.timestamp ??
+      event?.start_time ??
+      event?.startTime
+    );
+  }
+
+  private extractDriverName(row: any, key: MotivReportRow['key']): string {
+    if (key === 'activity') {
+      return String(row?.driverName ?? row?.driver_name ?? 'General');
+    }
+    if (key === 'fuel') {
+      return this.firstText(row?.driver_name, row?.driver_id, row?.driver?.name) || 'N/A';
+    }
+    const event = row?.driver_performance_event ?? row?.event ?? row ?? {};
+    const driver = event?.driver ?? row?.driver ?? {};
+    return this.firstText(
+      `${driver?.first_name ?? ''} ${driver?.last_name ?? ''}`.trim(),
+      driver?.name,
+      event?.driver_name,
+      event?.driver_id
+    ) || 'N/A';
+  }
+
+  private isActiveLikeStatus(status: string): boolean {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'active'
+      || normalized === 'enabled'
+      || normalized === 'available'
+      || normalized === 'online'
+      || normalized === 'true';
+  }
+
+  private getIsoWeekInfo(dateInput: Date): { year: number; week: number; key: string } {
+    const dt = new Date(Date.UTC(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate()));
+    const day = dt.getUTCDay() || 7;
+    dt.setUTCDate(dt.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+    const week = Math.ceil((((dt.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    const year = dt.getUTCFullYear();
+    return { year, week, key: `${year}-W${String(week).padStart(2, '0')}` };
+  }
+
+  private async generateActivityReport(rowsInput?: any[]): Promise<void> {
+    const rows = rowsInput ?? await this.fetchRows('/api/v1/motiv/activity-logs?limit=5000');
     if (!rows.length) throw new Error('No rows');
     const sorted = rows.sort((a: any, b: any) => this.asTime(b?.timestamp) - this.asTime(a?.timestamp));
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
@@ -350,8 +715,8 @@ export class ReportsComponent {
     await this.openPdf('motiv-activity-report', doc);
   }
 
-  private async generateSafetyDetailedReport(): Promise<void> {
-    const rows = await this.fetchRows('/api/v1/motiv/safety-events?days=30&limit=5000');
+  private async generateSafetyDetailedReport(rowsInput?: any[]): Promise<void> {
+    const rows = rowsInput ?? await this.fetchRows(`/api/v1/motiv/safety-events?days=${this.criteriaDays()}&limit=5000`);
     if (!rows.length) throw new Error('No rows');
     const mapped = rows.map((raw: any) => {
       const event = raw?.driver_performance_event ?? raw?.event ?? raw ?? {};
@@ -393,8 +758,8 @@ export class ReportsComponent {
     await this.openPdf('motiv-safety-detailed-report', doc);
   }
 
-  private async generateSafetySummaryReport(): Promise<void> {
-    const rows = await this.fetchRows('/api/v1/motiv/safety-events?days=30&limit=5000');
+  private async generateSafetySummaryReport(rowsInput?: any[]): Promise<void> {
+    const rows = rowsInput ?? await this.fetchRows(`/api/v1/motiv/safety-events?days=${this.criteriaDays()}&limit=5000`);
     if (!rows.length) throw new Error('No rows');
     const byType = new Map<string, number>();
     const byStatus = new Map<string, number>();
@@ -451,21 +816,22 @@ export class ReportsComponent {
     await this.openPdf('motiv-safety-summary-report', doc);
   }
 
-  private async generateFuelStatementReport(): Promise<void> {
-    const rows = await this.fetchRows('/api/v1/motiv/fuel-purchases');
+  private async generateFuelStatementReport(rowsInput?: any[]): Promise<void> {
+    const rows = rowsInput ?? await this.fetchRows('/api/v1/motiv/fuel-purchases');
     if (!rows.length) throw new Error('No rows');
     const mapped = rows.map((r: any) => {
-      const date = this.firstText(r?.transaction_time, r?.date, r?.created_at, r?.timestamp, r?.event_time) || '';
+      const dateRaw = this.firstText(r?.transaction_time, r?.date, r?.created_at, r?.timestamp, r?.event_time) || '';
       const amount = Number(r?.amount ?? r?.total_amount ?? r?.price ?? r?.charge_amount ?? 0);
       return {
-        date: this.formatDateTime(date),
+        sortAt: this.asTime(dateRaw),
+        date: this.formatDateTime(dateRaw),
         merchant: this.firstText(r?.merchant_name, r?.merchant, r?.location_name) || 'N/A',
         driver: this.firstText(r?.driver_name, r?.driver_id, r?.driver?.name) || 'N/A',
         vehicle: this.firstText(r?.vehicle_number, r?.vehicle_id, r?.vehicle?.number) || 'N/A',
         amount: Number.isFinite(amount) ? amount : 0,
         status: this.firstText(r?.status, r?.transaction_status) || 'N/A'
       };
-    }).sort((a, b) => this.asTime(b.date) - this.asTime(a.date));
+    }).sort((a, b) => b.sortAt - a.sortAt);
     const total = mapped.reduce((sum, r) => sum + r.amount, 0);
 
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
