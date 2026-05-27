@@ -10,7 +10,7 @@ type MotivReportRow = {
   section: string;
   filters: string;
   output: string;
-  key: 'activity' | 'safety-detailed' | 'safety-summary' | 'fuel';
+  key: 'activity' | 'safety-detailed' | 'safety-summary' | 'fuel' | 'applicants-summary';
 };
 type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
 
@@ -71,6 +71,22 @@ type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
             {{ selectedReportTile() === 'motiv' ? 'Showing Reports' : 'View MOTIV Reports' }}
           </button>
         </section>
+
+        <section
+          class="report-card report-card-action"
+          [class.active]="selectedReportTile() === 'applicants'"
+          (click)="selectReportTile('applicants')">
+          <h3><i class="bx bx-user-plus"></i> Applicants Reports</h3>
+          <p>Applicant pipeline and recruiting summary reports.</p>
+          <ul>
+            <li>Applicants roster summary</li>
+            <li>Status distribution report</li>
+            <li>Position/source breakdown</li>
+          </ul>
+          <button class="report-btn" type="button">
+            {{ selectedReportTile() === 'applicants' ? 'Showing Reports' : 'View Applicants Reports' }}
+          </button>
+        </section>
       </div>
 
       <div class="motiv-reports-panel" *ngIf="selectedReportTile() === 'motiv'">
@@ -91,6 +107,46 @@ type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
             </thead>
             <tbody>
               <tr *ngFor="let row of motivReports">
+                <td>{{ row.name }}</td>
+                <td>{{ row.section }}</td>
+                <td>{{ row.filters }}</td>
+                <td>{{ row.output }}</td>
+                <td>
+                  <button
+                    class="action-icon-btn"
+                    type="button"
+                    [attr.aria-label]="'Generate ' + row.name"
+                    [title]="'Generate ' + row.name"
+                    [disabled]="generatingReportKey() === row.key"
+                    (click)="openCriteriaModal(row)">
+                    <i class="bx" [ngClass]="generatingReportKey() === row.key ? 'bx-loader-alt bx-spin' : 'bx-play-circle'"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="error" *ngIf="reportError()">{{ reportError() }}</p>
+      </div>
+
+      <div class="motiv-reports-panel" *ngIf="selectedReportTile() === 'applicants'">
+        <div class="panel-header">
+          <h2><i class="bx bx-table"></i> Available Applicants Reports</h2>
+          <p>Current report options available from Applicants.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="reports-table">
+            <thead>
+              <tr>
+                <th>Report</th>
+                <th>Section</th>
+                <th>Scope / Filters</th>
+                <th>Output</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of applicantsReports">
                 <td>{{ row.name }}</td>
                 <td>{{ row.section }}</td>
                 <td>{{ row.filters }}</td>
@@ -381,7 +437,7 @@ type ReportScope = 'all' | 'active' | 'inactive' | 'specific';
 export class ReportsComponent {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
-  selectedReportTile = signal<'none' | 'motiv'>('none');
+  selectedReportTile = signal<'none' | 'motiv' | 'applicants'>('none');
   generatingReportKey = signal<MotivReportRow['key'] | ''>('');
   reportError = signal('');
   criteriaModalOpen = signal(false);
@@ -430,7 +486,17 @@ export class ReportsComponent {
     }
   ];
 
-  selectReportTile(tile: 'motiv'): void {
+  readonly applicantsReports: MotivReportRow[] = [
+    {
+      name: 'Applicants Summary Report',
+      section: 'Applicants > Records',
+      filters: 'Year/week (optional)',
+      output: 'PDF (applicant table + status summary)',
+      key: 'applicants-summary'
+    }
+  ];
+
+  selectReportTile(tile: 'motiv' | 'applicants'): void {
     this.selectedReportTile.set(this.selectedReportTile() === tile ? 'none' : tile);
   }
 
@@ -439,7 +505,7 @@ export class ReportsComponent {
   }
 
   supportsYearWeek(key: MotivReportRow['key']): boolean {
-    return key === 'activity' || key === 'safety-detailed' || key === 'safety-summary' || key === 'fuel';
+    return key === 'activity' || key === 'safety-detailed' || key === 'safety-summary' || key === 'fuel' || key === 'applicants-summary';
   }
 
   supportsDays(key: MotivReportRow['key']): boolean {
@@ -507,6 +573,8 @@ export class ReportsComponent {
         await this.generateSafetyDetailedReport(filteredRows);
       } else if (report.key === 'safety-summary') {
         await this.generateSafetySummaryReport(filteredRows);
+      } else if (report.key === 'applicants-summary') {
+        await this.generateApplicantsSummaryReport(filteredRows);
       } else {
         await this.generateFuelStatementReport(filteredRows);
       }
@@ -545,6 +613,7 @@ export class ReportsComponent {
   private getRowsPath(key: MotivReportRow['key']): string {
     if (key === 'activity') return '/api/v1/motiv/activity-logs?limit=5000';
     if (key === 'fuel') return '/api/v1/motiv/fuel-purchases';
+    if (key === 'applicants-summary') return '/api/v1/applicants/records';
     const days = Math.max(1, Math.min(365, Number(this.criteriaDays() || 30)));
     return `/api/v1/motiv/safety-events?days=${days}&limit=5000`;
   }
@@ -647,6 +716,9 @@ export class ReportsComponent {
     if (key === 'fuel') {
       return this.asTime(row?.transaction_time ?? row?.date ?? row?.created_at ?? row?.timestamp ?? row?.event_time);
     }
+    if (key === 'applicants-summary') {
+      return this.asTime(row?.appliedDate ?? row?.applied_date ?? row?.CreatedAt ?? row?.createdAt);
+    }
     const event = row?.driver_performance_event ?? row?.event ?? row ?? {};
     return this.asTime(
       event?.event_time ??
@@ -665,6 +737,9 @@ export class ReportsComponent {
     }
     if (key === 'fuel') {
       return this.firstText(row?.driver_name, row?.driver_id, row?.driver?.name) || 'N/A';
+    }
+    if (key === 'applicants-summary') {
+      return this.firstText(row?.fullName, row?.full_name, row?.name) || 'N/A';
     }
     const event = row?.driver_performance_event ?? row?.event ?? row ?? {};
     const driver = event?.driver ?? row?.driver ?? {};
@@ -851,6 +926,54 @@ export class ReportsComponent {
       mapped.map((r) => [r.date, r.merchant, r.driver, r.vehicle, this.formatCurrency(r.amount), r.status])
     );
     await this.openPdf('motiv-fuel-statement-report', doc);
+  }
+
+  private async generateApplicantsSummaryReport(rowsInput?: any[]): Promise<void> {
+    const rows = rowsInput ?? await this.fetchRows('/api/v1/applicants/records');
+    if (!rows.length) throw new Error('No rows');
+
+    const mapped = rows.map((r: any) => {
+      const appliedDate = this.asTime(r?.appliedDate ?? r?.applied_date ?? r?.createdAt ?? r?.CreatedAt);
+      return {
+        sortAt: appliedDate,
+        name: this.firstText(r?.fullName, r?.full_name, r?.name) || 'N/A',
+        position: this.firstText(r?.position) || 'N/A',
+        source: this.firstText(r?.source) || 'N/A',
+        status: this.firstText(r?.status) || 'N/A',
+        appliedAt: this.formatDateTime(appliedDate),
+        hasCv: !!r?.hasCv || !!r?.cvDataUrl || !!r?.CvDataUrl
+      };
+    }).sort((a, b) => b.sortAt - a.sortAt);
+
+    const statusSummary = new Map<string, number>();
+    for (const row of mapped) {
+      const key = row.status.toLowerCase();
+      statusSummary.set(key, (statusSummary.get(key) ?? 0) + 1);
+    }
+    const statusText = Array.from(statusSummary.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(' | ');
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    const columns = [
+      { label: 'Applicant', width: 170 },
+      { label: 'Position', width: 170 },
+      { label: 'Source', width: 120 },
+      { label: 'Status', width: 120 },
+      { label: 'Applied Date', width: 150 },
+      { label: 'CV', width: 50 }
+    ];
+
+    this.drawTableReport(
+      doc,
+      'Applicants Summary Report',
+      `Rows: ${mapped.length.toLocaleString()}${statusText ? ` | ${statusText}` : ''}`,
+      columns,
+      mapped.map((r) => [r.name, r.position, r.source, r.status, r.appliedAt, r.hasCv ? 'Yes' : 'No'])
+    );
+    await this.openPdf('applicants-summary-report', doc);
   }
 
   private drawTableReport(
