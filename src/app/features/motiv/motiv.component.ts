@@ -4553,6 +4553,11 @@ export class MotivComponent implements OnInit {
   private extractRows(payload: any): any[] {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.driver_performance_events)) return payload.driver_performance_events;
+    if (Array.isArray(payload?.driverPerformanceEvents)) return payload.driverPerformanceEvents;
+    if (Array.isArray(payload?.safety_events)) return payload.safety_events;
+    if (Array.isArray(payload?.safetyEvents)) return payload.safetyEvents;
+    if (Array.isArray(payload?.events)) return payload.events;
     if (Array.isArray(payload?.driver_locations)) return payload.driver_locations;
     if (Array.isArray(payload?.vehicle_locations)) return payload.vehicle_locations;
     if (Array.isArray(payload?.asset_locations)) return payload.asset_locations;
