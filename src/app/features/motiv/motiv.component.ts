@@ -2946,16 +2946,16 @@ export class MotivComponent implements OnInit {
       };
 
       const columns = [
-        { label: 'Time', width: 110 },
-        { label: 'Driver', width: 120 },
-        { label: 'Type', width: 64 },
-        { label: 'Event', width: 260 },
+        { label: 'Time', width: 96 },
+        { label: 'Driver', width: 96 },
+        { label: 'Type', width: 50 },
+        { label: 'Event', width: 248 },
         { label: 'Previous Location', width: 120 },
         { label: 'Current Location', width: 120 }
       ];
 
       const ensureSpace = (lines: number): void => {
-        const needed = Math.max(1, lines) * 11 + 8;
+        const needed = Math.max(1, lines) * 10 + 8;
         if (y + needed > bottom) {
           doc.addPage();
           y = 24;
@@ -2991,7 +2991,7 @@ export class MotivComponent implements OnInit {
             doc.text(wrapped[i][line] ?? '', x, y);
             x += columns[i].width;
           }
-          y += 11;
+          y += 10;
         }
         y += 2;
       };
