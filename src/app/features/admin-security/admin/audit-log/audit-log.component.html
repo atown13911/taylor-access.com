@@ -14,6 +14,12 @@
     </div>
   </header>
 
+  @if (auditWarning()) {
+    <div class="audit-warning-banner">
+      {{ auditWarning() }}
+    </div>
+  }
+
   <!-- Summary Cards -->
   @if (summary()) {
     <div class="summary-cards">

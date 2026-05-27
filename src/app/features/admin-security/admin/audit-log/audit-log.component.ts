@@ -21,6 +21,7 @@ export class AuditLogComponent implements OnInit {
   selectedLog = signal<AuditLog | null>(null);
   
   loading = signal(true);
+  auditWarning = signal('');
   
   dateRange = 'week';
   searchTerm = '';
@@ -73,6 +74,7 @@ export class AuditLogComponent implements OnInit {
 
   loadLogs() {
     this.loading.set(true);
+    this.auditWarning.set('');
     
     const params: any = {
       limit: this.filters.limit,
@@ -89,9 +91,11 @@ export class AuditLogComponent implements OnInit {
       next: (response) => {
         this.logs.set(response.data);
         this.meta.set(response.meta);
+        this.auditWarning.set(response.warning || '');
         this.loading.set(false);
       },
       error: () => {
+        this.auditWarning.set('Unable to load audit logs at this time.');
         this.loading.set(false);
       }
     });
@@ -101,6 +105,7 @@ export class AuditLogComponent implements OnInit {
     this.adminService.getAuditSummary().subscribe({
       next: (summary) => {
         this.summary.set(summary);
+        if (summary.warning && !this.auditWarning()) this.auditWarning.set(summary.warning);
       }
     });
   }

@@ -44,6 +44,7 @@ public class AuditController : ControllerBase
         int? orgFilter = (role == "product_owner" || role == "superadmin" || role == "development")
             ? null
             : user.OrganizationId;
+        var mongoConnected = _mongo.IsConnected;
 
         var logs = await _mongo.GetAuditLogsAsync(
             entityType: entityType,
@@ -67,7 +68,9 @@ public class AuditController : ControllerBase
         return Ok(new
         {
             data = paged,
-            meta = new { total, page, limit, pages = (int)Math.Ceiling((double)total / limit) }
+            meta = new { total, page, limit, pages = (int)Math.Ceiling((double)total / limit) },
+            mongoConnected,
+            warning = mongoConnected ? null : "Audit storage is currently unavailable (MongoDB not connected). Showing empty results."
         });
     }
 
@@ -104,6 +107,7 @@ public class AuditController : ControllerBase
         int? orgFilter = (role == "product_owner" || role == "superadmin" || role == "development")
             ? null
             : user.OrganizationId;
+        var mongoConnected = _mongo.IsConnected;
 
         var fromDate = from?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(-30);
         var toDate = to?.ToUniversalTime() ?? DateTime.UtcNow;
@@ -126,7 +130,9 @@ public class AuditController : ControllerBase
             byUser = logs.Where(l => l.UserEmail != null).GroupBy(l => l.UserEmail)
                 .OrderByDescending(g => g.Count()).Take(10)
                 .ToDictionary(g => g.Key!, g => g.Count()),
-            recentActivity = logs.OrderByDescending(l => l.Timestamp).Take(10)
+            recentActivity = logs.OrderByDescending(l => l.Timestamp).Take(10),
+            mongoConnected,
+            warning = mongoConnected ? null : "Audit storage is currently unavailable (MongoDB not connected). Summary may be incomplete."
         });
     }
 

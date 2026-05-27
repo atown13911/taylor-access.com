@@ -62,6 +62,8 @@ export interface AuditSummary {
   bySeverity: { [key: string]: number };
   byUser: { [key: string]: number };
   recentActivity: AuditLog[];
+  mongoConnected?: boolean;
+  warning?: string | null;
 }
 
 // ============ DASHBOARD INTERFACES ============
@@ -200,7 +202,7 @@ export class AdminService {
     severity?: string;
     limit?: number;
     page?: number;
-  }): Observable<{ data: AuditLog[]; meta: any }> {
+  }): Observable<{ data: AuditLog[]; meta: any; mongoConnected?: boolean; warning?: string | null }> {
     let httpParams = new HttpParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -209,7 +211,7 @@ export class AdminService {
         }
       });
     }
-    return this.http.get<{ data: AuditLog[]; meta: any }>(
+    return this.http.get<{ data: AuditLog[]; meta: any; mongoConnected?: boolean; warning?: string | null }>(
       `${this.baseUrl}/api/v1/audit`,
       { params: httpParams }
     );
