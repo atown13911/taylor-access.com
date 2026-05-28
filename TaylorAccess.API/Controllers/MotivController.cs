@@ -1508,6 +1508,20 @@ public class MotivController : ControllerBase
         return false;
     }
 
+    private static JsonElement EnsureDriverUserShape(JsonElement user)
+    {
+        if (IsDriverLikeUser(user)) return user;
+
+        var payload = user.ValueKind == JsonValueKind.Object
+            ? JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(user.GetRawText()) ?? new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+
+        payload["user_type"] = JsonSerializer.SerializeToElement("driver");
+        payload["is_driver"] = JsonSerializer.SerializeToElement(true);
+
+        return JsonSerializer.SerializeToElement(payload);
+    }
+
     private static string? PickString(JsonElement src, params string[] keys)
     {
         if (src.ValueKind != JsonValueKind.Object) return null;
@@ -2019,6 +2033,8 @@ public class MotivController : ControllerBase
             if (userObject.ValueKind != JsonValueKind.Object && emailKey != null && usersByEmail.TryGetValue(emailKey, out var matchedUserByEmail))
                 userObject = matchedUserByEmail;
 
+            userObject = EnsureDriverUserShape(userObject);
+
             var merged = JsonSerializer.SerializeToElement(new
             {
                 user = userObject,
@@ -2034,6 +2050,7 @@ public class MotivController : ControllerBase
             if (usedLocationIndexes.Contains(i)) continue;
             var row = locationRows[i];
             var nestedUser = PickNestedObject(row, "user") ?? row;
+            nestedUser = EnsureDriverUserShape(nestedUser);
             var merged = JsonSerializer.SerializeToElement(new
             {
                 user = nestedUser,
