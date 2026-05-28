@@ -678,18 +678,20 @@ export class PayrollComponent implements OnInit {
               prefs?.['compensationType']
             )
           );
+          const payFrequency = this.pickFirstText(
+            u?.payFrequency,
+            u?.PayFrequency,
+            payroll['payFrequency'],
+            payroll['frequency']
+          );
+          const grossPay = this.resolveGrossPay(payType, payFrequency, u, payroll);
           return {
             ...u,
             payType,
-            payFrequency: this.pickFirstText(
-              u?.payFrequency,
-              u?.PayFrequency,
-              payroll['payFrequency'],
-              payroll['frequency']
-            ),
+            payFrequency,
             payRate: this.toNumberOrDefault(u.payRate, payroll['payRate'], 0),
             hours: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 0),
-            grossPay: 0,
+            grossPay,
             deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
             netPay: 0,
             payrollStatus,
@@ -795,10 +797,39 @@ export class PayrollComponent implements OnInit {
         existingPrefs?.['payroll'] && typeof existingPrefs['payroll'] === 'object'
           ? existingPrefs['payroll'] as Record<string, unknown>
           : {};
+      const nextPayroll = { ...existingPayroll };
+      const payType = String(emp?.payType ?? '').trim().toLowerCase();
+      if (payType === 'salary') {
+        const annualPay = this.toNumberOrDefault(emp?.payRate, existingPayroll['annualSalary'], 0);
+        const frequency = this.normalizePayFrequency(
+          this.pickFirstText(emp?.payFrequency, existingPayroll['payFrequency'], existingPayroll['frequency'])
+        );
+        const periodsPerYear = this.getPayPeriodsPerYear(frequency);
+        const periodAmount = periodsPerYear > 0 ? annualPay / periodsPerYear : 0;
+        const currentYear = new Date().getUTCFullYear();
+        const trackedYear = Number(existingPayroll['salaryInvoiceYear']);
+        const activeYear = Number.isFinite(trackedYear) && trackedYear > 0 ? trackedYear : currentYear;
+
+        let periodsInvoiced = this.toNumberOrDefault(existingPayroll['salaryPeriodsInvoicedYtd'], 0);
+        let remainingBalance = this.toNumberOrDefault(existingPayroll['salaryRemainingBalance'], annualPay);
+
+        if (activeYear !== currentYear) {
+          periodsInvoiced = 0;
+          remainingBalance = annualPay;
+        }
+
+        periodsInvoiced = Math.min(periodsPerYear, periodsInvoiced + 1);
+        remainingBalance = Math.max(0, remainingBalance - periodAmount);
+
+        nextPayroll['annualSalary'] = annualPay;
+        nextPayroll['salaryInvoiceYear'] = currentYear;
+        nextPayroll['salaryPeriodsInvoicedYtd'] = periodsInvoiced;
+        nextPayroll['salaryRemainingBalance'] = Number(remainingBalance.toFixed(2));
+      }
       const mergedPreferences = {
         ...existingPrefs,
         payroll: {
-          ...existingPayroll,
+          ...nextPayroll,
           payrollStatus: 'invoiced',
           invoiceNumber: invoiceNo,
           invoiceDate: now.toISOString()
@@ -868,6 +899,58 @@ export class PayrollComponent implements OnInit {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'commission') return 'commission';
     return 'contract';
+  }
+
+  private resolveGrossPay(
+    payType: string,
+    payFrequency: string,
+    user: any,
+    payroll: Record<string, unknown>
+  ): number {
+    const normalizedPayType = String(payType ?? '').trim().toLowerCase();
+    if (normalizedPayType !== 'salary') {
+      return this.toNumberOrDefault(user?.grossPay, payroll['grossPay'], 0);
+    }
+
+    const annualPay = this.toNumberOrDefault(user?.payRate, payroll['payRate'], payroll['annualSalary'], 0);
+    if (annualPay <= 0) return 0;
+
+    const frequency = this.normalizePayFrequency(payFrequency);
+    const periodsPerYear = this.getPayPeriodsPerYear(frequency);
+    const currentYear = new Date().getUTCFullYear();
+    const trackedYear = Number(payroll['salaryInvoiceYear']);
+    const yearMatches = Number.isFinite(trackedYear) && trackedYear === currentYear;
+    const periodsInvoiced = yearMatches ? this.toNumberOrDefault(payroll['salaryPeriodsInvoicedYtd'], 0) : 0;
+
+    let remaining = yearMatches
+      ? this.toNumberOrDefault(payroll['salaryRemainingBalance'], annualPay)
+      : annualPay;
+
+    if (remaining > annualPay || !Number.isFinite(remaining)) remaining = annualPay;
+    if (remaining < 0) remaining = 0;
+
+    // Backfill from periods invoiced if explicit remaining value was not previously stored.
+    if (yearMatches && !Number.isFinite(Number(payroll['salaryRemainingBalance'])) && periodsPerYear > 0) {
+      const periodAmount = annualPay / periodsPerYear;
+      remaining = Math.max(0, annualPay - (Math.max(0, periodsInvoiced) * periodAmount));
+    }
+
+    return Number(remaining.toFixed(2));
+  }
+
+  private getPayPeriodsPerYear(frequency: PayrollDetailsForm['payFrequency']): number {
+    switch (frequency) {
+      case 'weekly':
+        return 52;
+      case 'biweekly':
+        return 26;
+      case 'semimonthly':
+        return 24;
+      case 'monthly':
+        return 12;
+      default:
+        return 52;
+    }
   }
 
   getPayFrequencyLabel(emp: any): string {
