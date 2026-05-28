@@ -202,7 +202,7 @@ import { environment } from '../../../../environments/environment';
                       title="Create invoice"
                       aria-label="Create invoice"
                       [disabled]="isInvoicedRow(emp) || creatingInvoiceForUserId() === emp.id"
-                      (click)="createInvoice(emp)"
+                      (click)="openCreateInvoiceModal(emp)"
                     >
                       <i class="bx bx-receipt"></i>
                     </button>
@@ -285,6 +285,75 @@ import { environment } from '../../../../environments/environment';
               Saving...
             } @else {
               Save details
+            }
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (invoiceModalOpen()) {
+      <div class="payroll-modal-backdrop" (click)="closeCreateInvoiceModal()"></div>
+      <div class="payroll-modal" role="dialog" aria-modal="true" aria-label="Create invoice">
+        <div class="payroll-modal-header">
+          <h3>Create Invoice</h3>
+          <button type="button" class="payroll-modal-close" (click)="closeCreateInvoiceModal()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <p class="payroll-modal-sub">
+          {{ selectedInvoiceEmployee()?.name || 'Employee' }} · {{ selectedInvoiceEmployee()?.email || 'No email' }}
+        </p>
+
+        <div class="payroll-modal-grid">
+          <label class="payroll-modal-field">
+            <span>Week To Invoice</span>
+            <select
+              [ngModel]="invoiceForm().weekFilter"
+              (ngModelChange)="updateInvoiceFormField('weekFilter', $event)"
+            >
+              @for (item of invoiceWeekOptions(); track item.value) {
+                <option [value]="item.value">{{ item.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="payroll-modal-field">
+            <span>Due Date</span>
+            <input
+              type="date"
+              [ngModel]="invoiceForm().dueDate"
+              (ngModelChange)="updateInvoiceFormField('dueDate', $event)"
+            >
+          </label>
+        </div>
+
+        <label class="payroll-modal-field">
+          <span>Reference</span>
+          <input
+            type="text"
+            [ngModel]="invoiceForm().reference"
+            (ngModelChange)="updateInvoiceFormField('reference', $event)"
+            placeholder="PO, ticket, or internal reference"
+          >
+        </label>
+
+        <label class="payroll-modal-field">
+          <span>Invoice Notes</span>
+          <input
+            type="text"
+            [ngModel]="invoiceForm().notes"
+            (ngModelChange)="updateInvoiceFormField('notes', $event)"
+            placeholder="Optional notes for this invoice"
+          >
+        </label>
+
+        <div class="payroll-modal-actions">
+          <button type="button" class="payroll-btn" (click)="closeCreateInvoiceModal()">Cancel</button>
+          <button type="button" class="payroll-btn payroll-btn-primary" [disabled]="creatingInvoiceForUserId() !== null" (click)="submitCreateInvoice()">
+            @if (creatingInvoiceForUserId() !== null) {
+              Creating...
+            } @else {
+              Create invoice
             }
           </button>
         </div>
@@ -507,6 +576,8 @@ export class PayrollComponent implements OnInit {
   selectedPositionTab = signal('All positions');
   detailsModalOpen = signal(false);
   selectedEmployeeDetails = signal<any | null>(null);
+  invoiceModalOpen = signal(false);
+  selectedInvoiceEmployee = signal<any | null>(null);
   savingDetails = signal(false);
   creatingInvoiceForUserId = signal<number | null>(null);
   actionMessage = signal('');
@@ -525,6 +596,12 @@ export class PayrollComponent implements OnInit {
     { value: 'contract', label: 'Contract' },
     { value: 'commission', label: 'Commission' }
   ];
+  invoiceForm = signal<InvoiceCreateForm>({
+    weekFilter: 'current',
+    dueDate: '',
+    reference: '',
+    notes: ''
+  });
   structureFilterFieldOptions: Array<{ value: StructureFilterField; label: string }> = [
     { value: 'all', label: 'All structures' },
     { value: 'division', label: 'Division' },
@@ -591,6 +668,8 @@ export class PayrollComponent implements OnInit {
     if (selectedPosition === 'All positions') return this.organizationScopedEmployees();
     return this.organizationScopedEmployees().filter((e) => this.getPositionLabel(e) === selectedPosition);
   });
+
+  invoiceWeekOptions = computed(() => this.periodOptions.filter((p) => p.value !== 'all'));
 
   structureFilterValueOptions = computed(() => {
     const field = this.selectedStructureFilterField();
@@ -757,6 +836,43 @@ export class PayrollComponent implements OnInit {
     this.savingDetails.set(false);
   }
 
+  openCreateInvoiceModal(emp: any): void {
+    if (!emp?.id) return;
+    const today = new Date();
+    const due = new Date(today);
+    due.setDate(due.getDate() + 7);
+    this.selectedInvoiceEmployee.set(emp);
+    this.invoiceForm.set({
+      weekFilter: this.periodFilter() === 'all' ? 'current' : this.periodFilter(),
+      dueDate: due.toISOString().slice(0, 10),
+      reference: '',
+      notes: ''
+    });
+    this.invoiceModalOpen.set(true);
+  }
+
+  closeCreateInvoiceModal(): void {
+    this.invoiceModalOpen.set(false);
+    this.selectedInvoiceEmployee.set(null);
+  }
+
+  updateInvoiceFormField<K extends keyof InvoiceCreateForm>(field: K, value: InvoiceCreateForm[K]): void {
+    this.invoiceForm.update((current) => ({ ...current, [field]: value }));
+  }
+
+  async submitCreateInvoice(): Promise<void> {
+    const employee = this.selectedInvoiceEmployee();
+    if (!employee?.id) return;
+    const form = this.invoiceForm();
+    await this.createInvoice(employee, {
+      weekFilter: form.weekFilter,
+      dueDate: form.dueDate,
+      reference: form.reference,
+      notes: form.notes
+    });
+    this.closeCreateInvoiceModal();
+  }
+
   updatePayrollFormField<K extends keyof PayrollDetailsForm>(field: K, value: PayrollDetailsForm[K]): void {
     this.payrollDetailsForm.update((current) => ({ ...current, [field]: value }));
   }
@@ -799,12 +915,13 @@ export class PayrollComponent implements OnInit {
     }
   }
 
-  async createInvoice(emp: any): Promise<void> {
+  async createInvoice(emp: any, options?: InvoiceCreateOptions): Promise<void> {
     if (!emp?.id || this.isInvoicedRow(emp)) return;
     this.creatingInvoiceForUserId.set(Number(emp.id));
     this.actionMessage.set('');
     try {
       const now = new Date();
+      const weekFilter = options?.weekFilter || this.periodFilter();
       const invoiceNo = `INV-${emp.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
       const existingPrefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
       const existingPayroll =
@@ -824,8 +941,8 @@ export class PayrollComponent implements OnInit {
         const periodAmount = periodsPerYear > 0 ? annualPay / periodsPerYear : 0;
         const expectedPeriods = this.getExpectedPaidPeriods(
           frequency,
-          this.getReferenceDateForPeriodFilter(this.periodFilter()),
-          this.periodFilter()
+          this.getReferenceDateForPeriodFilter(weekFilter),
+          weekFilter
         );
         const currentYear = new Date().getUTCFullYear();
         const trackedYear = Number(existingPayroll['salaryInvoiceYear']);
@@ -848,12 +965,17 @@ export class PayrollComponent implements OnInit {
         for (let periodIndex = periodsInvoiced + 1; periodIndex <= targetPeriods; periodIndex++) {
           const generatedInvoiceNumber = `INV-${emp.id}-${currentYear}-${String(periodIndex).padStart(2, '0')}`;
           const generatedDateIso = this.getSalaryPeriodInvoiceDate(currentYear, frequency, periodIndex);
+          const isLastGenerated = periodIndex === targetPeriods;
           historyEntries.push({
             invoiceNumber: generatedInvoiceNumber,
             invoiceDate: generatedDateIso,
             amount: Number(periodAmount.toFixed(2)),
             periodIndex,
-            source: periodIndex < targetPeriods ? 'backfill' : 'manual'
+            source: periodIndex < targetPeriods ? 'backfill' : 'manual',
+            weekFilter,
+            dueDate: isLastGenerated ? (options?.dueDate || '') : '',
+            reference: isLastGenerated ? (options?.reference || '') : '',
+            notes: isLastGenerated ? (options?.notes || '') : ''
           });
           lastInvoiceNumber = generatedInvoiceNumber;
           lastInvoiceDateIso = generatedDateIso;
@@ -876,7 +998,11 @@ export class PayrollComponent implements OnInit {
             invoiceNumber: lastInvoiceNumber,
             invoiceDate: lastInvoiceDateIso,
             amount: Number(amount.toFixed(2)),
-            source: 'manual'
+            source: 'manual',
+            weekFilter,
+            dueDate: options?.dueDate || '',
+            reference: options?.reference || '',
+            notes: options?.notes || ''
           }
         ].slice(-200);
       }
@@ -1068,7 +1194,11 @@ export class PayrollComponent implements OnInit {
         invoiceDate: String(item['invoiceDate'] ?? '').trim(),
         amount: this.toNumberOrDefault(item['amount'], 0),
         periodIndex: this.toNumberOrDefault(item['periodIndex'], 0),
-        source: String(item['source'] ?? '').trim() || 'manual'
+        source: String(item['source'] ?? '').trim() || 'manual',
+        weekFilter: String(item['weekFilter'] ?? '').trim(),
+        dueDate: String(item['dueDate'] ?? '').trim(),
+        reference: String(item['reference'] ?? '').trim(),
+        notes: String(item['notes'] ?? '').trim()
       }))
       .filter((item) => item.invoiceNumber && item.invoiceDate);
   }
@@ -1392,4 +1522,22 @@ type PayrollInvoiceEntry = {
   amount: number;
   periodIndex?: number;
   source?: string;
+  weekFilter?: string;
+  dueDate?: string;
+  reference?: string;
+  notes?: string;
+};
+
+type InvoiceCreateForm = {
+  weekFilter: string;
+  dueDate: string;
+  reference: string;
+  notes: string;
+};
+
+type InvoiceCreateOptions = {
+  weekFilter: string;
+  dueDate?: string;
+  reference?: string;
+  notes?: string;
 };
