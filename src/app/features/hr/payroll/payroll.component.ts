@@ -88,6 +88,18 @@ import { environment } from '../../../../environments/environment';
         }
       </div>
 
+      <div class="payroll-position-tabs">
+        @for (item of positionTabs(); track item) {
+          <button
+            class="payroll-position-tab"
+            [class.active]="selectedPositionTab() === item"
+            (click)="setPositionTab(item)"
+          >
+            {{ item }}
+          </button>
+        }
+      </div>
+
       <!-- Search -->
       <div class="payroll-search">
         <select
@@ -364,6 +376,16 @@ import { environment } from '../../../../environments/environment';
       &:hover { border-color: rgba(0,212,255,0.25); color: var(--text-primary); }
       &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.12); }
     }
+    .payroll-position-tabs {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.9rem;
+    }
+    .payroll-position-tab {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(148, 163, 184, 0.2);
+      color: #cbd5e1; border-radius: 999px; padding: 0.32rem 0.78rem;
+      font-size: 0.74rem; cursor: pointer; transition: all 0.2s;
+      &:hover { border-color: rgba(0,212,255,0.26); color: var(--text-primary); }
+      &.active { border-color: rgba(0,212,255,0.55); color: #dff8ff; background: rgba(0,212,255,0.14); }
+    }
     .payroll-table-wrap {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden;
     }
@@ -479,6 +501,7 @@ export class PayrollComponent implements OnInit {
   periodFilter = signal('current');
   payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
   selectedOrganization = signal('All organizations');
+  selectedPositionTab = signal('All positions');
   detailsModalOpen = signal(false);
   selectedEmployeeDetails = signal<any | null>(null);
   savingDetails = signal(false);
@@ -548,11 +571,26 @@ export class PayrollComponent implements OnInit {
     return this.employees().filter((e) => this.getOrganizationLabel(e) === selectedOrg);
   });
 
+  positionTabs = computed(() => {
+    const names = new Set<string>();
+    for (const emp of this.organizationScopedEmployees()) {
+      const position = this.getPositionLabel(emp);
+      if (position) names.add(position);
+    }
+    return ['All positions', ...Array.from(names).sort((a, b) => a.localeCompare(b))];
+  });
+
+  positionScopedEmployees = computed(() => {
+    const selectedPosition = this.selectedPositionTab();
+    if (selectedPosition === 'All positions') return this.organizationScopedEmployees();
+    return this.organizationScopedEmployees().filter((e) => this.getPositionLabel(e) === selectedPosition);
+  });
+
   structureFilterValueOptions = computed(() => {
     const field = this.selectedStructureFilterField();
     if (field === 'all') return ['All'];
     const names = new Set<string>();
-    for (const emp of this.organizationScopedEmployees()) {
+    for (const emp of this.positionScopedEmployees()) {
       const value = this.getSearchFieldText(emp, field);
       if (value) names.add(value);
     }
@@ -562,8 +600,8 @@ export class PayrollComponent implements OnInit {
   scopedEmployees = computed(() => {
     const field = this.selectedStructureFilterField();
     const value = this.selectedStructureFilterValue();
-    if (field === 'all' || value === 'All') return this.organizationScopedEmployees();
-    return this.organizationScopedEmployees().filter((e) => this.getSearchFieldText(e, field) === value);
+    if (field === 'all' || value === 'All') return this.positionScopedEmployees();
+    return this.positionScopedEmployees().filter((e) => this.getSearchFieldText(e, field) === value);
   });
 
   tabScopedEmployees = computed(() => {
@@ -595,6 +633,13 @@ export class PayrollComponent implements OnInit {
   setOrganization(org: string): void {
     if (this.selectedOrganization() === org) return;
     this.selectedOrganization.set(org);
+    this.selectedPositionTab.set('All positions');
+    this.selectedStructureFilterValue.set('All');
+  }
+
+  setPositionTab(position: string): void {
+    if (this.selectedPositionTab() === position) return;
+    this.selectedPositionTab.set(position);
     this.selectedStructureFilterValue.set('All');
   }
 
@@ -930,6 +975,19 @@ export class PayrollComponent implements OnInit {
     if (byName) return byName;
     const byId = Number(emp.divisionId);
     if (Number.isFinite(byId) && byId > 0) return `Division ${byId}`;
+    return null;
+  }
+
+  private getPositionLabel(emp: any): string | null {
+    if (!emp || typeof emp !== 'object') return null;
+    const byName = this.firstNonEmpty(
+      emp.positionTitle,
+      emp.position,
+      this.positionNameById()[Number(emp.positionId) || 0]
+    );
+    if (byName) return byName;
+    const byId = Number(emp.positionId);
+    if (Number.isFinite(byId) && byId > 0) return `Position ${byId}`;
     return null;
   }
 
