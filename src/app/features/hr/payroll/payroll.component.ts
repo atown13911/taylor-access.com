@@ -692,9 +692,9 @@ export class PayrollComponent implements OnInit {
   tabScopedEmployees = computed(() => {
     const rows = this.scopedEmployees();
     if (this.payrollMode() === 'accumulation') {
-      return rows.filter((e) => !this.isInvoicedRow(e));
+      return rows;
     }
-    return rows.filter((e) => this.isInvoicedRow(e));
+    return rows.filter((e) => this.hasInvoiceData(e));
   });
 
   filteredEmployees = computed(() => {
@@ -1047,6 +1047,24 @@ export class PayrollComponent implements OnInit {
   isInvoicedRow(emp: any): boolean {
     const status = String(emp?.payrollStatus ?? '').trim().toLowerCase();
     return status === 'processed' || status === 'paid';
+  }
+
+  private hasInvoiceData(emp: any): boolean {
+    if (!emp || typeof emp !== 'object') return false;
+    const invoicedAmount = this.toNumberOrDefault(emp?.invoicedAmount, 0);
+    if (invoicedAmount > 0) return true;
+
+    const invoiceNo = String(emp?.invoiceNumber ?? emp?.invoiceNo ?? emp?.invoice_id ?? '').trim();
+    if (invoiceNo) return true;
+
+    const invoiceDate = String(emp?.invoiceDate ?? emp?.invoicedAt ?? '').trim();
+    if (invoiceDate) return true;
+
+    const prefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
+    const rawPayroll = prefs?.['payroll'] ?? prefs?.['Payroll'];
+    const payroll = rawPayroll && typeof rawPayroll === 'object' ? rawPayroll as Record<string, unknown> : {};
+    const history = this.getPayrollInvoiceHistory(payroll);
+    return history.length > 0;
   }
 
   private normalizePayType(value: string): string {
