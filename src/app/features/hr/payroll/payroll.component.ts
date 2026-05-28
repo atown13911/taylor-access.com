@@ -843,7 +843,6 @@ export class PayrollComponent implements OnInit {
         ...existingPrefs,
         payroll: {
           ...nextPayroll,
-          payrollStatus: 'invoiced',
           invoiceNumber: invoiceNo,
           invoiceDate: now.toISOString()
         }
@@ -880,14 +879,7 @@ export class PayrollComponent implements OnInit {
 
   isInvoicedRow(emp: any): boolean {
     const status = String(emp?.payrollStatus ?? '').trim().toLowerCase();
-    if (status === 'processed' || status === 'paid' || status === 'invoiced') return true;
-    const invoiceNo = String(emp?.invoiceNumber ?? emp?.invoiceNo ?? emp?.invoice_id ?? '').trim();
-    if (invoiceNo) return true;
-    const invoiceAt = String(emp?.invoicedAt ?? emp?.invoiceDate ?? '').trim();
-    if (invoiceAt) return true;
-    const payType = String(emp?.payType ?? '').trim().toLowerCase();
-    if (payType === 'salary' && this.toNumberOrDefault(emp?.salaryPeriodsPaidYtd, 0) > 0) return true;
-    return false;
+    return status === 'processed' || status === 'paid';
   }
 
   private normalizePayType(value: string): string {
