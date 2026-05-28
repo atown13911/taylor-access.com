@@ -26,12 +26,29 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
+      <div class="payroll-mode-tabs">
+        <button
+          class="payroll-mode-tab"
+          [class.active]="payrollMode() === 'accumulation'"
+          (click)="payrollMode.set('accumulation')"
+        >
+          Accumulation
+        </button>
+        <button
+          class="payroll-mode-tab"
+          [class.active]="payrollMode() === 'invoiced'"
+          (click)="payrollMode.set('invoiced')"
+        >
+          Invoiced
+        </button>
+      </div>
+
       <!-- Stats -->
       <div class="payroll-stats">
         <div class="payroll-stat">
           <i class="bx bx-group"></i>
           <div class="payroll-stat-info">
-            <span class="payroll-stat-val">{{ scopedEmployees().length }}</span>
+            <span class="payroll-stat-val">{{ tabScopedEmployees().length }}</span>
             <span class="payroll-stat-lbl">Employees</span>
           </div>
         </div>
@@ -140,7 +157,15 @@ import { environment } from '../../../../environments/environment';
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="8" class="payroll-empty">No payroll data for this period</td></tr>
+              <tr>
+                <td colspan="8" class="payroll-empty">
+                  @if (payrollMode() === 'invoiced') {
+                    No invoiced payroll data for this period
+                  } @else {
+                    No payroll accumulation data for this period
+                  }
+                </td>
+              </tr>
             }
           </tbody>
         </table>
@@ -168,6 +193,31 @@ import { environment } from '../../../../environments/environment';
       border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
       color: var(--text-primary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
       &:hover { border-color: var(--cyan); background: rgba(0,212,255,0.08); }
+    }
+    .payroll-mode-tabs {
+      display: inline-flex;
+      gap: 8px;
+      margin: 0 0 0.9rem;
+      padding: 4px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+    }
+    .payroll-mode-tab {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      &:hover { color: var(--text-primary); border-color: rgba(0,212,255,0.22); }
+      &.active {
+        color: var(--text-primary);
+        border-color: rgba(0,212,255,0.45);
+        background: rgba(0,212,255,0.12);
+      }
     }
     .payroll-stats {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 1.5rem;
@@ -262,6 +312,7 @@ export class PayrollComponent implements OnInit {
   selectedStructureFilterField = signal<StructureFilterField>('all');
   selectedStructureFilterValue = signal('All');
   periodFilter = signal('current');
+  payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
   selectedOrganization = signal('All organizations');
   structureFilterFieldOptions: Array<{ value: StructureFilterField; label: string }> = [
     { value: 'all', label: 'All structures' },
@@ -321,18 +372,26 @@ export class PayrollComponent implements OnInit {
     return this.organizationScopedEmployees().filter((e) => this.getSearchFieldText(e, field) === value);
   });
 
+  tabScopedEmployees = computed(() => {
+    const rows = this.scopedEmployees();
+    if (this.payrollMode() === 'accumulation') {
+      return rows.filter((e) => !this.isInvoicedRow(e));
+    }
+    return rows.filter((e) => this.isInvoicedRow(e));
+  });
+
   filteredEmployees = computed(() => {
     const search = this.searchTerm().toLowerCase();
-    let list = this.scopedEmployees();
+    let list = this.tabScopedEmployees();
     if (search) {
       list = list.filter((e) => this.getAllSearchableText(e).includes(search));
     }
     return list;
   });
 
-  totalPayroll = computed(() => this.scopedEmployees().reduce((sum, e) => sum + (e.grossPay || 0), 0));
-  processedCount = computed(() => this.scopedEmployees().filter(e => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length);
-  pendingCount = computed(() => this.scopedEmployees().filter(e => !e.payrollStatus || e.payrollStatus === 'pending').length);
+  totalPayroll = computed(() => this.tabScopedEmployees().reduce((sum, e) => sum + (e.grossPay || 0), 0));
+  processedCount = computed(() => this.tabScopedEmployees().filter(e => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length);
+  pendingCount = computed(() => this.tabScopedEmployees().filter(e => !e.payrollStatus || e.payrollStatus === 'pending').length);
 
   ngOnInit() {
     this.loadData();
@@ -396,6 +455,15 @@ export class PayrollComponent implements OnInit {
       if (text) return text;
     }
     return '';
+  }
+
+  private isInvoicedRow(emp: any): boolean {
+    const status = String(emp?.payrollStatus ?? '').trim().toLowerCase();
+    if (status === 'processed' || status === 'paid' || status === 'invoiced') return true;
+    const invoiceNo = String(emp?.invoiceNumber ?? emp?.invoiceNo ?? emp?.invoice_id ?? '').trim();
+    if (invoiceNo) return true;
+    const invoiceAt = String(emp?.invoicedAt ?? emp?.invoiceDate ?? '').trim();
+    return !!invoiceAt;
   }
 
   private normalizePayType(value: string): string {
