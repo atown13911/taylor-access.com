@@ -493,6 +493,14 @@ export class PayrollComponent implements OnInit {
 
   periodOptions = (() => {
     const options = [{ value: 'current', label: 'Current Week' }];
+    const getIsoWeekNumber = (date: Date): number => {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const day = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - day);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const diffInDays = Math.floor((d.getTime() - yearStart.getTime()) / 86400000) + 1;
+      return Math.ceil(diffInDays / 7);
+    };
     const now = new Date();
     for (let i = 1; i <= 12; i++) {
       const d = new Date(now);
@@ -500,7 +508,8 @@ export class PayrollComponent implements OnInit {
       const start = new Date(d);
       const end = new Date(start); end.setDate(end.getDate() + 6);
       const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      options.push({ value: i.toString(), label: `${fmt(start)} – ${fmt(end)}` });
+      const weekNumber = getIsoWeekNumber(start);
+      options.push({ value: i.toString(), label: `${fmt(start)} – ${fmt(end)} (W${weekNumber})` });
     }
     return options;
   })();
