@@ -4406,6 +4406,7 @@ export class EmployeeRosterComponent implements OnInit {
   };
 
   private formDataLoaded = false;
+  private requestedEditEmployeeId: number | null = null;
 
   ngOnInit() {
     this.loadRoster();
@@ -4414,6 +4415,11 @@ export class EmployeeRosterComponent implements OnInit {
     this.loadOrganizations();
     this.route.queryParams.subscribe(p => {
       if (p['tab'] === 'import') this.rosterTab.set('import');
+      const requestedEditId = Number(p['editEmployeeId'] ?? 0);
+      this.requestedEditEmployeeId = Number.isFinite(requestedEditId) && requestedEditId > 0
+        ? requestedEditId
+        : null;
+      this.tryOpenRequestedProfileEdit();
     });
   }
 
@@ -4472,11 +4478,27 @@ export class EmployeeRosterComponent implements OnInit {
 
       this.employees.set(allRows);
       this.rosterPage.set(1);
+      this.tryOpenRequestedProfileEdit();
       this.loading.set(false);
     } catch (err) {
       console.error('Failed to load roster:', err);
       this.loading.set(false);
     }
+  }
+
+  private tryOpenRequestedProfileEdit(): void {
+    const requestedId = this.requestedEditEmployeeId;
+    if (!requestedId) return;
+    const employee = this.employees().find((row) => Number(row?.id) === requestedId);
+    if (!employee) return;
+    this.editEmployee(employee);
+    this.requestedEditEmployeeId = null;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { editEmployeeId: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
   }
 
   refreshRoster() {

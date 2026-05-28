@@ -2,6 +2,7 @@ import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
@@ -128,6 +129,7 @@ import { environment } from '../../../../environments/environment';
             <tr>
               <th>Employee</th>
               <th>Pay Type</th>
+              <th>Pay Frequency</th>
               <th>Pay Rate</th>
               <th>Hours</th>
               <th>Gross Pay</th>
@@ -149,6 +151,7 @@ import { environment } from '../../../../environments/environment';
                   </div>
                 </td>
                 <td><span class="payroll-type-badge">{{ emp.payType || 'salary' }}</span></td>
+                <td><span class="payroll-frequency-badge">{{ getPayFrequencyLabel(emp) }}</span></td>
                 <td class="payroll-mono">\${{ emp.payRate || 0 | number:'1.2-2' }}</td>
                 <td>{{ emp.hours || 0 }}</td>
                 <td class="payroll-mono">\${{ emp.grossPay || 0 | number:'1.2-2' }}</td>
@@ -171,6 +174,17 @@ import { environment } from '../../../../environments/environment';
                     <button
                       type="button"
                       class="payroll-icon-btn"
+                      title="Edit employee profile"
+                      aria-label="Edit employee profile"
+                      [disabled]="!emp?.id"
+                      (click)="openEmployeeProfile(emp)"
+                      *ngIf="payrollMode() === 'accumulation'"
+                    >
+                      <i class="bx bx-user-circle"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="payroll-icon-btn"
                       title="Create invoice"
                       aria-label="Create invoice"
                       [disabled]="isInvoicedRow(emp) || creatingInvoiceForUserId() === emp.id"
@@ -183,7 +197,7 @@ import { environment } from '../../../../environments/environment';
               </tr>
             } @empty {
               <tr>
-                <td colspan="9" class="payroll-empty">
+                <td colspan="10" class="payroll-empty">
                   @if (payrollMode() === 'invoiced') {
                     No invoiced payroll data for this period
                   } @else {
@@ -378,6 +392,10 @@ import { environment } from '../../../../environments/environment';
       padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize;
       background: rgba(0,212,255,0.08); color: var(--cyan); border: 1px solid rgba(0,212,255,0.15);
     }
+    .payroll-frequency-badge {
+      padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize;
+      background: rgba(148, 163, 184, 0.14); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);
+    }
     .payroll-status {
       padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize;
       &.pending { background: rgba(251,191,36,0.1); color: #fbbf24; }
@@ -444,6 +462,7 @@ import { environment } from '../../../../environments/environment';
 })
 export class PayrollComponent implements OnInit {
   private http = inject(HttpClient);
+  private router = inject(Router);
   private apiUrl = environment.apiUrl;
 
   employees = signal<any[]>([]);
@@ -617,6 +636,12 @@ export class PayrollComponent implements OnInit {
           return {
             ...u,
             payType,
+            payFrequency: this.pickFirstText(
+              u?.payFrequency,
+              u?.PayFrequency,
+              payroll['payFrequency'],
+              payroll['frequency']
+            ),
             payRate: this.toNumberOrDefault(u.payRate, payroll['payRate'], 0),
             hours: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 0),
             grossPay: 0,
@@ -748,6 +773,14 @@ export class PayrollComponent implements OnInit {
     }
   }
 
+  openEmployeeProfile(emp: any): void {
+    const employeeId = Number(emp?.id);
+    if (!Number.isFinite(employeeId) || employeeId <= 0) return;
+    void this.router.navigate(['/hr/roster'], {
+      queryParams: { editEmployeeId: employeeId }
+    });
+  }
+
   private pickFirstText(...values: unknown[]): string {
     for (const value of values) {
       const text = String(value ?? '').trim();
@@ -790,6 +823,23 @@ export class PayrollComponent implements OnInit {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'commission') return 'commission';
     return 'contract';
+  }
+
+  getPayFrequencyLabel(emp: any): string {
+    const raw = String(emp?.payFrequency ?? '').trim().toLowerCase();
+    if (!raw) return '--';
+    if (raw === 'bi-weekly') return 'Biweekly';
+    if (raw === 'semi-monthly') return 'Semi-monthly';
+    if (raw === 'weekly') return 'Weekly';
+    if (raw === 'biweekly') return 'Biweekly';
+    if (raw === 'semimonthly') return 'Semi-monthly';
+    if (raw === 'monthly') return 'Monthly';
+    return raw
+      .replace(/[_-]+/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
   }
 
   private parsePreferences(raw: unknown): Record<string, any> {
