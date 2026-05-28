@@ -161,6 +161,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         positionStateFilter() === 'active'
         || positionStateFilter() === 'inactive'
         || positionStateFilter() === 'report'
+        || positionStateFilter() === 'goals'
         || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')
       ) {
         <div class="position-group-tabs">
@@ -267,6 +268,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 >
                   <option value="thisWeek">This week</option>
                   <option value="lastWeek">Last week</option>
+                  <option value="allTime">All time</option>
                 </select>
               </div>
               <strong>{{ applicantsPerDayLabel() }}</strong>
@@ -1342,7 +1344,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   pipelineFilter = signal<'working' | 'rejected' | 'hired'>('working');
   reportRange = signal<'all' | '7d' | '30d' | 'custom'>('all');
   reportPositionFilter = signal<string>('all');
-  reportWeekSelection = signal<'thisWeek' | 'lastWeek'>('thisWeek');
+  reportWeekSelection = signal<'thisWeek' | 'lastWeek' | 'allTime'>('thisWeek');
   reportDateFrom = signal('');
   reportDateTo = signal('');
   search = signal('');
@@ -1491,7 +1493,19 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   );
   hiredCount = computed(() => this.reportPositionScopedRows().filter((r) => r.status === 'hired').length);
   applicantsPerDayTotal = computed(() => this.weekScopedRows().length);
-  applicantsPerDayLabel = computed(() => (this.weekScopedRows().length / 7).toFixed(1));
+  applicantsPerDayLabel = computed(() => {
+    const rows = this.weekScopedRows();
+    if (!rows.length) return '0.0';
+    if (this.reportWeekSelection() !== 'allTime') return (rows.length / 7).toFixed(1);
+
+    const timestamps = rows
+      .map((row) => this.parseDateOnly(row.appliedDate)?.getTime() ?? 0)
+      .filter((value) => value > 0)
+      .sort((a, b) => a - b);
+    if (!timestamps.length) return rows.length.toFixed(1);
+    const daySpan = Math.max(1, Math.floor((timestamps[timestamps.length - 1] - timestamps[0]) / 86400000) + 1);
+    return (rows.length / daySpan).toFixed(1);
+  });
 
   statusBreakdown = computed(() => {
     const order: ApplicantStatus[] = ['new', 'screening', 'interview', 'offer', 'hired', 'no response', 'no show', 'rejected'];
@@ -1619,6 +1633,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const lastWeekStart = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate() - 7);
     const lastWeekEnd = new Date(thisWeekStart.getFullYear(), thisWeekStart.getMonth(), thisWeekStart.getDate());
     const selection = this.reportWeekSelection();
+    if (selection === 'allTime') return this.reportRows();
     const start = selection === 'lastWeek' ? lastWeekStart : thisWeekStart;
     const end = selection === 'lastWeek' ? lastWeekEnd : tomorrow;
 
@@ -1669,9 +1684,17 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   tableWorkingCount = computed(() => this.tableScopeRows().filter((r) => r.status !== 'rejected').length);
   tableRejectedCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'rejected').length);
   tableHiredCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'hired').length);
+  goalGroupRows = computed(() => {
+    const targetGroup = this.positionGroupFilter();
+    return this.rows().filter((row) => {
+      if (this.isHistoricalApplicantRow(row)) return false;
+      const isFleet = this.isFleetPosition(row.position);
+      return targetGroup === 'fleet' ? isFleet : !isFleet;
+    });
+  });
   goalSourceOptions = computed(() =>
     Array.from(
-      this.rows().reduce((map, row) => {
+      this.goalGroupRows().reduce((map, row) => {
         const display = this.normalizeSourceDisplay(row.position);
         const key = this.normalizeSourceKey(display);
         if (!key) return map;
@@ -1682,10 +1705,10 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   );
   goalScopedRows = computed(() => {
     const goal = this.applicantGoals()[0];
-    if (!goal) return this.rows();
+    if (!goal) return this.goalGroupRows();
     const positionKeys = new Set(goal.sources.map((source) => this.normalizeSourceKey(source)).filter((value) => !!value));
-    if (positionKeys.size === 0) return this.rows();
-    return this.rows().filter((row) => positionKeys.has(this.normalizeSourceKey(row.position)));
+    if (positionKeys.size === 0) return this.goalGroupRows();
+    return this.goalGroupRows().filter((row) => positionKeys.has(this.normalizeSourceKey(row.position)));
   });
   goalApplicantsTrendSeries = computed<ChartSeries[]>(() => {
     const now = new Date();
@@ -1746,7 +1769,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     };
   });
   applicantGoalProgressRows = computed<ApplicantGoalProgressRow[]>(() => {
-    const rows = this.rows();
+    const rows = this.goalGroupRows();
     return this.applicantGoals().map((goal) => {
       const range = this.getGoalRange(goal.period);
       const sourceKeys = new Set(goal.sources.map((source) => this.normalizeSourceKey(source)).filter((value) => !!value));
