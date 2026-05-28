@@ -143,6 +143,7 @@ import { environment } from '../../../../environments/environment';
               <th>Pay Type</th>
               <th>Pay Frequency</th>
               <th>Pay Rate</th>
+              <th>Invoiced</th>
               <th>Hours</th>
               <th>Gross Pay</th>
               <th>Deductions</th>
@@ -165,6 +166,7 @@ import { environment } from '../../../../environments/environment';
                 <td><span class="payroll-type-badge">{{ emp.payType || 'salary' }}</span></td>
                 <td><span class="payroll-frequency-badge">{{ getPayFrequencyLabel(emp) }}</span></td>
                 <td class="payroll-mono">\${{ emp.payRate || 0 | number:'1.2-2' }}</td>
+                <td class="payroll-mono payroll-invoiced">\${{ emp.invoicedAmount || 0 | number:'1.2-2' }}</td>
                 <td>{{ emp.hours || 0 }}</td>
                 <td class="payroll-mono">\${{ emp.grossPay || 0 | number:'1.2-2' }}</td>
                 <td class="payroll-mono payroll-deduction">-\${{ emp.deductions || 0 | number:'1.2-2' }}</td>
@@ -209,7 +211,7 @@ import { environment } from '../../../../environments/environment';
               </tr>
             } @empty {
               <tr>
-                <td colspan="10" class="payroll-empty">
+                <td colspan="11" class="payroll-empty">
                   @if (payrollMode() === 'invoiced') {
                     No invoiced payroll data for this period
                   } @else {
@@ -410,6 +412,7 @@ import { environment } from '../../../../environments/environment';
     .payroll-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; }
     .payroll-deduction { color: #ff4444; }
     .payroll-net { color: #00ff88; font-weight: 600; }
+    .payroll-invoiced { color: #93c5fd; font-weight: 600; }
     .payroll-type-badge {
       padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; text-transform: capitalize;
       background: rgba(0,212,255,0.08); color: var(--cyan); border: 1px solid rgba(0,212,255,0.15);
@@ -694,11 +697,13 @@ export class PayrollComponent implements OnInit {
             payroll['frequency']
           );
           const grossPay = this.resolveGrossPay(payType, payFrequency, u, payroll);
+          const invoicedAmount = this.resolveInvoicedAmount(payType, payFrequency, u, payroll);
           return {
             ...u,
             payType,
             payFrequency,
             payRate: this.toNumberOrDefault(u.payRate, payroll['payRate'], 0),
+            invoicedAmount,
             hours: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 0),
             grossPay,
             deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
@@ -964,6 +969,32 @@ export class PayrollComponent implements OnInit {
     if (periodsPerYear <= 0) return Number(annualPay.toFixed(2));
     const periodAmount = annualPay / periodsPerYear;
     return Number(periodAmount.toFixed(2));
+  }
+
+  private resolveInvoicedAmount(
+    payType: string,
+    payFrequency: string,
+    user: any,
+    payroll: Record<string, unknown>
+  ): number {
+    const history = this.getPayrollInvoiceHistory(payroll);
+    if (history.length > 0) {
+      return Number(
+        history.reduce((sum, entry) => sum + this.toNumberOrDefault(entry.amount, 0), 0).toFixed(2)
+      );
+    }
+
+    const normalizedPayType = String(payType ?? '').trim().toLowerCase();
+    if (normalizedPayType !== 'salary') return 0;
+
+    const annualPay = this.toNumberOrDefault(user?.payRate, payroll['payRate'], payroll['annualSalary'], 0);
+    if (annualPay <= 0) return 0;
+    const periodsPerYear = this.getPayPeriodsPerYear(this.normalizePayFrequency(payFrequency));
+    if (periodsPerYear <= 0) return 0;
+
+    const periodsInvoiced = this.toNumberOrDefault(payroll['salaryPeriodsInvoicedYtd'], 0);
+    const periodAmount = annualPay / periodsPerYear;
+    return Number(Math.max(0, periodsInvoiced * periodAmount).toFixed(2));
   }
 
   private getPayPeriodsPerYear(frequency: PayrollDetailsForm['payFrequency']): number {
