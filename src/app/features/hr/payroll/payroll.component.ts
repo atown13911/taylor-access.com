@@ -693,8 +693,7 @@ export class PayrollComponent implements OnInit {
             payroll['payFrequency'],
             payroll['frequency']
           );
-          const salaryProgress = this.getSalaryProgress(payType, payFrequency, u, payroll);
-          const grossPay = salaryProgress?.remainingBalance ?? this.resolveGrossPay(payType, payFrequency, u, payroll);
+          const grossPay = this.resolveGrossPay(payType, payFrequency, u, payroll);
           return {
             ...u,
             payType,
@@ -705,7 +704,6 @@ export class PayrollComponent implements OnInit {
             deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
             netPay: 0,
             payrollStatus,
-            salaryPeriodsPaidYtd: salaryProgress?.effectivePeriodsPaid ?? 0,
             invoiceNumber: this.pickFirstText(
               u?.invoiceNumber,
               u?.invoiceNo,
@@ -963,62 +961,9 @@ export class PayrollComponent implements OnInit {
 
     const frequency = this.normalizePayFrequency(payFrequency);
     const periodsPerYear = this.getPayPeriodsPerYear(frequency);
-    const currentYear = new Date().getUTCFullYear();
-    const trackedYear = Number(payroll['salaryInvoiceYear']);
-    const yearMatches = Number.isFinite(trackedYear) && trackedYear === currentYear;
-    const periodsInvoiced = yearMatches ? this.toNumberOrDefault(payroll['salaryPeriodsInvoicedYtd'], 0) : 0;
-
-    let remaining = yearMatches
-      ? this.toNumberOrDefault(payroll['salaryRemainingBalance'], annualPay)
-      : annualPay;
-
-    if (remaining > annualPay || !Number.isFinite(remaining)) remaining = annualPay;
-    if (remaining < 0) remaining = 0;
-
-    // Backfill from periods invoiced if explicit remaining value was not previously stored.
-    if (yearMatches && !Number.isFinite(Number(payroll['salaryRemainingBalance'])) && periodsPerYear > 0) {
-      const periodAmount = annualPay / periodsPerYear;
-      remaining = Math.max(0, annualPay - (Math.max(0, periodsInvoiced) * periodAmount));
-    }
-
-    return Number(remaining.toFixed(2));
-  }
-
-  private getSalaryProgress(
-    payType: string,
-    payFrequency: string,
-    user: any,
-    payroll: Record<string, unknown>
-  ): { remainingBalance: number; effectivePeriodsPaid: number } | null {
-    const normalizedPayType = String(payType ?? '').trim().toLowerCase();
-    if (normalizedPayType !== 'salary') return null;
-
-    const annualPay = this.toNumberOrDefault(user?.payRate, payroll['payRate'], payroll['annualSalary'], 0);
-    if (annualPay <= 0) return { remainingBalance: 0, effectivePeriodsPaid: 0 };
-
-    const frequency = this.normalizePayFrequency(payFrequency);
-    const periodsPerYear = this.getPayPeriodsPerYear(frequency);
-    if (periodsPerYear <= 0) return { remainingBalance: Number(annualPay.toFixed(2)), effectivePeriodsPaid: 0 };
-
-    const referenceDate = this.getReferenceDateForPeriodFilter(this.periodFilter());
-    const activeYear = referenceDate.getUTCFullYear();
-    const trackedYear = Number(payroll['salaryInvoiceYear']);
-    const yearMatches = Number.isFinite(trackedYear) && trackedYear === activeYear;
-    const expectedPeriodsPaid = this.getExpectedPaidPeriods(frequency, referenceDate, this.periodFilter());
-    const actualPeriodsPaid = yearMatches ? this.toNumberOrDefault(payroll['salaryPeriodsInvoicedYtd'], 0) : 0;
-    const effectivePeriodsPaid = Math.min(periodsPerYear, Math.max(expectedPeriodsPaid, actualPeriodsPaid));
+    if (periodsPerYear <= 0) return Number(annualPay.toFixed(2));
     const periodAmount = annualPay / periodsPerYear;
-    const expectedRemaining = Math.max(0, annualPay - (effectivePeriodsPaid * periodAmount));
-
-    const storedRemaining = yearMatches
-      ? this.toNumberOrDefault(payroll['salaryRemainingBalance'], expectedRemaining)
-      : expectedRemaining;
-    const remainingBalance = Math.min(expectedRemaining, storedRemaining);
-
-    return {
-      remainingBalance: Number(Math.max(0, remainingBalance).toFixed(2)),
-      effectivePeriodsPaid
-    };
+    return Number(periodAmount.toFixed(2));
   }
 
   private getPayPeriodsPerYear(frequency: PayrollDetailsForm['payFrequency']): number {
