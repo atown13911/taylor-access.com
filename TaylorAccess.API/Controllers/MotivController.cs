@@ -2174,19 +2174,29 @@ public class MotivController : ControllerBase
             return locationElement;
 
         var src = locationElement.Value;
+        static decimal? ReadDecimal(JsonElement? srcObj, params string[] keys)
+        {
+            if (!srcObj.HasValue || srcObj.Value.ValueKind != JsonValueKind.Object) return null;
+            return PickDecimal(srcObj.Value, keys);
+        }
+
         decimal? latitude =
-            PickDecimal(src, "latitude", "lat", "currentLatitude", "lastLatitude")
-            ?? PickDecimal(PickNestedObject(src, "location") ?? default, "latitude", "lat")
-            ?? PickDecimal(PickNestedObject(src, "current_location") ?? default, "latitude", "lat")
-            ?? PickDecimal(PickNestedObject(src, "latest_location") ?? default, "latitude", "lat")
-            ?? PickDecimal(PickNestedObject(src, "last_known_location") ?? default, "latitude", "lat");
+            PickDecimal(src, "latitude", "lat", "currentLatitude", "lastLatitude", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "current_location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "latest_location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "last_known_location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "position"), "latitude", "lat", "latitudeE7", "latitude_e7")
+            ?? ReadDecimal(PickNestedObject(PickNestedObject(src, "geometry") ?? default, "location"), "lat", "latitude", "latitudeE7", "latitude_e7");
 
         decimal? longitude =
-            PickDecimal(src, "longitude", "lng", "lon", "currentLongitude", "lastLongitude")
-            ?? PickDecimal(PickNestedObject(src, "location") ?? default, "longitude", "lng", "lon")
-            ?? PickDecimal(PickNestedObject(src, "current_location") ?? default, "longitude", "lng", "lon")
-            ?? PickDecimal(PickNestedObject(src, "latest_location") ?? default, "longitude", "lng", "lon")
-            ?? PickDecimal(PickNestedObject(src, "last_known_location") ?? default, "longitude", "lng", "lon");
+            PickDecimal(src, "longitude", "lng", "lon", "currentLongitude", "lastLongitude", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "current_location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "latest_location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "last_known_location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "position"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7")
+            ?? ReadDecimal(PickNestedObject(PickNestedObject(src, "geometry") ?? default, "location"), "lng", "lon", "longitude", "longitudeE7", "longitude_e7");
 
         if ((!latitude.HasValue || !longitude.HasValue) &&
             src.TryGetProperty("coordinates", out var coordinates) &&
@@ -2202,6 +2212,30 @@ public class MotivController : ControllerBase
                 latitude ??= latFromCoords;
                 longitude ??= lonFromCoords;
             }
+        }
+
+        if ((!latitude.HasValue || !longitude.HasValue) &&
+            src.TryGetProperty("coordinates", out var coordinatesObj) &&
+            coordinatesObj.ValueKind == JsonValueKind.Object)
+        {
+            latitude ??= PickDecimal(coordinatesObj, "lat", "latitude", "y", "latitudeE7", "latitude_e7");
+            longitude ??= PickDecimal(coordinatesObj, "lng", "lon", "longitude", "x", "longitudeE7", "longitude_e7");
+        }
+
+        if ((!latitude.HasValue || !longitude.HasValue) &&
+            src.TryGetProperty("latLng", out var latLngObj) &&
+            latLngObj.ValueKind == JsonValueKind.Object)
+        {
+            latitude ??= PickDecimal(latLngObj, "lat", "latitude", "latitudeE7", "latitude_e7");
+            longitude ??= PickDecimal(latLngObj, "lng", "lon", "longitude", "longitudeE7", "longitude_e7");
+        }
+
+        if ((!latitude.HasValue || !longitude.HasValue) &&
+            src.TryGetProperty("gps", out var gpsObj) &&
+            gpsObj.ValueKind == JsonValueKind.Object)
+        {
+            latitude ??= PickDecimal(gpsObj, "lat", "latitude", "latitudeE7", "latitude_e7");
+            longitude ??= PickDecimal(gpsObj, "lng", "lon", "longitude", "longitudeE7", "longitude_e7");
         }
 
         if (!latitude.HasValue || !longitude.HasValue)
