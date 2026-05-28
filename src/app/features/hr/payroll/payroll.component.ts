@@ -134,6 +134,7 @@ import { environment } from '../../../../environments/environment';
               <th>Deductions</th>
               <th>Net Pay</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -156,10 +157,33 @@ import { environment } from '../../../../environments/environment';
                 <td>
                   <span class="payroll-status" [class]="emp.payrollStatus || 'pending'">{{ emp.payrollStatus || 'pending' }}</span>
                 </td>
+                <td>
+                  <div class="payroll-row-actions">
+                    <button
+                      type="button"
+                      class="payroll-icon-btn"
+                      title="Edit payroll details"
+                      aria-label="Edit payroll details"
+                      (click)="openPayrollDetails(emp)"
+                    >
+                      <i class="bx bx-edit-alt"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="payroll-icon-btn"
+                      title="Create invoice"
+                      aria-label="Create invoice"
+                      [disabled]="isInvoicedRow(emp) || creatingInvoiceForUserId() === emp.id"
+                      (click)="createInvoice(emp)"
+                    >
+                      <i class="bx bx-receipt"></i>
+                    </button>
+                  </div>
+                </td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="8" class="payroll-empty">
+                <td colspan="9" class="payroll-empty">
                   @if (payrollMode() === 'invoiced') {
                     No invoiced payroll data for this period
                   } @else {
@@ -171,7 +195,73 @@ import { environment } from '../../../../environments/environment';
           </tbody>
         </table>
       </div>
+
+      @if (actionMessage()) {
+        <div class="payroll-feedback">{{ actionMessage() }}</div>
+      }
     </div>
+
+    @if (detailsModalOpen()) {
+      <div class="payroll-modal-backdrop" (click)="closePayrollDetails()"></div>
+      <div class="payroll-modal" role="dialog" aria-modal="true" aria-label="Payroll details">
+        <div class="payroll-modal-header">
+          <h3>Payroll Details</h3>
+          <button type="button" class="payroll-modal-close" (click)="closePayrollDetails()">
+            <i class="bx bx-x"></i>
+          </button>
+        </div>
+        <p class="payroll-modal-sub">
+          {{ selectedEmployeeDetails()?.name || 'Employee' }} · {{ selectedEmployeeDetails()?.email || 'No email' }}
+        </p>
+
+        <div class="payroll-modal-grid">
+          <label class="payroll-modal-field">
+            <span>Pay frequency</span>
+            <select
+              [ngModel]="payrollDetailsForm().payFrequency"
+              (ngModelChange)="updatePayrollFormField('payFrequency', $event)"
+            >
+              @for (item of payFrequencyOptions; track item.value) {
+                <option [value]="item.value">{{ item.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="payroll-modal-field">
+            <span>Compensation model</span>
+            <select
+              [ngModel]="payrollDetailsForm().compensationModel"
+              (ngModelChange)="updatePayrollFormField('compensationModel', $event)"
+            >
+              @for (item of compensationModelOptions; track item.value) {
+                <option [value]="item.value">{{ item.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <label class="payroll-modal-field">
+          <span>Contract / commission notes</span>
+          <input
+            type="text"
+            [ngModel]="payrollDetailsForm().contractNotes"
+            (ngModelChange)="updatePayrollFormField('contractNotes', $event)"
+            placeholder="Optional details or notes"
+          >
+        </label>
+
+        <div class="payroll-modal-actions">
+          <button type="button" class="payroll-btn" (click)="closePayrollDetails()">Cancel</button>
+          <button type="button" class="payroll-btn payroll-btn-primary" [disabled]="savingDetails()" (click)="savePayrollDetails()">
+            @if (savingDetails()) {
+              Saving...
+            } @else {
+              Save details
+            }
+          </button>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .payroll-page { padding: 1.5rem; }
@@ -295,6 +385,60 @@ import { environment } from '../../../../environments/environment';
       &.paid { background: rgba(0,170,255,0.1); color: #00aaff; }
     }
     .payroll-empty { text-align: center; padding: 40px; color: var(--text-secondary); }
+    .payroll-row-actions { display: inline-flex; gap: 0.4rem; align-items: center; }
+    .payroll-icon-btn {
+      width: 30px; height: 30px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.04); color: var(--text-primary); display: inline-flex;
+      align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+      i { font-size: 1rem; }
+      &:hover { border-color: rgba(0,212,255,0.4); color: var(--cyan); background: rgba(0,212,255,0.12); }
+      &:disabled { opacity: 0.45; cursor: not-allowed; }
+    }
+    .payroll-feedback {
+      margin-top: 0.8rem; font-size: 0.82rem; color: #8be9fd;
+      background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.22);
+      border-radius: 8px; padding: 0.55rem 0.75rem;
+    }
+    .payroll-modal-backdrop {
+      position: fixed; inset: 0; background: rgba(2, 6, 23, 0.7); z-index: 500;
+    }
+    .payroll-modal {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: min(560px, calc(100vw - 2rem)); background: #0c111b; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12); z-index: 501; padding: 1rem 1rem 0.9rem;
+      box-shadow: 0 20px 55px rgba(0,0,0,0.55);
+    }
+    .payroll-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      h3 { margin: 0; font-size: 1.05rem; color: var(--text-primary); }
+    }
+    .payroll-modal-close {
+      border: 1px solid rgba(255,255,255,0.14); background: transparent; color: var(--text-secondary);
+      width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center;
+      justify-content: center; cursor: pointer; transition: all 0.2s;
+      &:hover { color: var(--text-primary); border-color: rgba(0,212,255,0.35); }
+    }
+    .payroll-modal-sub { margin: 0.3rem 0 0.9rem; color: var(--text-secondary); font-size: 0.82rem; }
+    .payroll-modal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+    .payroll-modal-field {
+      display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.75rem;
+      span { color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+      input, select {
+        width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);
+        color: var(--text-primary); font-size: 0.86rem; outline: none;
+        &:focus { border-color: rgba(0,212,255,0.4); }
+      }
+      select option { background: #0a0a0f; }
+    }
+    .payroll-modal-actions {
+      display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.35rem;
+    }
+    .payroll-btn-primary {
+      border-color: rgba(0,212,255,0.42);
+      background: rgba(0,212,255,0.18);
+      color: #dff8ff;
+    }
     @media (max-width: 768px) { .payroll-stats { grid-template-columns: repeat(2, 1fr); } }
   `]
 })
@@ -316,6 +460,26 @@ export class PayrollComponent implements OnInit {
   periodFilter = signal('current');
   payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
   selectedOrganization = signal('All organizations');
+  detailsModalOpen = signal(false);
+  selectedEmployeeDetails = signal<any | null>(null);
+  savingDetails = signal(false);
+  creatingInvoiceForUserId = signal<number | null>(null);
+  actionMessage = signal('');
+  payrollDetailsForm = signal<PayrollDetailsForm>({
+    payFrequency: 'weekly',
+    compensationModel: 'contract',
+    contractNotes: ''
+  });
+  readonly payFrequencyOptions = [
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'biweekly', label: 'Biweekly' },
+    { value: 'semimonthly', label: 'Semi-monthly' },
+    { value: 'monthly', label: 'Monthly' }
+  ];
+  readonly compensationModelOptions = [
+    { value: 'contract', label: 'Contract' },
+    { value: 'commission', label: 'Commission' }
+  ];
   structureFilterFieldOptions: Array<{ value: StructureFilterField; label: string }> = [
     { value: 'all', label: 'All structures' },
     { value: 'division', label: 'Division' },
@@ -421,6 +585,13 @@ export class PayrollComponent implements OnInit {
           const prefs = this.parsePreferences(u?.preferences ?? u?.Preferences);
           const rawPayroll = prefs?.['payroll'] ?? prefs?.['Payroll'];
           const payroll = rawPayroll && typeof rawPayroll === 'object' ? rawPayroll as Record<string, unknown> : {};
+          const payrollStatus = this.pickFirstText(
+            u?.payrollStatus,
+            u?.PayrollStatus,
+            payroll['payrollStatus'],
+            payroll['status'],
+            payroll['invoiceStatus']
+          ) || 'pending';
           const payType = this.normalizePayType(
             this.pickFirstText(
               u?.payType,
@@ -442,13 +613,128 @@ export class PayrollComponent implements OnInit {
             grossPay: 0,
             deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
             netPay: 0,
-            payrollStatus: u.payrollStatus || 'pending'
+            payrollStatus,
+            invoiceNumber: this.pickFirstText(
+              u?.invoiceNumber,
+              u?.invoiceNo,
+              u?.invoice_id,
+              payroll['invoiceNumber'],
+              payroll['invoiceNo']
+            ),
+            invoiceDate: this.pickFirstText(
+              u?.invoiceDate,
+              u?.invoicedAt,
+              payroll['invoiceDate'],
+              payroll['invoicedAt']
+            )
           };
         });
         this.employees.set(users);
       },
       error: () => this.employees.set([])
     });
+  }
+
+  openPayrollDetails(emp: any): void {
+    if (!emp || typeof emp !== 'object') return;
+    const prefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
+    const payroll = prefs?.payroll && typeof prefs.payroll === 'object' ? prefs.payroll as Record<string, unknown> : {};
+    const payFrequency = this.normalizePayFrequency(
+      this.pickFirstText(payroll['payFrequency'], payroll['frequency'], emp?.payFrequency)
+    );
+    const compensationModel = this.normalizeCompensationModel(
+      this.pickFirstText(payroll['compensationModel'], payroll['contractType'], payroll['payPlan'], emp?.compensationModel)
+    );
+    this.selectedEmployeeDetails.set(emp);
+    this.payrollDetailsForm.set({
+      payFrequency,
+      compensationModel,
+      contractNotes: this.pickFirstText(payroll['contractNotes'], payroll['compensationNotes'], emp?.contractNotes)
+    });
+    this.detailsModalOpen.set(true);
+  }
+
+  closePayrollDetails(): void {
+    this.detailsModalOpen.set(false);
+    this.selectedEmployeeDetails.set(null);
+    this.savingDetails.set(false);
+  }
+
+  updatePayrollFormField<K extends keyof PayrollDetailsForm>(field: K, value: PayrollDetailsForm[K]): void {
+    this.payrollDetailsForm.update((current) => ({ ...current, [field]: value }));
+  }
+
+  async savePayrollDetails(): Promise<void> {
+    const employee = this.selectedEmployeeDetails();
+    if (!employee?.id) return;
+    this.savingDetails.set(true);
+    this.actionMessage.set('');
+    try {
+      const existingPrefs = this.parsePreferences(employee?.preferences ?? employee?.Preferences);
+      const existingPayroll =
+        existingPrefs?.payroll && typeof existingPrefs.payroll === 'object'
+          ? existingPrefs.payroll as Record<string, unknown>
+          : {};
+      const form = this.payrollDetailsForm();
+      const mergedPreferences = {
+        ...existingPrefs,
+        payroll: {
+          ...existingPayroll,
+          payFrequency: form.payFrequency,
+          compensationModel: form.compensationModel,
+          contractNotes: form.contractNotes
+        }
+      };
+
+      await firstValueFrom(
+        this.http.put(`${this.apiUrl}/api/v1/users/${employee.id}`, {
+          preferences: JSON.stringify(mergedPreferences)
+        })
+      );
+
+      this.detailsModalOpen.set(false);
+      this.actionMessage.set(`Updated payroll details for ${employee.name || 'employee'}.`);
+      this.loadData();
+    } catch {
+      this.actionMessage.set('Failed to save payroll details.');
+    } finally {
+      this.savingDetails.set(false);
+    }
+  }
+
+  async createInvoice(emp: any): Promise<void> {
+    if (!emp?.id || this.isInvoicedRow(emp)) return;
+    this.creatingInvoiceForUserId.set(Number(emp.id));
+    this.actionMessage.set('');
+    try {
+      const now = new Date();
+      const invoiceNo = `INV-${emp.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const existingPrefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
+      const existingPayroll =
+        existingPrefs?.payroll && typeof existingPrefs.payroll === 'object'
+          ? existingPrefs.payroll as Record<string, unknown>
+          : {};
+      const mergedPreferences = {
+        ...existingPrefs,
+        payroll: {
+          ...existingPayroll,
+          payrollStatus: 'invoiced',
+          invoiceNumber: invoiceNo,
+          invoiceDate: now.toISOString()
+        }
+      };
+      await firstValueFrom(
+        this.http.put(`${this.apiUrl}/api/v1/users/${emp.id}`, {
+          preferences: JSON.stringify(mergedPreferences)
+        })
+      );
+      this.actionMessage.set(`Invoice ${invoiceNo} created for ${emp.name || 'employee'}.`);
+      this.loadData();
+    } catch {
+      this.actionMessage.set(`Failed to create invoice for ${emp?.name || 'employee'}.`);
+    } finally {
+      this.creatingInvoiceForUserId.set(null);
+    }
   }
 
   private pickFirstText(...values: unknown[]): string {
@@ -459,7 +745,7 @@ export class PayrollComponent implements OnInit {
     return '';
   }
 
-  private isInvoicedRow(emp: any): boolean {
+  isInvoicedRow(emp: any): boolean {
     const status = String(emp?.payrollStatus ?? '').trim().toLowerCase();
     if (status === 'processed' || status === 'paid' || status === 'invoiced') return true;
     const invoiceNo = String(emp?.invoiceNumber ?? emp?.invoiceNo ?? emp?.invoice_id ?? '').trim();
@@ -477,6 +763,22 @@ export class PayrollComponent implements OnInit {
       .filter(Boolean)
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
+  }
+
+  private normalizePayFrequency(value: string): PayrollDetailsForm['payFrequency'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'bi-weekly') return 'biweekly';
+    if (normalized === 'semi-monthly') return 'semimonthly';
+    if (normalized === 'weekly' || normalized === 'biweekly' || normalized === 'semimonthly' || normalized === 'monthly') {
+      return normalized;
+    }
+    return 'weekly';
+  }
+
+  private normalizeCompensationModel(value: string): PayrollDetailsForm['compensationModel'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'commission') return 'commission';
+    return 'contract';
   }
 
   private parsePreferences(raw: unknown): Record<string, any> {
@@ -719,3 +1021,9 @@ type StructureFilterField =
   | 'satellite'
   | 'agency'
   | 'all';
+
+type PayrollDetailsForm = {
+  payFrequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
+  compensationModel: 'contract' | 'commission';
+  contractNotes: string;
+};
