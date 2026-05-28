@@ -143,7 +143,8 @@ import { environment } from '../../../../environments/environment';
                   <div class="payroll-avatar">{{ (emp.name || 'E').charAt(0) }}</div>
                   <div class="payroll-emp-info">
                     <strong>{{ emp.name }}</strong>
-                    <span>{{ emp.email }}</span>
+                    <span class="payroll-email">{{ emp.email }}</span>
+                    <span class="payroll-meta">{{ getOrganizationLabel(emp) || 'No org' }} • {{ getDivisionLabel(emp) || 'No division' }}</span>
                   </div>
                 </td>
                 <td><span class="payroll-type-badge">{{ emp.payType || 'salary' }}</span></td>
@@ -277,7 +278,8 @@ import { environment } from '../../../../environments/environment';
     }
     .payroll-emp-info { display: flex; flex-direction: column;
       strong { font-size: 0.88rem; }
-      span { font-size: 0.72rem; color: var(--text-secondary); }
+      .payroll-email { font-size: 0.72rem; color: var(--text-secondary); }
+      .payroll-meta { font-size: 0.68rem; color: rgba(148, 163, 184, 0.95); }
     }
     .payroll-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; }
     .payroll-deduction { color: #ff4444; }
@@ -541,7 +543,7 @@ export class PayrollComponent implements OnInit {
     }
   }
 
-  private getOrganizationLabel(emp: any): string | null {
+  getOrganizationLabel(emp: any): string | null {
     if (!emp || typeof emp !== 'object') return null;
     const byName = String(
       emp.organizationName
@@ -552,6 +554,19 @@ export class PayrollComponent implements OnInit {
     if (byName) return byName;
     const byId = Number(emp.organizationId);
     if (Number.isFinite(byId) && byId > 0) return `Organization ${byId}`;
+    return null;
+  }
+
+  getDivisionLabel(emp: any): string | null {
+    if (!emp || typeof emp !== 'object') return null;
+    const byName = this.firstNonEmpty(
+      emp.divisionName,
+      emp.division,
+      this.divisionNameById()[Number(emp.divisionId) || 0]
+    );
+    if (byName) return byName;
+    const byId = Number(emp.divisionId);
+    if (Number.isFinite(byId) && byId > 0) return `Division ${byId}`;
     return null;
   }
 
