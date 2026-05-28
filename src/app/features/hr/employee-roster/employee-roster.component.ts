@@ -5177,7 +5177,7 @@ export class EmployeeRosterComponent implements OnInit {
         name: this.editingEmployee.name,
         alias: this.editingEmployee.alias,
         gender: this.editingEmployee.gender,
-        dateOfBirth: this.editingEmployee.dateOfBirth,
+        dateOfBirth: this.normalizeDateOnly(this.editingEmployee.dateOfBirth),
         idNumber: this.editingEmployee.idNumber,
         height: this.editingEmployee.height,
         weight: this.editingEmployee.weight,
@@ -5204,12 +5204,12 @@ export class EmployeeRosterComponent implements OnInit {
         jobTitle: this.editingEmployee.jobTitle,
         role: this.editingEmployee.role,
         status: this.editingEmployee.status,
-        organizationId: this.editingEmployee.organizationId,
+        organizationId: this.toNullableInt(this.editingEmployee.organizationId),
         country: this.editingEmployee.country,
         language: this.editingEmployee.language,
-        divisionId: this.editingEmployee.divisionId,
-        departmentId: this.editingEmployee.departmentId,
-        positionId: this.editingEmployee.positionId,
+        divisionId: this.toNullableInt(this.editingEmployee.divisionId),
+        departmentId: this.toNullableInt(this.editingEmployee.departmentId),
+        positionId: this.toNullableInt(this.editingEmployee.positionId),
         timezone: this.editingEmployee.timezone,
         preferences: this.mergePayrollPreferences(this.editingEmployee.preferences, payrollPreferences)
       };
@@ -5244,8 +5244,46 @@ export class EmployeeRosterComponent implements OnInit {
       this.toast.champagne(`🎉 ${employeeName} updated successfully!`);
     } catch (err: any) {
       console.error('Failed to update employee:', err);
-      alert(err?.error?.message || 'Failed to update employee');
+      alert(this.getApiErrorMessage(err, 'Failed to update employee'));
     }
+  }
+
+  private toNullableInt(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private normalizeDateOnly(value: unknown): string | null {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    const dateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) return dateOnlyMatch[0];
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return null;
+    const year = parsed.getUTCFullYear();
+    const month = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private getApiErrorMessage(err: any, fallback: string): string {
+    const errorPayload = err?.error;
+    const direct = String(
+      errorPayload?.message
+      ?? errorPayload?.error
+      ?? err?.message
+      ?? ''
+    ).trim();
+    if (direct) return direct;
+
+    const validation = errorPayload?.errors;
+    if (validation && typeof validation === 'object') {
+      const firstEntry = Object.values(validation).find((v) => Array.isArray(v) && v.length > 0) as string[] | undefined;
+      if (firstEntry?.[0]) return firstEntry[0];
+    }
+
+    return fallback;
   }
 
   async toggleEmployeeStatus(employee: any) {
