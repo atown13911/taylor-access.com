@@ -69,6 +69,7 @@ public class MotivController : ControllerBase
             var normalizedLocation = NormalizeLocationElement(
                 PickNestedObject(r, "current_location")
                 ?? PickNestedObject(r, "location")
+                ?? r
             );
             var (lat, lon) = TryExtractLatLon(normalizedLocation);
             return lat.HasValue && lon.HasValue;
@@ -1952,6 +1953,48 @@ public class MotivController : ControllerBase
         if (mergedRows.Count == 0)
             mergedRows = locationRows;
 
+        var locationRowsWithCoords = locationRows.Count(row =>
+        {
+            var normalized = NormalizeLocationElement(
+                PickNestedObject(row, "current_location")
+                ?? PickNestedObject(row, "location")
+                ?? PickNestedObject(row, "latest_location")
+                ?? PickNestedObject(row, "last_known_location")
+                ?? row
+            );
+            var (lat, lon) = TryExtractLatLon(normalized);
+            return lat.HasValue && lon.HasValue;
+        });
+
+        var vehicleRowsWithCoords = vehiclesRows.Count(row =>
+        {
+            var normalized = NormalizeLocationElement(
+                PickNestedObject(row, "current_location")
+                ?? PickNestedObject(row, "location")
+                ?? PickNestedObject(row, "latest_location")
+                ?? PickNestedObject(row, "last_known_location")
+                ?? row
+            );
+            var (lat, lon) = TryExtractLatLon(normalized);
+            return lat.HasValue && lon.HasValue;
+        });
+
+        var locationSample = locationRows.Count > 0 ? locationRows[0] : (JsonElement?)null;
+        var vehicleSample = vehiclesRows.Count > 0 ? vehiclesRows[0] : (JsonElement?)null;
+        var locationSampleJson = locationSample.HasValue ? Truncate(locationSample.Value.GetRawText(), 800) : "";
+        var vehicleSampleJson = vehicleSample.HasValue ? Truncate(vehicleSample.Value.GetRawText(), 800) : "";
+        _logger.LogInformation(
+            "MOTIV raw coverage locationRowsWithCoords={LocationRowsWithCoords}/{LocationRowsTotal} vehicleRowsWithCoords={VehicleRowsWithCoords}/{VehicleRowsTotal} locationSampleKeys={LocationSampleKeys} vehicleSampleKeys={VehicleSampleKeys} locationSampleJson={LocationSampleJson} vehicleSampleJson={VehicleSampleJson}",
+            locationRowsWithCoords,
+            locationRows.Count,
+            vehicleRowsWithCoords,
+            vehiclesRows.Count,
+            string.Join(",", GetJsonKeys(locationSample, 30)),
+            string.Join(",", GetJsonKeys(vehicleSample, 30)),
+            locationSampleJson,
+            vehicleSampleJson
+        );
+
         JsonElement? mergedSample = mergedRows.Count > 0 ? mergedRows[0] : null;
         AppendDebugLog(
             runId: "run-activity-location",
@@ -2057,12 +2100,21 @@ public class MotivController : ControllerBase
                 usedLocationIndexes.Add(i);
             }
 
+            var matchedLocationUser = matchedLocation.HasValue
+                ? (PickNestedObject(matchedLocation.Value, "user") ?? (JsonElement?)null)
+                : null;
+            var baseRowUser = PickNestedObject(baseRow, "user");
+
             var locationObject = matchedLocation.HasValue
                 ? (
                     PickNestedObject(matchedLocation.Value, "current_location")
                     ?? PickNestedObject(matchedLocation.Value, "location")
                     ?? PickNestedObject(matchedLocation.Value, "latest_location")
                     ?? PickNestedObject(matchedLocation.Value, "last_known_location")
+                    ?? (matchedLocationUser.HasValue ? PickNestedObject(matchedLocationUser.Value, "current_location") : null)
+                    ?? (matchedLocationUser.HasValue ? PickNestedObject(matchedLocationUser.Value, "location") : null)
+                    ?? (matchedLocationUser.HasValue ? PickNestedObject(matchedLocationUser.Value, "latest_location") : null)
+                    ?? (matchedLocationUser.HasValue ? PickNestedObject(matchedLocationUser.Value, "last_known_location") : null)
                     ?? (LooksLikeLocationRow(matchedLocation.Value) ? matchedLocation.Value : (JsonElement?)null)
                 )
                 : (
@@ -2070,16 +2122,30 @@ public class MotivController : ControllerBase
                     ?? PickNestedObject(baseRow, "location")
                     ?? PickNestedObject(baseRow, "latest_location")
                     ?? PickNestedObject(baseRow, "last_known_location")
+                    ?? (baseRowUser.HasValue ? PickNestedObject(baseRowUser.Value, "current_location") : null)
+                    ?? (baseRowUser.HasValue ? PickNestedObject(baseRowUser.Value, "location") : null)
+                    ?? (baseRowUser.HasValue ? PickNestedObject(baseRowUser.Value, "latest_location") : null)
+                    ?? (baseRowUser.HasValue ? PickNestedObject(baseRowUser.Value, "last_known_location") : null)
                     ?? (LooksLikeLocationRow(baseRow) ? baseRow : (JsonElement?)null)
                 );
             locationObject = NormalizeLocationElement(locationObject) ?? locationObject;
 
             var vehicleObject =
                 (matchedLocation.HasValue ? PickNestedObject(matchedLocation.Value, "current_vehicle") : null)
+                ?? (matchedLocationUser.HasValue ? PickNestedObject(matchedLocationUser.Value, "current_vehicle") : null)
                 ?? PickNestedObject(baseRow, "current_vehicle")
+                ?? (baseRowUser.HasValue ? PickNestedObject(baseRowUser.Value, "current_vehicle") : null)
                 ?? PickNestedObject(baseRow, "vehicle");
 
-            var vehicleId = PickString(vehicleObject ?? matchedLocation ?? baseRow, "id", "vehicle_id");
+            var vehicleId =
+                PickString(vehicleObject ?? default, "id", "vehicle_id")
+                ?? PickString(
+                    matchedLocation ?? baseRow,
+                    "vehicle_id",
+                    "vehicleId",
+                    "current_vehicle_id",
+                    "truck_id",
+                    "asset_id");
             if (vehicleObject == null && !string.IsNullOrWhiteSpace(vehicleId) && vehiclesById.TryGetValue(vehicleId, out var matchedVehicle))
                 vehicleObject = matchedVehicle;
 
@@ -2094,6 +2160,26 @@ public class MotivController : ControllerBase
             }
             locationObject = NormalizeLocationElement(locationObject) ?? locationObject;
             var (flatLatitude, flatLongitude) = TryExtractLatLon(locationObject);
+
+            // If driver-location row exists but has no coordinates, fall back to vehicle-location coordinates.
+            if ((!flatLatitude.HasValue || !flatLongitude.HasValue) && vehicleObject.HasValue)
+            {
+                var vehicleLocation =
+                    PickNestedObject(vehicleObject.Value, "current_location")
+                    ?? PickNestedObject(vehicleObject.Value, "location")
+                    ?? PickNestedObject(vehicleObject.Value, "latest_location")
+                    ?? PickNestedObject(vehicleObject.Value, "last_known_location")
+                    ?? (LooksLikeLocationRow(vehicleObject.Value) ? vehicleObject.Value : (JsonElement?)null);
+
+                var normalizedVehicleLocation = NormalizeLocationElement(vehicleLocation) ?? vehicleLocation;
+                var (vehicleLat, vehicleLon) = TryExtractLatLon(normalizedVehicleLocation);
+                if (vehicleLat.HasValue && vehicleLon.HasValue)
+                {
+                    locationObject = normalizedVehicleLocation;
+                    flatLatitude = vehicleLat;
+                    flatLongitude = vehicleLon;
+                }
+            }
 
             var userObject = baseUser;
             if (userObject.ValueKind != JsonValueKind.Object && !string.IsNullOrWhiteSpace(userId) && usersById.TryGetValue(userId, out var matchedUserById))
@@ -2164,6 +2250,16 @@ public class MotivController : ControllerBase
             || row.TryGetProperty("lon", out _)
             || row.TryGetProperty("lng", out _)
             || row.TryGetProperty("longitude", out _)
+            || row.TryGetProperty("coordinates", out _)
+            || row.TryGetProperty("position", out _)
+            || row.TryGetProperty("latLng", out _)
+            || row.TryGetProperty("gps", out _)
+            || row.TryGetProperty("geometry", out _)
+            || row.TryGetProperty("geo", out _)
+            || row.TryGetProperty("location", out _)
+            || row.TryGetProperty("current_location", out _)
+            || row.TryGetProperty("latest_location", out _)
+            || row.TryGetProperty("last_known_location", out _)
             || row.TryGetProperty("located_at", out _)
             || row.TryGetProperty("locatedAt", out _);
     }
@@ -2273,9 +2369,169 @@ public class MotivController : ControllerBase
             return (null, null);
 
         var src = locationElement.Value;
-        var latitude = PickDecimal(src, "latitude", "lat", "currentLatitude", "lastLatitude");
-        var longitude = PickDecimal(src, "longitude", "lng", "lon", "currentLongitude", "lastLongitude");
+        decimal NormalizeCoordinateValue(decimal value)
+        {
+            var abs = Math.Abs(value);
+            if (abs > 1000000m)
+                return value / 10000000m;
+            return value;
+        }
+
+        decimal? ReadDecimal(JsonElement? obj, params string[] keys)
+        {
+            if (!obj.HasValue || obj.Value.ValueKind != JsonValueKind.Object) return null;
+            return PickDecimal(obj.Value, keys);
+        }
+
+        var latitude =
+            PickDecimal(src, "latitude", "lat", "currentLatitude", "lastLatitude", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "current_location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "latest_location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "last_known_location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "position"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "gps"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(src, "latLng"), "latitude", "lat", "latitudeE7", "latitude_e7", "y")
+            ?? ReadDecimal(PickNestedObject(PickNestedObject(src, "geometry") ?? default, "location"), "latitude", "lat", "latitudeE7", "latitude_e7", "y");
+
+        var longitude =
+            PickDecimal(src, "longitude", "lng", "lon", "currentLongitude", "lastLongitude", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "current_location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "latest_location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "last_known_location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "position"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "gps"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(src, "latLng"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x")
+            ?? ReadDecimal(PickNestedObject(PickNestedObject(src, "geometry") ?? default, "location"), "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x");
+
+        if ((!latitude.HasValue || !longitude.HasValue) &&
+            src.TryGetProperty("coordinates", out var coordinatesArray) &&
+            coordinatesArray.ValueKind == JsonValueKind.Array)
+        {
+            var values = coordinatesArray.EnumerateArray().ToList();
+            if (values.Count >= 2 &&
+                values[0].ValueKind == JsonValueKind.Number &&
+                values[1].ValueKind == JsonValueKind.Number &&
+                values[0].TryGetDecimal(out var c0) &&
+                values[1].TryGetDecimal(out var c1))
+            {
+                var c0Norm = NormalizeCoordinateValue(c0);
+                var c1Norm = NormalizeCoordinateValue(c1);
+                var c0LooksLat = c0Norm >= -90m && c0Norm <= 90m;
+                var c1LooksLat = c1Norm >= -90m && c1Norm <= 90m;
+                if (!latitude.HasValue)
+                {
+                    latitude = c0LooksLat && !c1LooksLat ? c0 : c1;
+                }
+                if (!longitude.HasValue)
+                {
+                    longitude = c0LooksLat && !c1LooksLat ? c1 : c0;
+                }
+            }
+        }
+
+        if ((!latitude.HasValue || !longitude.HasValue) &&
+            src.TryGetProperty("coordinates", out var coordinatesObj) &&
+            coordinatesObj.ValueKind == JsonValueKind.Object)
+        {
+            latitude ??= PickDecimal(coordinatesObj, "lat", "latitude", "y", "latitudeE7", "latitude_e7");
+            longitude ??= PickDecimal(coordinatesObj, "lng", "lon", "longitude", "x", "longitudeE7", "longitude_e7");
+        }
+
+        if (latitude.HasValue) latitude = NormalizeCoordinateValue(latitude.Value);
+        if (longitude.HasValue) longitude = NormalizeCoordinateValue(longitude.Value);
+
+        if ((!latitude.HasValue || !longitude.HasValue) &&
+            TryExtractLatLonDeep(src, depth: 0, maxDepth: 6, out var deepLat, out var deepLon))
+        {
+            latitude ??= deepLat;
+            longitude ??= deepLon;
+        }
+
         return (latitude, longitude);
+    }
+
+    private static bool TryExtractLatLonDeep(JsonElement element, int depth, int maxDepth, out decimal? latitude, out decimal? longitude)
+    {
+        latitude = null;
+        longitude = null;
+        if (depth > maxDepth) return false;
+
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            var directLat = PickDecimal(element, "latitude", "lat", "latitudeE7", "latitude_e7", "y");
+            var directLon = PickDecimal(element, "longitude", "lng", "lon", "longitudeE7", "longitude_e7", "x");
+            if (directLat.HasValue && directLon.HasValue)
+            {
+                latitude = NormalizeDeepCoordinate(directLat.Value);
+                longitude = NormalizeDeepCoordinate(directLon.Value);
+                return true;
+            }
+
+            if (element.TryGetProperty("coordinates", out var coordinates))
+            {
+                if (coordinates.ValueKind == JsonValueKind.Array)
+                {
+                    var values = coordinates.EnumerateArray().ToList();
+                    if (values.Count >= 2 &&
+                        values[0].ValueKind == JsonValueKind.Number &&
+                        values[1].ValueKind == JsonValueKind.Number &&
+                        values[0].TryGetDecimal(out var c0) &&
+                        values[1].TryGetDecimal(out var c1))
+                    {
+                        var c0Norm = NormalizeDeepCoordinate(c0);
+                        var c1Norm = NormalizeDeepCoordinate(c1);
+                        var c0LooksLat = c0Norm >= -90m && c0Norm <= 90m;
+                        var c1LooksLat = c1Norm >= -90m && c1Norm <= 90m;
+                        latitude = c0LooksLat && !c1LooksLat ? c0Norm : c1Norm;
+                        longitude = c0LooksLat && !c1LooksLat ? c1Norm : c0Norm;
+                        return true;
+                    }
+                }
+                else if (coordinates.ValueKind == JsonValueKind.Object &&
+                         TryExtractLatLonDeep(coordinates, depth + 1, maxDepth, out var cLat, out var cLon))
+                {
+                    latitude = cLat;
+                    longitude = cLon;
+                    return true;
+                }
+            }
+
+            foreach (var prop in element.EnumerateObject())
+            {
+                if (prop.Value.ValueKind != JsonValueKind.Object && prop.Value.ValueKind != JsonValueKind.Array)
+                    continue;
+                if (TryExtractLatLonDeep(prop.Value, depth + 1, maxDepth, out var nestedLat, out var nestedLon))
+                {
+                    latitude = nestedLat;
+                    longitude = nestedLon;
+                    return true;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in element.EnumerateArray())
+            {
+                if (child.ValueKind != JsonValueKind.Object && child.ValueKind != JsonValueKind.Array)
+                    continue;
+                if (TryExtractLatLonDeep(child, depth + 1, maxDepth, out var nestedLat, out var nestedLon))
+                {
+                    latitude = nestedLat;
+                    longitude = nestedLon;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static decimal NormalizeDeepCoordinate(decimal value)
+    {
+        var abs = Math.Abs(value);
+        return abs > 1000000m ? value / 10000000m : value;
     }
 
     private async Task<(bool Success, int StatusCode, string? Error, List<JsonElement> Rows)> FetchAllMotivRows(
