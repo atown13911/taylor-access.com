@@ -638,7 +638,9 @@ export class PayrollComponent implements OnInit {
   openPayrollDetails(emp: any): void {
     if (!emp || typeof emp !== 'object') return;
     const prefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
-    const payroll = prefs?.payroll && typeof prefs.payroll === 'object' ? prefs.payroll as Record<string, unknown> : {};
+    const payroll = prefs?.['payroll'] && typeof prefs['payroll'] === 'object'
+      ? prefs['payroll'] as Record<string, unknown>
+      : {};
     const payFrequency = this.normalizePayFrequency(
       this.pickFirstText(payroll['payFrequency'], payroll['frequency'], emp?.payFrequency)
     );
@@ -672,8 +674,8 @@ export class PayrollComponent implements OnInit {
     try {
       const existingPrefs = this.parsePreferences(employee?.preferences ?? employee?.Preferences);
       const existingPayroll =
-        existingPrefs?.payroll && typeof existingPrefs.payroll === 'object'
-          ? existingPrefs.payroll as Record<string, unknown>
+        existingPrefs?.['payroll'] && typeof existingPrefs['payroll'] === 'object'
+          ? existingPrefs['payroll'] as Record<string, unknown>
           : {};
       const form = this.payrollDetailsForm();
       const mergedPreferences = {
@@ -711,8 +713,8 @@ export class PayrollComponent implements OnInit {
       const invoiceNo = `INV-${emp.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
       const existingPrefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
       const existingPayroll =
-        existingPrefs?.payroll && typeof existingPrefs.payroll === 'object'
-          ? existingPrefs.payroll as Record<string, unknown>
+        existingPrefs?.['payroll'] && typeof existingPrefs['payroll'] === 'object'
+          ? existingPrefs['payroll'] as Record<string, unknown>
           : {};
       const mergedPreferences = {
         ...existingPrefs,
