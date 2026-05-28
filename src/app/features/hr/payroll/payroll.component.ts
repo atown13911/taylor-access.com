@@ -534,7 +534,10 @@ export class PayrollComponent implements OnInit {
   ];
 
   periodOptions = (() => {
-    const options = [{ value: 'current', label: 'Current Week' }];
+    const options = [
+      { value: 'current', label: 'Current Week' },
+      { value: 'all', label: 'All' }
+    ];
     const getIsoWeekNumber = (date: Date): number => {
       const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
       const day = d.getUTCDay() || 7;
@@ -807,6 +810,8 @@ export class PayrollComponent implements OnInit {
           : {};
       const nextPayroll = { ...existingPayroll };
       const payType = String(emp?.payType ?? '').trim().toLowerCase();
+      let lastInvoiceNumber = invoiceNo;
+      let lastInvoiceDateIso = now.toISOString();
       if (payType === 'salary') {
         const annualPay = this.toNumberOrDefault(emp?.payRate, existingPayroll['annualSalary'], 0);
         const frequency = this.normalizePayFrequency(
@@ -816,7 +821,8 @@ export class PayrollComponent implements OnInit {
         const periodAmount = periodsPerYear > 0 ? annualPay / periodsPerYear : 0;
         const expectedPeriods = this.getExpectedPaidPeriods(
           frequency,
-          this.getReferenceDateForPeriodFilter(this.periodFilter())
+          this.getReferenceDateForPeriodFilter(this.periodFilter()),
+          this.periodFilter()
         );
         const currentYear = new Date().getUTCFullYear();
         const trackedYear = Number(existingPayroll['salaryInvoiceYear']);
@@ -830,21 +836,53 @@ export class PayrollComponent implements OnInit {
           remainingBalance = annualPay;
         }
 
-        periodsInvoiced = Math.max(periodsInvoiced, expectedPeriods);
-        periodsInvoiced = Math.min(periodsPerYear, periodsInvoiced + 1);
-        remainingBalance = Math.max(0, remainingBalance - periodAmount);
+        const targetPeriods = periodsInvoiced < expectedPeriods
+          ? expectedPeriods
+          : Math.min(periodsPerYear, periodsInvoiced + 1);
+
+        const existingHistory = this.getPayrollInvoiceHistory(existingPayroll);
+        const historyEntries: PayrollInvoiceEntry[] = [...existingHistory];
+        for (let periodIndex = periodsInvoiced + 1; periodIndex <= targetPeriods; periodIndex++) {
+          const generatedInvoiceNumber = `INV-${emp.id}-${currentYear}-${String(periodIndex).padStart(2, '0')}`;
+          const generatedDateIso = this.getSalaryPeriodInvoiceDate(currentYear, frequency, periodIndex);
+          historyEntries.push({
+            invoiceNumber: generatedInvoiceNumber,
+            invoiceDate: generatedDateIso,
+            amount: Number(periodAmount.toFixed(2)),
+            periodIndex,
+            source: periodIndex < targetPeriods ? 'backfill' : 'manual'
+          });
+          lastInvoiceNumber = generatedInvoiceNumber;
+          lastInvoiceDateIso = generatedDateIso;
+        }
+
+        periodsInvoiced = targetPeriods;
+        remainingBalance = Math.max(0, annualPay - (periodsInvoiced * periodAmount));
 
         nextPayroll['annualSalary'] = annualPay;
         nextPayroll['salaryInvoiceYear'] = currentYear;
         nextPayroll['salaryPeriodsInvoicedYtd'] = periodsInvoiced;
         nextPayroll['salaryRemainingBalance'] = Number(remainingBalance.toFixed(2));
+        nextPayroll['invoiceHistory'] = historyEntries.slice(-200);
+      } else {
+        const existingHistory = this.getPayrollInvoiceHistory(existingPayroll);
+        const amount = this.toNumberOrDefault(emp?.grossPay, 0);
+        nextPayroll['invoiceHistory'] = [
+          ...existingHistory,
+          {
+            invoiceNumber: lastInvoiceNumber,
+            invoiceDate: lastInvoiceDateIso,
+            amount: Number(amount.toFixed(2)),
+            source: 'manual'
+          }
+        ].slice(-200);
       }
       const mergedPreferences = {
         ...existingPrefs,
         payroll: {
           ...nextPayroll,
-          invoiceNumber: invoiceNo,
-          invoiceDate: now.toISOString()
+          invoiceNumber: lastInvoiceNumber,
+          invoiceDate: lastInvoiceDateIso
         }
       };
       await firstValueFrom(
@@ -852,7 +890,7 @@ export class PayrollComponent implements OnInit {
           preferences: JSON.stringify(mergedPreferences)
         })
       );
-      this.actionMessage.set(`Invoice ${invoiceNo} created for ${emp.name || 'employee'}.`);
+      this.actionMessage.set(`Invoice ${lastInvoiceNumber} created for ${emp.name || 'employee'}.`);
       this.loadData();
     } catch {
       this.actionMessage.set(`Failed to create invoice for ${emp?.name || 'employee'}.`);
@@ -966,7 +1004,7 @@ export class PayrollComponent implements OnInit {
     const activeYear = referenceDate.getUTCFullYear();
     const trackedYear = Number(payroll['salaryInvoiceYear']);
     const yearMatches = Number.isFinite(trackedYear) && trackedYear === activeYear;
-    const expectedPeriodsPaid = this.getExpectedPaidPeriods(frequency, referenceDate);
+    const expectedPeriodsPaid = this.getExpectedPaidPeriods(frequency, referenceDate, this.periodFilter());
     const actualPeriodsPaid = yearMatches ? this.toNumberOrDefault(payroll['salaryPeriodsInvoicedYtd'], 0) : 0;
     const effectivePeriodsPaid = Math.min(periodsPerYear, Math.max(expectedPeriodsPaid, actualPeriodsPaid));
     const periodAmount = annualPay / periodsPerYear;
@@ -1017,7 +1055,12 @@ export class PayrollComponent implements OnInit {
     return Math.ceil(diffInDays / 7);
   }
 
-  private getExpectedPaidPeriods(frequency: PayrollDetailsForm['payFrequency'], referenceDate: Date): number {
+  private getExpectedPaidPeriods(
+    frequency: PayrollDetailsForm['payFrequency'],
+    referenceDate: Date,
+    filter?: string
+  ): number {
+    if ((filter ?? '').toLowerCase() === 'all') return 0;
     switch (frequency) {
       case 'weekly': {
         return Math.min(52, Math.max(0, this.getIsoWeekNumber(referenceDate)));
@@ -1037,6 +1080,57 @@ export class PayrollComponent implements OnInit {
       default:
         return 0;
     }
+  }
+
+  private getPayrollInvoiceHistory(payroll: Record<string, unknown>): PayrollInvoiceEntry[] {
+    const raw = payroll['invoiceHistory'];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .map((item) => ({
+        invoiceNumber: String(item['invoiceNumber'] ?? '').trim(),
+        invoiceDate: String(item['invoiceDate'] ?? '').trim(),
+        amount: this.toNumberOrDefault(item['amount'], 0),
+        periodIndex: this.toNumberOrDefault(item['periodIndex'], 0),
+        source: String(item['source'] ?? '').trim() || 'manual'
+      }))
+      .filter((item) => item.invoiceNumber && item.invoiceDate);
+  }
+
+  private getSalaryPeriodInvoiceDate(
+    year: number,
+    frequency: PayrollDetailsForm['payFrequency'],
+    periodIndex: number
+  ): string {
+    const safePeriod = Math.max(1, periodIndex);
+    const date = new Date(Date.UTC(year, 0, 1));
+
+    switch (frequency) {
+      case 'weekly':
+        date.setUTCDate(date.getUTCDate() + ((safePeriod - 1) * 7));
+        break;
+      case 'biweekly':
+        date.setUTCDate(date.getUTCDate() + ((safePeriod - 1) * 14));
+        break;
+      case 'semimonthly': {
+        const monthIndex = Math.floor((safePeriod - 1) / 2);
+        const half = ((safePeriod - 1) % 2) + 1;
+        date.setUTCMonth(monthIndex, half === 1 ? 15 : 1);
+        if (half === 2) {
+          const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+          date.setUTCDate(lastDay);
+        }
+        break;
+      }
+      case 'monthly':
+        date.setUTCMonth(safePeriod - 1, 1);
+        date.setUTCDate(new Date(Date.UTC(year, safePeriod, 0)).getUTCDate());
+        break;
+      default:
+        break;
+    }
+
+    return date.toISOString();
   }
 
   getPayFrequencyLabel(emp: any): string {
@@ -1314,4 +1408,12 @@ type PayrollDetailsForm = {
   payFrequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
   compensationModel: 'contract' | 'commission';
   contractNotes: string;
+};
+
+type PayrollInvoiceEntry = {
+  invoiceNumber: string;
+  invoiceDate: string;
+  amount: number;
+  periodIndex?: number;
+  source?: string;
 };
