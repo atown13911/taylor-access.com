@@ -1123,13 +1123,14 @@ export class PayrollComponent implements OnInit {
   ): number {
     const history = this.getPayrollInvoiceHistory(payroll);
     if (history.length > 0) {
-      return Number(
-        history.reduce((sum, entry) => sum + this.toNumberOrDefault(entry.amount, 0), 0).toFixed(2)
-      );
+      const latest = history[history.length - 1];
+      return Number(this.toNumberOrDefault(latest?.amount, 0).toFixed(2));
     }
 
     const normalizedPayType = String(payType ?? '').trim().toLowerCase();
-    if (normalizedPayType !== 'salary') return 0;
+    if (normalizedPayType !== 'salary') {
+      return Number(this.toNumberOrDefault(user?.grossPay, payroll['grossPay'], 0).toFixed(2));
+    }
 
     const annualPay = this.toNumberOrDefault(user?.payRate, payroll['payRate'], payroll['annualSalary'], 0);
     if (annualPay <= 0) return 0;
