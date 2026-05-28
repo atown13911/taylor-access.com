@@ -157,7 +157,12 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           </button>
         }
       </div>
-      @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive') {
+      @if (
+        positionStateFilter() === 'active'
+        || positionStateFilter() === 'inactive'
+        || positionStateFilter() === 'report'
+        || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')
+      ) {
         <div class="position-group-tabs">
           <button
             class="group-tab"
@@ -1406,7 +1411,14 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   });
 
   positionOptionsForForm = computed(() => this.allPositions().filter((p) => p.isActive).map((p) => p.name));
-  reportPositionOptions = computed(() => ['all', ...this.allPositions().map((p) => p.name)]);
+  reportPositionOptions = computed(() => {
+    const targetGroup = this.positionGroupFilter();
+    const list = this.allPositions()
+      .filter((p) => this.normalizePositionGroup(p.group, p.name) === targetGroup)
+      .map((p) => p.name)
+      .sort((a, b) => a.localeCompare(b));
+    return ['all', ...list];
+  });
   selectedHiredApplicant = computed(() => {
     const id = this.selectedApplicantId();
     if (!id) return null;
@@ -1416,7 +1428,12 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   reportRows = computed(() => {
     const range = this.reportRange();
     const useHistorical = this.positionStateFilter() === 'historical';
+    const targetGroup = this.positionGroupFilter();
     let scopedRows = this.rows().filter((row) => useHistorical ? this.isHistoricalApplicantRow(row) : !this.isHistoricalApplicantRow(row));
+    scopedRows = scopedRows.filter((row) => {
+      const isFleet = this.isFleetPosition(row.position);
+      return targetGroup === 'fleet' ? isFleet : !isFleet;
+    });
 
     if (range === 'custom') {
       const from = this.parseDateOnly(this.reportDateFrom());
@@ -1458,14 +1475,20 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
     return scopedRows;
   });
-  reportPositionScopedRows = computed(() => {
-    const position = String(this.reportPositionFilter() || 'all').trim().toLowerCase();
-    if (!position || position === 'all') return this.rows();
-    return this.rows().filter((row) => String(row.position || '').trim().toLowerCase() === position);
-  });
+  reportPositionScopedRows = computed(() => this.reportRows());
 
-  activePositionsCount = computed(() => this.allPositions().filter((p) => p.isActive).length);
-  inactivePositionsCount = computed(() => this.allPositions().filter((p) => !p.isActive).length);
+  activePositionsCount = computed(() =>
+    this.allPositions()
+      .filter((p) => p.isActive)
+      .filter((p) => this.normalizePositionGroup(p.group, p.name) === this.positionGroupFilter())
+      .length
+  );
+  inactivePositionsCount = computed(() =>
+    this.allPositions()
+      .filter((p) => !p.isActive)
+      .filter((p) => this.normalizePositionGroup(p.group, p.name) === this.positionGroupFilter())
+      .length
+  );
   hiredCount = computed(() => this.reportPositionScopedRows().filter((r) => r.status === 'hired').length);
   applicantsPerDayTotal = computed(() => this.weekScopedRows().length);
   applicantsPerDayLabel = computed(() => (this.weekScopedRows().length / 7).toFixed(1));
