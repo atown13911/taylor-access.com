@@ -18,7 +18,7 @@ import { environment } from '../../../../environments/environment';
           <p class="payroll-sub">Employee payroll management</p>
         </div>
         <div class="payroll-actions">
-          <select class="payroll-filter" [ngModel]="periodFilter()" (ngModelChange)="periodFilter.set($event)">
+          <select class="payroll-filter" [ngModel]="periodFilter()" (ngModelChange)="onPeriodFilterChange($event)">
             @for (p of periodOptions; track p.value) {
               <option [value]="p.value">{{ p.label }}</option>
             }
@@ -630,6 +630,12 @@ export class PayrollComponent implements OnInit {
     void this.loadStructureLookups();
   }
 
+  onPeriodFilterChange(value: string): void {
+    if (this.periodFilter() === value) return;
+    this.periodFilter.set(value);
+    this.loadData();
+  }
+
   setOrganization(org: string): void {
     if (this.selectedOrganization() === org) return;
     this.selectedOrganization.set(org);
@@ -684,7 +690,8 @@ export class PayrollComponent implements OnInit {
             payroll['payFrequency'],
             payroll['frequency']
           );
-          const grossPay = this.resolveGrossPay(payType, payFrequency, u, payroll);
+          const salaryProgress = this.getSalaryProgress(payType, payFrequency, u, payroll);
+          const grossPay = salaryProgress?.remainingBalance ?? this.resolveGrossPay(payType, payFrequency, u, payroll);
           return {
             ...u,
             payType,
@@ -695,6 +702,7 @@ export class PayrollComponent implements OnInit {
             deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
             netPay: 0,
             payrollStatus,
+            salaryPeriodsPaidYtd: salaryProgress?.effectivePeriodsPaid ?? 0,
             invoiceNumber: this.pickFirstText(
               u?.invoiceNumber,
               u?.invoiceNo,
@@ -806,6 +814,10 @@ export class PayrollComponent implements OnInit {
         );
         const periodsPerYear = this.getPayPeriodsPerYear(frequency);
         const periodAmount = periodsPerYear > 0 ? annualPay / periodsPerYear : 0;
+        const expectedPeriods = this.getExpectedPaidPeriods(
+          frequency,
+          this.getReferenceDateForPeriodFilter(this.periodFilter())
+        );
         const currentYear = new Date().getUTCFullYear();
         const trackedYear = Number(existingPayroll['salaryInvoiceYear']);
         const activeYear = Number.isFinite(trackedYear) && trackedYear > 0 ? trackedYear : currentYear;
@@ -818,6 +830,7 @@ export class PayrollComponent implements OnInit {
           remainingBalance = annualPay;
         }
 
+        periodsInvoiced = Math.max(periodsInvoiced, expectedPeriods);
         periodsInvoiced = Math.min(periodsPerYear, periodsInvoiced + 1);
         remainingBalance = Math.max(0, remainingBalance - periodAmount);
 
@@ -871,7 +884,10 @@ export class PayrollComponent implements OnInit {
     const invoiceNo = String(emp?.invoiceNumber ?? emp?.invoiceNo ?? emp?.invoice_id ?? '').trim();
     if (invoiceNo) return true;
     const invoiceAt = String(emp?.invoicedAt ?? emp?.invoiceDate ?? '').trim();
-    return !!invoiceAt;
+    if (invoiceAt) return true;
+    const payType = String(emp?.payType ?? '').trim().toLowerCase();
+    if (payType === 'salary' && this.toNumberOrDefault(emp?.salaryPeriodsPaidYtd, 0) > 0) return true;
+    return false;
   }
 
   private normalizePayType(value: string): string {
@@ -938,6 +954,43 @@ export class PayrollComponent implements OnInit {
     return Number(remaining.toFixed(2));
   }
 
+  private getSalaryProgress(
+    payType: string,
+    payFrequency: string,
+    user: any,
+    payroll: Record<string, unknown>
+  ): { remainingBalance: number; effectivePeriodsPaid: number } | null {
+    const normalizedPayType = String(payType ?? '').trim().toLowerCase();
+    if (normalizedPayType !== 'salary') return null;
+
+    const annualPay = this.toNumberOrDefault(user?.payRate, payroll['payRate'], payroll['annualSalary'], 0);
+    if (annualPay <= 0) return { remainingBalance: 0, effectivePeriodsPaid: 0 };
+
+    const frequency = this.normalizePayFrequency(payFrequency);
+    const periodsPerYear = this.getPayPeriodsPerYear(frequency);
+    if (periodsPerYear <= 0) return { remainingBalance: Number(annualPay.toFixed(2)), effectivePeriodsPaid: 0 };
+
+    const referenceDate = this.getReferenceDateForPeriodFilter(this.periodFilter());
+    const activeYear = referenceDate.getUTCFullYear();
+    const trackedYear = Number(payroll['salaryInvoiceYear']);
+    const yearMatches = Number.isFinite(trackedYear) && trackedYear === activeYear;
+    const expectedPeriodsPaid = this.getExpectedPaidPeriods(frequency, referenceDate);
+    const actualPeriodsPaid = yearMatches ? this.toNumberOrDefault(payroll['salaryPeriodsInvoicedYtd'], 0) : 0;
+    const effectivePeriodsPaid = Math.min(periodsPerYear, Math.max(expectedPeriodsPaid, actualPeriodsPaid));
+    const periodAmount = annualPay / periodsPerYear;
+    const expectedRemaining = Math.max(0, annualPay - (effectivePeriodsPaid * periodAmount));
+
+    const storedRemaining = yearMatches
+      ? this.toNumberOrDefault(payroll['salaryRemainingBalance'], expectedRemaining)
+      : expectedRemaining;
+    const remainingBalance = Math.min(expectedRemaining, storedRemaining);
+
+    return {
+      remainingBalance: Number(Math.max(0, remainingBalance).toFixed(2)),
+      effectivePeriodsPaid
+    };
+  }
+
   private getPayPeriodsPerYear(frequency: PayrollDetailsForm['payFrequency']): number {
     switch (frequency) {
       case 'weekly':
@@ -950,6 +1003,47 @@ export class PayrollComponent implements OnInit {
         return 12;
       default:
         return 52;
+    }
+  }
+
+  private getReferenceDateForPeriodFilter(filter: string): Date {
+    const now = new Date();
+    if (filter === 'current') return now;
+    const weeksBack = Number(filter);
+    if (!Number.isFinite(weeksBack) || weeksBack <= 0) return now;
+    const ref = new Date(now);
+    ref.setDate(ref.getDate() - (weeksBack * 7));
+    return ref;
+  }
+
+  private getIsoWeekNumber(date: Date): number {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const day = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const diffInDays = Math.floor((d.getTime() - yearStart.getTime()) / 86400000) + 1;
+    return Math.ceil(diffInDays / 7);
+  }
+
+  private getExpectedPaidPeriods(frequency: PayrollDetailsForm['payFrequency'], referenceDate: Date): number {
+    switch (frequency) {
+      case 'weekly': {
+        return Math.min(52, Math.max(0, this.getIsoWeekNumber(referenceDate)));
+      }
+      case 'biweekly': {
+        const week = Math.min(52, Math.max(0, this.getIsoWeekNumber(referenceDate)));
+        return Math.min(26, Math.floor((week + 1) / 2));
+      }
+      case 'semimonthly': {
+        const monthIndex = referenceDate.getUTCMonth();
+        const half = referenceDate.getUTCDate() > 15 ? 2 : 1;
+        return Math.min(24, (monthIndex * 2) + half);
+      }
+      case 'monthly': {
+        return Math.min(12, referenceDate.getUTCMonth() + 1);
+      }
+      default:
+        return 0;
     }
   }
 
