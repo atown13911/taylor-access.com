@@ -197,7 +197,7 @@ export class DriverDatabaseComponent implements OnInit {
       ).toPromise();
       const rows = Array.isArray(response?.data) ? response.data : [];
       return rows
-        .filter((row: any) => this.isApplicantHired(row?.status))
+        .filter((row: any) => this.isApplicantHired(row?.status) && !this.isApplicantHistorical(row))
         .map((row: any) => this.mapApplicantToComplianceDriver(row));
     } catch {
       return [];
@@ -206,6 +206,14 @@ export class DriverDatabaseComponent implements OnInit {
 
   private isApplicantHired(status: unknown): boolean {
     return String(status ?? '').trim().toLowerCase() === 'hired';
+  }
+
+  private isApplicantHistorical(row: any): boolean {
+    const historicalFlag = row?.isHistorical ?? row?.is_historical ?? row?.historical;
+    if (historicalFlag === true) return true;
+    if (historicalFlag === false || historicalFlag == null) return false;
+    const text = String(historicalFlag).trim().toLowerCase();
+    return text === 'true' || text === '1' || text === 'yes';
   }
 
   private mapApplicantToComplianceDriver(applicant: any): any {
