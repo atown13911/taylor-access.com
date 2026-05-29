@@ -120,7 +120,7 @@
             <th>Issued</th>
             <th>Expires</th>
             <th>Cost</th>
-            <th>Document</th>
+            <th>{{ isCustomEquipmentTab() ? 'Device' : 'Document' }}</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -152,11 +152,11 @@
               <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
               <td class="tp-doc-cell">
                 @if (p.hasFile || p.fileName) {
-                  <button class="tp-icon-btn" title="View document" (click)="viewPermitDoc(p)"><i class="bx bx-show"></i></button>
-                  <button class="tp-icon-btn" title="Download" (click)="downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
-                  <button class="tp-icon-btn danger" title="Remove document" (click)="deletePermitDoc(p)"><i class="bx bx-x"></i></button>
+                  <button class="tp-icon-btn" [title]="isCustomEquipmentTab() ? 'View device' : 'View document'" (click)="viewPermitDoc(p)"><i class="bx bx-show"></i></button>
+                  <button class="tp-icon-btn" [title]="isCustomEquipmentTab() ? 'Download device' : 'Download document'" (click)="downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
+                  <button class="tp-icon-btn danger" [title]="isCustomEquipmentTab() ? 'Remove device' : 'Remove document'" (click)="deletePermitDoc(p)"><i class="bx bx-x"></i></button>
                 } @else {
-                  <button class="tp-icon-btn upload" title="Upload document" (click)="openUploadDoc(p)"
+                  <button class="tp-icon-btn upload" [title]="isCustomEquipmentTab() ? 'Upload device' : 'Upload document'" (click)="openUploadDoc(p)"
                     [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id">
                     @if (uploadingDoc() && uploadTarget()?.id === p.id) {
                       <i class="bx bx-loader-alt bx-spin"></i>
