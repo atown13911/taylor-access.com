@@ -114,7 +114,9 @@
             <th>Type</th>
             <th>State</th>
             <th>Assigned Driver</th>
-            <th>Trailer #</th>
+            @if (activeTab() !== 'elds') {
+              <th>Trailer #</th>
+            }
             <th>Issued</th>
             <th>Expires</th>
             <th>Cost</th>
@@ -136,7 +138,9 @@
                   <span class="tp-muted">Unassigned</span>
                 }
               </td>
-              <td class="tp-mono">{{ p.assignedTruckNumber || '—' }}</td>
+              @if (activeTab() !== 'elds') {
+                <td class="tp-mono">{{ p.assignedTruckNumber || '—' }}</td>
+              }
               <td>{{ formatDate(p.issueDate) }}</td>
               <td>
                 @if (p.expiryDate) {
@@ -169,7 +173,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="11" class="tp-empty">{{ activePermitEmptyText() }}</td></tr>
+            <tr><td [attr.colspan]="activeTab() === 'elds' ? 10 : 11" class="tp-empty">{{ activePermitEmptyText() }}</td></tr>
           }
         </tbody>
       </table>
