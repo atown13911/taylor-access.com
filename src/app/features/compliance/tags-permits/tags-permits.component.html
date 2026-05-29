@@ -112,7 +112,7 @@
           <tr>
             <th>{{ isCustomEquipmentTab() ? 'Serial Number' : 'Permit #' }}</th>
             <th>Type</th>
-            <th>State</th>
+            <th>{{ activeTab() === 'elds' ? 'Provider' : 'State' }}</th>
             <th>Assigned Driver</th>
             @if (!isCustomEquipmentTab()) {
               <th>Trailer #</th>

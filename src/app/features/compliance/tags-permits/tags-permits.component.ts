@@ -666,7 +666,11 @@ export class TagsPermitsComponent implements OnInit {
         this.saving.set(false);
         this.closeModal();
         this.loadData();
-        this.toast.champagne(editing ? 'Permit updated' : 'Permit created', 'Success');
+        const entityLabel = this.modalRecordLabel();
+        this.toast.champagne(
+          editing ? `${entityLabel} updated` : `${entityLabel} created`,
+          'Success'
+        );
       },
       error: (err) => {
         this.saving.set(false);
