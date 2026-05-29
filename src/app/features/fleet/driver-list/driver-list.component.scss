@@ -214,6 +214,22 @@
     &::placeholder { color: var(--text-muted, #555); }
   }
 
+  .fleet-filter-select {
+    min-width: 180px;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    outline: none;
+
+    option {
+      background: #0a0a0f;
+      color: var(--text-primary);
+    }
+  }
+
   &:focus-within {
     border-color: var(--cyan, #00e5ff);
     box-shadow: 0 0 10px rgba(0, 229, 255, 0.1);

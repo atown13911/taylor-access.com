@@ -78,6 +78,13 @@
   <div class="search-bar">
     <i class='bx bx-search'></i>
     <input type="text" placeholder="Search by name, phone, email, license..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+    <select class="fleet-filter-select" [ngModel]="fleetFilter()" (ngModelChange)="fleetFilter.set($event)">
+      <option value="all">All Fleets</option>
+      <option value="unassigned">Unassigned</option>
+      @for (fleet of fleetFilterOptions(); track fleet) {
+        <option [value]="fleet">{{ fleet }}</option>
+      }
+    </select>
   </div>
 
   <!-- Loading -->

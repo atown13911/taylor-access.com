@@ -41,6 +41,7 @@ export class DriverListComponent implements OnInit {
   syncingArchived = signal(false);
   drivers = signal<DriverRow[]>([]);
   searchQuery = signal('');
+  fleetFilter = signal<'all' | 'unassigned' | string>('all');
   fleetName = signal<string>('');
   activeTab = signal<'active' | 'inactive' | 'archived'>('active');
 
@@ -113,6 +114,14 @@ export class DriverListComponent implements OnInit {
     teamDriverName: '' as string
   });
 
+  fleetFilterOptions = computed<string[]>(() =>
+    Array.from(new Set(
+      this.drivers()
+        .map((d) => String(d.fleetName || '').trim())
+        .filter((name) => !!name && name !== '—')
+    )).sort((a, b) => a.localeCompare(b))
+  );
+
   tabbedDrivers = computed(() => {
     const tab = this.activeTab();
     const all = this.drivers();
@@ -123,9 +132,17 @@ export class DriverListComponent implements OnInit {
 
   filteredDrivers = computed(() => {
     const query = this.searchQuery().toLowerCase();
-    const pool = this.tabbedDrivers();
+    const fleet = this.fleetFilter();
+    let pool = this.tabbedDrivers();
+
+    if (fleet === 'unassigned') {
+      pool = pool.filter((d) => String(d.fleetName || '').trim() === '—');
+    } else if (fleet !== 'all') {
+      pool = pool.filter((d) => String(d.fleetName || '').trim() === fleet);
+    }
+
     if (!query) return pool;
-    return pool.filter(d =>
+    return pool.filter((d) =>
       d.name.toLowerCase().includes(query) ||
       d.phone.includes(query) ||
       d.email?.toLowerCase().includes(query) ||
