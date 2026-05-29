@@ -829,6 +829,15 @@ export class TagsPermitsComponent implements OnInit {
     return 'e.g., 1210';
   }
 
+  equipmentAssetOptions(): string[] {
+    const values = this.trailerOptions()
+      .map((t: any) => String(t?.number || t?.tag || t?.id || '').trim())
+      .filter((v: string) => !!v);
+    const current = String(this.permitForm?.assignedTruckNumber ?? '').trim();
+    if (current) values.push(current);
+    return Array.from(new Set(values));
+  }
+
   modalNotesLabel(): string {
     const tab = this.activeTab();
     if (tab === 'elds') return 'Device Notes';

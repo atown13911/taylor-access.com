@@ -488,7 +488,16 @@
               } @else {
                 <div class="tp-form-group">
                   <label>{{ modalTruckLabel() }}</label>
-                  <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" [placeholder]="modalTruckPlaceholder()">
+                  @if (isCustomEquipmentTab()) {
+                    <select [(ngModel)]="permitForm.assignedTruckNumber">
+                      <option value="">Unassigned</option>
+                      @for (asset of equipmentAssetOptions(); track asset) {
+                        <option [value]="asset">{{ asset }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" [placeholder]="modalTruckPlaceholder()">
+                  }
                 </div>
               }
             </div>
