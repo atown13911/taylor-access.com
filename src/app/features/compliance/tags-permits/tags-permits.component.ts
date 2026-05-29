@@ -653,7 +653,7 @@ export class TagsPermitsComponent implements OnInit {
     if (!this.permitForm.permitNumber.trim()) { this.toast.error('Permit number is required', 'Error'); return; }
     this.saving.set(true);
     const editing = this.editingPermit();
-    const body = { ...this.permitForm };
+    const body = this.normalizePermitPayloadForApi({ ...this.permitForm });
     if (body.issueDate) body.issueDate = new Date(body.issueDate).toISOString();
     if (body.expiryDate) body.expiryDate = new Date(body.expiryDate).toISOString();
 
@@ -670,7 +670,7 @@ export class TagsPermitsComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.error || 'Failed to save permit', 'Error');
+        this.toast.error(this.getApiErrorMessage(err, 'Failed to save permit'), 'Error');
       }
     });
   }
@@ -873,6 +873,45 @@ export class TagsPermitsComponent implements OnInit {
     }
     if (status) list = list.filter((p: any) => this.getPermitStatus(p) === status);
     return list;
+  }
+
+  private normalizePermitPayloadForApi(payload: any): any {
+    const normalized = { ...payload };
+    const isEquipmentTab = this.isCustomEquipmentTab();
+    const stateText = String(normalized?.state ?? '').trim();
+
+    // CompanyPermit.State is constrained to max 5 chars server-side.
+    // For equipment tabs, preserve full provider/vendor text in notes and
+    // send a 5-char state-safe token to avoid 400 model validation failures.
+    if (isEquipmentTab && stateText.length > 5) {
+      const existingNotes = String(normalized?.notes ?? '').trim();
+      const providerLine = `Provider: ${stateText}`;
+      normalized.notes = existingNotes
+        ? (existingNotes.toLowerCase().includes('provider:') ? existingNotes : `${providerLine}\n${existingNotes}`)
+        : providerLine;
+      normalized.state = stateText.slice(0, 5);
+    } else {
+      normalized.state = stateText;
+    }
+
+    return normalized;
+  }
+
+  private getApiErrorMessage(err: any, fallback: string): string {
+    const body = err?.error;
+    if (typeof body === 'string' && body.trim()) return body.trim();
+    if (typeof body?.error === 'string' && body.error.trim()) return body.error.trim();
+    if (typeof body?.message === 'string' && body.message.trim()) return body.message.trim();
+    const errors = body?.errors;
+    if (errors && typeof errors === 'object') {
+      for (const value of Object.values(errors)) {
+        if (Array.isArray(value) && value.length > 0) {
+          const first = String(value[0] ?? '').trim();
+          if (first) return first;
+        }
+      }
+    }
+    return fallback;
   }
 
   // ── Document handling ──────────────────────────────────────────────────
