@@ -983,8 +983,7 @@ export class DriverListComponent implements OnInit {
       hireDate: form.hireDate || null,
       payRate: form.payRate,
       payType: form.payType,
-      driverType: form.driverType,
-      status: 'active'
+      driverType: form.driverType
     };
 
     if (this.modalType() === 'edit' && this.editingId()) {
@@ -1002,7 +1001,7 @@ export class DriverListComponent implements OnInit {
         }
       });
     } else {
-      this.api.createDriver(payload).subscribe({
+      this.api.createDriver({ ...payload, status: 'active' }).subscribe({
         next: () => {
           this.toast.success('Driver created', 'Success');
           this.tracking.trackCreate('Driver', undefined, payload.name);
