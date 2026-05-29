@@ -16,6 +16,7 @@ interface DriverRow {
   licenseNumber: string;
   licenseExpiry: string;
   status: string;
+  fleetId: number | null;
   fleetName: string;
   hireDate: string;
   type: string;
@@ -185,7 +186,10 @@ export class DriverListComponent implements OnInit {
 
   loadFleets(): void {
     this.api.getFleets().subscribe({
-      next: (res: any) => this.availableFleets.set(this.asArray(res)),
+      next: (res: any) => {
+        this.availableFleets.set(this.asArray(res));
+        this.reconcileDriverFleetNames();
+      },
       error: () => this.availableFleets.set([])
     });
   }
@@ -205,7 +209,8 @@ export class DriverListComponent implements OnInit {
           licenseNumber: d.licenseNumber || '',
           licenseExpiry: d.licenseExpiry || '',
           status: this.normalizeStatus(d.status || 'active'),
-          fleetName: d.fleet?.name || '—',
+          fleetId: this.toNullableNumber(d.fleetId),
+          fleetName: this.resolveFleetName(d),
           hireDate: d.hireDate || d.createdAt || '',
           type: d.driverType || 'company'
         }));
@@ -222,6 +227,38 @@ export class DriverListComponent implements OnInit {
         this.isLoading.set(false);
       }
     });
+  }
+
+  private toNullableNumber(value: any): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private resolveFleetName(driverLike: any): string {
+    const direct = String(
+      driverLike?.fleet?.name
+      ?? driverLike?.fleetName
+      ?? driverLike?.fleet?.fleetName
+      ?? ''
+    ).trim();
+    if (direct) return direct;
+
+    const fleetId = this.toNullableNumber(driverLike?.fleetId);
+    if (!fleetId) return '—';
+
+    const fleet = this.availableFleets().find((f: any) => this.toNullableNumber(f?.id) === fleetId);
+    const fallback = String(fleet?.name ?? fleet?.fleetName ?? '').trim();
+    return fallback || '—';
+  }
+
+  private reconcileDriverFleetNames(): void {
+    this.drivers.update((rows) =>
+      rows.map((row) => {
+        const nextName = this.resolveFleetName(row);
+        if (nextName === row.fleetName) return row;
+        return { ...row, fleetName: nextName };
+      })
+    );
   }
 
   syncArchivedFromDrayTac(showToast = true): void {
