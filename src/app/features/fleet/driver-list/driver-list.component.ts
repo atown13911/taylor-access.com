@@ -244,11 +244,25 @@ export class DriverListComponent implements OnInit {
     if (direct) return direct;
 
     const fleetId = this.toNullableNumber(driverLike?.fleetId);
-    if (!fleetId) return '—';
+    if (fleetId) {
+      const fleet = this.availableFleets().find((f: any) => this.toNullableNumber(f?.id) === fleetId);
+      const fallback = String(fleet?.name ?? fleet?.fleetName ?? '').trim();
+      if (fallback) return fallback;
+    }
 
-    const fleet = this.availableFleets().find((f: any) => this.toNullableNumber(f?.id) === fleetId);
-    const fallback = String(fleet?.name ?? fleet?.fleetName ?? '').trim();
-    return fallback || '—';
+    // Some environments represent assignments via fleetDrivers join rows
+    // without populating driver.fleetId. Resolve by membership as fallback.
+    const driverId = this.toNullableNumber(driverLike?.id);
+    if (driverId) {
+      const byMembership = this.availableFleets().find((fleet: any) => {
+        const rows = Array.isArray(fleet?.fleetDrivers) ? fleet.fleetDrivers : [];
+        return rows.some((fd: any) => this.toNullableNumber(fd?.driverId ?? fd?.DriverId) === driverId);
+      });
+      const membershipName = String(byMembership?.name ?? byMembership?.fleetName ?? '').trim();
+      if (membershipName) return membershipName;
+    }
+
+    return '—';
   }
 
   private reconcileDriverFleetNames(): void {
