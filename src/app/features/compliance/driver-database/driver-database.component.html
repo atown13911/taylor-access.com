@@ -132,19 +132,23 @@
                 <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallLabel(driver) }}</span>
               </td>
               <td class="col-actions" (click)="$event.stopPropagation()">
-                @if (canSuspendDriver(driver)) {
-                  <button class="action-btn suspend" title="Suspend Driver" (click)="suspendDriver(driver)">
-                    <i class='bx bx-pause-circle'></i>
-                  </button>
+                @if (isApplicantRow(driver)) {
+                  <span class="empty-row">—</span>
                 } @else {
-                  <button class="action-btn reactivate" title="Reactivate Driver" (click)="reactivateDriver(driver)">
-                    <i class='bx bx-play-circle'></i>
-                  </button>
-                }
-                @if (canArchiveDriver(driver)) {
-                  <button class="action-btn archive" title="Archive Driver" (click)="archiveDriver(driver)">
-                    <i class='bx bx-archive'></i>
-                  </button>
+                  @if (canSuspendDriver(driver)) {
+                    <button class="action-btn suspend" title="Suspend Driver" (click)="suspendDriver(driver)">
+                      <i class='bx bx-pause-circle'></i>
+                    </button>
+                  } @else {
+                    <button class="action-btn reactivate" title="Reactivate Driver" (click)="reactivateDriver(driver)">
+                      <i class='bx bx-play-circle'></i>
+                    </button>
+                  }
+                  @if (canArchiveDriver(driver)) {
+                    <button class="action-btn archive" title="Archive Driver" (click)="archiveDriver(driver)">
+                      <i class='bx bx-archive'></i>
+                    </button>
+                  }
                 }
               </td>
             </tr>

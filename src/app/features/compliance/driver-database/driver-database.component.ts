@@ -169,15 +169,65 @@ export class DriverDatabaseComponent implements OnInit {
   async loadDrivers() {
     this.loading.set(true);
     try {
-      const response: any = await this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=1000`).toPromise();
-      const rawDrivers = response?.data || [];
-      this.drivers.set(this.deduplicateDrivers(rawDrivers));
+      const [driversRes, applicantsRes] = await Promise.allSettled([
+        this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=1000`).toPromise(),
+        this.loadHiredApplicants()
+      ]);
+
+      const rawDrivers = driversRes.status === 'fulfilled'
+        ? ((driversRes.value as any)?.data || [])
+        : [];
+      const hiredApplicants = applicantsRes.status === 'fulfilled'
+        ? applicantsRes.value
+        : [];
+
+      this.drivers.set(this.deduplicateDrivers([...rawDrivers, ...hiredApplicants]));
     } catch (err) {
       console.error('Failed to load drivers:', err);
       this.drivers.set([]);
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async loadHiredApplicants(): Promise<any[]> {
+    try {
+      const response: any = await this.http.get(
+        `${environment.apiUrl}/api/v1/applicants/records?includeCv=false`
+      ).toPromise();
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      return rows
+        .filter((row: any) => this.isApplicantHired(row?.status))
+        .map((row: any) => this.mapApplicantToComplianceDriver(row));
+    } catch {
+      return [];
+    }
+  }
+
+  private isApplicantHired(status: unknown): boolean {
+    return String(status ?? '').trim().toLowerCase() === 'hired';
+  }
+
+  private mapApplicantToComplianceDriver(applicant: any): any {
+    const id = String(applicant?.id ?? '').trim();
+    const firstName = String(applicant?.firstName ?? applicant?.first_name ?? '').trim();
+    const lastName = String(applicant?.lastName ?? applicant?.last_name ?? '').trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    const name = fullName
+      || String(applicant?.name ?? applicant?.applicantName ?? applicant?.fullName ?? 'Applicant').trim();
+
+    return {
+      id: id ? `applicant-${id}` : `applicant-${Math.random().toString(36).slice(2, 10)}`,
+      _source: 'applicant',
+      name,
+      email: String(applicant?.email ?? '').trim(),
+      phone: String(applicant?.phone ?? applicant?.phoneNumber ?? '').trim(),
+      licenseNumber: String(applicant?.licenseNumber ?? applicant?.cdlNumber ?? '').trim(),
+      licenseExpiry: String(applicant?.licenseExpiry ?? applicant?.cdlExpiry ?? '').trim(),
+      status: 'onboarding',
+      createdAt: applicant?.createdAt ?? applicant?.appliedDate ?? applicant?.appliedAt ?? null,
+      updatedAt: applicant?.updatedAt ?? applicant?.modifiedAt ?? null
+    };
   }
 
   importDrayTacArchived(): void {
@@ -624,13 +674,20 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   canSuspendDriver(driver: any): boolean {
-    return this.isActiveStatus(driver?.status);
+    return !this.isApplicantRow(driver) && this.isActiveStatus(driver?.status);
   }
 
   canArchiveDriver(driver: any): boolean {
-    return this.activeStatusTab() === 'closeout' &&
+    return !this.isApplicantRow(driver) &&
+      this.activeStatusTab() === 'closeout' &&
       this.isCloseoutStatus(driver?.status) &&
       !this.isArchivedStatus(driver?.status);
+  }
+
+  isApplicantRow(driver: any): boolean {
+    if (!driver) return false;
+    if (String(driver?._source ?? '').trim().toLowerCase() === 'applicant') return true;
+    return String(driver?.id ?? '').trim().startsWith('applicant-');
   }
 
   private normalizeStatus(status: any): string {
