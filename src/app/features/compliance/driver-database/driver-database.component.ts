@@ -197,7 +197,11 @@ export class DriverDatabaseComponent implements OnInit {
       ).toPromise();
       const rows = Array.isArray(response?.data) ? response.data : [];
       return rows
-        .filter((row: any) => this.isApplicantHired(row?.status) && !this.isApplicantHistorical(row))
+        .filter((row: any) =>
+          this.isApplicantHired(row?.status) &&
+          !this.isApplicantHistorical(row) &&
+          this.isDriverApplicant(row)
+        )
         .map((row: any) => this.mapApplicantToComplianceDriver(row));
     } catch {
       return [];
@@ -214,6 +218,31 @@ export class DriverDatabaseComponent implements OnInit {
     if (historicalFlag === false || historicalFlag == null) return false;
     const text = String(historicalFlag).trim().toLowerCase();
     return text === 'true' || text === '1' || text === 'yes';
+  }
+
+  private isDriverApplicant(row: any): boolean {
+    const position = String(
+      row?.position ??
+      row?.positionName ??
+      row?.jobTitle ??
+      row?.role ??
+      row?.appliedFor ??
+      ''
+    ).trim().toLowerCase();
+
+    if (!position) return false;
+
+    const driverIndicators = [
+      'driver',
+      'otr',
+      'cdl',
+      'truck',
+      'tractor',
+      'owner operator',
+      'owner-operator'
+    ];
+
+    return driverIndicators.some((token) => position.includes(token));
   }
 
   private mapApplicantToComplianceDriver(applicant: any): any {
