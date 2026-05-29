@@ -554,7 +554,9 @@ export class DriverDatabaseComponent implements OnInit {
     } else {
       this.selectedDriver.set(driver);
       this.loadDriverDocs(driver.id);
-      this.loadDriverDetails(driver.id);
+      if (this.isApiDriverId(driver.id)) {
+        this.loadDriverDetails(driver.id);
+      }
     }
   }
 
@@ -586,7 +588,13 @@ export class DriverDatabaseComponent implements OnInit {
 
     const filtered = this.allDocs().filter(d => aliasIds.has(String(d.driverId ?? '').trim()));
     this.driverDocs.set(filtered);
-    Promise.all(Array.from(aliasIds).map((id: string) =>
+    const apiAliasIds = Array.from(aliasIds).filter((id: string) => this.isApiDriverId(id));
+    if (!apiAliasIds.length) {
+      this.updateDriverDocsInState(driverId, filtered);
+      return;
+    }
+
+    Promise.all(apiAliasIds.map((id: string) =>
       this.api.getDriverDocuments(id).toPromise().then((res: any) => res?.data || []).catch(() => [])
     )).then((docLists: any[]) => {
       const docs = this.mergeDocs(...docLists, filtered);
@@ -822,7 +830,7 @@ export class DriverDatabaseComponent implements OnInit {
     this.docsReady.set(true); // show initial dots from bulk load immediately
 
     // For drivers with 0 docs from bulk, fetch individually in batches
-    const missing = drivers.filter(d => (d._docs || []).length === 0);
+    const missing = drivers.filter(d => (d._docs || []).length === 0 && this.isApiDriverId(d?.id));
     const batchSize = 5;
     for (let i = 0; i < missing.length; i += batchSize) {
       const batch = missing.slice(i, i + batchSize);
@@ -1161,5 +1169,10 @@ export class DriverDatabaseComponent implements OnInit {
     const updated = driver?.updatedAt ? new Date(driver.updatedAt).getTime() : 0;
     const created = driver?.createdAt ? new Date(driver.createdAt).getTime() : 0;
     return Math.max(updated || 0, created || 0);
+  }
+
+  private isApiDriverId(id: unknown): boolean {
+    const value = String(id ?? '').trim();
+    return /^[0-9]+$/.test(value);
   }
 }

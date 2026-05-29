@@ -2762,15 +2762,17 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private isFleetPositionName(value: unknown): boolean {
     const text = this.normalizePositionName(value).toLowerCase();
     if (!text) return false;
-    return text.includes('driver')
-      || text.includes('fleet')
-      || text.includes('truck')
-      || text.includes('dispatch')
-      || text.includes('broker')
-      || text.includes('carrier')
-      || text.includes('logistics')
-      || text.includes('safety')
-      || text.includes('compliance');
+    const strongFleetIndicators = [
+      'driver',
+      'otr',
+      'cdl',
+      'truck',
+      'tractor',
+      'fleet',
+      'owner operator',
+      'owner-operator'
+    ];
+    return strongFleetIndicators.some((token) => text.includes(token));
   }
 
   private normalizePositionGroup(value: unknown, positionName?: unknown): PositionGroup {
