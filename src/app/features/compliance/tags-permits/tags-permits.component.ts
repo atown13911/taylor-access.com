@@ -67,7 +67,10 @@ export class TagsPermitsComponent implements OnInit {
   permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
 
   filteredPermits = computed(() => {
-    let list = this.permits().filter(p => !this.irpTypes.includes(p.permitType));
+    let list = this.permits().filter((p: any) => {
+      const type = String(p?.permitType ?? '').trim().toLowerCase();
+      return !this.irpTypes.includes(type) && !this.equipmentTypes.includes(type);
+    });
     const search = this.searchTerm().toLowerCase();
     const type = this.typeFilter();
     const status = this.statusFilter();
@@ -86,6 +89,7 @@ export class TagsPermitsComponent implements OnInit {
   });
 
   irpTypes = ['irp', 'ifta', 'cab_card'];
+  equipmentTypes = ['eld', 'camera', 'cable'];
 
   filteredIrpPermits = computed(() => {
     let list = this.permits().filter(p => this.irpTypes.includes(p.permitType));
