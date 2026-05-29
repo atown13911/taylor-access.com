@@ -209,7 +209,13 @@ export class DriverListComponent implements OnInit {
           licenseNumber: d.licenseNumber || '',
           licenseExpiry: d.licenseExpiry || '',
           status: this.normalizeStatus(d.status || 'active'),
-          fleetId: this.toNullableNumber(d.fleetId),
+          fleetId: this.toNullableNumber(
+            d.fleetId
+            ?? d.FleetId
+            ?? d.fleet_id
+            ?? d.fleet?.id
+            ?? d.fleet?.Id
+          ),
           fleetName: this.resolveFleetName(d),
           hireDate: d.hireDate || d.createdAt || '',
           type: d.driverType || 'company'
@@ -237,13 +243,23 @@ export class DriverListComponent implements OnInit {
   private resolveFleetName(driverLike: any): string {
     const direct = String(
       driverLike?.fleet?.name
+      ?? driverLike?.fleet?.Name
       ?? driverLike?.fleetName
+      ?? driverLike?.FleetName
+      ?? driverLike?.fleet_name
       ?? driverLike?.fleet?.fleetName
+      ?? (typeof driverLike?.fleet === 'string' ? driverLike.fleet : '')
       ?? ''
     ).trim();
     if (direct) return direct;
 
-    const fleetId = this.toNullableNumber(driverLike?.fleetId);
+    const fleetId = this.toNullableNumber(
+      driverLike?.fleetId
+      ?? driverLike?.FleetId
+      ?? driverLike?.fleet_id
+      ?? driverLike?.fleet?.id
+      ?? driverLike?.fleet?.Id
+    );
     if (fleetId) {
       const fleet = this.availableFleets().find((f: any) => this.toNullableNumber(f?.id) === fleetId);
       const fallback = String(fleet?.name ?? fleet?.fleetName ?? '').trim();
