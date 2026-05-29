@@ -994,6 +994,16 @@ type MotivStatusCache = {
                 placeholder="Search events (driver, vehicle, event type, location)"
                 [value]="safetySearchTerm()"
                 (input)="setSafetySearchTerm($any($event.target).value)" />
+              <input
+                class="filter-input"
+                type="date"
+                [value]="safetyDateFromFilter()"
+                (change)="setSafetyDateFromFilter($any($event.target).value)" />
+              <input
+                class="filter-input"
+                type="date"
+                [value]="safetyDateToFilter()"
+                (change)="setSafetyDateToFilter($any($event.target).value)" />
               <select
                 class="filter-input filter-select"
                 [value]="safetyTypeFilter()"
@@ -1973,6 +1983,8 @@ export class MotivComponent implements OnInit {
   safetySearchTerm = signal('');
   safetyTypeFilter = signal<string>('all');
   safetyVideoFilter = signal<'all' | 'with-video' | 'without-video'>('all');
+  safetyDateFromFilter = signal('');
+  safetyDateToFilter = signal('');
   safetyDaysFilter = signal(30);
   safetyPage = signal(1);
   safetyPageSize = signal(100);
@@ -2212,6 +2224,8 @@ export class MotivComponent implements OnInit {
     const term = this.safetySearchTerm().trim().toLowerCase();
     const type = this.safetyTypeFilter();
     const video = this.safetyVideoFilter();
+    const fromDate = this.safetyDateFromFilter();
+    const toDate = this.safetyDateToFilter();
 
     return this.safetyRows().filter((row) => {
       const matchesSearch =
@@ -2229,8 +2243,11 @@ export class MotivComponent implements OnInit {
         video === 'all'
         || (video === 'with-video' && row.hasVideo)
         || (video === 'without-video' && !row.hasVideo);
+      const matchesDate =
+        (!fromDate && !toDate)
+        || this.isTimestampWithinLocalDateRange(row.eventTimestamp, fromDate, toDate);
 
-      return matchesSearch && matchesType && matchesVideo;
+      return matchesSearch && matchesType && matchesVideo && matchesDate;
     });
   });
   safetyWithVideoCount = computed<number>(() =>
@@ -4805,6 +4822,16 @@ export class MotivComponent implements OnInit {
 
   setSafetyVideoFilter(value: 'all' | 'with-video' | 'without-video'): void {
     this.safetyVideoFilter.set(value ?? 'all');
+    this.safetyPage.set(1);
+  }
+
+  setSafetyDateFromFilter(value: string): void {
+    this.safetyDateFromFilter.set(String(value ?? '').trim());
+    this.safetyPage.set(1);
+  }
+
+  setSafetyDateToFilter(value: string): void {
+    this.safetyDateToFilter.set(String(value ?? '').trim());
     this.safetyPage.set(1);
   }
 
