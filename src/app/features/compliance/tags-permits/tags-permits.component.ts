@@ -22,7 +22,7 @@ export class TagsPermitsComponent implements OnInit {
   private readonly trailerStatusOverridesKey = 'ta_trailer_status_overrides';
   private readonly trailerFieldOverridesKey = 'ta_trailer_field_overrides';
 
-  activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards'>('permits');
+  activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'>('permits');
   permits = signal<any[]>([]);
   trailers = signal<any[]>([]);
   drivers = signal<any[]>([]);
@@ -102,6 +102,18 @@ export class TagsPermitsComponent implements OnInit {
     }
     if (status) list = list.filter(p => this.getPermitStatus(p) === status);
     return list;
+  });
+
+  filteredEldPermits = computed(() => {
+    return this.filterByPermitType('eld');
+  });
+
+  filteredCameraPermits = computed(() => {
+    return this.filterByPermitType('camera');
+  });
+
+  filteredCablePermits = computed(() => {
+    return this.filterByPermitType('cable');
   });
 
   filteredTrailerPermits = computed(() => {
@@ -206,6 +218,25 @@ export class TagsPermitsComponent implements OnInit {
         { icon: 'bx-user-check', label: 'Assigned Drivers', value: assigned },
         { icon: 'bx-user-x', label: 'Unassigned Trailers', value: unassigned },
         { icon: 'bx-error', label: 'Expiring Soon', value: expiring }
+      ];
+    }
+
+    if (tab === 'elds' || tab === 'cameras' || tab === 'cables') {
+      const rows = tab === 'elds'
+        ? this.filteredEldPermits()
+        : (tab === 'cameras' ? this.filteredCameraPermits() : this.filteredCablePermits());
+      const totalLabel = tab === 'elds'
+        ? 'Total ELDs'
+        : (tab === 'cameras' ? 'Total Cameras' : 'Total Cables');
+      const active = rows.filter((p: any) => this.getPermitStatus(p) === 'active').length;
+      const expiring = rows.filter((p: any) => this.getPermitStatus(p) === 'expiring').length;
+      const expired = rows.filter((p: any) => this.getPermitStatus(p) === 'expired').length;
+
+      return [
+        { icon: 'bx-chip', label: totalLabel, value: rows.length },
+        { icon: 'bx-check-circle', label: 'Active', value: active },
+        { icon: 'bx-error', label: 'Expiring Soon', value: expiring },
+        { icon: 'bx-x-circle', label: 'Expired', value: expired }
       ];
     }
 
@@ -485,7 +516,7 @@ export class TagsPermitsComponent implements OnInit {
     }
   }
 
-  selectMainTab(tab: 'permits' | 'irp' | 'trailer' | 'fuel-cards'): void {
+  selectMainTab(tab: 'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'): void {
     this.activeTab.set(tab);
 
     if (tab === 'trailer') {
@@ -505,7 +536,13 @@ export class TagsPermitsComponent implements OnInit {
     const tab = this.activeTab();
     const defaultType = tab === 'irp'
       ? 'irp'
-      : (tab === 'trailer' ? 'standard_equipment' : 'overweight');
+      : tab === 'elds'
+        ? 'eld'
+        : tab === 'cameras'
+          ? 'camera'
+          : tab === 'cables'
+            ? 'cable'
+            : (tab === 'trailer' ? 'standard_equipment' : 'overweight');
     this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
     this.editingPermit.set(null);
     this.trailerModalTab.set('details');
@@ -672,13 +709,67 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   pageSubtitle(): string {
+    if (this.activeTab() === 'elds') return 'Manage ELD permits and subscription records';
+    if (this.activeTab() === 'cameras') return 'Manage camera permits and subscription records';
+    if (this.activeTab() === 'cables') return 'Manage cable permits and subscription records';
     return this.isTrailerTab()
       ? 'Add trailer tags and assign drivers to active trailers'
       : 'Manage company-owned overweight/oversize permits and IRP registrations';
   }
 
   searchPlaceholder(): string {
+    if (this.activeTab() === 'elds') return 'Search ELD records...';
+    if (this.activeTab() === 'cameras') return 'Search camera records...';
+    if (this.activeTab() === 'cables') return 'Search cable records...';
     return this.isTrailerTab() ? 'Search trailer tags...' : 'Search permits...';
+  }
+
+  addButtonLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'irp') return 'Add IRP Tag';
+    if (tab === 'trailer') return 'Add Trailer';
+    if (tab === 'elds') return 'Add ELD';
+    if (tab === 'cameras') return 'Add Camera';
+    if (tab === 'cables') return 'Add Cable';
+    return 'Add Permit';
+  }
+
+  activePermitRows(): any[] {
+    const tab = this.activeTab();
+    if (tab === 'irp') return this.filteredIrpPermits();
+    if (tab === 'elds') return this.filteredEldPermits();
+    if (tab === 'cameras') return this.filteredCameraPermits();
+    if (tab === 'cables') return this.filteredCablePermits();
+    return this.filteredPermits();
+  }
+
+  activePermitEmptyText(): string {
+    const tab = this.activeTab();
+    if (tab === 'irp') return 'No IRP tags found. Click "Add IRP Tag" to create one.';
+    if (tab === 'elds') return 'No ELD records found. Click "Add ELD" to create one.';
+    if (tab === 'cameras') return 'No camera records found. Click "Add Camera" to create one.';
+    if (tab === 'cables') return 'No cable records found. Click "Add Cable" to create one.';
+    return 'No permits found. Click "Add Permit" to create one.';
+  }
+
+  private filterByPermitType(targetType: string): any[] {
+    const normalizedTarget = String(targetType || '').trim().toLowerCase();
+    let list = this.permits().filter((p: any) =>
+      String(p?.permitType || '').trim().toLowerCase() === normalizedTarget
+    );
+    const search = this.searchTerm().toLowerCase();
+    const status = this.statusFilter();
+
+    if (search) {
+      list = list.filter((p: any) =>
+        (p.permitNumber || '').toLowerCase().includes(search) ||
+        (p.assignedDriverName || '').toLowerCase().includes(search) ||
+        (p.assignedTruckNumber || '').toLowerCase().includes(search) ||
+        (p.state || '').toLowerCase().includes(search)
+      );
+    }
+    if (status) list = list.filter((p: any) => this.getPermitStatus(p) === status);
+    return list;
   }
 
   // ── Document handling ──────────────────────────────────────────────────
