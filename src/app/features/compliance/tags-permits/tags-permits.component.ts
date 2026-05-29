@@ -734,6 +734,109 @@ export class TagsPermitsComponent implements OnInit {
     return 'Add Permit';
   }
 
+  isCustomEquipmentTab(): boolean {
+    const tab = this.activeTab();
+    return tab === 'elds' || tab === 'cameras' || tab === 'cables';
+  }
+
+  modalRecordLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'trailer') return 'Trailer';
+    if (tab === 'elds') return 'ELD';
+    if (tab === 'cameras') return 'Camera';
+    if (tab === 'cables') return 'Cable';
+    return 'Permit';
+  }
+
+  modalNumberLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'trailer') return 'Trailer Tag Number';
+    if (tab === 'elds') return 'ELD Number / Device ID';
+    if (tab === 'cameras') return 'Camera Number / Device ID';
+    if (tab === 'cables') return 'Cable Number / Asset ID';
+    return 'Permit Number';
+  }
+
+  modalNumberPlaceholder(): string {
+    const tab = this.activeTab();
+    if (tab === 'trailer') return 'e.g., TR-2026-12345';
+    if (tab === 'elds') return 'e.g., ELD-1024 or device serial';
+    if (tab === 'cameras') return 'e.g., CAM-1184 or serial';
+    if (tab === 'cables') return 'e.g., CBL-2042 or kit ID';
+    return 'e.g., OW-2026-12345';
+  }
+
+  modalRegionLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds') return 'Provider';
+    if (tab === 'cameras') return 'Camera Vendor';
+    if (tab === 'cables') return 'Cable Type / Vendor';
+    return 'State';
+  }
+
+  modalRegionPlaceholder(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds') return 'e.g., Motive, Samsara';
+    if (tab === 'cameras') return 'e.g., Lytx, Motive';
+    if (tab === 'cables') return 'e.g., Harness, Coax, OEM';
+    return 'e.g., FL';
+  }
+
+  modalRegionMaxLength(): number {
+    return this.isCustomEquipmentTab() ? 40 : 5;
+  }
+
+  modalCostLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds' || tab === 'cameras') return 'Monthly Cost';
+    if (tab === 'cables') return 'Replacement Cost';
+    return 'Cost';
+  }
+
+  modalIssueDateLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds') return 'Activated Date';
+    if (tab === 'cameras') return 'Installed Date';
+    if (tab === 'cables') return 'Installed Date';
+    return 'Issue Date';
+  }
+
+  modalExpiryDateLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds') return 'Renewal Date';
+    if (tab === 'cameras') return 'Warranty / Renewal Date';
+    if (tab === 'cables') return 'Service / Replacement Date';
+    return 'Expiry Date';
+  }
+
+  modalTruckLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds' || tab === 'cameras' || tab === 'cables') return 'Truck / Unit #';
+    return 'Truck #';
+  }
+
+  modalTruckPlaceholder(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds' || tab === 'cameras' || tab === 'cables') return 'e.g., Unit 1210';
+    return 'e.g., 1210';
+  }
+
+  modalNotesLabel(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds') return 'Device Notes';
+    if (tab === 'cameras') return 'Camera Notes';
+    if (tab === 'cables') return 'Cable Notes';
+    return 'Notes';
+  }
+
+  modalNotesPlaceholder(): string {
+    const tab = this.activeTab();
+    if (tab === 'elds') return 'Optional login, install, or support notes...';
+    if (tab === 'cameras') return 'Optional placement, install, or support notes...';
+    if (tab === 'cables') return 'Optional cable type, routing, or service notes...';
+    return 'Optional notes...';
+  }
+
   activePermitRows(): any[] {
     const tab = this.activeTab();
     if (tab === 'irp') return this.filteredIrpPermits();

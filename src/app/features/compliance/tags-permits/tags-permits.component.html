@@ -301,11 +301,7 @@
         <div class="tp-modal-header">
           <h2>
             {{ editingPermit() ? 'Edit' : 'Add' }}
-            {{
-              activeTab() === 'trailer'
-                ? 'Trailer'
-                : (activeTab() === 'elds' ? 'ELD' : 'Permit')
-            }}
+            {{ modalRecordLabel() }}
           </h2>
           <button class="tp-close" (click)="closeModal()">&times;</button>
         </div>
@@ -381,23 +377,13 @@
                 </div>
               }
               <div class="tp-form-group">
-                <label>
-                  {{
-                    activeTab() === 'trailer'
-                      ? 'Trailer Tag Number'
-                      : (activeTab() === 'elds' ? 'ELD Number / Device ID' : 'Permit Number')
-                  }}
-                </label>
+                <label>{{ modalNumberLabel() }}</label>
                 <input
                   type="text"
                   [(ngModel)]="permitForm.permitNumber"
-                  [placeholder]="
-                    activeTab() === 'trailer'
-                      ? 'e.g., TR-2026-12345'
-                      : (activeTab() === 'elds' ? 'e.g., ELD-1024 or device serial' : 'e.g., OW-2026-12345')
-                  ">
+                  [placeholder]="modalNumberPlaceholder()">
               </div>
-              @if (activeTab() !== 'elds') {
+              @if (!isCustomEquipmentTab()) {
                 <div class="tp-form-group">
                   <label>{{ activeTab() === 'trailer' ? 'Trailer Type' : 'Type' }}</label>
                   <select [(ngModel)]="permitForm.permitType">
@@ -428,15 +414,15 @@
             </div>
             <div class="tp-form-row">
               <div class="tp-form-group">
-                <label>{{ activeTab() === 'elds' ? 'Provider' : 'State' }}</label>
+                <label>{{ modalRegionLabel() }}</label>
                 <input
                   type="text"
                   [(ngModel)]="permitForm.state"
-                  [placeholder]="activeTab() === 'elds' ? 'e.g., Motive, Samsara' : 'e.g., FL'"
-                  [attr.maxlength]="activeTab() === 'elds' ? 40 : 5">
+                  [placeholder]="modalRegionPlaceholder()"
+                  [attr.maxlength]="modalRegionMaxLength()">
               </div>
               <div class="tp-form-group">
-                <label>{{ activeTab() === 'elds' ? 'Monthly Cost' : 'Cost' }}</label>
+                <label>{{ modalCostLabel() }}</label>
                 <input type="number" [(ngModel)]="permitForm.cost" placeholder="0.00" step="0.01">
               </div>
             </div>
@@ -467,11 +453,11 @@
             }
             <div class="tp-form-row">
               <div class="tp-form-group">
-                <label>{{ activeTab() === 'elds' ? 'Activated Date' : 'Issue Date' }}</label>
+                <label>{{ modalIssueDateLabel() }}</label>
                 <input type="date" [(ngModel)]="permitForm.issueDate">
               </div>
               <div class="tp-form-group">
-                <label>{{ activeTab() === 'elds' ? 'Renewal Date' : 'Expiry Date' }}</label>
+                <label>{{ modalExpiryDateLabel() }}</label>
                 <input type="date" [(ngModel)]="permitForm.expiryDate">
               </div>
             </div>
@@ -497,17 +483,17 @@
                 </div>
               } @else {
                 <div class="tp-form-group">
-                  <label>{{ activeTab() === 'elds' ? 'Truck / Unit #' : 'Truck #' }}</label>
-                  <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" [placeholder]="activeTab() === 'elds' ? 'e.g., Unit 1210' : 'e.g., 1210'">
+                  <label>{{ modalTruckLabel() }}</label>
+                  <input type="text" [(ngModel)]="permitForm.assignedTruckNumber" [placeholder]="modalTruckPlaceholder()">
                 </div>
               }
             </div>
             <div class="tp-form-group">
-              <label>{{ activeTab() === 'elds' ? 'Device Notes' : 'Notes' }}</label>
+              <label>{{ modalNotesLabel() }}</label>
               <textarea
                 [(ngModel)]="permitForm.notes"
                 rows="2"
-                [placeholder]="activeTab() === 'elds' ? 'Optional login, install, or support notes...' : 'Optional notes...'"></textarea>
+                [placeholder]="modalNotesPlaceholder()"></textarea>
             </div>
           }
         </div>
