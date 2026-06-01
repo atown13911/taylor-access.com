@@ -73,8 +73,6 @@ export class TagsPermitsComponent implements OnInit {
     driverId: string;
     driverName?: string;
     driverEmail?: string;
-  } | {
-    driverId: '';
   }>>({});
   readonly trailerVendorOptions = ['ryder', 'metro', 'taylor_leasing', 'other'] as const;
 
@@ -1138,7 +1136,7 @@ export class TagsPermitsComponent implements OnInit {
     return digits.length >= 4 ? digits.slice(-4) : 'N/A';
   }
 
-  private buildFuelCardAssignmentMap(): Map<string, { label: string; last4: string }> {
+  private buildFuelCardAssignmentMap(): Map<string, { label: string; last4: string; cardId: string }> {
     const map = new Map<string, { label: string; last4: string; cardId: string }>();
     for (const card of this.getResolvedFuelCards()) {
       const assignment = { label: card.label, last4: card.last4, cardId: card.id };
@@ -1353,7 +1351,7 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   private persistFuelCardAssignmentOverrides(
-    overrides: Record<string, { driverId: string; driverName?: string; driverEmail?: string } | { driverId: '' }>
+    overrides: Record<string, { driverId: string; driverName?: string; driverEmail?: string }>
   ): void {
     try {
       localStorage.setItem(this.fuelCardAssignmentOverridesKey, JSON.stringify(overrides));
