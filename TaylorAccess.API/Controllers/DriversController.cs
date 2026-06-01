@@ -49,11 +49,41 @@ public class DriversController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int limit = 25)
     {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null)
+            return Unauthorized(new { error = "Not authenticated" });
+
+        var userRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
+        var canBypassOrgFilter =
+            userRole == "product_owner" ||
+            userRole == "superadmin" ||
+            userRole == "development";
+
+        var allowedOrgIds = new HashSet<int>();
+        if (!canBypassOrgFilter)
+        {
+            var membershipOrgIds = await _currentUserService.GetUserOrganizationIdsAsync();
+            foreach (var id in membershipOrgIds)
+            {
+                if (id > 0) allowedOrgIds.Add(id);
+            }
+
+            if (user.OrganizationId.HasValue && user.OrganizationId.Value > 0)
+                allowedOrgIds.Add(user.OrganizationId.Value);
+
+            if (allowedOrgIds.Count == 0)
+                return BadRequest(new { error = "User must belong to an organization" });
+        }
+
         var query = _context.Drivers
             .AsNoTracking()
             .Include(d => d.Division)
             .Include(d => d.DriverTerminal)
+            .Where(d => !d.IsDeleted)
             .AsQueryable();
+
+        if (!canBypassOrgFilter)
+            query = query.Where(d => allowedOrgIds.Contains(d.OrganizationId));
 
         if (!string.IsNullOrEmpty(status))
             query = query.Where(d => d.Status == status);
