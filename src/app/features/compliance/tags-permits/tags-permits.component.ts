@@ -21,6 +21,7 @@ export class TagsPermitsComponent implements OnInit {
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
   private readonly trailerStatusOverridesKey = 'ta_trailer_status_overrides';
   private readonly trailerFieldOverridesKey = 'ta_trailer_field_overrides';
+  private readonly fuelCardAssignmentOverridesKey = 'ta_fuel_card_assignment_overrides_v1';
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'>('permits');
   permits = signal<any[]>([]);
@@ -36,6 +37,12 @@ export class TagsPermitsComponent implements OnInit {
   editingPermit = signal<any>(null);
   trailerModalTab = signal<'details' | 'photo'>('details');
   selectedTrailerDrawer = signal<any | null>(null);
+  showFuelCardDetailsModal = signal(false);
+  showFuelCardAssignModal = signal(false);
+  selectedFuelCardDriver = signal<any | null>(null);
+  selectedFuelCardDetail = signal<any | null>(null);
+  fuelCardAssignCardId = signal('');
+  savingFuelCardAssignment = signal(false);
 
   // Document upload
   uploadingDoc = signal(false);
@@ -62,6 +69,13 @@ export class TagsPermitsComponent implements OnInit {
     notes: string;
     photoUrl: string | null;
   }>>>({});
+  private fuelCardAssignmentOverrides = signal<Record<string, {
+    driverId: string;
+    driverName?: string;
+    driverEmail?: string;
+  } | {
+    driverId: '';
+  }>>({});
   readonly trailerVendorOptions = ['ryder', 'metro', 'taylor_leasing', 'other'] as const;
 
   permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
@@ -173,6 +187,7 @@ export class TagsPermitsComponent implements OnInit {
           email: d?.email || '',
           truckNumber: d?.truckNumber || d?.assignedTruckNumber || d?.truckTag || '',
           status: d?.status || 'active',
+          assignedFuelCardId: assigned?.cardId ?? '',
           assignedFuelCard: assigned?.label ?? 'Unassigned',
           assignedFuelCardLast4: assigned?.last4 ?? 'N/A'
         };
@@ -195,12 +210,12 @@ export class TagsPermitsComponent implements OnInit {
 
     if (tab === 'fuel-cards') {
       const rows = this.filteredFuelCardDrivers();
-      const assigned = rows.filter((d: any) => String(d?.assignedFuelCard || '') !== 'Unassigned').length;
+      const assigned = rows.filter((d: any) => !!String(d?.assignedFuelCardId || '').trim()).length;
       const unassigned = Math.max(rows.length - assigned, 0);
       const uniqueAssignedCards = new Set(
         rows
-          .map((d: any) => String(d?.assignedFuelCard || '').trim())
-          .filter((v: string) => !!v && v !== 'Unassigned')
+          .map((d: any) => String(d?.assignedFuelCardId || '').trim())
+          .filter((v: string) => !!v)
       ).size;
 
       return [
@@ -302,6 +317,7 @@ export class TagsPermitsComponent implements OnInit {
   ngOnInit() {
     this.loadTrailerStatusOverrides();
     this.loadTrailerFieldOverrides();
+    this.loadFuelCardAssignmentOverrides();
     this.loadData();
   }
 
@@ -1123,27 +1139,227 @@ export class TagsPermitsComponent implements OnInit {
   }
 
   private buildFuelCardAssignmentMap(): Map<string, { label: string; last4: string }> {
-    const map = new Map<string, { label: string; last4: string }>();
-    for (const raw of this.motivFuelCards()) {
-      const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
-      const assignment = {
-        label: this.buildFuelCardDisplay(card),
-        last4: this.buildFuelCardLast4(card)
-      };
-      const assigned = card?.assigned_driver ?? card?.driver ?? card?.user ?? card?.holder ?? raw?.assigned_driver ?? raw?.driver ?? raw?.user ?? raw?.holder ?? {};
-      const assignedName = [assigned?.first_name ?? assigned?.firstName, assigned?.last_name ?? assigned?.lastName].filter(Boolean).join(' ').trim() || assigned?.name;
-      const assignedEmail = assigned?.email ?? assigned?.driver_email ?? raw?.assigned_driver_email;
-      const assignedId = assigned?.id ?? assigned?.driver_id ?? assigned?.user_id ?? raw?.assigned_driver_id ?? raw?.driver_id ?? raw?.user_id;
-
-      const idKey = this.normalizeKey(assignedId);
-      const emailKey = this.normalizeKey(assignedEmail);
-      const nameKey = this.normalizeNameKey(assignedName);
+    const map = new Map<string, { label: string; last4: string; cardId: string }>();
+    for (const card of this.getResolvedFuelCards()) {
+      const assignment = { label: card.label, last4: card.last4, cardId: card.id };
+      const idKey = this.normalizeKey(card.assignedDriverId);
+      const emailKey = this.normalizeKey(card.assignedDriverEmail);
+      const nameKey = this.normalizeNameKey(card.assignedDriverName);
 
       if (idKey) map.set(`id:${idKey}`, assignment);
       if (emailKey) map.set(`email:${emailKey}`, assignment);
       if (nameKey) map.set(`name:${nameKey}`, assignment);
     }
     return map;
+  }
+
+  private extractFuelCardId(card: any, fallbackIndex: number): string {
+    const rawId = card?.id ?? card?.card_id ?? card?.cardId ?? card?.uuid ?? card?.external_id ?? card?.externalId;
+    const normalizedRaw = String(rawId ?? '').trim();
+    if (normalizedRaw) return normalizedRaw;
+    const last4 = this.buildFuelCardLast4(card);
+    const name = String(card?.name ?? card?.card_name ?? card?.display_name ?? card?.nickname ?? '').trim();
+    return `${name || 'card'}-${last4 || 'na'}-${fallbackIndex + 1}`;
+  }
+
+  private getResolvedFuelCards(): Array<{
+    id: string;
+    raw: any;
+    card: any;
+    label: string;
+    last4: string;
+    assignedDriverId: string;
+    assignedDriverName: string;
+    assignedDriverEmail: string;
+  }> {
+    const overrides = this.fuelCardAssignmentOverrides();
+    const cards: Array<{
+      id: string;
+      raw: any;
+      card: any;
+      label: string;
+      last4: string;
+      assignedDriverId: string;
+      assignedDriverName: string;
+      assignedDriverEmail: string;
+    }> = [];
+
+    this.motivFuelCards().forEach((raw: any, index: number) => {
+      const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
+      const assigned = card?.assigned_driver ?? card?.driver ?? card?.user ?? card?.holder ?? raw?.assigned_driver ?? raw?.driver ?? raw?.user ?? raw?.holder ?? {};
+      const assignedName = [assigned?.first_name ?? assigned?.firstName, assigned?.last_name ?? assigned?.lastName].filter(Boolean).join(' ').trim() || String(assigned?.name ?? '').trim();
+      const assignedEmail = String(assigned?.email ?? assigned?.driver_email ?? raw?.assigned_driver_email ?? '').trim();
+      const assignedId = String(assigned?.id ?? assigned?.driver_id ?? assigned?.user_id ?? raw?.assigned_driver_id ?? raw?.driver_id ?? raw?.user_id ?? '').trim();
+      const id = this.extractFuelCardId(card, index);
+      const override = overrides[id];
+
+      let resolvedDriverId = assignedId;
+      let resolvedDriverName = assignedName;
+      let resolvedDriverEmail = assignedEmail;
+
+      if (override) {
+        if (!String(override.driverId ?? '').trim()) {
+          resolvedDriverId = '';
+          resolvedDriverName = '';
+          resolvedDriverEmail = '';
+        } else {
+          const overrideDriverId = String(override.driverId).trim();
+          const driver = this.drivers().find((d: any) => this.normalizeKey(d?.id) === this.normalizeKey(overrideDriverId));
+          resolvedDriverId = overrideDriverId;
+          resolvedDriverName = String(driver?.name ?? override.driverName ?? '').trim();
+          resolvedDriverEmail = String(driver?.email ?? override.driverEmail ?? '').trim();
+        }
+      }
+
+      cards.push({
+        id,
+        raw,
+        card,
+        label: this.buildFuelCardDisplay(card),
+        last4: this.buildFuelCardLast4(card),
+        assignedDriverId: resolvedDriverId,
+        assignedDriverName: resolvedDriverName,
+        assignedDriverEmail: resolvedDriverEmail
+      });
+    });
+
+    return cards;
+  }
+
+  getFuelCardAssignmentOptions(): Array<{ id: string; label: string }> {
+    const selectedDriverId = this.normalizeKey(this.selectedFuelCardDriver()?.id);
+    return this.getResolvedFuelCards().map((card) => {
+      const assignedToCurrent = this.normalizeKey(card.assignedDriverId) === selectedDriverId;
+      const assignedLabel = !card.assignedDriverId
+        ? 'Unassigned'
+        : (assignedToCurrent ? 'Assigned to selected driver' : `Assigned to ${card.assignedDriverName || card.assignedDriverEmail || `Driver ${card.assignedDriverId}`}`);
+      const last4 = card.last4 && card.last4 !== 'N/A' ? ` • ${card.last4}` : '';
+      return { id: card.id, label: `${card.label}${last4} (${assignedLabel})` };
+    });
+  }
+
+  openFuelCardDetails(driverRow: any): void {
+    const assignedCard = this.getAssignedFuelCardForDriver(driverRow);
+    if (!assignedCard) {
+      this.toast.error('No fuel card assigned to this driver.', 'Card details');
+      return;
+    }
+    this.selectedFuelCardDetail.set({
+      driverName: driverRow?.name || 'Unknown Driver',
+      cardLabel: assignedCard.label,
+      last4: assignedCard.last4 || 'N/A',
+      cardId: assignedCard.id,
+      status: assignedCard.card?.status ?? assignedCard.raw?.status ?? '—',
+      network: assignedCard.card?.network ?? assignedCard.raw?.network ?? assignedCard.card?.provider ?? assignedCard.raw?.provider ?? '—',
+      cardType: assignedCard.card?.type ?? assignedCard.raw?.type ?? assignedCard.card?.card_type ?? assignedCard.raw?.card_type ?? '—',
+      nickname: assignedCard.card?.nickname ?? assignedCard.raw?.nickname ?? assignedCard.card?.name ?? assignedCard.raw?.name ?? '—',
+      spendLimit: assignedCard.card?.spend_limit ?? assignedCard.raw?.spend_limit ?? assignedCard.card?.limit ?? assignedCard.raw?.limit ?? null
+    });
+    this.showFuelCardDetailsModal.set(true);
+  }
+
+  closeFuelCardDetailsModal(): void {
+    this.showFuelCardDetailsModal.set(false);
+    this.selectedFuelCardDetail.set(null);
+  }
+
+  openFuelCardAssignModal(driverRow: any): void {
+    this.selectedFuelCardDriver.set(driverRow);
+    this.fuelCardAssignCardId.set(String(driverRow?.assignedFuelCardId ?? '').trim());
+    this.showFuelCardAssignModal.set(true);
+  }
+
+  closeFuelCardAssignModal(): void {
+    this.showFuelCardAssignModal.set(false);
+    this.selectedFuelCardDriver.set(null);
+    this.fuelCardAssignCardId.set('');
+    this.savingFuelCardAssignment.set(false);
+  }
+
+  saveFuelCardAssignment(): void {
+    const driver = this.selectedFuelCardDriver();
+    if (!driver) return;
+
+    this.savingFuelCardAssignment.set(true);
+    const driverId = String(driver?.id ?? '').trim();
+    const selectedCardId = String(this.fuelCardAssignCardId() ?? '').trim();
+    const currentCardId = String(driver?.assignedFuelCardId ?? '').trim();
+    const next = { ...this.fuelCardAssignmentOverrides() };
+
+    for (const [cardId, assignment] of Object.entries(next)) {
+      if (String((assignment as any)?.driverId ?? '').trim() === driverId) {
+        delete next[cardId];
+      }
+    }
+
+    if (currentCardId && currentCardId !== selectedCardId) {
+      next[currentCardId] = { driverId: '' };
+    }
+
+    if (selectedCardId) {
+      next[selectedCardId] = {
+        driverId,
+        driverName: String(driver?.name ?? '').trim(),
+        driverEmail: String(driver?.email ?? '').trim()
+      };
+    } else if (currentCardId) {
+      next[currentCardId] = { driverId: '' };
+    }
+
+    this.fuelCardAssignmentOverrides.set(next);
+    this.persistFuelCardAssignmentOverrides(next);
+    this.savingFuelCardAssignment.set(false);
+    this.closeFuelCardAssignModal();
+    this.toast.champagne('Fuel card assignment updated', 'Success');
+  }
+
+  private getAssignedFuelCardForDriver(driverRow: any): {
+    id: string;
+    raw: any;
+    card: any;
+    label: string;
+    last4: string;
+    assignedDriverId: string;
+    assignedDriverName: string;
+    assignedDriverEmail: string;
+  } | null {
+    const targetCardId = String(driverRow?.assignedFuelCardId ?? '').trim();
+    if (targetCardId) {
+      return this.getResolvedFuelCards().find((card) => card.id === targetCardId) ?? null;
+    }
+
+    const targetDriverKeys = this.buildDriverLookupKeys(driverRow);
+    const keySet = new Set(targetDriverKeys);
+    return this.getResolvedFuelCards().find((card) => {
+      const cardKeys = [
+        `id:${this.normalizeKey(card.assignedDriverId)}`,
+        `email:${this.normalizeKey(card.assignedDriverEmail)}`,
+        `name:${this.normalizeNameKey(card.assignedDriverName)}`
+      ].filter((k: string) => !k.endsWith(':'));
+      return cardKeys.some((k: string) => keySet.has(k));
+    }) ?? null;
+  }
+
+  private loadFuelCardAssignmentOverrides(): void {
+    try {
+      const raw = localStorage.getItem(this.fuelCardAssignmentOverridesKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+      this.fuelCardAssignmentOverrides.set(parsed);
+    } catch {
+      // Ignore malformed local values.
+    }
+  }
+
+  private persistFuelCardAssignmentOverrides(
+    overrides: Record<string, { driverId: string; driverName?: string; driverEmail?: string } | { driverId: '' }>
+  ): void {
+    try {
+      localStorage.setItem(this.fuelCardAssignmentOverridesKey, JSON.stringify(overrides));
+    } catch {
+      // Ignore storage issues.
+    }
   }
 
   private isTrailerPermitType(rawType: any): boolean {

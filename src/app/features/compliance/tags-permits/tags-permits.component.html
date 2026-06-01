@@ -266,6 +266,7 @@
             <th>Status</th>
             <th>Assigned Fuel Card</th>
             <th>Last4</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -289,9 +290,24 @@
                 }
               </td>
               <td class="tp-mono">{{ d.assignedFuelCardLast4 || 'N/A' }}</td>
+              <td class="tp-actions">
+                <button
+                  class="tp-icon-btn"
+                  title="Card details"
+                  [disabled]="!d.assignedFuelCardId"
+                  (click)="openFuelCardDetails(d)">
+                  <i class="bx bx-detail"></i>
+                </button>
+                <button
+                  class="tp-icon-btn"
+                  title="Assign / reassign card"
+                  (click)="openFuelCardAssignModal(d)">
+                  <i class="bx bx-user-check"></i>
+                </button>
+              </td>
             </tr>
           } @empty {
-            <tr><td colspan="6" class="tp-empty">No active drivers found.</td></tr>
+            <tr><td colspan="7" class="tp-empty">No active drivers found.</td></tr>
           }
         </tbody>
       </table>
@@ -570,6 +586,73 @@
         <p>{{ selectedTrailerDrawer()?.notes || 'No notes' }}</p>
       </div>
     </aside>
+  }
+
+  @if (showFuelCardDetailsModal()) {
+    <div class="tp-modal-overlay" (click)="closeFuelCardDetailsModal()">
+      <div class="tp-modal" (click)="$event.stopPropagation()">
+        <div class="tp-modal-header">
+          <h2>Fuel Card Details</h2>
+          <button class="tp-close" (click)="closeFuelCardDetailsModal()">&times;</button>
+        </div>
+        <div class="tp-modal-body">
+          <div class="tp-fuel-card-details-grid">
+            <div class="tp-fuel-card-details-item"><span>Driver</span><strong>{{ selectedFuelCardDetail()?.driverName || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Card</span><strong>{{ selectedFuelCardDetail()?.cardLabel || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Last4</span><strong>{{ selectedFuelCardDetail()?.last4 || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Card ID</span><strong>{{ selectedFuelCardDetail()?.cardId || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Status</span><strong>{{ selectedFuelCardDetail()?.status || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Network</span><strong>{{ selectedFuelCardDetail()?.network || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Type</span><strong>{{ selectedFuelCardDetail()?.cardType || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Nickname</span><strong>{{ selectedFuelCardDetail()?.nickname || '—' }}</strong></div>
+            <div class="tp-fuel-card-details-item"><span>Spend Limit</span><strong>{{ selectedFuelCardDetail()?.spendLimit ?? '—' }}</strong></div>
+          </div>
+        </div>
+        <div class="tp-modal-footer">
+          <button class="tp-btn" (click)="closeFuelCardDetailsModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showFuelCardAssignModal()) {
+    <div class="tp-modal-overlay" (click)="closeFuelCardAssignModal()">
+      <div class="tp-modal" (click)="$event.stopPropagation()">
+        <div class="tp-modal-header">
+          <h2>Assign Fuel Card</h2>
+          <button class="tp-close" (click)="closeFuelCardAssignModal()">&times;</button>
+        </div>
+        <div class="tp-modal-body">
+          <div class="tp-form-row tp-form-row-single">
+            <div class="tp-form-group">
+              <label>Driver</label>
+              <input type="text" [value]="selectedFuelCardDriver()?.name || '—'" disabled>
+            </div>
+          </div>
+          <div class="tp-form-row tp-form-row-single">
+            <div class="tp-form-group">
+              <label>Fuel Card</label>
+              <select [ngModel]="fuelCardAssignCardId()" (ngModelChange)="fuelCardAssignCardId.set($event)">
+                <option value="">Unassigned</option>
+                @for (card of getFuelCardAssignmentOptions(); track card.id) {
+                  <option [value]="card.id">{{ card.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="tp-modal-footer">
+          <button class="tp-btn" (click)="closeFuelCardAssignModal()">Cancel</button>
+          <button class="tp-btn primary" (click)="saveFuelCardAssignment()" [disabled]="savingFuelCardAssignment()">
+            @if (savingFuelCardAssignment()) {
+              <i class="bx bx-loader-alt bx-spin"></i> Saving...
+            } @else {
+              <i class="bx bx-check"></i> Save Assignment
+            }
+          </button>
+        </div>
+      </div>
+    </div>
   }
 
   <!-- Floating Add Button -->
