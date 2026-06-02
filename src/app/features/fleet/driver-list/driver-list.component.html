@@ -55,31 +55,33 @@
     </div>
   </div>
 
-  <!-- Tabs -->
-  <div class="driver-tabs">
-    <button class="driver-tab" [class.active]="activeTab() === 'active'" (click)="setActiveTab('active')">
-      <i class='bx bx-check-circle'></i> Active <span class="driver-tab-count">{{ tabCounts().active }}</span>
-    </button>
-    <button class="driver-tab" [class.active]="activeTab() === 'inactive'" (click)="setActiveTab('inactive')">
-      <i class='bx bx-pause-circle'></i> Inactive <span class="driver-tab-count">{{ tabCounts().inactive }}</span>
-    </button>
-    <button class="driver-tab" [class.active]="activeTab() === 'archived'" (click)="setActiveTab('archived')">
-      <i class='bx bx-archive'></i> Archived <span class="driver-tab-count">{{ tabCounts().archived }}</span>
-    </button>
-  </div>
+  @if (!dispatchersView()) {
+    <!-- Tabs -->
+    <div class="driver-tabs">
+      <button class="driver-tab" [class.active]="activeTab() === 'active'" (click)="setActiveTab('active')">
+        <i class='bx bx-check-circle'></i> Active <span class="driver-tab-count">{{ tabCounts().active }}</span>
+      </button>
+      <button class="driver-tab" [class.active]="activeTab() === 'inactive'" (click)="setActiveTab('inactive')">
+        <i class='bx bx-pause-circle'></i> Inactive <span class="driver-tab-count">{{ tabCounts().inactive }}</span>
+      </button>
+      <button class="driver-tab" [class.active]="activeTab() === 'archived'" (click)="setActiveTab('archived')">
+        <i class='bx bx-archive'></i> Archived <span class="driver-tab-count">{{ tabCounts().archived }}</span>
+      </button>
+    </div>
 
-  <!-- Search -->
-  <div class="search-bar">
-    <i class='bx bx-search'></i>
-    <input type="text" placeholder="Search by name, phone, email, license..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
-    <select class="fleet-filter-select" [ngModel]="fleetFilter()" (ngModelChange)="fleetFilter.set($event)">
-      <option value="all">All Fleets</option>
-      <option value="unassigned">Unassigned</option>
-      @for (fleet of fleetFilterOptions(); track fleet) {
-        <option [value]="fleet">{{ fleet }}</option>
-      }
-    </select>
-  </div>
+    <!-- Search -->
+    <div class="search-bar">
+      <i class='bx bx-search'></i>
+      <input type="text" placeholder="Search by name, phone, email, license..." [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)">
+      <select class="fleet-filter-select" [ngModel]="fleetFilter()" (ngModelChange)="fleetFilter.set($event)">
+        <option value="all">All Fleets</option>
+        <option value="unassigned">Unassigned</option>
+        @for (fleet of fleetFilterOptions(); track fleet) {
+          <option [value]="fleet">{{ fleet }}</option>
+        }
+      </select>
+    </div>
+  }
 
   <!-- Loading -->
   @if (isLoading()) {
@@ -179,12 +181,12 @@
                   <td class="actions-cell">
                     <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                     <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
-                    @if (activeTab() === 'active') {
-                      <button class="action-btn deactivate" title="Deactivate" (click)="$event.stopPropagation(); deactivateDriver(driver)"><i class='bx bx-power-off'></i></button>
-                    } @else if (activeTab() === 'inactive') {
+                    @if (isArchivedStatus(driver.status)) {
+                      <button class="action-btn restore" title="Restore" (click)="$event.stopPropagation(); restoreArchivedDriver(driver)"><i class='bx bx-archive-out'></i></button>
+                    } @else if (isInactiveStatus(driver.status)) {
                       <button class="action-btn archive" title="Archive" (click)="$event.stopPropagation(); archiveDriver(driver)"><i class='bx bx-archive-in'></i></button>
                     } @else {
-                      <button class="action-btn restore" title="Restore" (click)="$event.stopPropagation(); restoreArchivedDriver(driver)"><i class='bx bx-archive-out'></i></button>
+                      <button class="action-btn deactivate" title="Deactivate" (click)="$event.stopPropagation(); deactivateDriver(driver)"><i class='bx bx-power-off'></i></button>
                     }
                   </td>
                 </tr>

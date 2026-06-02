@@ -179,23 +179,7 @@ export class DriverListComponent implements OnInit {
     const selectedId = this.selectedDispatcherId();
     if (!selectedId) return [] as DriverRow[];
 
-    const query = this.searchQuery().toLowerCase();
-    const fleet = this.fleetFilter();
-    let pool = this.tabbedDrivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === selectedId);
-
-    if (fleet === 'unassigned') {
-      pool = pool.filter((d) => String(d.fleetName || '').trim() === '—');
-    } else if (fleet !== 'all') {
-      pool = pool.filter((d) => String(d.fleetName || '').trim() === fleet);
-    }
-
-    if (!query) return pool;
-    return pool.filter((d) =>
-      d.name.toLowerCase().includes(query) ||
-      d.phone.includes(query) ||
-      d.email?.toLowerCase().includes(query) ||
-      d.licenseNumber?.toLowerCase().includes(query)
-    );
+    return this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === selectedId);
   });
 
   tabCounts = computed(() => {
@@ -1299,11 +1283,11 @@ export class DriverListComponent implements OnInit {
     return normalized || 'active';
   }
 
-  private isArchivedStatus(status: string): boolean {
+  isArchivedStatus(status: string): boolean {
     return this.normalizeStatus(status) === 'archived';
   }
 
-  private isInactiveStatus(status: string): boolean {
+  isInactiveStatus(status: string): boolean {
     const normalized = this.normalizeStatus(status);
     return normalized === 'inactive' ||
       normalized === 'off-duty' ||
