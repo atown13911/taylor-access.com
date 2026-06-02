@@ -106,25 +106,34 @@
             </tr>
           </thead>
           <tbody>
-            @for (dispatcher of dispatcherRows(); track dispatcher.id) {
-              <tr
-                class="dispatcher-row"
-                [class.selected]="selectedDispatcherId() === dispatcher.id"
-                (click)="selectDispatcherForView(dispatcher.id)">
-                <td class="name-cell">
-                  <div class="avatar">{{ dispatcher.name.charAt(0) }}</div>
-                  {{ dispatcher.name }}
-                </td>
-                <td>{{ dispatcher.email || '—' }}</td>
-                <td>{{ dispatcher.phone || '—' }}</td>
-                <td>{{ dispatcher.title || 'Dispatcher' }}</td>
-                <td><span class="status-badge" [class]="dispatcher.status || 'active'">{{ dispatcher.status || 'active' }}</span></td>
-                <td>{{ dispatcher.assignedDrivers }}</td>
-              </tr>
-            } @empty {
+            @if (loadingDispatchUsers()) {
               <tr>
-                <td colspan="6" class="empty-row">No dispatcher users with dispatch rights were found.</td>
+                <td colspan="6" class="empty-row">
+                  <i class='bx bx-loader-alt bx-spin'></i>
+                  Loading dispatchers...
+                </td>
               </tr>
+            } @else {
+              @for (dispatcher of dispatcherRows(); track dispatcher.id) {
+                <tr
+                  class="dispatcher-row"
+                  [class.selected]="selectedDispatcherId() === dispatcher.id"
+                  (click)="selectDispatcherForView(dispatcher.id)">
+                  <td class="name-cell">
+                    <div class="avatar">{{ dispatcher.name.charAt(0) }}</div>
+                    {{ dispatcher.name }}
+                  </td>
+                  <td>{{ dispatcher.email || '—' }}</td>
+                  <td>{{ dispatcher.phone || '—' }}</td>
+                  <td>{{ dispatcher.title || 'Dispatcher' }}</td>
+                  <td><span class="status-badge" [class]="dispatcher.status || 'active'">{{ dispatcher.status || 'active' }}</span></td>
+                  <td>{{ dispatcher.assignedDrivers }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="empty-row">No dispatcher users with dispatch rights were found.</td>
+                </tr>
+              }
             }
           </tbody>
         </table>
