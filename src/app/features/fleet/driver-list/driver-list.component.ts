@@ -1326,6 +1326,14 @@ export class DriverListComponent implements OnInit {
     return text.includes('dispatch');
   }
 
+  private isUserRecordEligibleForDispatch(user: any): boolean {
+    const normalized = String(user?.status ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalized) return true;
+    return !['inactive', 'archived', 'deleted', 'disabled', 'suspended', 'terminated'].includes(normalized);
+  }
+
   private assignmentHasDispatchRights(assignment: any): boolean {
     const rawStatus = String(assignment?.status ?? '').trim().toLowerCase();
     if (rawStatus && rawStatus !== 'active') return false;
@@ -1342,6 +1350,7 @@ export class DriverListComponent implements OnInit {
     const appIdentityText = String(
       assignment?.appName ??
       assignment?.clientName ??
+      assignment?.applicationName ??
       assignment?.appClientId ??
       assignment?.clientId ??
       ''
@@ -1350,14 +1359,17 @@ export class DriverListComponent implements OnInit {
     return appRole.includes('dispatch') ||
       this.containsDispatchSignal(assignment?.permissions) ||
       this.containsDispatchSignal(assignment?.scopes) ||
-      appIdentityText.includes('dispatch');
+      appIdentityText.includes('dispatch') ||
+      appIdentityText.includes('tss') ||
+      appIdentityText.includes('portal') ||
+      appIdentityText.includes('vantac');
   }
 
   private async loadDispatchUsers(): Promise<void> {
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
     try {
-      const usersRes: any = await this.api.getUsers({ status: 'active', limit: 5000 }).toPromise();
+      const usersRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
 
       const candidates: DispatchUserRow[] = [];
@@ -1365,7 +1377,7 @@ export class DriverListComponent implements OnInit {
       for (const user of users) {
         const userId = Number(user?.id);
         if (!Number.isFinite(userId) || userId <= 0) continue;
-        if (String(user?.status ?? '').trim().toLowerCase() !== 'active') continue;
+        if (!this.isUserRecordEligibleForDispatch(user)) continue;
 
         let appDispatchEligible = false;
         try {
