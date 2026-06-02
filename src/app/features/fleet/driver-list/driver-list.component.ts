@@ -210,6 +210,20 @@ export class DriverListComponent implements OnInit {
     };
   });
 
+  dispatcherStats = computed(() => {
+    const dispatchers = this.dispatcherRows();
+    const totalDispatchers = dispatchers.length;
+    const dispatchersWithAssignedDrivers = dispatchers.filter((d) => d.assignedDrivers > 0).length;
+    const driversWithDispatcher = this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) !== null).length;
+    const unassignedDrivers = Math.max(this.drivers().length - driversWithDispatcher, 0);
+    return {
+      totalDispatchers,
+      dispatchersWithAssignedDrivers,
+      driversWithDispatcher,
+      unassignedDrivers
+    };
+  });
+
   ngOnInit(): void {
     this.updateDispatchersViewFromRoute();
     this.router.events.subscribe((event) => {
@@ -1347,22 +1361,15 @@ export class DriverListComponent implements OnInit {
       ''
     ).trim().toLowerCase();
 
-    const appIdentityText = String(
-      assignment?.appName ??
-      assignment?.clientName ??
-      assignment?.applicationName ??
-      assignment?.appClientId ??
-      assignment?.clientId ??
-      ''
-    ).toLowerCase();
+    const explicitDispatchFlag =
+      assignment?.canDispatch === true ||
+      assignment?.isDispatcher === true ||
+      assignment?.dispatchAccess === true;
 
-    return appRole.includes('dispatch') ||
+    return explicitDispatchFlag ||
+      appRole.includes('dispatch') ||
       this.containsDispatchSignal(assignment?.permissions) ||
-      this.containsDispatchSignal(assignment?.scopes) ||
-      appIdentityText.includes('dispatch') ||
-      appIdentityText.includes('tss') ||
-      appIdentityText.includes('portal') ||
-      appIdentityText.includes('vantac');
+      this.containsDispatchSignal(assignment?.scopes);
   }
 
   private async loadDispatchUsers(): Promise<void> {

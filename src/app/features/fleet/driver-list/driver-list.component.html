@@ -30,29 +30,29 @@
     <div class="stat-card">
       <div class="stat-icon total"><i class='bx bx-group'></i></div>
       <div class="stat-info">
-        <span class="stat-value">{{ stats().total }}</span>
-        <span class="stat-label">Total Drivers</span>
+        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().totalDispatchers : stats().total }}</span>
+        <span class="stat-label">{{ dispatchersView() ? 'Total Dispatchers' : 'Total Drivers' }}</span>
       </div>
     </div>
     <div class="stat-card">
       <div class="stat-icon active"><i class='bx bx-check-circle'></i></div>
       <div class="stat-info">
-        <span class="stat-value">{{ stats().active }}</span>
-        <span class="stat-label">Active</span>
+        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().dispatchersWithAssignedDrivers : stats().active }}</span>
+        <span class="stat-label">{{ dispatchersView() ? 'Dispatchers Assigned' : 'Active' }}</span>
       </div>
     </div>
     <div class="stat-card">
       <div class="stat-icon dispatched"><i class='bx bx-navigation'></i></div>
       <div class="stat-info">
-        <span class="stat-value">{{ stats().dispatched }}</span>
-        <span class="stat-label">Dispatched</span>
+        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().driversWithDispatcher : stats().dispatched }}</span>
+        <span class="stat-label">{{ dispatchersView() ? 'Drivers Assigned' : 'Dispatched' }}</span>
       </div>
     </div>
     <div class="stat-card">
       <div class="stat-icon off-duty"><i class='bx bx-moon'></i></div>
       <div class="stat-info">
-        <span class="stat-value">{{ stats().offDuty }}</span>
-        <span class="stat-label">Off Duty</span>
+        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().unassignedDrivers : stats().offDuty }}</span>
+        <span class="stat-label">{{ dispatchersView() ? 'Drivers Unassigned' : 'Off Duty' }}</span>
       </div>
     </div>
   </div>
