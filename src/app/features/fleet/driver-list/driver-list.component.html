@@ -2,14 +2,8 @@
   <!-- Header -->
   <div class="page-header">
     <div class="header-left">
-      <h1><i class='bx bx-id-card'></i> Drivers</h1>
-      <p class="subtitle">
-        @if (fleetName()) {
-          Drivers assigned to <strong>{{ fleetName() }}</strong>
-        } @else {
-          All drivers in your organization
-        }
-      </p>
+      <h1><i class='bx bx-id-card'></i> {{ pageTitle() }}</h1>
+      <p class="subtitle">{{ pageSubtitle() }}</p>
     </div>
     <div class="header-actions">
       <button class="btn btn-secondary" (click)="loadDrivers()" title="Refresh">

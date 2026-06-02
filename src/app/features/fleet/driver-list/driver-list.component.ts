@@ -22,6 +22,8 @@ interface DriverRow {
   fleetName: string;
   hireDate: string;
   type: string;
+  notes?: string;
+  dispatchUserId?: number | null;
 }
 
 @Component({
@@ -49,6 +51,7 @@ export class DriverListComponent implements OnInit {
   fleetFilter = signal<'all' | 'unassigned' | string>('all');
   fleetName = signal<string>('');
   activeTab = signal<'active' | 'inactive' | 'archived'>('active');
+  dispatchersView = signal(false);
 
   // Modal state
   showModal = signal(false);
@@ -144,6 +147,10 @@ export class DriverListComponent implements OnInit {
     const fleet = this.fleetFilter();
     let pool = this.tabbedDrivers();
 
+    if (this.dispatchersView()) {
+      pool = pool.filter((d) => this.toNullableNumber(d.dispatchUserId) !== null);
+    }
+
     if (fleet === 'unassigned') {
       pool = pool.filter((d) => String(d.fleetName || '').trim() === '—');
     } else if (fleet !== 'all') {
@@ -179,9 +186,25 @@ export class DriverListComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    const currentPath = String(this.router.url || '').split('?')[0];
+    this.dispatchersView.set(currentPath === '/dispatchers');
     this.loadDrivers();
     this.loadFleets();
     this.loadOrganizations();
+  }
+
+  pageTitle(): string {
+    return this.dispatchersView() ? 'Dispatchers' : 'Drivers';
+  }
+
+  pageSubtitle(): string {
+    if (this.dispatchersView()) {
+      return 'Drivers with dispatch assignments in your organization';
+    }
+    if (this.fleetName()) {
+      return `Drivers assigned to ${this.fleetName()}`;
+    }
+    return 'All drivers in your organization';
   }
 
   private asArray(input: any): any[] {
@@ -244,7 +267,9 @@ export class DriverListComponent implements OnInit {
           ),
           fleetName: this.resolveFleetName(d),
           hireDate: d.hireDate || d.createdAt || '',
-          type: d.driverType || 'company'
+          type: d.driverType || 'company',
+          notes: String(d.notes ?? '').trim(),
+          dispatchUserId: this.resolveDispatchUserId(d)
         }));
         this.drivers.set(mapped);
 
