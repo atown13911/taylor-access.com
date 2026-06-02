@@ -8,7 +8,6 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { EventTrackingService } from '../../../core/services/event-tracking.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
-import { AdminService } from '../../../core/services/admin.service';
 import { environment } from '../../../../environments/environment';
 
 interface DriverRow {
@@ -47,7 +46,6 @@ export class DriverListComponent implements OnInit {
   private http = inject(HttpClient);
   private api = inject(VanTacApiService);
   private auth = inject(AuthService);
-  private adminService = inject(AdminService);
   private toast = inject(ToastService);
   private router = inject(Router);
   private tracking = inject(EventTrackingService);
@@ -1374,15 +1372,21 @@ export class DriverListComponent implements OnInit {
       this.containsDispatchSignal(assignment?.scopes);
   }
 
-  private rolesPayloadHasDispatchRights(payload: any): boolean {
-    const roles = Array.isArray(payload?.roles) ? payload.roles : [];
-    const roleSignals = roles.flatMap((role: any) => [
-      role?.name,
-      role?.description,
-      ...(Array.isArray(role?.permissions) ? role.permissions : [])
-    ]);
-    const directPermissions = Array.isArray(payload?.permissions) ? payload.permissions : [];
-    return [...roleSignals, ...directPermissions].some((value) => this.containsDispatchSignal(value));
+  private assignmentMatchesDispatchApp(assignment: any): boolean {
+    const identity = String(
+      assignment?.appName ??
+      assignment?.clientName ??
+      assignment?.applicationName ??
+      assignment?.appClientId ??
+      assignment?.clientId ??
+      ''
+    ).trim().toLowerCase();
+
+    if (!identity) return true;
+    return identity.includes('tss') ||
+      identity.includes('portal') ||
+      identity.includes('dispatch') ||
+      identity.includes('vantac');
   }
 
   private async loadDispatchUsers(): Promise<void> {
@@ -1393,36 +1397,24 @@ export class DriverListComponent implements OnInit {
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
 
       const candidates: DispatchUserRow[] = [];
-      const candidateUsers = users.filter((user: any) => {
+
+      for (const user of users) {
         const userId = Number(user?.id);
-        return Number.isFinite(userId) && userId > 0 && this.isUserRecordEligibleForDispatch(user);
-      });
+        if (!Number.isFinite(userId) || userId <= 0) continue;
+        if (!this.isUserRecordEligibleForDispatch(user)) continue;
 
-      const roleChecks = await Promise.all(
-        candidateUsers.map(async (user: any) => {
-          const userId = Number(user?.id);
-          try {
-            const rolesRes: any = await this.adminService.getUserRoles(String(userId)).toPromise();
-            const userDispatchFlags = [
-              user?.role,
-              user?.roles,
-              user?.permissions,
-              user?.app_permissions,
-              user?.appPermissions,
-              user?.claims
-            ];
-            const isDispatchEligible =
-              this.rolesPayloadHasDispatchRights(rolesRes) ||
-              userDispatchFlags.some((source: any) => this.containsDispatchSignal(source));
-            return { user, userId, isDispatchEligible };
-          } catch {
-            return { user, userId, isDispatchEligible: false };
-          }
-        })
-      );
+        let appDispatchEligible = false;
+        try {
+          const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
+          const assignments = this.asArray(assignmentsRes);
+          appDispatchEligible = assignments.some((assignment: any) =>
+            this.assignmentMatchesDispatchApp(assignment) && this.assignmentHasDispatchRights(assignment)
+          );
+        } catch {
+          appDispatchEligible = false;
+        }
 
-      for (const { user, userId, isDispatchEligible } of roleChecks) {
-        if (!isDispatchEligible) continue;
+        if (!appDispatchEligible) continue;
 
         const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
         const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
