@@ -578,6 +578,11 @@
   }
 }
 
+.helper-text {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
 // Details slide-out panel
 .panel-overlay {
   position: fixed;

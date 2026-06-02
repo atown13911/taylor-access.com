@@ -2,11 +2,13 @@ import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { EventTrackingService } from '../../../core/services/event-tracking.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
+import { environment } from '../../../../environments/environment';
 
 interface DriverRow {
   id: string;
@@ -30,15 +32,18 @@ interface DriverRow {
   styleUrls: ['./driver-list.component.scss']
 })
 export class DriverListComponent implements OnInit {
+  private http = inject(HttpClient);
   private api = inject(VanTacApiService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private router = inject(Router);
   private tracking = inject(EventTrackingService);
   private confirmDialog = inject(ConfirmService);
+  private baseUrl = environment.apiUrl;
 
   isLoading = signal(false);
   syncingArchived = signal(false);
+  loadingDispatchUsers = signal(false);
   drivers = signal<DriverRow[]>([]);
   searchQuery = signal('');
   fleetFilter = signal<'all' | 'unassigned' | string>('all');
@@ -52,6 +57,9 @@ export class DriverListComponent implements OnInit {
   editingId = signal<string | null>(null);
   availableFleets = signal<any[]>([]);
   availableOrganizations = signal<any[]>([]);
+  availableDispatchUsers = signal<Array<{ id: number; name: string; email: string }>>([]);
+  private dispatchUsersLoaded = false;
+  private originalDriverNotes = signal('');
 
   readonly usStates = [
     { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
@@ -110,6 +118,7 @@ export class DriverListComponent implements OnInit {
     payRate: 0,
     payType: 'mile' as 'mile' | 'hour' | 'percentage',
     driverType: 'company' as string,
+    dispatchUserId: null as number | null,
     teamDriverId: null as number | null,
     teamDriverName: '' as string
   });
@@ -891,7 +900,9 @@ export class DriverListComponent implements OnInit {
   openAddModal(): void {
     this.modalType.set('add');
     this.editingId.set(null);
+    this.originalDriverNotes.set('');
     this.resetForm();
+    this.loadDispatchUsers();
     this.showModal.set(true);
   }
 
@@ -936,11 +947,14 @@ export class DriverListComponent implements OnInit {
           payRate: d.payRate || 0,
           payType: d.payType || 'mile',
           driverType: d.driverType || 'company',
+          dispatchUserId: this.resolveDispatchUserId(d),
           teamDriverId: d.teamDriverId || null,
           teamDriverName: d.teamDriverName || ''
         });
+        this.originalDriverNotes.set(String(d.notes ?? '').trim());
         if (d.fleetId) this.loadDivisionsForFleet(d.fleetId);
         if (d.divisionId) this.loadTerminalsForDivision(d.divisionId);
+        this.loadDispatchUsers();
         this.showModal.set(true);
       },
       error: () => {
@@ -954,8 +968,11 @@ export class DriverListComponent implements OnInit {
           emergencyContact: '', emergencyPhone: '',
           hireDate: driver.hireDate ? driver.hireDate.split('T')[0] : '',
           payRate: 0, payType: 'mile', driverType: driver.type || 'company',
+          dispatchUserId: this.resolveDispatchUserId(driver),
           teamDriverId: null, teamDriverName: ''
         });
+        this.originalDriverNotes.set(String((driver as any)?.notes ?? '').trim());
+        this.loadDispatchUsers();
         this.showModal.set(true);
       }
     });
@@ -974,7 +991,7 @@ export class DriverListComponent implements OnInit {
       truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '',
       truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
       emergencyContact: '', emergencyPhone: '',
-      hireDate: '', payRate: 0, payType: 'mile', driverType: 'company',
+      hireDate: '', payRate: 0, payType: 'mile', driverType: 'company', dispatchUserId: null,
       teamDriverId: null, teamDriverName: ''
     });
     this.availableDivisions.set([]);
@@ -1067,7 +1084,12 @@ export class DriverListComponent implements OnInit {
       hireDate: form.hireDate || null,
       payRate: form.payRate,
       payType: form.payType,
-      driverType: form.driverType
+      driverType: form.driverType,
+      notes: this.composeDriverNotesWithDispatch(
+        this.originalDriverNotes(),
+        form.dispatchUserId
+      ),
+      dispatchUserId: form.dispatchUserId || null
     };
 
     if (this.modalType() === 'edit' && this.editingId()) {
@@ -1237,5 +1259,118 @@ export class DriverListComponent implements OnInit {
   private isDispatchedStatus(status: string): boolean {
     const normalized = this.normalizeStatus(status);
     return normalized === 'dispatched' || normalized === 'en-route' || normalized === 'at-location';
+  }
+
+  private async loadDispatchUsers(): Promise<void> {
+    if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
+    this.loadingDispatchUsers.set(true);
+    try {
+      const usersRes: any = await this.api.getUsers({ status: 'active', limit: 5000 }).toPromise();
+      const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
+
+      const appsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/clients`).toPromise();
+      const apps = Array.isArray(appsRes) ? appsRes : [];
+      const landmarkClientIds = apps
+        .filter((app: any) => this.isLandmarkClient(app))
+        .map((app: any) => String(app?.clientId ?? '').trim())
+        .filter((id: string) => !!id);
+
+      const candidates: Array<{ id: number; name: string; email: string }> = [];
+
+      for (const user of users) {
+        const userId = Number(user?.id);
+        if (!Number.isFinite(userId) || userId <= 0) continue;
+        if (String(user?.status ?? '').trim().toLowerCase() !== 'active') continue;
+
+        const role = String(user?.role ?? '').trim().toLowerCase();
+        const roleDispatchEligible = role === 'dispatcher' || role === 'admin' || role === 'superadmin' || role === 'product_owner';
+
+        let landmarkDispatchEligible = false;
+        try {
+          const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
+          const assignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
+          landmarkDispatchEligible = assignments.some((assignment: any) => {
+            const clientId = String(assignment?.appClientId ?? '').trim();
+            if (!clientId || !landmarkClientIds.includes(clientId)) return false;
+            if (String(assignment?.status ?? '').trim().toLowerCase() !== 'active') return false;
+
+            const appRole = String(assignment?.role ?? '').trim().toLowerCase();
+            const permissionsText = String(assignment?.permissions ?? '').toLowerCase();
+            return appRole.includes('dispatch') || permissionsText.includes('dispatch');
+          });
+        } catch {
+          landmarkDispatchEligible = false;
+        }
+
+        if (!roleDispatchEligible && !landmarkDispatchEligible) continue;
+
+        candidates.push({
+          id: userId,
+          name: String(user?.name ?? '').trim() || `User ${userId}`,
+          email: String(user?.email ?? '').trim()
+        });
+      }
+
+      this.availableDispatchUsers.set(
+        candidates.sort((a, b) => a.name.localeCompare(b.name))
+      );
+      this.dispatchUsersLoaded = true;
+    } catch {
+      this.availableDispatchUsers.set([]);
+    } finally {
+      this.loadingDispatchUsers.set(false);
+    }
+  }
+
+  private isLandmarkClient(app: any): boolean {
+    const haystack = [
+      app?.clientId,
+      app?.name,
+      app?.description,
+      app?.homepageUrl
+    ]
+      .map((v) => String(v ?? '').toLowerCase())
+      .join(' ');
+    return haystack.includes('landmark') || haystack.includes('landstar');
+  }
+
+  private extractDispatchTag(notes: string): { id: number | null; label: string | null } {
+    const raw = String(notes ?? '');
+    const match = raw.match(/\[dispatch-assignee-id:(\d+)(?:\|name:([^\]]+))?\]/i);
+    if (!match) return { id: null, label: null };
+    const id = Number(match[1]);
+    return {
+      id: Number.isFinite(id) && id > 0 ? id : null,
+      label: String(match[2] ?? '').trim() || null
+    };
+  }
+
+  private stripDispatchTag(notes: string): string {
+    return String(notes ?? '')
+      .replace(/\s*\[dispatch-assignee-id:\d+(?:\|name:[^\]]+)?\]\s*/gi, '\n')
+      .replace(/\n{2,}/g, '\n')
+      .trim();
+  }
+
+  private resolveDispatchUserId(driverLike: any): number | null {
+    const direct = Number(
+      driverLike?.dispatchUserId ??
+      driverLike?.dispatcherUserId ??
+      driverLike?.dispatchAssignedUserId ??
+      0
+    );
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    const parsed = this.extractDispatchTag(String(driverLike?.notes ?? '')).id;
+    return parsed && parsed > 0 ? parsed : null;
+  }
+
+  private composeDriverNotesWithDispatch(existingNotes: string, dispatchUserId: number | null): string | null {
+    const clean = this.stripDispatchTag(existingNotes);
+    if (!dispatchUserId) return clean || null;
+
+    const selected = this.availableDispatchUsers().find((u) => u.id === dispatchUserId);
+    const dispatchLabel = String(selected?.name ?? '').trim();
+    const tag = `[dispatch-assignee-id:${dispatchUserId}${dispatchLabel ? `|name:${dispatchLabel}` : ''}]`;
+    return clean ? `${clean}\n${tag}` : tag;
   }
 }
