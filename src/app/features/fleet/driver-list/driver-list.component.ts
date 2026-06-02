@@ -1315,6 +1315,44 @@ export class DriverListComponent implements OnInit {
     return normalized === 'dispatched' || normalized === 'en-route' || normalized === 'at-location';
   }
 
+  private containsDispatchSignal(value: any): boolean {
+    const text = String(
+      typeof value === 'string'
+        ? value
+        : Array.isArray(value)
+          ? value.join(' ')
+          : JSON.stringify(value ?? '')
+    ).toLowerCase();
+    return text.includes('dispatch');
+  }
+
+  private assignmentHasDispatchRights(assignment: any): boolean {
+    const rawStatus = String(assignment?.status ?? '').trim().toLowerCase();
+    if (rawStatus && rawStatus !== 'active') return false;
+
+    const appRole = String(
+      assignment?.role?.name ??
+      assignment?.role?.key ??
+      assignment?.role ??
+      assignment?.appRole ??
+      assignment?.roleName ??
+      ''
+    ).trim().toLowerCase();
+
+    const appIdentityText = String(
+      assignment?.appName ??
+      assignment?.clientName ??
+      assignment?.appClientId ??
+      assignment?.clientId ??
+      ''
+    ).toLowerCase();
+
+    return appRole.includes('dispatch') ||
+      this.containsDispatchSignal(assignment?.permissions) ||
+      this.containsDispatchSignal(assignment?.scopes) ||
+      appIdentityText.includes('dispatch');
+  }
+
   private async loadDispatchUsers(): Promise<void> {
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
@@ -1332,19 +1370,18 @@ export class DriverListComponent implements OnInit {
         let appDispatchEligible = false;
         try {
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
-          const assignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
-          appDispatchEligible = assignments.some((assignment: any) => {
-            if (String(assignment?.status ?? '').trim().toLowerCase() !== 'active') return false;
-
-            const appRole = String(
-              assignment?.role ??
-              assignment?.appRole ??
-              assignment?.roleName ??
-              ''
-            ).trim().toLowerCase();
-            const permissionsText = String(assignment?.permissions ?? '').toLowerCase();
-            return appRole === 'dispatcher' || permissionsText.includes('dispatch');
-          });
+          const assignments = this.asArray(assignmentsRes);
+          const userDispatchFlags = [
+            user?.role,
+            user?.roles,
+            user?.permissions,
+            user?.app_permissions,
+            user?.appPermissions,
+            user?.claims
+          ];
+          appDispatchEligible =
+            assignments.some((assignment: any) => this.assignmentHasDispatchRights(assignment)) ||
+            userDispatchFlags.some((source: any) => this.containsDispatchSignal(source));
         } catch {
           appDispatchEligible = false;
         }
