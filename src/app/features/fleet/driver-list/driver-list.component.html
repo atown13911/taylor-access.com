@@ -5,22 +5,24 @@
       <h1><i class='bx bx-id-card'></i> {{ pageTitle() }}</h1>
       <p class="subtitle">{{ pageSubtitle() }}</p>
     </div>
-    <div class="header-actions">
-      <button class="btn btn-secondary" (click)="loadDrivers()" title="Refresh">
-        <i class='bx bx-refresh'></i>
-      </button>
-      <button class="btn btn-secondary" [disabled]="syncingArchived()" (click)="syncArchivedFromDrayTac()">
-        @if (syncingArchived()) {
-          <i class='bx bx-loader-alt bx-spin'></i>
-        } @else {
-          <i class='bx bx-archive-in'></i>
-        }
-        Sync Archived
-      </button>
-      <button class="btn btn-primary" (click)="openAddModal()">
-        <i class='bx bx-plus'></i> Add Driver
-      </button>
-    </div>
+    @if (!dispatchersView()) {
+      <div class="header-actions">
+        <button class="btn btn-secondary" (click)="loadDrivers()" title="Refresh">
+          <i class='bx bx-refresh'></i>
+        </button>
+        <button class="btn btn-secondary" [disabled]="syncingArchived()" (click)="syncArchivedFromDrayTac()">
+          @if (syncingArchived()) {
+            <i class='bx bx-loader-alt bx-spin'></i>
+          } @else {
+            <i class='bx bx-archive-in'></i>
+          }
+          Sync Archived
+        </button>
+        <button class="btn btn-primary" (click)="openAddModal()">
+          <i class='bx bx-plus'></i> Add Driver
+        </button>
+      </div>
+    }
   </div>
 
   <!-- Stats -->
@@ -97,6 +99,9 @@
             <tr>
               <th>Dispatcher</th>
               <th>Email</th>
+              <th>Phone</th>
+              <th>Position</th>
+              <th>Status</th>
               <th>Assigned Drivers</th>
             </tr>
           </thead>
@@ -111,11 +116,14 @@
                   {{ dispatcher.name }}
                 </td>
                 <td>{{ dispatcher.email || '—' }}</td>
+                <td>{{ dispatcher.phone || '—' }}</td>
+                <td>{{ dispatcher.title || 'Dispatcher' }}</td>
+                <td><span class="status-badge" [class]="dispatcher.status || 'active'">{{ dispatcher.status || 'active' }}</span></td>
                 <td>{{ dispatcher.assignedDrivers }}</td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="3" class="empty-row">No dispatcher users with dispatch rights were found.</td>
+                <td colspan="6" class="empty-row">No dispatcher users with dispatch rights were found.</td>
               </tr>
             }
           </tbody>

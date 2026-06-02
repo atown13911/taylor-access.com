@@ -26,6 +26,15 @@ interface DriverRow {
   dispatchUserId?: number | null;
 }
 
+interface DispatchUserRow {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  title: string;
+  status: string;
+}
+
 @Component({
   selector: 'app-driver-list',
   standalone: true,
@@ -61,7 +70,7 @@ export class DriverListComponent implements OnInit {
   editingId = signal<string | null>(null);
   availableFleets = signal<any[]>([]);
   availableOrganizations = signal<any[]>([]);
-  availableDispatchUsers = signal<Array<{ id: number; name: string; email: string }>>([]);
+  availableDispatchUsers = signal<DispatchUserRow[]>([]);
   private dispatchUsersLoaded = false;
   private originalDriverNotes = signal('');
 
@@ -1313,7 +1322,7 @@ export class DriverListComponent implements OnInit {
       const usersRes: any = await this.api.getUsers({ status: 'active', limit: 5000 }).toPromise();
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
 
-      const candidates: Array<{ id: number; name: string; email: string }> = [];
+      const candidates: DispatchUserRow[] = [];
 
       for (const user of users) {
         const userId = Number(user?.id);
@@ -1342,10 +1351,17 @@ export class DriverListComponent implements OnInit {
 
         if (!appDispatchEligible) continue;
 
+        const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
+        const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
+        const combinedName = `${firstName} ${lastName}`.trim();
+
         candidates.push({
           id: userId,
-          name: String(user?.name ?? '').trim() || `User ${userId}`,
-          email: String(user?.email ?? '').trim()
+          name: String(user?.name ?? user?.fullName ?? user?.displayName ?? '').trim() || combinedName || `User ${userId}`,
+          email: String(user?.email ?? user?.workEmail ?? '').trim(),
+          phone: String(user?.phone ?? user?.mobilePhone ?? user?.phoneNumber ?? user?.workPhone ?? '').trim(),
+          title: String(user?.jobTitle ?? user?.title ?? user?.position ?? user?.department ?? '').trim() || 'Dispatcher',
+          status: String(user?.status ?? 'active').trim().toLowerCase() || 'active'
         });
       }
 
