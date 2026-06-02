@@ -1268,13 +1268,6 @@ export class DriverListComponent implements OnInit {
       const usersRes: any = await this.api.getUsers({ status: 'active', limit: 5000 }).toPromise();
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
 
-      const appsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/clients`).toPromise();
-      const apps = Array.isArray(appsRes) ? appsRes : [];
-      const dispatchAppClientIds = apps
-        .filter((app: any) => this.isDispatchAssignmentApp(app))
-        .map((app: any) => String(app?.clientId ?? '').trim())
-        .filter((id: string) => !!id);
-
       const candidates: Array<{ id: number; name: string; email: string }> = [];
 
       for (const user of users) {
@@ -1287,11 +1280,14 @@ export class DriverListComponent implements OnInit {
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
           const assignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
           appDispatchEligible = assignments.some((assignment: any) => {
-            const clientId = String(assignment?.appClientId ?? '').trim();
-            if (!clientId || !dispatchAppClientIds.includes(clientId)) return false;
             if (String(assignment?.status ?? '').trim().toLowerCase() !== 'active') return false;
 
-            const appRole = String(assignment?.role ?? '').trim().toLowerCase();
+            const appRole = String(
+              assignment?.role ??
+              assignment?.appRole ??
+              assignment?.roleName ??
+              ''
+            ).trim().toLowerCase();
             const permissionsText = String(assignment?.permissions ?? '').toLowerCase();
             return appRole === 'dispatcher' || permissionsText.includes('dispatch');
           });
@@ -1317,21 +1313,6 @@ export class DriverListComponent implements OnInit {
     } finally {
       this.loadingDispatchUsers.set(false);
     }
-  }
-
-  private isDispatchAssignmentApp(app: any): boolean {
-    const clientId = String(app?.clientId ?? '').trim().toLowerCase();
-    if (clientId === 'ta_taylor_access') return true;
-
-    const haystack = [
-      app?.clientId,
-      app?.name,
-      app?.description,
-      app?.homepageUrl
-    ]
-      .map((v) => String(v ?? '').toLowerCase())
-      .join(' ');
-    return haystack.includes('van-tac tms') || haystack.includes('van tac tms') || haystack.includes('taylor access');
   }
 
   private extractDispatchTag(notes: string): { id: number | null; label: string | null } {
