@@ -1,7 +1,7 @@
 import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, NavigationEnd } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -218,12 +218,15 @@ export class DriverListComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const currentPath = String(this.router.url || '').split('?')[0];
-    this.dispatchersView.set(currentPath === '/dispatchers');
+    this.updateDispatchersViewFromRoute();
+    this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.updateDispatchersViewFromRoute(event.urlAfterRedirects || event.url);
+      }
+    });
     this.loadDrivers();
     this.loadFleets();
     this.loadOrganizations();
-    if (this.dispatchersView()) this.loadDispatchUsers();
   }
 
   pageTitle(): string {
@@ -1373,6 +1376,23 @@ export class DriverListComponent implements OnInit {
       this.availableDispatchUsers.set([]);
     } finally {
       this.loadingDispatchUsers.set(false);
+    }
+  }
+
+  private updateDispatchersViewFromRoute(routeUrl?: string): void {
+    const rawPath = String(routeUrl ?? this.router.url ?? '').split('?')[0];
+    const normalizedPath = rawPath.replace(/\/+$/, '') || '/';
+    const isDispatchersRoute = normalizedPath === '/dispatchers';
+    const wasDispatchersRoute = this.dispatchersView();
+
+    this.dispatchersView.set(isDispatchersRoute);
+
+    if (isDispatchersRoute && (!wasDispatchersRoute || !this.dispatchUsersLoaded)) {
+      this.loadDispatchUsers();
+    }
+
+    if (!isDispatchersRoute && wasDispatchersRoute) {
+      this.selectedDispatcherId.set(null);
     }
   }
 
