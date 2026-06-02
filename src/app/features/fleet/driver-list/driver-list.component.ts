@@ -52,6 +52,7 @@ export class DriverListComponent implements OnInit {
   fleetName = signal<string>('');
   activeTab = signal<'active' | 'inactive' | 'archived'>('active');
   dispatchersView = signal(false);
+  selectedDispatcherId = signal<number | null>(null);
 
   // Modal state
   showModal = signal(false);
@@ -166,6 +167,37 @@ export class DriverListComponent implements OnInit {
     );
   });
 
+  dispatcherRows = computed(() => {
+    const rows = this.availableDispatchUsers();
+    return rows.map((u) => ({
+      ...u,
+      assignedDrivers: this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === u.id).length
+    }));
+  });
+
+  dispatcherAssignedDrivers = computed(() => {
+    const selectedId = this.selectedDispatcherId();
+    if (!selectedId) return [] as DriverRow[];
+
+    const query = this.searchQuery().toLowerCase();
+    const fleet = this.fleetFilter();
+    let pool = this.tabbedDrivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === selectedId);
+
+    if (fleet === 'unassigned') {
+      pool = pool.filter((d) => String(d.fleetName || '').trim() === '—');
+    } else if (fleet !== 'all') {
+      pool = pool.filter((d) => String(d.fleetName || '').trim() === fleet);
+    }
+
+    if (!query) return pool;
+    return pool.filter((d) =>
+      d.name.toLowerCase().includes(query) ||
+      d.phone.includes(query) ||
+      d.email?.toLowerCase().includes(query) ||
+      d.licenseNumber?.toLowerCase().includes(query)
+    );
+  });
+
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
@@ -191,6 +223,7 @@ export class DriverListComponent implements OnInit {
     this.loadDrivers();
     this.loadFleets();
     this.loadOrganizations();
+    if (this.dispatchersView()) this.loadDispatchUsers();
   }
 
   pageTitle(): string {
@@ -199,7 +232,7 @@ export class DriverListComponent implements OnInit {
 
   pageSubtitle(): string {
     if (this.dispatchersView()) {
-      return 'Drivers with dispatch assignments in your organization';
+      return 'Manage dispatcher users and assigned drivers';
     }
     if (this.fleetName()) {
       return `Drivers assigned to ${this.fleetName()}`;
@@ -1332,12 +1365,26 @@ export class DriverListComponent implements OnInit {
       this.availableDispatchUsers.set(
         candidates.sort((a, b) => a.name.localeCompare(b.name))
       );
+      if (this.dispatchersView() && !this.selectedDispatcherId() && candidates.length > 0) {
+        this.selectedDispatcherId.set(candidates[0].id);
+      }
       this.dispatchUsersLoaded = true;
     } catch {
       this.availableDispatchUsers.set([]);
     } finally {
       this.loadingDispatchUsers.set(false);
     }
+  }
+
+  selectDispatcherForView(dispatcherId: number): void {
+    this.selectedDispatcherId.set(dispatcherId);
+  }
+
+  selectedDispatcherName(): string {
+    const id = this.selectedDispatcherId();
+    if (!id) return 'No dispatcher selected';
+    const match = this.availableDispatchUsers().find((u) => u.id === id);
+    return match?.name || `Dispatcher ${id}`;
   }
 
   private extractDispatchTag(notes: string): { id: number | null; label: string | null } {

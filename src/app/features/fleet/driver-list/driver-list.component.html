@@ -87,6 +87,113 @@
       <i class='bx bx-loader-alt bx-spin'></i>
       <p>Loading drivers...</p>
     </div>
+  } @else if (dispatchersView()) {
+    <div class="dispatchers-layout">
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Dispatcher</th>
+              <th>Email</th>
+              <th>Assigned Drivers</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (dispatcher of dispatcherRows(); track dispatcher.id) {
+              <tr
+                class="dispatcher-row"
+                [class.selected]="selectedDispatcherId() === dispatcher.id"
+                (click)="selectDispatcherForView(dispatcher.id)">
+                <td class="name-cell">
+                  <div class="avatar">{{ dispatcher.name.charAt(0) }}</div>
+                  {{ dispatcher.name }}
+                </td>
+                <td>{{ dispatcher.email || '—' }}</td>
+                <td>{{ dispatcher.assignedDrivers }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="3" class="empty-row">No dispatcher users with dispatch rights were found.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="data-table-container">
+        <div class="dispatchers-subheader">
+          <h3>Assigned Drivers</h3>
+          <p>{{ selectedDispatcherName() }}</p>
+        </div>
+        @if (!selectedDispatcherId()) {
+          <div class="empty-state compact">
+            <i class='bx bx-user-check'></i>
+            <h3>Select a dispatcher</h3>
+            <p>Choose a dispatcher above to view assigned drivers.</p>
+          </div>
+        } @else if (dispatcherAssignedDrivers().length === 0) {
+          <div class="empty-state compact">
+            <i class='bx bx-car'></i>
+            <h3>No assigned drivers</h3>
+            <p>No drivers are currently assigned to this dispatcher.</p>
+          </div>
+        } @else {
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>License #</th>
+                <th>License Exp</th>
+                <th>Type</th>
+                <th>Fleet</th>
+                <th>Hire Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (driver of dispatcherAssignedDrivers(); track driver.id) {
+                <tr (click)="selectDriverRow(driver)" [class.selected]="selectedDriver()?.id === driver.id" style="cursor:pointer">
+                  <td class="name-cell">
+                    <div class="avatar">{{ driver.name.charAt(0) }}</div>
+                    {{ driver.name }}
+                  </td>
+                  <td>{{ driver.phone }}</td>
+                  <td>{{ driver.email || '—' }}</td>
+                  <td class="mono">{{ driver.licenseNumber || '—' }}</td>
+                  <td [class.expiring]="isExpiringSoon(driver.licenseExpiry)" [class.expired]="isExpired(driver.licenseExpiry)">
+                    {{ formatDate(driver.licenseExpiry) }}
+                  </td>
+                  <td><span class="type-badge" [class]="driver.type">{{ driver.type }}</span></td>
+                  <td>
+                    @if (driver.fleetName !== '—') {
+                      <span class="fleet-badge">{{ driver.fleetName }}</span>
+                    } @else {
+                      <span class="no-fleet">—</span>
+                    }
+                  </td>
+                  <td>{{ formatDate(driver.hireDate) }}</td>
+                  <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
+                  <td class="actions-cell">
+                    <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
+                    <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
+                    @if (activeTab() === 'active') {
+                      <button class="action-btn deactivate" title="Deactivate" (click)="$event.stopPropagation(); deactivateDriver(driver)"><i class='bx bx-power-off'></i></button>
+                    } @else if (activeTab() === 'inactive') {
+                      <button class="action-btn archive" title="Archive" (click)="$event.stopPropagation(); archiveDriver(driver)"><i class='bx bx-archive-in'></i></button>
+                    } @else {
+                      <button class="action-btn restore" title="Restore" (click)="$event.stopPropagation(); restoreArchivedDriver(driver)"><i class='bx bx-archive-out'></i></button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </div>
   } @else if (filteredDrivers().length === 0) {
     <div class="empty-state">
       <i class='bx bx-id-card'></i>

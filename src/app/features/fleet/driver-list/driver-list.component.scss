@@ -259,6 +259,34 @@
   overflow: hidden;
 }
 
+.dispatchers-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dispatchers-subheader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+  }
+  p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--cyan, #00e5ff);
+  }
+}
+
+.empty-state.compact {
+  padding: 1.8rem 1rem;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
