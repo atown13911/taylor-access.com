@@ -1377,16 +1377,34 @@ export class DriverListComponent implements OnInit {
       assignment?.appName ??
       assignment?.clientName ??
       assignment?.applicationName ??
-      assignment?.appClientId ??
-      assignment?.clientId ??
       ''
     ).trim().toLowerCase();
 
-    if (!identity) return true;
-    return identity.includes('tss') ||
-      identity.includes('portal') ||
-      identity.includes('dispatch') ||
-      identity.includes('vantac');
+    const normalized = identity.replace(/[\s_-]+/g, '');
+    return normalized.includes('vantactms');
+  }
+
+  private assignmentBelongsToClientIds(assignment: any, clientIds: Set<string>): boolean {
+    if (!clientIds.size) return this.assignmentMatchesDispatchApp(assignment);
+    const assignmentClientId = String(
+      assignment?.appClientId ??
+      assignment?.clientId ??
+      ''
+    ).trim();
+    return !!assignmentClientId && clientIds.has(assignmentClientId);
+  }
+
+  private resolveVanTacTmsClientIds(clients: any[]): Set<string> {
+    const ids = new Set<string>();
+    for (const client of clients) {
+      const name = String(client?.name ?? client?.displayName ?? '').trim().toLowerCase();
+      const normalized = name.replace(/[\s_-]+/g, '');
+      if (!normalized.includes('vantactms')) continue;
+
+      const clientId = String(client?.clientId ?? client?.id ?? '').trim();
+      if (clientId) ids.add(clientId);
+    }
+    return ids;
   }
 
   private async loadDispatchUsers(): Promise<void> {
@@ -1395,6 +1413,13 @@ export class DriverListComponent implements OnInit {
     try {
       const usersRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
+      let vanTacTmsClientIds = new Set<string>();
+      try {
+        const clientsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/clients`).toPromise();
+        vanTacTmsClientIds = this.resolveVanTacTmsClientIds(this.asArray(clientsRes));
+      } catch {
+        vanTacTmsClientIds = new Set<string>();
+      }
 
       const candidates: DispatchUserRow[] = [];
 
@@ -1408,7 +1433,8 @@ export class DriverListComponent implements OnInit {
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
           const assignments = this.asArray(assignmentsRes);
           appDispatchEligible = assignments.some((assignment: any) =>
-            this.assignmentMatchesDispatchApp(assignment) && this.assignmentHasDispatchRights(assignment)
+            this.assignmentBelongsToClientIds(assignment, vanTacTmsClientIds) &&
+            this.assignmentHasDispatchRights(assignment)
           );
         } catch {
           appDispatchEligible = false;
