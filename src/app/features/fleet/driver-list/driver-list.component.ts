@@ -1385,7 +1385,7 @@ export class DriverListComponent implements OnInit {
   }
 
   private assignmentBelongsToClientIds(assignment: any, clientIds: Set<string>): boolean {
-    if (!clientIds.size) return this.assignmentMatchesDispatchApp(assignment);
+    if (!clientIds.size) return true;
     const assignmentClientId = String(
       assignment?.appClientId ??
       assignment?.clientId ??
@@ -1433,8 +1433,12 @@ export class DriverListComponent implements OnInit {
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
           const assignments = this.asArray(assignmentsRes);
           appDispatchEligible = assignments.some((assignment: any) =>
-            this.assignmentBelongsToClientIds(assignment, vanTacTmsClientIds) &&
-            this.assignmentHasDispatchRights(assignment)
+            this.assignmentHasDispatchRights(assignment) &&
+            (
+              vanTacTmsClientIds.size
+                ? this.assignmentBelongsToClientIds(assignment, vanTacTmsClientIds)
+                : true
+            )
           );
         } catch {
           appDispatchEligible = false;
