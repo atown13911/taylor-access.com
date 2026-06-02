@@ -1270,8 +1270,8 @@ export class DriverListComponent implements OnInit {
 
       const appsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/clients`).toPromise();
       const apps = Array.isArray(appsRes) ? appsRes : [];
-      const landmarkClientIds = apps
-        .filter((app: any) => this.isLandmarkClient(app))
+      const dispatchAppClientIds = apps
+        .filter((app: any) => this.isDispatchAssignmentApp(app))
         .map((app: any) => String(app?.clientId ?? '').trim())
         .filter((id: string) => !!id);
 
@@ -1282,27 +1282,24 @@ export class DriverListComponent implements OnInit {
         if (!Number.isFinite(userId) || userId <= 0) continue;
         if (String(user?.status ?? '').trim().toLowerCase() !== 'active') continue;
 
-        const role = String(user?.role ?? '').trim().toLowerCase();
-        const roleDispatchEligible = role === 'dispatcher' || role === 'admin' || role === 'superadmin' || role === 'product_owner';
-
-        let landmarkDispatchEligible = false;
+        let appDispatchEligible = false;
         try {
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
           const assignments = Array.isArray(assignmentsRes) ? assignmentsRes : [];
-          landmarkDispatchEligible = assignments.some((assignment: any) => {
+          appDispatchEligible = assignments.some((assignment: any) => {
             const clientId = String(assignment?.appClientId ?? '').trim();
-            if (!clientId || !landmarkClientIds.includes(clientId)) return false;
+            if (!clientId || !dispatchAppClientIds.includes(clientId)) return false;
             if (String(assignment?.status ?? '').trim().toLowerCase() !== 'active') return false;
 
             const appRole = String(assignment?.role ?? '').trim().toLowerCase();
             const permissionsText = String(assignment?.permissions ?? '').toLowerCase();
-            return appRole.includes('dispatch') || permissionsText.includes('dispatch');
+            return appRole === 'dispatcher' || permissionsText.includes('dispatch');
           });
         } catch {
-          landmarkDispatchEligible = false;
+          appDispatchEligible = false;
         }
 
-        if (!roleDispatchEligible && !landmarkDispatchEligible) continue;
+        if (!appDispatchEligible) continue;
 
         candidates.push({
           id: userId,
@@ -1322,7 +1319,10 @@ export class DriverListComponent implements OnInit {
     }
   }
 
-  private isLandmarkClient(app: any): boolean {
+  private isDispatchAssignmentApp(app: any): boolean {
+    const clientId = String(app?.clientId ?? '').trim().toLowerCase();
+    if (clientId === 'ta_taylor_access') return true;
+
     const haystack = [
       app?.clientId,
       app?.name,
@@ -1331,7 +1331,7 @@ export class DriverListComponent implements OnInit {
     ]
       .map((v) => String(v ?? '').toLowerCase())
       .join(' ');
-    return haystack.includes('landmark') || haystack.includes('landstar');
+    return haystack.includes('van-tac tms') || haystack.includes('van tac tms') || haystack.includes('taylor access');
   }
 
   private extractDispatchTag(notes: string): { id: number | null; label: string | null } {
