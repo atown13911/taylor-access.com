@@ -106,6 +106,7 @@ public class AuditService : IAuditService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to write audit log to PostgreSQL");
+            await WriteSqlAuditFallbackAsync(log);
         }
 
         // Write to central MongoDB audit_logs collection
@@ -202,6 +203,50 @@ public class AuditService : IAuditService
         catch
         {
             return "[]";
+        }
+    }
+
+    private async Task WriteSqlAuditFallbackAsync(AuditLog log)
+    {
+        try
+        {
+            // Minimal schema bootstrap if migrations/drift left the table missing.
+            await _context.Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS ""AuditLogs"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""OrganizationId"" INTEGER NULL,
+                    ""UserId"" INTEGER NULL,
+                    ""UserName"" VARCHAR(200) NULL,
+                    ""UserEmail"" VARCHAR(256) NULL,
+                    ""IpAddress"" VARCHAR(64) NULL,
+                    ""UserAgent"" TEXT NULL,
+                    ""Action"" VARCHAR(120) NOT NULL,
+                    ""EntityType"" VARCHAR(120) NOT NULL,
+                    ""EntityId"" INTEGER NULL,
+                    ""EntityName"" VARCHAR(300) NULL,
+                    ""OldValues"" TEXT NULL,
+                    ""NewValues"" TEXT NULL,
+                    ""Changes"" TEXT NULL,
+                    ""Description"" TEXT NULL,
+                    ""Module"" VARCHAR(120) NULL,
+                    ""Endpoint"" VARCHAR(500) NULL,
+                    ""HttpMethod"" VARCHAR(20) NULL,
+                    ""HttpStatusCode"" INTEGER NULL,
+                    ""Timestamp"" TIMESTAMP NOT NULL DEFAULT NOW(),
+                    ""Severity"" VARCHAR(20) NOT NULL DEFAULT 'info'
+                );
+            ");
+
+            await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                INSERT INTO ""AuditLogs""
+                (""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""IpAddress"", ""UserAgent"", ""Action"", ""EntityType"", ""EntityId"", ""EntityName"", ""OldValues"", ""NewValues"", ""Changes"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""HttpStatusCode"", ""Timestamp"", ""Severity"")
+                VALUES
+                ({log.OrganizationId}, {log.UserId}, {log.UserName}, {log.UserEmail}, {log.IpAddress}, {log.UserAgent}, {log.Action}, {log.EntityType}, {log.EntityId}, {log.EntityName}, {log.OldValues}, {log.NewValues}, {log.Changes}, {log.Description}, {log.Module}, {log.Endpoint}, {log.HttpMethod}, {log.HttpStatusCode}, {log.Timestamp}, {log.Severity});
+            ");
+        }
+        catch (Exception fallbackEx)
+        {
+            _logger.LogError(fallbackEx, "SQL audit fallback write failed");
         }
     }
 }
