@@ -320,28 +320,37 @@ public class AuditController : ControllerBase
 
     private async Task EnsureBootstrapAuditRecordAsync(User user, int? organizationId)
     {
-        var exists = await _context.AuditLogs
-            .AsNoTracking()
-            .AnyAsync(l => l.Action == "audit_bootstrap");
-        if (exists) return;
-
-        _context.AuditLogs.Add(new AuditLog
+        try
         {
-            OrganizationId = organizationId,
-            UserId = user.Id,
-            UserName = string.IsNullOrWhiteSpace(user.Name) ? "System" : user.Name,
-            UserEmail = string.IsNullOrWhiteSpace(user.Email) ? "system@taylor-access.local" : user.Email,
-            Action = "audit_bootstrap",
-            EntityType = "System",
-            EntityName = "AuditLogs",
-            Description = "Bootstrap audit record created because audit history was empty.",
-            Endpoint = "/api/v1/audit",
-            HttpMethod = "GET",
-            Timestamp = DateTime.UtcNow,
-            Severity = "info"
-        });
+            var exists = await _context.AuditLogs
+                .AsNoTracking()
+                .AnyAsync(l => l.Action == "audit_bootstrap");
+            if (exists) return;
 
-        await _context.SaveChangesAsync();
+            _context.AuditLogs.Add(new AuditLog
+            {
+                // Keep FK fields null to avoid hard failures when claims IDs
+                // don't exist in local SQL user/org tables.
+                OrganizationId = null,
+                UserId = null,
+                UserName = string.IsNullOrWhiteSpace(user.Name) ? "System" : user.Name,
+                UserEmail = string.IsNullOrWhiteSpace(user.Email) ? "system@taylor-access.local" : user.Email,
+                Action = "audit_bootstrap",
+                EntityType = "System",
+                EntityName = "AuditLogs",
+                Description = "Bootstrap audit record created because audit history was empty.",
+                Endpoint = "/api/v1/audit",
+                HttpMethod = "GET",
+                Timestamp = DateTime.UtcNow,
+                Severity = "info"
+            });
+
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            // Never allow bootstrap creation to break audit reads.
+        }
     }
 
     private static AuditLog MapMongoAuditLog(MongoAuditLog log) => new()
