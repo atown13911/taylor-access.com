@@ -25,6 +25,13 @@ public class AuditController : ControllerBase
         _context = context;
     }
 
+    public record NavigationClickRequest(
+        string? Route,
+        string? Label,
+        string? Section,
+        string? Source
+    );
+
     [HttpGet]
     public async Task<ActionResult<object>> GetLogs(
         [FromQuery] string? entityType,
@@ -142,6 +149,37 @@ public class AuditController : ControllerBase
             dataSource = sqlFallbackUsed ? "postgres" : "mongo",
             warning
         });
+    }
+
+    [HttpPost("navigation-click")]
+    public async Task<ActionResult<object>> LogNavigationClick([FromBody] NavigationClickRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not found" });
+
+        var route = string.IsNullOrWhiteSpace(request.Route) ? "unknown" : request.Route.Trim();
+        var label = string.IsNullOrWhiteSpace(request.Label) ? "Unknown" : request.Label.Trim();
+        var section = string.IsNullOrWhiteSpace(request.Section) ? "General" : request.Section.Trim();
+        var source = string.IsNullOrWhiteSpace(request.Source) ? "sidebar" : request.Source.Trim();
+
+        await _auditService.LogAsync(new AuditLog
+        {
+            OrganizationId = user.OrganizationId,
+            UserId = user.Id > 0 ? user.Id : null,
+            UserName = user.Name,
+            UserEmail = user.Email,
+            Action = "navigation_click",
+            EntityType = "Navigation",
+            EntityName = label,
+            Description = $"{label} clicked ({route}) from {section} [{source}]",
+            Module = "navigation",
+            Endpoint = route,
+            HttpMethod = "NAVIGATE",
+            Timestamp = DateTime.UtcNow,
+            Severity = "info"
+        });
+
+        return Ok(new { success = true });
     }
 
     [HttpGet("{id}")]

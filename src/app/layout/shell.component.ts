@@ -4,6 +4,7 @@ import { RouterModule, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../core/services/auth.service';
 import { InactivityService } from '../core/services/inactivity.service';
+import { EventTrackingService } from '../core/services/event-tracking.service';
 import { environment } from '../../environments/environment';
 
 interface NavSection {
@@ -23,6 +24,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   inactivity = inject(InactivityService);
   private router = inject(Router);
   private http = inject(HttpClient);
+  private tracking = inject(EventTrackingService);
   private apiUrl = environment.apiUrl;
 
   sidebarCollapsed = signal(false);
@@ -299,7 +301,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.sidebarCollapsed.update(v => !v);
   }
 
-  navigateTo(route: string): void {
+  navigateTo(route: string, label?: string, section?: string): void {
+    this.tracking.trackNavigationClick(route, label, section, 'sidebar');
     void this.router.navigateByUrl(route);
   }
 

@@ -32,7 +32,7 @@
             type="button"
             class="nav-item"
             [class.active]="isActiveRoute(item.route)"
-            (click)="navigateTo(item.route)"
+            (click)="navigateTo(item.route, item.label, section.label || '')"
           >
             <i [class]="item.icon"></i>
             @if (!sidebarCollapsed()) {

@@ -521,6 +521,19 @@ export class EventTrackingService {
     });
   }
 
+  /** Track sidebar/top-nav clicks into Audit Logs */
+  trackNavigationClick(route: string, label?: string, section?: string, source = 'sidebar') {
+    this.http.post(`${this.apiUrl}/api/v1/audit/navigation-click`, {
+      route,
+      label,
+      section,
+      source
+    }).pipe(
+      timeout(this.telemetryTimeoutMs),
+      catchError(() => of(null))
+    ).subscribe();
+  }
+
   /** Track filter usage */
   trackFilter(filterName: string, filterValue: string, context?: string) {
     this.queueEvent({
