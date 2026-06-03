@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using System.Text.Json;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
@@ -16,12 +17,14 @@ public class RolesController : ControllerBase
     private readonly TaylorAccessDbContext _context;
     private readonly IRoleService _roleService;
     private readonly IAuditService _auditService;
+    private readonly IConfiguration _configuration;
 
-    public RolesController(TaylorAccessDbContext context, IRoleService roleService, IAuditService auditService)
+    public RolesController(TaylorAccessDbContext context, IRoleService roleService, IAuditService auditService, IConfiguration configuration)
     {
         _context = context;
         _roleService = roleService;
         _auditService = auditService;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -303,7 +306,12 @@ public class RolesController : ControllerBase
     [HttpGet("{roleId}/users")]
     public async Task<ActionResult<object>> GetUsersByRoleId(int roleId)
     {
-        var usersFromUserRoles = await _context.UserRoles
+        // Prefer explicit portal_db role source when configured
+        var portalUsers = await TryGetUsersByRoleIdFromPortalDb(roleId);
+        if (portalUsers.Count > 0)
+            return Ok(new { data = portalUsers, source = "portal_db" });
+
+        var users = await _context.UserRoles
             .AsNoTracking()
             .Where(ur => ur.RoleId == roleId)
             .Join(
@@ -324,45 +332,75 @@ public class RolesController : ControllerBase
                     ur.AssignedAt
                 }
             )
-            .ToListAsync();
-
-        var usersFromAppAssignments = await _context.AppRoleAssignments
-            .AsNoTracking()
-            .Where(a => a.Status == "active" && a.Role != null && a.Role.ToLower() == "dispatcher")
-            .Where(a =>
-                a.AppClientId.ToLower().Contains("vantac") ||
-                a.AppClientId.ToLower().Contains("tms") ||
-                a.AppClientId.ToLower().Contains("portal"))
-            .Join(
-                _context.Users.AsNoTracking(),
-                a => a.UserId,
-                u => u.Id,
-                (a, u) => new
-                {
-                    u.Id,
-                    u.Name,
-                    u.Email,
-                    u.Phone,
-                    u.WorkPhone,
-                    u.CellPhone,
-                    u.JobTitle,
-                    u.Status,
-                    RoleId = roleId,
-                    AssignedAt = a.UpdatedAt
-                }
-            )
-            .ToListAsync();
-
-        var users = usersFromUserRoles
-            .Concat(usersFromAppAssignments)
-            .GroupBy(u => u.Id)
-            .Select(g => g
-                .OrderByDescending(x => x.AssignedAt)
-                .First())
             .OrderBy(u => u.Name)
-            .ToList();
+            .ToListAsync();
 
-        return Ok(new { data = users });
+        return Ok(new { data = users, source = "default_db" });
+    }
+
+    private async Task<List<object>> TryGetUsersByRoleIdFromPortalDb(int roleId)
+    {
+        var conn = ResolvePortalDbConnectionString();
+        if (string.IsNullOrWhiteSpace(conn)) return new List<object>();
+
+        await using var db = new NpgsqlConnection(conn);
+        await db.OpenAsync();
+        await using var cmd = db.CreateCommand();
+        cmd.CommandText = @"
+            select
+                u.""Id"",
+                u.""Name"",
+                u.""Email"",
+                coalesce(u.""Phone"", u.""WorkPhone"", u.""CellPhone"") as ""Phone"",
+                u.""JobTitle"",
+                u.""Status"",
+                ur.""RoleId"",
+                ur.""AssignedAt""
+            from ""UserRoles"" ur
+            join ""Users"" u on u.""Id"" = ur.""UserId""
+            where ur.""RoleId"" = @roleId
+            order by u.""Name"";";
+        cmd.Parameters.AddWithValue("@roleId", roleId);
+
+        var results = new List<object>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            results.Add(new
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                Name = reader["Name"]?.ToString() ?? "",
+                Email = reader["Email"]?.ToString() ?? "",
+                Phone = reader["Phone"]?.ToString() ?? "",
+                JobTitle = reader["JobTitle"]?.ToString() ?? "",
+                Status = reader["Status"]?.ToString() ?? "active",
+                RoleId = reader.GetInt32(reader.GetOrdinal("RoleId")),
+                AssignedAt = reader.GetDateTime(reader.GetOrdinal("AssignedAt"))
+            });
+        }
+
+        return results;
+    }
+
+    private string? ResolvePortalDbConnectionString()
+    {
+        var raw = _configuration.GetConnectionString("PortalDbConnection")
+            ?? Environment.GetEnvironmentVariable("PORTAL_DB_CONNECTION")
+            ?? Environment.GetEnvironmentVariable("PORTAL_DATABASE_URL");
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
+        if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(raw);
+            var userInfo = uri.UserInfo.Split(':');
+            if (userInfo.Length >= 2)
+            {
+                return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Disable;Trust Server Certificate=true";
+            }
+        }
+
+        return raw;
     }
 
     /// <summary>
