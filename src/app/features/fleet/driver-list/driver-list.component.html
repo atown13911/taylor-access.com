@@ -200,15 +200,15 @@
                   <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
                   <td>{{ resolveDispatcherName(driver) }}</td>
                   <td class="actions-cell">
-                    <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
-                    <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
-                    @if (isArchivedStatus(driver.status)) {
-                      <button class="action-btn restore" title="Restore" (click)="$event.stopPropagation(); restoreArchivedDriver(driver)"><i class='bx bx-archive-out'></i></button>
-                    } @else if (isInactiveStatus(driver.status)) {
-                      <button class="action-btn archive" title="Archive" (click)="$event.stopPropagation(); archiveDriver(driver)"><i class='bx bx-archive-in'></i></button>
-                    } @else {
-                      <button class="action-btn deactivate" title="Deactivate" (click)="$event.stopPropagation(); deactivateDriver(driver)"><i class='bx bx-power-off'></i></button>
+                    @if (!hasDispatcherAssignment(driver)) {
+                      <button
+                        class="action-btn assign-dispatcher"
+                        title="Assign Dispatcher"
+                        (click)="$event.stopPropagation(); openAssignDispatcherForDriver(driver)">
+                        <i class='bx bx-user-plus'></i>
+                      </button>
                     }
+                    <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                   </td>
                 </tr>
               }

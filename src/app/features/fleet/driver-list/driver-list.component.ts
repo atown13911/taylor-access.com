@@ -1560,6 +1560,10 @@ export class DriverListComponent implements OnInit {
     return match?.name || `Dispatcher ${id}`;
   }
 
+  hasDispatcherAssignment(driver: DriverRow): boolean {
+    return this.toNullableNumber(driver.dispatchUserId) !== null;
+  }
+
   resolveDispatcherName(driver: DriverRow): string {
     const dispatcherId = this.toNullableNumber(driver.dispatchUserId);
     if (!dispatcherId) return '—';
@@ -1579,6 +1583,15 @@ export class DriverListComponent implements OnInit {
       return;
     }
     this.assignDriverId.set(null);
+    this.showAssignDriverModal.set(true);
+  }
+
+  openAssignDispatcherForDriver(driver: DriverRow): void {
+    if (!this.selectedDispatcherId()) {
+      this.toast.info('Select a dispatcher first', 'Dispatcher Required');
+      return;
+    }
+    this.assignDriverId.set(String(driver.id));
     this.showAssignDriverModal.set(true);
   }
 
