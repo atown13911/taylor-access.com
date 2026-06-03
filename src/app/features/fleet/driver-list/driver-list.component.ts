@@ -35,6 +35,18 @@ interface DispatchUserRow {
   status: string;
 }
 
+interface DispatchLoadDebug {
+  usersFetched: number;
+  usersEligibleByStatus: number;
+  clientsFetched: number;
+  vanTacTmsClientIds: string[];
+  assignmentCalls: number;
+  assignmentErrors: number;
+  usersMatchedDispatchRights: number;
+  usersRejectedNoDispatchRights: number;
+  sampleRejectedUsers: string[];
+}
+
 @Component({
   selector: 'app-driver-list',
   standalone: true,
@@ -71,6 +83,17 @@ export class DriverListComponent implements OnInit {
   availableFleets = signal<any[]>([]);
   availableOrganizations = signal<any[]>([]);
   availableDispatchUsers = signal<DispatchUserRow[]>([]);
+  dispatchLoadDebug = signal<DispatchLoadDebug>({
+    usersFetched: 0,
+    usersEligibleByStatus: 0,
+    clientsFetched: 0,
+    vanTacTmsClientIds: [],
+    assignmentCalls: 0,
+    assignmentErrors: 0,
+    usersMatchedDispatchRights: 0,
+    usersRejectedNoDispatchRights: 0,
+    sampleRejectedUsers: []
+  });
   private dispatchUsersLoaded = false;
   private originalDriverNotes = signal('');
 
@@ -1410,13 +1433,28 @@ export class DriverListComponent implements OnInit {
   private async loadDispatchUsers(): Promise<void> {
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
+    const debug: DispatchLoadDebug = {
+      usersFetched: 0,
+      usersEligibleByStatus: 0,
+      clientsFetched: 0,
+      vanTacTmsClientIds: [],
+      assignmentCalls: 0,
+      assignmentErrors: 0,
+      usersMatchedDispatchRights: 0,
+      usersRejectedNoDispatchRights: 0,
+      sampleRejectedUsers: []
+    };
     try {
       const usersRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
+      debug.usersFetched = users.length;
       let vanTacTmsClientIds = new Set<string>();
       try {
         const clientsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/clients`).toPromise();
-        vanTacTmsClientIds = this.resolveVanTacTmsClientIds(this.asArray(clientsRes));
+        const clients = this.asArray(clientsRes);
+        debug.clientsFetched = clients.length;
+        vanTacTmsClientIds = this.resolveVanTacTmsClientIds(clients);
+        debug.vanTacTmsClientIds = Array.from(vanTacTmsClientIds);
       } catch {
         vanTacTmsClientIds = new Set<string>();
       }
@@ -1427,9 +1465,11 @@ export class DriverListComponent implements OnInit {
         const userId = Number(user?.id);
         if (!Number.isFinite(userId) || userId <= 0) continue;
         if (!this.isUserRecordEligibleForDispatch(user)) continue;
+        debug.usersEligibleByStatus += 1;
 
         let appDispatchEligible = false;
         try {
+          debug.assignmentCalls += 1;
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
           const assignments = this.asArray(assignmentsRes);
           appDispatchEligible = assignments.some((assignment: any) =>
@@ -1441,10 +1481,19 @@ export class DriverListComponent implements OnInit {
             )
           );
         } catch {
+          debug.assignmentErrors += 1;
           appDispatchEligible = false;
         }
 
-        if (!appDispatchEligible) continue;
+        if (!appDispatchEligible) {
+          debug.usersRejectedNoDispatchRights += 1;
+          if (debug.sampleRejectedUsers.length < 8) {
+            const label = String(user?.email ?? user?.name ?? `User ${userId}`).trim();
+            debug.sampleRejectedUsers.push(label);
+          }
+          continue;
+        }
+        debug.usersMatchedDispatchRights += 1;
 
         const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
         const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
@@ -1463,12 +1512,14 @@ export class DriverListComponent implements OnInit {
       this.availableDispatchUsers.set(
         candidates.sort((a, b) => a.name.localeCompare(b.name))
       );
+      this.dispatchLoadDebug.set(debug);
       if (this.dispatchersView() && !this.selectedDispatcherId() && candidates.length > 0) {
         this.selectedDispatcherId.set(candidates[0].id);
       }
       this.dispatchUsersLoaded = true;
     } catch {
       this.availableDispatchUsers.set([]);
+      this.dispatchLoadDebug.set(debug);
     } finally {
       this.loadingDispatchUsers.set(false);
     }
