@@ -1506,11 +1506,6 @@ export class DriverListComponent implements OnInit {
   }
 
   private async loadDispatchUsers(): Promise<void> {
-    this.debugDispatchLog('H1', 'loadDispatchUsers called', {
-      dispatchUsersLoaded: this.dispatchUsersLoaded,
-      loadingDispatchUsers: this.loadingDispatchUsers(),
-      route: this.router.url
-    });
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
     const debug: DispatchLoadDebug = {
@@ -1534,19 +1529,8 @@ export class DriverListComponent implements OnInit {
     try {
       const dispatcherRoleId = '4';
       debug.roleChecks = 1;
-      this.debugDispatchLog('H2', 'requesting role users', {
-        roleId: dispatcherRoleId,
-        apiBaseUrl: this.baseUrl
-      });
       const roleUsersRes: any = await this.adminService.getUsersByRoleId(dispatcherRoleId).toPromise();
       const users = this.asArray(roleUsersRes);
-      this.debugDispatchLog('H3', 'role users response received', {
-        source: String(roleUsersRes?.source ?? ''),
-        hasDataArray: Array.isArray(roleUsersRes?.data),
-        rootKeys: Object.keys(roleUsersRes ?? {}),
-        usersLength: users.length,
-        portalLookup: roleUsersRes?.portalLookup ?? null
-      });
       debug.usersFetched = users.length;
       debug.usersEligibleByStatus = users.length;
       debug.roleIdMatches = users.length;
@@ -1572,12 +1556,6 @@ export class DriverListComponent implements OnInit {
         })
         .filter((row): row is DispatchUserRow => !!row);
 
-      this.debugDispatchLog('H4', 'dispatcher candidates mapped', {
-        candidatesLength: candidates.length,
-        candidateIds: candidates.slice(0, 10).map((c) => c.id),
-        statuses: candidates.slice(0, 10).map((c) => c.status)
-      });
-
       debug.usersMatchedDispatchRights = candidates.length;
       debug.usersRejectedNoDispatchRights = Math.max(debug.usersFetched - candidates.length, 0);
 
@@ -1589,13 +1567,7 @@ export class DriverListComponent implements OnInit {
         this.selectedDispatcherId.set(candidates[0].id);
       }
       this.dispatchUsersLoaded = true;
-    } catch (error: any) {
-      this.debugDispatchLog('H5', 'loadDispatchUsers failed', {
-        errorName: String(error?.name ?? ''),
-        errorMessage: String(error?.message ?? ''),
-        status: Number(error?.status ?? 0),
-        statusText: String(error?.statusText ?? '')
-      });
+    } catch {
       this.availableDispatchUsers.set([]);
       this.dispatchLoadDebug.set(debug);
     } finally {
@@ -1608,13 +1580,6 @@ export class DriverListComponent implements OnInit {
     const normalizedPath = rawPath.replace(/\/+$/, '') || '/';
     const isDispatchersRoute = normalizedPath === '/dispatchers';
     const wasDispatchersRoute = this.dispatchersView();
-    this.debugDispatchLog('H1', 'route evaluation', {
-      rawPath,
-      normalizedPath,
-      isDispatchersRoute,
-      wasDispatchersRoute,
-      dispatchUsersLoaded: this.dispatchUsersLoaded
-    });
 
     this.dispatchersView.set(isDispatchersRoute);
 
@@ -1678,14 +1643,4 @@ export class DriverListComponent implements OnInit {
     return clean ? `${clean}\n${tag}` : tag;
   }
 
-  private debugDispatchLog(
-    hypothesisId: string,
-    message: string,
-    data: Record<string, any>,
-    runId = 'run-1'
-  ): void {
-    // #region agent log
-    fetch('http://127.0.0.1:7748/ingest/00b0bc9c-1fd5-453e-89d9-a57d4ff597b8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ff188a'},body:JSON.stringify({sessionId:'ff188a',runId,hypothesisId,location:'driver-list.component.ts:dispatchers',message,data,timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }
 }
