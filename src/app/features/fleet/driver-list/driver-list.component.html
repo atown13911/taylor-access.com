@@ -207,6 +207,13 @@
                         (click)="$event.stopPropagation(); openAssignDispatcherForDriver(driver)">
                         <i class='bx bx-user-plus'></i>
                       </button>
+                    } @else {
+                      <button
+                        class="action-btn unassign-dispatcher"
+                        title="Unassign Dispatcher"
+                        (click)="$event.stopPropagation(); unassignDispatcherForDriver(driver)">
+                        <i class='bx bx-user-x'></i>
+                      </button>
                     }
                     <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                   </td>

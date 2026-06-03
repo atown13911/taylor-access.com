@@ -196,7 +196,7 @@ export class DriverListComponent implements OnInit {
   landmarkOtrDrivers = computed(() =>
     this.drivers()
       .filter((d) => this.isLandmarkOtrFleet(d.fleetName))
-      .filter((d) => !this.isArchivedStatus(d.status))
+      .filter((d) => this.isActiveStatus(d.status))
       .sort((a, b) => a.name.localeCompare(b.name))
   );
 
@@ -1593,6 +1593,29 @@ export class DriverListComponent implements OnInit {
       return;
     }
     this.assignDriverToSelectedDispatcher(driver);
+  }
+
+  unassignDispatcherForDriver(driver: DriverRow): void {
+    const dispatcherId = this.toNullableNumber(driver.dispatchUserId);
+    if (!dispatcherId) return;
+
+    this.assignDriverSaving.set(true);
+    const payload = {
+      dispatchUserId: null,
+      notes: this.composeDriverNotesWithDispatch(String(driver.notes ?? ''), null)
+    };
+
+    this.api.updateDriver(driver.id, payload).subscribe({
+      next: () => {
+        this.toast.success(`${driver.name} unassigned from dispatcher`, 'Dispatcher Unassigned');
+        this.assignDriverSaving.set(false);
+        this.loadDrivers();
+      },
+      error: (err: any) => {
+        this.toast.error(err?.error?.error || 'Failed to unassign dispatcher', 'Unassign Failed');
+        this.assignDriverSaving.set(false);
+      }
+    });
   }
 
   closeAssignDriverModal(): void {
