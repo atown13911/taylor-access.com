@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 
 namespace TaylorAccess.API.Services;
@@ -16,15 +17,18 @@ public class AuditService : IAuditService
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuditService> _logger;
     private readonly IMongoDbService _mongoDbService;
+    private readonly TaylorAccessDbContext _context;
 
     public AuditService(
         IHttpContextAccessor httpContextAccessor, 
         ILogger<AuditService> logger,
-        IMongoDbService mongoDbService)
+        IMongoDbService mongoDbService,
+        TaylorAccessDbContext context)
     {
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _mongoDbService = mongoDbService;
+        _context = context;
     }
 
     public async Task LogAsync(string action, string entityType, int? entityId, string? description = null, object? oldValues = null, object? newValues = null)
@@ -68,6 +72,42 @@ public class AuditService : IAuditService
 
     public async Task LogAsync(AuditLog log)
     {
+        // Always persist to PostgreSQL so audit history remains available
+        // even when MongoDB/gateway is unavailable.
+        try
+        {
+            var sqlLog = new AuditLog
+            {
+                OrganizationId = log.OrganizationId,
+                UserId = log.UserId,
+                UserName = log.UserName,
+                UserEmail = log.UserEmail,
+                IpAddress = log.IpAddress,
+                UserAgent = log.UserAgent,
+                Action = log.Action,
+                EntityType = log.EntityType,
+                EntityId = log.EntityId,
+                EntityName = log.EntityName,
+                OldValues = log.OldValues,
+                NewValues = log.NewValues,
+                Changes = log.Changes,
+                Description = log.Description,
+                Module = log.Module,
+                Endpoint = log.Endpoint,
+                HttpMethod = log.HttpMethod,
+                HttpStatusCode = log.HttpStatusCode,
+                Timestamp = log.Timestamp,
+                Severity = log.Severity
+            };
+
+            _context.AuditLogs.Add(sqlLog);
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write audit log to PostgreSQL");
+        }
+
         // Write to central MongoDB audit_logs collection
         try
         {

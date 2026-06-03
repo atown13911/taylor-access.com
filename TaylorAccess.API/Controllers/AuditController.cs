@@ -46,31 +46,60 @@ public class AuditController : ControllerBase
             : user.OrganizationId;
         var mongoConnected = _mongo.IsConnected;
 
-        var logs = await _mongo.GetAuditLogsAsync(
+        var fromUtc = from?.ToUniversalTime();
+        var toUtc = to?.ToUniversalTime();
+        var mongoLogs = await _mongo.GetAuditLogsAsync(
             entityType: entityType,
             entityId: entityId,
             userId: userId,
             organizationId: orgFilter,
-            from: from?.ToUniversalTime(),
-            to: to?.ToUniversalTime(),
+            from: fromUtc,
+            to: toUtc,
             limit: limit * page,
             includeUnscopedOrganization: orgFilter.HasValue
         );
+        var logs = mongoLogs.Select(MapMongoAuditLog).ToList();
 
         if (!string.IsNullOrEmpty(action))
-            logs = logs.Where(l => l.Action == action).ToList();
+            logs = logs.Where(l => string.Equals(l.Action, action, StringComparison.OrdinalIgnoreCase)).ToList();
         if (!string.IsNullOrEmpty(severity))
-            logs = logs.Where(l => l.Severity == severity).ToList();
+            logs = logs.Where(l => string.Equals(l.Severity, severity, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        var total = logs.Count;
-        var paged = logs.Skip((page - 1) * limit).Take(limit).ToList();
+        var sqlFallbackUsed = false;
+        int total;
+        List<AuditLog> paged;
+
+        if (logs.Count > 0)
+        {
+            total = logs.Count;
+            paged = logs.Skip((page - 1) * limit).Take(limit).ToList();
+        }
+        else
+        {
+            sqlFallbackUsed = true;
+            (total, paged) = await QuerySqlLogsAsync(
+                entityType: entityType,
+                entityId: entityId,
+                userId: userId,
+                organizationId: orgFilter,
+                action: action,
+                severity: severity,
+                from: fromUtc,
+                to: toUtc,
+                page: page,
+                limit: limit
+            );
+        }
 
         return Ok(new
         {
             data = paged,
             meta = new { total, page, limit, pages = (int)Math.Ceiling((double)total / limit) },
             mongoConnected,
-            warning = mongoConnected ? null : "Audit storage is currently unavailable (MongoDB not connected). Showing empty results."
+            dataSource = sqlFallbackUsed ? "postgres" : "mongo",
+            warning = !mongoConnected
+                ? "Audit storage is currently unavailable (MongoDB not connected). Showing PostgreSQL fallback results."
+                : null
         });
     }
 
@@ -112,13 +141,25 @@ public class AuditController : ControllerBase
         var fromDate = from?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(-30);
         var toDate = to?.ToUniversalTime() ?? DateTime.UtcNow;
 
-        var logs = await _mongo.GetAuditLogsAsync(
+        var mongoLogs = await _mongo.GetAuditLogsAsync(
             organizationId: orgFilter,
             from: fromDate,
             to: toDate,
             limit: 10000,
             includeUnscopedOrganization: orgFilter.HasValue
         );
+        var logs = mongoLogs.Select(MapMongoAuditLog).ToList();
+
+        var sqlFallbackUsed = false;
+        if (logs.Count == 0)
+        {
+            sqlFallbackUsed = true;
+            logs = await QuerySqlLogsForSummaryAsync(
+                organizationId: orgFilter,
+                from: fromDate,
+                to: toDate
+            );
+        }
 
         return Ok(new
         {
@@ -132,9 +173,112 @@ public class AuditController : ControllerBase
                 .ToDictionary(g => g.Key!, g => g.Count()),
             recentActivity = logs.OrderByDescending(l => l.Timestamp).Take(10),
             mongoConnected,
-            warning = mongoConnected ? null : "Audit storage is currently unavailable (MongoDB not connected). Summary may be incomplete."
+            dataSource = sqlFallbackUsed ? "postgres" : "mongo",
+            warning = !mongoConnected
+                ? "Audit storage is currently unavailable (MongoDB not connected). Summary is using PostgreSQL fallback."
+                : null
         });
     }
+
+    private async Task<(int total, List<AuditLog> data)> QuerySqlLogsAsync(
+        string? entityType,
+        int? entityId,
+        int? userId,
+        int? organizationId,
+        string? action,
+        string? severity,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int limit)
+    {
+        var query = BuildSqlAuditQuery(entityType, entityId, userId, organizationId, action, severity, from, to);
+
+        var total = await query.CountAsync();
+        var data = await query
+            .OrderByDescending(l => l.Timestamp)
+            .Skip((page - 1) * limit)
+            .Take(limit)
+            .ToListAsync();
+
+        return (total, data);
+    }
+
+    private async Task<List<AuditLog>> QuerySqlLogsForSummaryAsync(
+        int? organizationId,
+        DateTime? from,
+        DateTime? to)
+    {
+        return await BuildSqlAuditQuery(
+                entityType: null,
+                entityId: null,
+                userId: null,
+                organizationId: organizationId,
+                action: null,
+                severity: null,
+                from: from,
+                to: to
+            )
+            .OrderByDescending(l => l.Timestamp)
+            .Take(10000)
+            .ToListAsync();
+    }
+
+    private IQueryable<AuditLog> BuildSqlAuditQuery(
+        string? entityType,
+        int? entityId,
+        int? userId,
+        int? organizationId,
+        string? action,
+        string? severity,
+        DateTime? from,
+        DateTime? to)
+    {
+        var query = _context.AuditLogs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(entityType))
+            query = query.Where(l => l.EntityType == entityType);
+        if (entityId.HasValue)
+            query = query.Where(l => l.EntityId == entityId);
+        if (userId.HasValue)
+            query = query.Where(l => l.UserId == userId);
+        if (organizationId.HasValue)
+            query = query.Where(l => l.OrganizationId == organizationId || l.OrganizationId == null);
+        if (!string.IsNullOrWhiteSpace(action))
+            query = query.Where(l => (l.Action ?? string.Empty).ToLower() == action.ToLower());
+        if (!string.IsNullOrWhiteSpace(severity))
+            query = query.Where(l => (l.Severity ?? string.Empty).ToLower() == severity.ToLower());
+        if (from.HasValue)
+            query = query.Where(l => l.Timestamp >= from.Value);
+        if (to.HasValue)
+            query = query.Where(l => l.Timestamp <= to.Value);
+
+        return query;
+    }
+
+    private static AuditLog MapMongoAuditLog(MongoAuditLog log) => new()
+    {
+        OrganizationId = log.OrganizationId,
+        UserId = log.UserId,
+        UserName = log.UserName,
+        UserEmail = log.UserEmail,
+        IpAddress = log.IpAddress,
+        UserAgent = log.UserAgent,
+        Action = log.Action,
+        EntityType = log.EntityType,
+        EntityId = log.EntityId,
+        EntityName = log.EntityName,
+        OldValues = log.OldValues,
+        NewValues = log.NewValues,
+        Changes = log.Changes,
+        Description = log.Description,
+        Module = log.Module,
+        Endpoint = log.Endpoint,
+        HttpMethod = log.HttpMethod,
+        HttpStatusCode = log.HttpStatusCode,
+        Timestamp = log.Timestamp,
+        Severity = log.Severity
+    };
 
     /// <summary>
     /// Get activity logs for a specific user on a specific day (used by Time Clock drawer)
