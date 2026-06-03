@@ -190,7 +190,12 @@ export class DriverListComponent implements OnInit {
     const selectedId = this.selectedDispatcherId();
     if (!selectedId) return [] as DriverRow[];
 
-    return this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === selectedId);
+    const assigned = this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === selectedId);
+    if (assigned.length > 0) return assigned;
+
+    // Fallback for environments that haven't persisted dispatch assignments yet:
+    // show Landmark OTR fleet drivers from the primary drivers dataset.
+    return this.drivers().filter((d) => this.isLandmarkOtrFleet(d.fleetName));
   });
 
   tabCounts = computed(() => {
@@ -429,6 +434,14 @@ export class DriverListComponent implements OnInit {
     }
 
     return '—';
+  }
+
+  private isLandmarkOtrFleet(fleetName: string): boolean {
+    const normalized = String(fleetName ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+    return normalized.includes('landmark otr');
   }
 
   private reconcileDriverFleetNames(): void {
