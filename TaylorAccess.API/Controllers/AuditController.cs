@@ -47,6 +47,25 @@ public class AuditController : ControllerBase
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized(new { message = "User not found" });
 
+        // Write a lightweight view event so audit recording can be verified
+        // immediately when this endpoint is opened.
+        await _auditService.LogAsync(new AuditLog
+        {
+            OrganizationId = user.OrganizationId,
+            UserId = user.Id > 0 ? user.Id : null,
+            UserName = user.Name,
+            UserEmail = user.Email,
+            Action = "audit_view",
+            EntityType = "AuditLog",
+            EntityName = "Audit Logs",
+            Description = "Viewed audit logs",
+            Module = "admin",
+            Endpoint = "/api/v1/audit",
+            HttpMethod = "GET",
+            Timestamp = DateTime.UtcNow,
+            Severity = "info"
+        });
+
         var role = user.Role?.ToLowerInvariant();
         int? orgFilter = (role == "product_owner" || role == "superadmin" || role == "development")
             ? null
