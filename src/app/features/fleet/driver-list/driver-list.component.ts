@@ -184,7 +184,7 @@ export class DriverListComponent implements OnInit {
 
   dispatcherRows = computed(() => {
     const rows = this.availableDispatchUsers();
-    const activeLandmarkAssigned = this.landmarkOtrDrivers();
+    const activeLandmarkAssigned = this.activeLandmarkDispatchDrivers();
     return rows.map((u) => ({
       ...u,
       assignedDrivers: activeLandmarkAssigned.filter((d) => this.toNullableNumber(d.dispatchUserId) === u.id).length
@@ -211,6 +211,15 @@ export class DriverListComponent implements OnInit {
       .sort((a, b) => a.name.localeCompare(b.name))
   );
 
+  activeLandmarkDispatchDrivers = computed(() => {
+    const combined = [...this.landmarkOtrDrivers(), ...this.landmarkDrayageDrivers()];
+    const byId = new Map<string, DriverRow>();
+    for (const driver of combined) {
+      byId.set(String(driver.id), driver);
+    }
+    return Array.from(byId.values());
+  });
+
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
@@ -234,9 +243,9 @@ export class DriverListComponent implements OnInit {
     const dispatchers = this.dispatcherRows();
     const totalDispatchers = dispatchers.length;
     const dispatchersWithAssignedDrivers = dispatchers.filter((d) => d.assignedDrivers > 0).length;
-    const eligibleLandmarkOtrDrivers = this.landmarkOtrDrivers().filter((d) => this.isActiveStatus(d.status));
-    const driversWithDispatcher = eligibleLandmarkOtrDrivers.filter((d) => this.toNullableNumber(d.dispatchUserId) !== null).length;
-    const unassignedDrivers = Math.max(eligibleLandmarkOtrDrivers.length - driversWithDispatcher, 0);
+    const eligibleLandmarkDrivers = this.activeLandmarkDispatchDrivers();
+    const driversWithDispatcher = eligibleLandmarkDrivers.filter((d) => this.toNullableNumber(d.dispatchUserId) !== null).length;
+    const unassignedDrivers = Math.max(eligibleLandmarkDrivers.length - driversWithDispatcher, 0);
     return {
       totalDispatchers,
       dispatchersWithAssignedDrivers,
