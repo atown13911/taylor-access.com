@@ -1443,13 +1443,19 @@ export class DriverListComponent implements OnInit {
 
     const appRole = String(
       assignment?.role?.name ??
+      assignment?.role?.displayName ??
       assignment?.role?.key ??
+      assignment?.role?.slug ??
       assignment?.role ??
       assignment?.appRole ??
+      assignment?.appRoleName ??
+      assignment?.roleLabel ??
+      assignment?.role_title ??
       assignment?.roleName ??
+      assignment?.roleId ??
       ''
     ).trim().toLowerCase();
-    const normalizedRole = appRole.replace(/[\s_-]+/g, '');
+    const normalizedRole = appRole.replace(/[^a-z0-9]/g, '');
 
     const explicitDispatchFlag =
       assignment?.canDispatch === true ||
@@ -1457,7 +1463,7 @@ export class DriverListComponent implements OnInit {
       assignment?.dispatchAccess === true;
 
     return explicitDispatchFlag ||
-      normalizedRole === 'dispatcher';
+      normalizedRole.includes('dispatcher');
   }
 
   private assignmentMatchesDispatchApp(assignment: any): boolean {
@@ -1556,6 +1562,7 @@ export class DriverListComponent implements OnInit {
                 `client:${String(assignment?.appClientId ?? assignment?.clientId ?? 'n/a')}`,
                 `app:${String(assignment?.appName ?? assignment?.clientName ?? assignment?.applicationName ?? 'n/a')}`,
                 `role:${String(assignment?.role?.name ?? assignment?.role ?? assignment?.appRole ?? assignment?.roleName ?? 'n/a')}`,
+                `roleId:${String(assignment?.roleId ?? assignment?.role?.id ?? 'n/a')}`,
                 `status:${String(assignment?.status ?? 'n/a')}`,
                 `perms:${String(assignment?.permissions ?? '').slice(0, 40)}`
               ].join(' | ');
