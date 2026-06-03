@@ -338,6 +338,13 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        INSERT INTO ""AuditLogs""
+        (""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""Action"", ""EntityType"", ""EntityId"", ""EntityName"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""Timestamp"", ""Severity"")
+        VALUES
+        (NULL, NULL, 'System', 'system@taylor-access.local', 'system_start', 'System', NULL, 'TaylorAccess.API', 'API startup initialization completed', 'system', '/health', 'GET', NOW(), 'info');
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""MotivFuelPurchases"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NULL,
