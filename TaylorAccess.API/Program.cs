@@ -304,6 +304,40 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""AuditLogs"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NULL,
+            ""UserId"" INTEGER NULL,
+            ""UserName"" VARCHAR(200) NULL,
+            ""UserEmail"" VARCHAR(256) NULL,
+            ""IpAddress"" VARCHAR(64) NULL,
+            ""UserAgent"" TEXT NULL,
+            ""Action"" VARCHAR(120) NOT NULL,
+            ""EntityType"" VARCHAR(120) NOT NULL,
+            ""EntityId"" INTEGER NULL,
+            ""EntityName"" VARCHAR(300) NULL,
+            ""OldValues"" TEXT NULL,
+            ""NewValues"" TEXT NULL,
+            ""Changes"" TEXT NULL,
+            ""Description"" TEXT NULL,
+            ""Module"" VARCHAR(120) NULL,
+            ""Endpoint"" VARCHAR(500) NULL,
+            ""HttpMethod"" VARCHAR(20) NULL,
+            ""HttpStatusCode"" INTEGER NULL,
+            ""Timestamp"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""Severity"" VARCHAR(20) NOT NULL DEFAULT 'info'
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_AuditLogs_Timestamp""
+            ON ""AuditLogs"" (""Timestamp"");
+        CREATE INDEX IF NOT EXISTS ""IX_AuditLogs_OrganizationId_Timestamp""
+            ON ""AuditLogs"" (""OrganizationId"", ""Timestamp"");
+        CREATE INDEX IF NOT EXISTS ""IX_AuditLogs_UserId_Timestamp""
+            ON ""AuditLogs"" (""UserId"", ""Timestamp"");
+        CREATE INDEX IF NOT EXISTS ""IX_AuditLogs_Action_Timestamp""
+            ON ""AuditLogs"" (""Action"", ""Timestamp"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""MotivFuelPurchases"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NULL,
