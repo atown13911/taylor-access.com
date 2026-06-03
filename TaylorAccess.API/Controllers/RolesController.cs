@@ -320,18 +320,35 @@ public class RolesController : ControllerBase
                 u => u.Id,
                 (ur, u) => new
                 {
-                    u.Id,
-                    u.Name,
-                    u.Email,
-                    u.Phone,
-                    u.WorkPhone,
-                    u.CellPhone,
-                    u.JobTitle,
-                    u.Status,
-                    ur.RoleId,
-                    ur.AssignedAt
+                    ur,
+                    u
                 }
             )
+            .GroupJoin(
+                _context.Positions.AsNoTracking(),
+                row => row.u.PositionId,
+                p => (int?)p.Id,
+                (row, positions) => new
+                {
+                    row.ur,
+                    row.u,
+                    Position = positions.Select(p => p.Title).FirstOrDefault()
+                }
+            )
+            .Select(row => new
+            {
+                row.u.Id,
+                row.u.Name,
+                row.u.Email,
+                row.u.Phone,
+                row.u.WorkPhone,
+                row.u.CellPhone,
+                row.u.JobTitle,
+                row.Position,
+                row.u.Status,
+                row.ur.RoleId,
+                row.ur.AssignedAt
+            })
             .OrderBy(u => u.Name)
             .ToListAsync();
 
@@ -393,6 +410,8 @@ public class RolesController : ControllerBase
 
             var titleColumn = FirstExisting("JobTitle", "Title", "Position", "job_title");
             var statusColumn = FirstExisting("Status", "status");
+            var titleExpr = string.IsNullOrWhiteSpace(titleColumn) ? "null" : $@"u.""{titleColumn}""";
+            var statusExpr = string.IsNullOrWhiteSpace(statusColumn) ? "'active'" : $@"u.""{statusColumn}""";
 
             await using var cmd = db.CreateCommand();
             cmd.CommandText = $@"
@@ -401,8 +420,9 @@ public class RolesController : ControllerBase
                     u.""Name"",
                     u.""Email"",
                     {phoneExpr} as ""Phone"",
-                    {(string.IsNullOrWhiteSpace(titleColumn) ? "null" : $@"u.""{titleColumn}""")} as ""JobTitle"",
-                    {(string.IsNullOrWhiteSpace(statusColumn) ? "'active'" : $@"u.""{statusColumn}""")} as ""Status"",
+                    {titleExpr} as ""JobTitle"",
+                    {titleExpr} as ""Position"",
+                    {statusExpr} as ""Status"",
                     ur.""RoleId"",
                     ur.""AssignedAt""
                 from ""UserRoles"" ur
@@ -422,6 +442,7 @@ public class RolesController : ControllerBase
                     Email = reader["Email"]?.ToString() ?? "",
                     Phone = reader["Phone"]?.ToString() ?? "",
                     JobTitle = reader["JobTitle"]?.ToString() ?? "",
+                    Position = reader["Position"]?.ToString() ?? "",
                     Status = reader["Status"]?.ToString() ?? "active",
                     RoleId = reader.GetInt32(reader.GetOrdinal("RoleId")),
                     AssignedAt = reader["AssignedAt"] is DBNull ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("AssignedAt"))

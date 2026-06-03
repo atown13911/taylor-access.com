@@ -1503,7 +1503,14 @@ export class DriverListComponent implements OnInit {
             name: String(user?.name ?? user?.fullName ?? user?.displayName ?? '').trim() || combinedName || `User ${userId}`,
             email: String(user?.email ?? user?.workEmail ?? '').trim(),
             phone: String(user?.phone ?? user?.mobilePhone ?? user?.phoneNumber ?? user?.workPhone ?? '').trim(),
-            title: String(user?.jobTitle ?? user?.title ?? user?.position ?? user?.department ?? '').trim() || 'Dispatcher',
+            title: String(
+              user?.position ??
+              user?.jobPosition ??
+              user?.jobTitle ??
+              user?.title ??
+              user?.department ??
+              ''
+            ).trim() || 'Dispatcher',
             status: String(user?.status ?? 'active').trim().toLowerCase() || 'active'
           } as DispatchUserRow;
         })
