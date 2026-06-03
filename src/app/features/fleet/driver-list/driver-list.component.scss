@@ -276,11 +276,21 @@
     font-size: 0.9rem;
     color: var(--text-primary);
   }
+  .dispatchers-subheader-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
   p {
     margin: 0;
     font-size: 0.78rem;
     color: var(--cyan, #00e5ff);
   }
+}
+
+.btn-assign-driver {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.75rem;
 }
 
 .empty-state.compact {

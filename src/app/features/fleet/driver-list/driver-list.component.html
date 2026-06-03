@@ -141,7 +141,16 @@
       <div class="data-table-container">
         <div class="dispatchers-subheader">
           <h3>Assigned Drivers</h3>
-          <p>{{ selectedDispatcherName() }}</p>
+          <div class="dispatchers-subheader-actions">
+            <p>{{ selectedDispatcherName() }}</p>
+            <button
+              class="btn btn-primary btn-assign-driver"
+              (click)="openAssignDriverModal()"
+              [disabled]="!selectedDispatcherId()">
+              <i class='bx bx-user-plus'></i>
+              Assign Driver
+            </button>
+          </div>
         </div>
         @if (!selectedDispatcherId()) {
           <div class="empty-state compact">
@@ -277,6 +286,46 @@
     </div>
   }
 </div>
+
+@if (showAssignDriverModal()) {
+  <div class="modal-overlay" (click)="closeAssignDriverModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Assign Driver</h3>
+        <button class="close-btn" (click)="closeAssignDriverModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-section">
+          <div class="form-group">
+            <label>Dispatcher</label>
+            <input type="text" [value]="selectedDispatcherName()" disabled>
+          </div>
+          <div class="form-group">
+            <label>Select Driver</label>
+            <select [ngModel]="assignDriverId()" (ngModelChange)="assignDriverId.set($event)">
+              <option [ngValue]="null">— Select Driver —</option>
+              @for (driver of assignableDriversForSelectedDispatcher(); track driver.id) {
+                <option [ngValue]="driver.id">
+                  {{ driver.name }}{{ driver.fleetName !== '—' ? ' — ' + driver.fleetName : '' }}
+                </option>
+              }
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeAssignDriverModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveAssignedDriver()" [disabled]="assignDriverSaving() || !assignDriverId()">
+          @if (assignDriverSaving()) {
+            <i class='bx bx-loader-alt bx-spin'></i> Assigning...
+          } @else {
+            <i class='bx bx-check'></i> Assign Driver
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
 
 <!-- Add/Edit Driver Modal -->
 @if (showModal()) {
