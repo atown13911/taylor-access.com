@@ -64,6 +64,9 @@ export class DriverListComponent implements OnInit {
   activeTab = signal<'active' | 'inactive' | 'archived'>('active');
   dispatchersView = signal(false);
   selectedDispatcherId = signal<number | null>(null);
+  showAssignDriverModal = signal(false);
+  assignDriverSaving = signal(false);
+  assignDriverId = signal<string | null>(null);
 
   // Modal state
   showModal = signal(false);
@@ -1556,6 +1559,62 @@ export class DriverListComponent implements OnInit {
     if (!id) return 'No dispatcher selected';
     const match = this.availableDispatchUsers().find((u) => u.id === id);
     return match?.name || `Dispatcher ${id}`;
+  }
+
+  assignableDriversForSelectedDispatcher(): DriverRow[] {
+    const selectedId = this.selectedDispatcherId();
+    if (!selectedId) return [];
+    return this.drivers()
+      .filter((driver) => !this.isArchivedStatus(driver.status))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  openAssignDriverModal(): void {
+    if (!this.selectedDispatcherId()) {
+      this.toast.info('Select a dispatcher first', 'Dispatcher Required');
+      return;
+    }
+    this.assignDriverId.set(null);
+    this.showAssignDriverModal.set(true);
+  }
+
+  closeAssignDriverModal(): void {
+    this.showAssignDriverModal.set(false);
+    this.assignDriverId.set(null);
+    this.assignDriverSaving.set(false);
+  }
+
+  saveAssignedDriver(): void {
+    const dispatcherId = this.selectedDispatcherId();
+    const driverId = this.assignDriverId();
+    if (!dispatcherId || !driverId) {
+      this.toast.error('Select a driver to assign', 'Missing Driver');
+      return;
+    }
+
+    const selectedDriver = this.drivers().find((d) => String(d.id) === String(driverId));
+    if (!selectedDriver) {
+      this.toast.error('Selected driver was not found', 'Assign Failed');
+      return;
+    }
+
+    this.assignDriverSaving.set(true);
+    const payload = {
+      dispatchUserId: dispatcherId,
+      notes: this.composeDriverNotesWithDispatch(String(selectedDriver.notes ?? ''), dispatcherId)
+    };
+
+    this.api.updateDriver(selectedDriver.id, payload).subscribe({
+      next: () => {
+        this.toast.success(`${selectedDriver.name} assigned to ${this.selectedDispatcherName()}`, 'Driver Assigned');
+        this.closeAssignDriverModal();
+        this.loadDrivers();
+      },
+      error: (err: any) => {
+        this.toast.error(err?.error?.error || 'Failed to assign driver', 'Assign Failed');
+        this.assignDriverSaving.set(false);
+      }
+    });
   }
 
   private extractDispatchTag(notes: string): { id: number | null; label: string | null } {
