@@ -8,6 +8,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { EventTrackingService } from '../../../core/services/event-tracking.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
+import { AdminService } from '../../../core/services/admin.service';
 import { environment } from '../../../../environments/environment';
 
 interface DriverRow {
@@ -45,6 +46,11 @@ interface DispatchLoadDebug {
   usersMatchedDispatchRights: number;
   usersRejectedNoDispatchRights: number;
   sampleRejectedUsers: string[];
+  roleChecks: number;
+  roleDispatchMatches: number;
+  sampleAssignmentSummaries: string[];
+  usersWithEmptyAssignments: number;
+  sampleAssignmentRootKeys: string[];
 }
 
 @Component({
@@ -62,6 +68,7 @@ export class DriverListComponent implements OnInit {
   private router = inject(Router);
   private tracking = inject(EventTrackingService);
   private confirmDialog = inject(ConfirmService);
+  private adminService = inject(AdminService);
   private baseUrl = environment.apiUrl;
 
   isLoading = signal(false);
@@ -92,7 +99,12 @@ export class DriverListComponent implements OnInit {
     assignmentErrors: 0,
     usersMatchedDispatchRights: 0,
     usersRejectedNoDispatchRights: 0,
-    sampleRejectedUsers: []
+    sampleRejectedUsers: [],
+    roleChecks: 0,
+    roleDispatchMatches: 0,
+    sampleAssignmentSummaries: [],
+    usersWithEmptyAssignments: 0,
+    sampleAssignmentRootKeys: []
   });
   private dispatchUsersLoaded = false;
   private originalDriverNotes = signal('');
@@ -279,10 +291,64 @@ export class DriverListComponent implements OnInit {
     if (Array.isArray(input?.items)) return input.items;
     if (Array.isArray(input?.rows)) return input.rows;
     if (Array.isArray(input?.drivers)) return input.drivers;
+    if (Array.isArray(input?.apps)) return input.apps;
+    if (Array.isArray(input?.assignments)) return input.assignments;
     if (Array.isArray(input?.data?.items)) return input.data.items;
     if (Array.isArray(input?.data?.rows)) return input.data.rows;
     if (Array.isArray(input?.data?.drivers)) return input.data.drivers;
+    if (Array.isArray(input?.data?.apps)) return input.data.apps;
+    if (Array.isArray(input?.data?.assignments)) return input.data.assignments;
     return [];
+  }
+
+  private extractAppAssignments(input: any): any[] {
+    const direct = this.asArray(input);
+    if (direct.length) return direct;
+
+    const discovered: any[] = [];
+    const queue: any[] = [input];
+    const visited = new Set<any>();
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || typeof current !== 'object' || visited.has(current)) continue;
+      visited.add(current);
+
+      if (Array.isArray(current)) {
+        for (const item of current) queue.push(item);
+        continue;
+      }
+
+      for (const [key, value] of Object.entries(current)) {
+        if (Array.isArray(value)) {
+          const hasAssignmentLikeObjects = value.some((entry: any) =>
+            entry && typeof entry === 'object' && (
+              Object.prototype.hasOwnProperty.call(entry, 'appClientId') ||
+              Object.prototype.hasOwnProperty.call(entry, 'clientId') ||
+              Object.prototype.hasOwnProperty.call(entry, 'appName') ||
+              Object.prototype.hasOwnProperty.call(entry, 'clientName') ||
+              Object.prototype.hasOwnProperty.call(entry, 'role') ||
+              Object.prototype.hasOwnProperty.call(entry, 'permissions') ||
+              Object.prototype.hasOwnProperty.call(entry, 'scopes')
+            )
+          );
+
+          if (hasAssignmentLikeObjects) {
+            discovered.push(...value);
+          } else {
+            for (const item of value) queue.push(item);
+          }
+        } else if (value && typeof value === 'object') {
+          queue.push(value);
+        }
+
+        if (key.toLowerCase().includes('assignment') || key.toLowerCase().includes('app')) {
+          if (value && typeof value === 'object') queue.push(value);
+        }
+      }
+    }
+
+    return discovered;
   }
 
   setActiveTab(tab: 'active' | 'inactive' | 'archived'): void {
@@ -1442,7 +1508,12 @@ export class DriverListComponent implements OnInit {
       assignmentErrors: 0,
       usersMatchedDispatchRights: 0,
       usersRejectedNoDispatchRights: 0,
-      sampleRejectedUsers: []
+      sampleRejectedUsers: [],
+      roleChecks: 0,
+      roleDispatchMatches: 0,
+      sampleAssignmentSummaries: [],
+      usersWithEmptyAssignments: 0,
+      sampleAssignmentRootKeys: []
     };
     try {
       const usersRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
@@ -1471,8 +1542,29 @@ export class DriverListComponent implements OnInit {
         try {
           debug.assignmentCalls += 1;
           const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
-          const assignments = this.asArray(assignmentsRes);
-          appDispatchEligible = assignments.some((assignment: any) =>
+          if (debug.sampleAssignmentRootKeys.length < 8 && assignmentsRes && typeof assignmentsRes === 'object') {
+            const keys = Object.keys(assignmentsRes).slice(0, 8);
+            debug.sampleAssignmentRootKeys.push(`u:${userId} keys:[${keys.join(', ')}]`);
+          }
+
+          const assignments = this.extractAppAssignments(assignmentsRes);
+          if (assignments.length === 0) debug.usersWithEmptyAssignments += 1;
+          if (debug.sampleAssignmentSummaries.length < 8 && assignments.length > 0) {
+            for (const assignment of assignments.slice(0, 2)) {
+              if (debug.sampleAssignmentSummaries.length >= 8) break;
+              const summary = [
+                `u:${userId}`,
+                `client:${String(assignment?.appClientId ?? assignment?.clientId ?? 'n/a')}`,
+                `app:${String(assignment?.appName ?? assignment?.clientName ?? assignment?.applicationName ?? 'n/a')}`,
+                `role:${String(assignment?.role?.name ?? assignment?.role ?? assignment?.appRole ?? assignment?.roleName ?? 'n/a')}`,
+                `status:${String(assignment?.status ?? 'n/a')}`,
+                `perms:${String(assignment?.permissions ?? '').slice(0, 40)}`
+              ].join(' | ');
+              debug.sampleAssignmentSummaries.push(summary);
+            }
+          }
+
+          const assignmentDispatchEligible = assignments.some((assignment: any) =>
             this.assignmentHasDispatchRights(assignment) &&
             (
               vanTacTmsClientIds.size
@@ -1480,6 +1572,24 @@ export class DriverListComponent implements OnInit {
                 : true
             )
           );
+
+          let roleDispatchEligible = false;
+          if (!assignmentDispatchEligible) {
+            debug.roleChecks += 1;
+            try {
+              const userRolesRes: any = await this.adminService.getUserRoles(String(userId)).toPromise();
+              const roles = Array.isArray(userRolesRes?.roles) ? userRolesRes.roles : [];
+              const perms = Array.isArray(userRolesRes?.permissions) ? userRolesRes.permissions : [];
+              roleDispatchEligible = roles.some((r: any) =>
+                this.containsDispatchSignal(r?.name) || this.containsDispatchSignal(r?.description)
+              ) || perms.some((p: any) => this.containsDispatchSignal(p));
+              if (roleDispatchEligible) debug.roleDispatchMatches += 1;
+            } catch {
+              roleDispatchEligible = false;
+            }
+          }
+
+          appDispatchEligible = assignmentDispatchEligible || roleDispatchEligible;
         } catch {
           debug.assignmentErrors += 1;
           appDispatchEligible = false;
