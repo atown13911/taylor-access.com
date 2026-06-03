@@ -298,6 +298,39 @@ public class RolesController : ControllerBase
     }
 
     /// <summary>
+    /// Get users assigned to a specific role id (direct UserRoles source).
+    /// </summary>
+    [HttpGet("{roleId}/users")]
+    public async Task<ActionResult<object>> GetUsersByRoleId(int roleId)
+    {
+        var users = await _context.UserRoles
+            .AsNoTracking()
+            .Where(ur => ur.RoleId == roleId)
+            .Join(
+                _context.Users.AsNoTracking(),
+                ur => ur.UserId,
+                u => u.Id,
+                (ur, u) => new
+                {
+                    u.Id,
+                    u.Name,
+                    u.Email,
+                    u.Phone,
+                    u.WorkPhone,
+                    u.CellPhone,
+                    u.JobTitle,
+                    u.Status,
+                    ur.RoleId,
+                    ur.AssignedAt
+                }
+            )
+            .OrderBy(u => u.Name)
+            .ToListAsync();
+
+        return Ok(new { data = users });
+    }
+
+    /// <summary>
     /// Assign role to user
     /// </summary>
     [HttpPost("assign")]

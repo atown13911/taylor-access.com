@@ -176,6 +176,10 @@ export class AdminService {
     );
   }
 
+  getUsersByRoleId(roleId: string | number): Observable<{ data: any[] }> {
+    return this.http.get<{ data: any[] }>(`${this.baseUrl}/api/v1/roles/${roleId}/users`);
+  }
+
   assignRole(userId: string, roleId: string): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(`${this.baseUrl}/api/v1/roles/assign`, {
       userId,

@@ -1527,77 +1527,37 @@ export class DriverListComponent implements OnInit {
       sampleAssignmentRootKeys: []
     };
     try {
-      const usersRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
-      const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
-      debug.usersFetched = users.length;
-      const vanTacTmsClientIds = new Set<string>();
-      debug.clientsFetched = 0;
-      debug.vanTacTmsClientIds = [];
-
-      const candidates: DispatchUserRow[] = [];
       const dispatcherRoleId = '4';
+      debug.roleChecks = 1;
+      const roleUsersRes: any = await this.adminService.getUsersByRoleId(dispatcherRoleId).toPromise();
+      const users = this.asArray(roleUsersRes);
+      debug.usersFetched = users.length;
+      debug.usersEligibleByStatus = users.length;
+      debug.roleIdMatches = users.length;
+      debug.roleDispatchMatches = users.length;
 
-      for (const user of users) {
-        const userId = Number(user?.id);
-        if (!Number.isFinite(userId) || userId <= 0) continue;
-        if (!this.isUserRecordEligibleForDispatch(user)) continue;
-        debug.usersEligibleByStatus += 1;
+      const candidates: DispatchUserRow[] = users
+        .map((user: any) => {
+          const userId = Number(user?.id);
+          if (!Number.isFinite(userId) || userId <= 0) return null;
 
-        let appDispatchEligible = false;
-        try {
-          debug.roleChecks += 1;
-          const userRolesRes: any = await this.adminService.getUserRoles(String(userId)).toPromise();
-          const roles = Array.isArray(userRolesRes?.roles) ? userRolesRes.roles : [];
-          const matchedRoleById = roles.find((role: any) => {
-            const roleId = String(role?.id ?? role?.roleId ?? '').trim();
-            return roleId === dispatcherRoleId;
-          });
-          const matchedRoleByName = roles.find((role: any) => {
-            const roleName = String(role?.name ?? role?.key ?? '').trim().toLowerCase();
-            return roleName === 'dispatcher';
-          });
+          const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
+          const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
+          const combinedName = `${firstName} ${lastName}`.trim();
 
-          appDispatchEligible = !!matchedRoleById || !!matchedRoleByName;
-          if (appDispatchEligible) {
-            if (matchedRoleById) debug.roleIdMatches += 1;
-            if (matchedRoleByName) debug.roleNameMatches += 1;
-            debug.roleDispatchMatches += 1;
-          } else {
-            if (debug.sampleRejectedUsers.length < 8) {
-              const roleSummary = roles
-                .map((r: any) => `${String(r?.id ?? r?.roleId ?? 'n/a')}:${String(r?.name ?? '').trim()}`)
-                .join('|');
-              debug.sampleRejectedUsers.push(`${String(user?.email ?? user?.name ?? `User ${userId}`).trim()} [roles ${roleSummary || 'none'}]`);
-            }
-          }
-        } catch {
-          debug.assignmentErrors += 1;
-          appDispatchEligible = false;
-        }
+          return {
+            id: userId,
+            name: String(user?.name ?? user?.fullName ?? user?.displayName ?? '').trim() || combinedName || `User ${userId}`,
+            email: String(user?.email ?? user?.workEmail ?? '').trim(),
+            phone: String(user?.phone ?? user?.mobilePhone ?? user?.phoneNumber ?? user?.workPhone ?? '').trim(),
+            title: String(user?.jobTitle ?? user?.title ?? user?.position ?? user?.department ?? '').trim() || 'Dispatcher',
+            status: String(user?.status ?? 'active').trim().toLowerCase() || 'active'
+          } as DispatchUserRow;
+        })
+        .filter((row): row is DispatchUserRow => !!row);
 
-        if (!appDispatchEligible) {
-          debug.usersRejectedNoDispatchRights += 1;
-          if (debug.sampleRejectedUsers.length < 8) {
-            const label = String(user?.email ?? user?.name ?? `User ${userId}`).trim();
-            debug.sampleRejectedUsers.push(label);
-          }
-          continue;
-        }
-        debug.usersMatchedDispatchRights += 1;
-
-        const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
-        const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
-        const combinedName = `${firstName} ${lastName}`.trim();
-
-        candidates.push({
-          id: userId,
-          name: String(user?.name ?? user?.fullName ?? user?.displayName ?? '').trim() || combinedName || `User ${userId}`,
-          email: String(user?.email ?? user?.workEmail ?? '').trim(),
-          phone: String(user?.phone ?? user?.mobilePhone ?? user?.phoneNumber ?? user?.workPhone ?? '').trim(),
-          title: String(user?.jobTitle ?? user?.title ?? user?.position ?? user?.department ?? '').trim() || 'Dispatcher',
-          status: String(user?.status ?? 'active').trim().toLowerCase() || 'active'
-        });
-      }
+      debug.usersMatchedDispatchRights = candidates.length;
+      debug.usersRejectedNoDispatchRights = Math.max(debug.usersFetched - candidates.length, 0);
 
       this.availableDispatchUsers.set(
         candidates.sort((a, b) => a.name.localeCompare(b.name))
