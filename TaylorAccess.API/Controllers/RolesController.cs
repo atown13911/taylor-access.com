@@ -343,43 +343,84 @@ public class RolesController : ControllerBase
         var conn = ResolvePortalDbConnectionString();
         if (string.IsNullOrWhiteSpace(conn)) return new List<object>();
 
-        await using var db = new NpgsqlConnection(conn);
-        await db.OpenAsync();
-        await using var cmd = db.CreateCommand();
-        cmd.CommandText = @"
-            select
-                u.""Id"",
-                u.""Name"",
-                u.""Email"",
-                coalesce(u.""Phone"", u.""WorkPhone"", u.""CellPhone"") as ""Phone"",
-                u.""JobTitle"",
-                u.""Status"",
-                ur.""RoleId"",
-                ur.""AssignedAt""
-            from ""UserRoles"" ur
-            join ""Users"" u on u.""Id"" = ur.""UserId""
-            where ur.""RoleId"" = @roleId
-            order by u.""Name"";";
-        cmd.Parameters.AddWithValue("@roleId", roleId);
-
-        var results = new List<object>();
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        try
         {
-            results.Add(new
-            {
-                Id = reader.GetInt32(reader.GetOrdinal("Id")),
-                Name = reader["Name"]?.ToString() ?? "",
-                Email = reader["Email"]?.ToString() ?? "",
-                Phone = reader["Phone"]?.ToString() ?? "",
-                JobTitle = reader["JobTitle"]?.ToString() ?? "",
-                Status = reader["Status"]?.ToString() ?? "active",
-                RoleId = reader.GetInt32(reader.GetOrdinal("RoleId")),
-                AssignedAt = reader.GetDateTime(reader.GetOrdinal("AssignedAt"))
-            });
-        }
+            await using var db = new NpgsqlConnection(conn);
+            await db.OpenAsync();
 
-        return results;
+            var userColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var colsCmd = db.CreateCommand())
+            {
+                colsCmd.CommandText = @"
+                    select column_name
+                    from information_schema.columns
+                    where table_schema = 'public'
+                      and table_name = 'Users';";
+
+                await using var colsReader = await colsCmd.ExecuteReaderAsync();
+                while (await colsReader.ReadAsync())
+                {
+                    var col = colsReader["column_name"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(col))
+                        userColumns.Add(col);
+                }
+            }
+
+            string FirstExisting(params string[] candidates)
+                => candidates.FirstOrDefault(c => userColumns.Contains(c)) ?? string.Empty;
+
+            var phoneColumns = new[] { "Phone", "WorkPhone", "CellPhone", "Cellphone", "phone", "work_phone", "cell_phone", "phone_number" }
+                .Where(userColumns.Contains)
+                .Select(c => $@"u.""{c}""")
+                .ToList();
+            var phoneExpr = phoneColumns.Count > 0
+                ? $"coalesce({string.Join(", ", phoneColumns)})"
+                : "null";
+
+            var titleColumn = FirstExisting("JobTitle", "Title", "Position", "job_title");
+            var statusColumn = FirstExisting("Status", "status");
+
+            await using var cmd = db.CreateCommand();
+            cmd.CommandText = $@"
+                select
+                    u.""Id"",
+                    u.""Name"",
+                    u.""Email"",
+                    {phoneExpr} as ""Phone"",
+                    {(string.IsNullOrWhiteSpace(titleColumn) ? "null" : $@"u.""{titleColumn}""")} as ""JobTitle"",
+                    {(string.IsNullOrWhiteSpace(statusColumn) ? "'active'" : $@"u.""{statusColumn}""")} as ""Status"",
+                    ur.""RoleId"",
+                    ur.""AssignedAt""
+                from ""UserRoles"" ur
+                join ""Users"" u on u.""Id"" = ur.""UserId""
+                where ur.""RoleId"" = @roleId
+                order by u.""Name"";";
+            cmd.Parameters.AddWithValue("@roleId", roleId);
+
+            var results = new List<object>();
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new
+                {
+                    Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                    Name = reader["Name"]?.ToString() ?? "",
+                    Email = reader["Email"]?.ToString() ?? "",
+                    Phone = reader["Phone"]?.ToString() ?? "",
+                    JobTitle = reader["JobTitle"]?.ToString() ?? "",
+                    Status = reader["Status"]?.ToString() ?? "active",
+                    RoleId = reader.GetInt32(reader.GetOrdinal("RoleId")),
+                    AssignedAt = reader["AssignedAt"] is DBNull ? (DateTime?)null : reader.GetDateTime(reader.GetOrdinal("AssignedAt"))
+                });
+            }
+
+            return results;
+        }
+        catch
+        {
+            // Graceful fallback to default DB query when portal schema doesn't match expectations.
+            return new List<object>();
+        }
     }
 
     private string? ResolvePortalDbConnectionString()
