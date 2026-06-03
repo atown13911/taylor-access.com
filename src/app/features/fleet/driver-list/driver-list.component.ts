@@ -183,9 +183,10 @@ export class DriverListComponent implements OnInit {
 
   dispatcherRows = computed(() => {
     const rows = this.availableDispatchUsers();
+    const activeLandmarkAssigned = this.landmarkOtrDrivers();
     return rows.map((u) => ({
       ...u,
-      assignedDrivers: this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === u.id).length
+      assignedDrivers: activeLandmarkAssigned.filter((d) => this.toNullableNumber(d.dispatchUserId) === u.id).length
     }));
   });
 
