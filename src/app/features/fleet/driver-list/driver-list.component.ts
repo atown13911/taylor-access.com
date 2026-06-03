@@ -36,25 +36,6 @@ interface DispatchUserRow {
   status: string;
 }
 
-interface DispatchLoadDebug {
-  usersFetched: number;
-  usersEligibleByStatus: number;
-  clientsFetched: number;
-  vanTacTmsClientIds: string[];
-  assignmentCalls: number;
-  assignmentErrors: number;
-  usersMatchedDispatchRights: number;
-  usersRejectedNoDispatchRights: number;
-  sampleRejectedUsers: string[];
-  roleChecks: number;
-  roleIdMatches: number;
-  roleNameMatches: number;
-  roleDispatchMatches: number;
-  sampleAssignmentSummaries: string[];
-  usersWithEmptyAssignments: number;
-  sampleAssignmentRootKeys: string[];
-}
-
 @Component({
   selector: 'app-driver-list',
   standalone: true,
@@ -92,24 +73,6 @@ export class DriverListComponent implements OnInit {
   availableFleets = signal<any[]>([]);
   availableOrganizations = signal<any[]>([]);
   availableDispatchUsers = signal<DispatchUserRow[]>([]);
-  dispatchLoadDebug = signal<DispatchLoadDebug>({
-    usersFetched: 0,
-    usersEligibleByStatus: 0,
-    clientsFetched: 0,
-    vanTacTmsClientIds: [],
-    assignmentCalls: 0,
-    assignmentErrors: 0,
-    usersMatchedDispatchRights: 0,
-    usersRejectedNoDispatchRights: 0,
-    sampleRejectedUsers: [],
-    roleChecks: 0,
-    roleIdMatches: 0,
-    roleNameMatches: 0,
-    roleDispatchMatches: 0,
-    sampleAssignmentSummaries: [],
-    usersWithEmptyAssignments: 0,
-    sampleAssignmentRootKeys: []
-  });
   private dispatchUsersLoaded = false;
   private originalDriverNotes = signal('');
 
@@ -1508,33 +1471,10 @@ export class DriverListComponent implements OnInit {
   private async loadDispatchUsers(): Promise<void> {
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
-    const debug: DispatchLoadDebug = {
-      usersFetched: 0,
-      usersEligibleByStatus: 0,
-      clientsFetched: 0,
-      vanTacTmsClientIds: [],
-      assignmentCalls: 0,
-      assignmentErrors: 0,
-      usersMatchedDispatchRights: 0,
-      usersRejectedNoDispatchRights: 0,
-      sampleRejectedUsers: [],
-      roleChecks: 0,
-      roleIdMatches: 0,
-      roleNameMatches: 0,
-      roleDispatchMatches: 0,
-      sampleAssignmentSummaries: [],
-      usersWithEmptyAssignments: 0,
-      sampleAssignmentRootKeys: []
-    };
     try {
       const dispatcherRoleId = '4';
-      debug.roleChecks = 1;
       const roleUsersRes: any = await this.adminService.getUsersByRoleId(dispatcherRoleId).toPromise();
       const users = this.asArray(roleUsersRes);
-      debug.usersFetched = users.length;
-      debug.usersEligibleByStatus = users.length;
-      debug.roleIdMatches = users.length;
-      debug.roleDispatchMatches = users.length;
 
       const candidates: DispatchUserRow[] = users
         .map((user: any) => {
@@ -1556,20 +1496,15 @@ export class DriverListComponent implements OnInit {
         })
         .filter((row): row is DispatchUserRow => !!row);
 
-      debug.usersMatchedDispatchRights = candidates.length;
-      debug.usersRejectedNoDispatchRights = Math.max(debug.usersFetched - candidates.length, 0);
-
       this.availableDispatchUsers.set(
         candidates.sort((a, b) => a.name.localeCompare(b.name))
       );
-      this.dispatchLoadDebug.set(debug);
       if (this.dispatchersView() && !this.selectedDispatcherId() && candidates.length > 0) {
         this.selectedDispatcherId.set(candidates[0].id);
       }
       this.dispatchUsersLoaded = true;
     } catch {
       this.availableDispatchUsers.set([]);
-      this.dispatchLoadDebug.set(debug);
     } finally {
       this.loadingDispatchUsers.set(false);
     }

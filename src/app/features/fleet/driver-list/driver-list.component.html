@@ -138,40 +138,6 @@
           </tbody>
         </table>
       </div>
-      <div class="dispatch-debug">
-        <span>Users: {{ dispatchLoadDebug().usersFetched }}</span>
-        <span>Status-eligible: {{ dispatchLoadDebug().usersEligibleByStatus }}</span>
-        <span>OAuth clients: {{ dispatchLoadDebug().clientsFetched }}</span>
-        <span>Van-Tac TMS client ids: {{ dispatchLoadDebug().vanTacTmsClientIds.length }}</span>
-        <span>Assignment calls: {{ dispatchLoadDebug().assignmentCalls }}</span>
-        <span>Assignment errors: {{ dispatchLoadDebug().assignmentErrors }}</span>
-        <span>Users w/ empty assignments: {{ dispatchLoadDebug().usersWithEmptyAssignments }}</span>
-        <span>Role checks: {{ dispatchLoadDebug().roleChecks }}</span>
-        <span>RoleId=4 matches: {{ dispatchLoadDebug().roleIdMatches }}</span>
-        <span>Role name matches: {{ dispatchLoadDebug().roleNameMatches }}</span>
-        <span>Role dispatch matches: {{ dispatchLoadDebug().roleDispatchMatches }}</span>
-        <span>Matched dispatchers: {{ dispatchLoadDebug().usersMatchedDispatchRights }}</span>
-        <span>Rejected (no rights): {{ dispatchLoadDebug().usersRejectedNoDispatchRights }}</span>
-      </div>
-      @if (dispatchLoadDebug().sampleRejectedUsers.length > 0) {
-        <div class="dispatch-debug dispatch-debug-samples">
-          <span>Rejected samples:</span>
-          <span>{{ dispatchLoadDebug().sampleRejectedUsers.join(', ') }}</span>
-        </div>
-      }
-      @if (dispatchLoadDebug().sampleAssignmentSummaries.length > 0) {
-        <div class="dispatch-debug dispatch-debug-samples">
-          <span>Assignment samples:</span>
-          <span>{{ dispatchLoadDebug().sampleAssignmentSummaries.join(' || ') }}</span>
-        </div>
-      }
-      @if (dispatchLoadDebug().sampleAssignmentRootKeys.length > 0) {
-        <div class="dispatch-debug dispatch-debug-samples">
-          <span>Assignment payload keys:</span>
-          <span>{{ dispatchLoadDebug().sampleAssignmentRootKeys.join(' || ') }}</span>
-        </div>
-      }
-
       <div class="data-table-container">
         <div class="dispatchers-subheader">
           <h3>Assigned Drivers</h3>
