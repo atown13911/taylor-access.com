@@ -166,27 +166,67 @@ public class GatewayMongoDbService : IMongoDbService
         bool includeUnscopedOrganization = false)
     {
         var filter = new BsonDocument();
-        if (!string.IsNullOrEmpty(entityType)) filter["EntityType"] = entityType;
-        if (entityId.HasValue) filter["EntityId"] = entityId.Value;
-        if (userId.HasValue) filter["UserId"] = userId.Value;
+        var andFilters = new BsonArray();
+
+        void AddFieldMatch(string pascalName, string camelName, BsonValue value)
+        {
+            andFilters.Add(new BsonDocument("$or", new BsonArray
+            {
+                new BsonDocument(pascalName, value),
+                new BsonDocument(camelName, value)
+            }));
+        }
+
+        void AddDateMatch(string pascalName, string camelName, BsonDocument condition)
+        {
+            andFilters.Add(new BsonDocument("$or", new BsonArray
+            {
+                new BsonDocument(pascalName, condition),
+                new BsonDocument(camelName, condition)
+            }));
+        }
+
+        if (!string.IsNullOrEmpty(entityType)) AddFieldMatch("EntityType", "entityType", entityType);
+        if (entityId.HasValue) AddFieldMatch("EntityId", "entityId", entityId.Value);
+        if (userId.HasValue) AddFieldMatch("UserId", "userId", userId.Value);
         if (organizationId.HasValue)
         {
             if (includeUnscopedOrganization)
             {
-                filter["$or"] = new BsonArray
+                andFilters.Add(new BsonDocument("$or", new BsonArray
                 {
                     new BsonDocument("OrganizationId", organizationId.Value),
+                    new BsonDocument("organizationId", organizationId.Value),
                     new BsonDocument("OrganizationId", BsonNull.Value),
-                    new BsonDocument("OrganizationId", new BsonDocument("$exists", false))
-                };
+                    new BsonDocument("organizationId", BsonNull.Value),
+                    new BsonDocument("OrganizationId", new BsonDocument("$exists", false)),
+                    new BsonDocument("organizationId", new BsonDocument("$exists", false))
+                }));
             }
             else
             {
-                filter["OrganizationId"] = organizationId.Value;
+                AddFieldMatch("OrganizationId", "organizationId", organizationId.Value);
             }
         }
-        if (from.HasValue) filter["Timestamp"] = new BsonDocument("$gte", from.Value);
-        if (to.HasValue) filter.Set("Timestamp", new BsonDocument { { "$gte", from ?? DateTime.MinValue }, { "$lte", to.Value } });
+        if (from.HasValue && to.HasValue)
+        {
+            var condition = new BsonDocument { { "$gte", from.Value }, { "$lte", to.Value } };
+            AddDateMatch("Timestamp", "timestamp", condition);
+        }
+        else if (from.HasValue)
+        {
+            AddDateMatch("Timestamp", "timestamp", new BsonDocument("$gte", from.Value));
+        }
+        else if (to.HasValue)
+        {
+            AddDateMatch("Timestamp", "timestamp", new BsonDocument("$lte", to.Value));
+        }
+
+        if (andFilters.Count > 0)
+        {
+            if (filter.ElementCount > 0) andFilters.Add(filter);
+            filter = new BsonDocument("$and", andFilters);
+        }
 
         return await QueryAsync<MongoAuditLog>("audit_logs", filter, new BsonDocument("Timestamp", -1), limit);
     }
