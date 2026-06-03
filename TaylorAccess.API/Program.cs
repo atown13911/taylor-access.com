@@ -335,6 +335,15 @@ using (var scope = app.Services.CreateScope())
             ON ""AuditLogs"" (""UserId"", ""Timestamp"");
         CREATE INDEX IF NOT EXISTS ""IX_AuditLogs_Action_Timestamp""
             ON ""AuditLogs"" (""Action"", ""Timestamp"");
+
+        CREATE SEQUENCE IF NOT EXISTS ""AuditLogs_Id_seq"";
+        SELECT setval(
+            '""AuditLogs_Id_seq""',
+            COALESCE((SELECT MAX(""Id"") FROM ""AuditLogs""), 0) + 1,
+            false
+        );
+        ALTER TABLE ""AuditLogs""
+            ALTER COLUMN ""Id"" SET DEFAULT nextval('""AuditLogs_Id_seq""');
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"

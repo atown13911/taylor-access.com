@@ -239,9 +239,9 @@ public class AuditService : IAuditService
 
             await _context.Database.ExecuteSqlInterpolatedAsync($@"
                 INSERT INTO ""AuditLogs""
-                (""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""IpAddress"", ""UserAgent"", ""Action"", ""EntityType"", ""EntityId"", ""EntityName"", ""OldValues"", ""NewValues"", ""Changes"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""HttpStatusCode"", ""Timestamp"", ""Severity"")
+                (""Id"", ""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""IpAddress"", ""UserAgent"", ""Action"", ""EntityType"", ""EntityId"", ""EntityName"", ""OldValues"", ""NewValues"", ""Changes"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""HttpStatusCode"", ""Timestamp"", ""Severity"")
                 VALUES
-                ({log.OrganizationId}, {log.UserId}, {log.UserName}, {log.UserEmail}, {log.IpAddress}, {log.UserAgent}, {log.Action}, {log.EntityType}, {log.EntityId}, {log.EntityName}, {log.OldValues}, {log.NewValues}, {log.Changes}, {log.Description}, {log.Module}, {log.Endpoint}, {log.HttpMethod}, {log.HttpStatusCode}, {log.Timestamp}, {log.Severity});
+                ((SELECT COALESCE(MAX(""Id""), 0) + 1 FROM ""AuditLogs""), {log.OrganizationId}, {log.UserId}, {log.UserName}, {log.UserEmail}, {log.IpAddress}, {log.UserAgent}, {log.Action}, {log.EntityType}, {log.EntityId}, {log.EntityName}, {log.OldValues}, {log.NewValues}, {log.Changes}, {log.Description}, {log.Module}, {log.Endpoint}, {log.HttpMethod}, {log.HttpStatusCode}, {log.Timestamp}, {log.Severity});
             ");
         }
         catch (Exception fallbackEx)

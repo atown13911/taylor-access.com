@@ -142,9 +142,9 @@ public class AuditController : ControllerBase
             {
                 await _context.Database.ExecuteSqlInterpolatedAsync($@"
                     INSERT INTO ""AuditLogs""
-                    (""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""Action"", ""EntityType"", ""EntityName"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""Timestamp"", ""Severity"")
+                    (""Id"", ""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""Action"", ""EntityType"", ""EntityName"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""Timestamp"", ""Severity"")
                     VALUES
-                    ({(int?)null}, {(int?)null}, {"System"}, {"system@taylor-access.local"}, {"audit_bootstrap_direct"}, {"System"}, {"AuditLogs"}, {"Direct bootstrap insert from GET /api/v1/audit"}, {"admin"}, {"/api/v1/audit"}, {"GET"}, {DateTime.UtcNow}, {"info"});
+                    ((SELECT COALESCE(MAX(""Id""), 0) + 1 FROM ""AuditLogs""), {(int?)null}, {(int?)null}, {"System"}, {"system@taylor-access.local"}, {"audit_bootstrap_direct"}, {"System"}, {"AuditLogs"}, {"Direct bootstrap insert from GET /api/v1/audit"}, {"admin"}, {"/api/v1/audit"}, {"GET"}, {DateTime.UtcNow}, {"info"});
                 ");
             }
             catch (Exception ex)
