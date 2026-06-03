@@ -223,8 +223,9 @@ export class DriverListComponent implements OnInit {
     const dispatchers = this.dispatcherRows();
     const totalDispatchers = dispatchers.length;
     const dispatchersWithAssignedDrivers = dispatchers.filter((d) => d.assignedDrivers > 0).length;
-    const driversWithDispatcher = this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) !== null).length;
-    const unassignedDrivers = Math.max(this.drivers().length - driversWithDispatcher, 0);
+    const eligibleLandmarkOtrDrivers = this.landmarkOtrDrivers().filter((d) => this.isActiveStatus(d.status));
+    const driversWithDispatcher = eligibleLandmarkOtrDrivers.filter((d) => this.toNullableNumber(d.dispatchUserId) !== null).length;
+    const unassignedDrivers = Math.max(eligibleLandmarkOtrDrivers.length - driversWithDispatcher, 0);
     return {
       totalDispatchers,
       dispatchersWithAssignedDrivers,
@@ -1591,8 +1592,7 @@ export class DriverListComponent implements OnInit {
       this.toast.info('Select a dispatcher first', 'Dispatcher Required');
       return;
     }
-    this.assignDriverId.set(String(driver.id));
-    this.showAssignDriverModal.set(true);
+    this.assignDriverToSelectedDispatcher(driver);
   }
 
   closeAssignDriverModal(): void {
@@ -1602,9 +1602,8 @@ export class DriverListComponent implements OnInit {
   }
 
   saveAssignedDriver(): void {
-    const dispatcherId = this.selectedDispatcherId();
     const driverId = this.assignDriverId();
-    if (!dispatcherId || !driverId) {
+    if (!driverId) {
       this.toast.error('Select a driver to assign', 'Missing Driver');
       return;
     }
@@ -1612,6 +1611,16 @@ export class DriverListComponent implements OnInit {
     const selectedDriver = this.drivers().find((d) => String(d.id) === String(driverId));
     if (!selectedDriver) {
       this.toast.error('Selected driver was not found', 'Assign Failed');
+      return;
+    }
+
+    this.assignDriverToSelectedDispatcher(selectedDriver);
+  }
+
+  private assignDriverToSelectedDispatcher(selectedDriver: DriverRow): void {
+    const dispatcherId = this.selectedDispatcherId();
+    if (!dispatcherId) {
+      this.toast.info('Select a dispatcher first', 'Dispatcher Required');
       return;
     }
 
@@ -1624,7 +1633,11 @@ export class DriverListComponent implements OnInit {
     this.api.updateDriver(selectedDriver.id, payload).subscribe({
       next: () => {
         this.toast.success(`${selectedDriver.name} assigned to ${this.selectedDispatcherName()}`, 'Driver Assigned');
-        this.closeAssignDriverModal();
+        if (this.showAssignDriverModal()) {
+          this.closeAssignDriverModal();
+        } else {
+          this.assignDriverSaving.set(false);
+        }
         this.loadDrivers();
       },
       error: (err: any) => {
