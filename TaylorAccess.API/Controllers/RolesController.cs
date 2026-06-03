@@ -307,9 +307,19 @@ public class RolesController : ControllerBase
     public async Task<ActionResult<object>> GetUsersByRoleId(int roleId)
     {
         // Prefer explicit portal_db role source when configured
-        var portalUsers = await TryGetUsersByRoleIdFromPortalDb(roleId);
-        if (portalUsers.Count > 0)
-            return Ok(new { data = portalUsers, source = "portal_db" });
+        var portalLookup = await TryGetUsersByRoleIdFromPortalDb(roleId);
+        if (portalLookup.Users.Count > 0)
+            return Ok(new
+            {
+                data = portalLookup.Users,
+                source = "portal_db",
+                portalLookup = new
+                {
+                    portalLookup.Configured,
+                    portalLookup.Outcome,
+                    portalLookup.Error
+                }
+            });
 
         var users = await _context.UserRoles
             .AsNoTracking()
@@ -335,13 +345,31 @@ public class RolesController : ControllerBase
             .OrderBy(u => u.Name)
             .ToListAsync();
 
-        return Ok(new { data = users, source = "default_db" });
+        return Ok(new
+        {
+            data = users,
+            source = "default_db",
+            portalLookup = new
+            {
+                portalLookup.Configured,
+                portalLookup.Outcome,
+                portalLookup.Error
+            }
+        });
     }
 
-    private async Task<List<object>> TryGetUsersByRoleIdFromPortalDb(int roleId)
+    private async Task<PortalRoleLookupResult> TryGetUsersByRoleIdFromPortalDb(int roleId)
     {
         var conn = ResolvePortalDbConnectionString();
-        if (string.IsNullOrWhiteSpace(conn)) return new List<object>();
+        if (string.IsNullOrWhiteSpace(conn))
+        {
+            return new PortalRoleLookupResult(
+                new List<object>(),
+                Configured: false,
+                Outcome: "not_configured",
+                Error: null
+            );
+        }
 
         try
         {
@@ -414,14 +442,31 @@ public class RolesController : ControllerBase
                 });
             }
 
-            return results;
+            return new PortalRoleLookupResult(
+                results,
+                Configured: true,
+                Outcome: results.Count > 0 ? "success" : "zero_rows",
+                Error: null
+            );
         }
-        catch
+        catch (Exception ex)
         {
             // Graceful fallback to default DB query when portal schema doesn't match expectations.
-            return new List<object>();
+            return new PortalRoleLookupResult(
+                new List<object>(),
+                Configured: true,
+                Outcome: "query_error",
+                Error: ex.Message
+            );
         }
     }
+
+    private sealed record PortalRoleLookupResult(
+        List<object> Users,
+        bool Configured,
+        string Outcome,
+        string? Error
+    );
 
     private string? ResolvePortalDbConnectionString()
     {

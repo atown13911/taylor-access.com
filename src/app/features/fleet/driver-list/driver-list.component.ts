@@ -1544,7 +1544,8 @@ export class DriverListComponent implements OnInit {
         source: String(roleUsersRes?.source ?? ''),
         hasDataArray: Array.isArray(roleUsersRes?.data),
         rootKeys: Object.keys(roleUsersRes ?? {}),
-        usersLength: users.length
+        usersLength: users.length,
+        portalLookup: roleUsersRes?.portalLookup ?? null
       });
       debug.usersFetched = users.length;
       debug.usersEligibleByStatus = users.length;
