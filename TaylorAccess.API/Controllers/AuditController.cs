@@ -58,6 +58,23 @@ public class AuditController : ControllerBase
             limit: limit * page,
             includeUnscopedOrganization: orgFilter.HasValue
         );
+        if (mongoLogs.Count == 0 && orgFilter.HasValue)
+        {
+            var unscopedMongo = await _mongo.GetAuditLogsAsync(
+                entityType: entityType,
+                entityId: entityId,
+                userId: userId,
+                organizationId: null,
+                from: fromUtc,
+                to: toUtc,
+                limit: limit * page * 2,
+                includeUnscopedOrganization: false
+            );
+
+            mongoLogs = unscopedMongo
+                .Where(l => !l.OrganizationId.HasValue || l.OrganizationId == orgFilter.Value)
+                .ToList();
+        }
         var logs = mongoLogs.Select(MapMongoAuditLog).ToList();
 
         if (!string.IsNullOrEmpty(action))
@@ -148,6 +165,20 @@ public class AuditController : ControllerBase
             limit: 10000,
             includeUnscopedOrganization: orgFilter.HasValue
         );
+        if (mongoLogs.Count == 0 && orgFilter.HasValue)
+        {
+            var unscopedMongo = await _mongo.GetAuditLogsAsync(
+                organizationId: null,
+                from: fromDate,
+                to: toDate,
+                limit: 10000,
+                includeUnscopedOrganization: false
+            );
+
+            mongoLogs = unscopedMongo
+                .Where(l => !l.OrganizationId.HasValue || l.OrganizationId == orgFilter.Value)
+                .ToList();
+        }
         var logs = mongoLogs.Select(MapMongoAuditLog).ToList();
 
         var sqlFallbackUsed = false;
