@@ -140,7 +140,7 @@
       </div>
       <div class="data-table-container">
         <div class="dispatchers-subheader">
-          <h3>Landmark OTR Drivers</h3>
+          <h3>{{ dispatchersDriverTab() === 'otr' ? 'Landmark OTR Drivers' : 'Landmark Drayage Drivers' }}</h3>
           <div class="dispatchers-subheader-actions">
             <p>{{ selectedDispatcherName() }}</p>
             <button
@@ -152,11 +152,25 @@
             </button>
           </div>
         </div>
+        <div class="dispatchers-driver-tabs">
+          <button
+            class="dispatchers-driver-tab"
+            [class.active]="dispatchersDriverTab() === 'otr'"
+            (click)="setDispatchersDriverTab('otr')">
+            OTR
+          </button>
+          <button
+            class="dispatchers-driver-tab"
+            [class.active]="dispatchersDriverTab() === 'drayage'"
+            (click)="setDispatchersDriverTab('drayage')">
+            Drayage
+          </button>
+        </div>
         @if (dispatcherAssignedDrivers().length === 0) {
           <div class="empty-state compact">
             <i class='bx bx-car'></i>
-            <h3>No Landmark OTR drivers</h3>
-            <p>No Landmark OTR drivers are available right now.</p>
+            <h3>No {{ dispatchersDriverTab() === 'otr' ? 'Landmark OTR' : 'Landmark Drayage' }} drivers</h3>
+            <p>No {{ dispatchersDriverTab() === 'otr' ? 'Landmark OTR' : 'Landmark Drayage' }} drivers are available right now.</p>
           </div>
         } @else {
           <table class="data-table">

@@ -63,6 +63,7 @@ export class DriverListComponent implements OnInit {
   fleetName = signal<string>('');
   activeTab = signal<'active' | 'inactive' | 'archived'>('active');
   dispatchersView = signal(false);
+  dispatchersDriverTab = signal<'otr' | 'drayage'>('otr');
   selectedDispatcherId = signal<number | null>(null);
   showAssignDriverModal = signal(false);
   assignDriverSaving = signal(false);
@@ -191,12 +192,21 @@ export class DriverListComponent implements OnInit {
   });
 
   dispatcherAssignedDrivers = computed(() => {
-    return this.landmarkOtrDrivers();
+    return this.dispatchersDriverTab() === 'drayage'
+      ? this.landmarkDrayageDrivers()
+      : this.landmarkOtrDrivers();
   });
 
   landmarkOtrDrivers = computed(() =>
     this.drivers()
       .filter((d) => this.isLandmarkOtrFleet(d.fleetName))
+      .filter((d) => this.isActiveStatus(d.status))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
+
+  landmarkDrayageDrivers = computed(() =>
+    this.drivers()
+      .filter((d) => this.isLandmarkDrayageFleet(d.fleetName))
       .filter((d) => this.isActiveStatus(d.status))
       .sort((a, b) => a.name.localeCompare(b.name))
   );
@@ -447,6 +457,18 @@ export class DriverListComponent implements OnInit {
       .toLowerCase()
       .replace(/\s+/g, ' ');
     return normalized.includes('landmark otr');
+  }
+
+  private isLandmarkDrayageFleet(fleetName: string): boolean {
+    const normalized = String(fleetName ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+    return normalized.includes('landmark drayage');
+  }
+
+  setDispatchersDriverTab(tab: 'otr' | 'drayage'): void {
+    this.dispatchersDriverTab.set(tab);
   }
 
   private reconcileDriverFleetNames(): void {
@@ -1579,7 +1601,7 @@ export class DriverListComponent implements OnInit {
   assignableDriversForSelectedDispatcher(): DriverRow[] {
     const selectedId = this.selectedDispatcherId();
     if (!selectedId) return [];
-    return this.landmarkOtrDrivers();
+    return this.dispatcherAssignedDrivers();
   }
 
   openAssignDriverModal(): void {

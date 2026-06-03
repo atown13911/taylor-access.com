@@ -288,6 +288,35 @@
   }
 }
 
+.dispatchers-driver-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0.55rem 1rem 0.25rem;
+}
+
+.dispatchers-driver-tab {
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: var(--text-primary);
+    border-color: rgba(0, 229, 255, 0.35);
+  }
+
+  &.active {
+    color: var(--cyan, #00e5ff);
+    border-color: rgba(0, 229, 255, 0.5);
+    background: rgba(0, 229, 255, 0.09);
+  }
+}
+
 .btn-assign-driver {
   padding: 0.4rem 0.7rem;
   font-size: 0.75rem;
