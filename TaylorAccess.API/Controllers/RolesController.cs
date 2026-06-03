@@ -303,7 +303,7 @@ public class RolesController : ControllerBase
     [HttpGet("{roleId}/users")]
     public async Task<ActionResult<object>> GetUsersByRoleId(int roleId)
     {
-        var users = await _context.UserRoles
+        var usersFromUserRoles = await _context.UserRoles
             .AsNoTracking()
             .Where(ur => ur.RoleId == roleId)
             .Join(
@@ -324,8 +324,43 @@ public class RolesController : ControllerBase
                     ur.AssignedAt
                 }
             )
-            .OrderBy(u => u.Name)
             .ToListAsync();
+
+        var usersFromAppAssignments = await _context.AppRoleAssignments
+            .AsNoTracking()
+            .Where(a => a.Status == "active" && a.Role != null && a.Role.ToLower() == "dispatcher")
+            .Where(a =>
+                a.AppClientId.ToLower().Contains("vantac") ||
+                a.AppClientId.ToLower().Contains("tms") ||
+                a.AppClientId.ToLower().Contains("portal"))
+            .Join(
+                _context.Users.AsNoTracking(),
+                a => a.UserId,
+                u => u.Id,
+                (a, u) => new
+                {
+                    u.Id,
+                    u.Name,
+                    u.Email,
+                    u.Phone,
+                    u.WorkPhone,
+                    u.CellPhone,
+                    u.JobTitle,
+                    u.Status,
+                    RoleId = roleId,
+                    AssignedAt = a.UpdatedAt
+                }
+            )
+            .ToListAsync();
+
+        var users = usersFromUserRoles
+            .Concat(usersFromAppAssignments)
+            .GroupBy(u => u.Id)
+            .Select(g => g
+                .OrderByDescending(x => x.AssignedAt)
+                .First())
+            .OrderBy(u => u.Name)
+            .ToList();
 
         return Ok(new { data = users });
     }
