@@ -1449,6 +1449,7 @@ export class DriverListComponent implements OnInit {
       assignment?.roleName ??
       ''
     ).trim().toLowerCase();
+    const normalizedRole = appRole.replace(/[\s_-]+/g, '');
 
     const explicitDispatchFlag =
       assignment?.canDispatch === true ||
@@ -1456,9 +1457,7 @@ export class DriverListComponent implements OnInit {
       assignment?.dispatchAccess === true;
 
     return explicitDispatchFlag ||
-      appRole.includes('dispatch') ||
-      this.containsDispatchSignal(assignment?.permissions) ||
-      this.containsDispatchSignal(assignment?.scopes);
+      normalizedRole === 'dispatcher';
   }
 
   private assignmentMatchesDispatchApp(assignment: any): boolean {
@@ -1569,27 +1568,11 @@ export class DriverListComponent implements OnInit {
             (
               vanTacTmsClientIds.size
                 ? this.assignmentBelongsToClientIds(assignment, vanTacTmsClientIds)
-                : true
+                : this.assignmentMatchesDispatchApp(assignment)
             )
           );
 
-          let roleDispatchEligible = false;
-          if (!assignmentDispatchEligible) {
-            debug.roleChecks += 1;
-            try {
-              const userRolesRes: any = await this.adminService.getUserRoles(String(userId)).toPromise();
-              const roles = Array.isArray(userRolesRes?.roles) ? userRolesRes.roles : [];
-              const perms = Array.isArray(userRolesRes?.permissions) ? userRolesRes.permissions : [];
-              roleDispatchEligible = roles.some((r: any) =>
-                this.containsDispatchSignal(r?.name) || this.containsDispatchSignal(r?.description)
-              ) || perms.some((p: any) => this.containsDispatchSignal(p));
-              if (roleDispatchEligible) debug.roleDispatchMatches += 1;
-            } catch {
-              roleDispatchEligible = false;
-            }
-          }
-
-          appDispatchEligible = assignmentDispatchEligible || roleDispatchEligible;
+          appDispatchEligible = assignmentDispatchEligible;
         } catch {
           debug.assignmentErrors += 1;
           appDispatchEligible = false;
