@@ -140,7 +140,7 @@
       </div>
       <div class="data-table-container">
         <div class="dispatchers-subheader">
-          <h3>Assigned Drivers</h3>
+          <h3>Landmark OTR Drivers</h3>
           <div class="dispatchers-subheader-actions">
             <p>{{ selectedDispatcherName() }}</p>
             <button
@@ -152,17 +152,11 @@
             </button>
           </div>
         </div>
-        @if (!selectedDispatcherId()) {
-          <div class="empty-state compact">
-            <i class='bx bx-user-check'></i>
-            <h3>Select a dispatcher</h3>
-            <p>Choose a dispatcher above to view assigned drivers.</p>
-          </div>
-        } @else if (dispatcherAssignedDrivers().length === 0) {
+        @if (dispatcherAssignedDrivers().length === 0) {
           <div class="empty-state compact">
             <i class='bx bx-car'></i>
-            <h3>No assigned drivers</h3>
-            <p>No drivers are currently assigned to this dispatcher.</p>
+            <h3>No Landmark OTR drivers</h3>
+            <p>No Landmark OTR drivers are available right now.</p>
           </div>
         } @else {
           <table class="data-table">
@@ -177,6 +171,7 @@
                 <th>Fleet</th>
                 <th>Hire Date</th>
                 <th>Status</th>
+                <th>Dispatcher</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -203,6 +198,7 @@
                   </td>
                   <td>{{ formatDate(driver.hireDate) }}</td>
                   <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
+                  <td>{{ resolveDispatcherName(driver) }}</td>
                   <td class="actions-cell">
                     <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                     <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>

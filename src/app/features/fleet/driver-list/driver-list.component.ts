@@ -190,16 +190,15 @@ export class DriverListComponent implements OnInit {
   });
 
   dispatcherAssignedDrivers = computed(() => {
-    const selectedId = this.selectedDispatcherId();
-    if (!selectedId) return [] as DriverRow[];
-
-    const assigned = this.drivers().filter((d) => this.toNullableNumber(d.dispatchUserId) === selectedId);
-    if (assigned.length > 0) return assigned;
-
-    // Fallback for environments that haven't persisted dispatch assignments yet:
-    // show Landmark OTR fleet drivers from the primary drivers dataset.
-    return this.drivers().filter((d) => this.isLandmarkOtrFleet(d.fleetName));
+    return this.landmarkOtrDrivers();
   });
+
+  landmarkOtrDrivers = computed(() =>
+    this.drivers()
+      .filter((d) => this.isLandmarkOtrFleet(d.fleetName))
+      .filter((d) => !this.isArchivedStatus(d.status))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 
   tabCounts = computed(() => {
     const all = this.drivers();
@@ -1561,12 +1560,17 @@ export class DriverListComponent implements OnInit {
     return match?.name || `Dispatcher ${id}`;
   }
 
+  resolveDispatcherName(driver: DriverRow): string {
+    const dispatcherId = this.toNullableNumber(driver.dispatchUserId);
+    if (!dispatcherId) return '—';
+    const match = this.availableDispatchUsers().find((u) => u.id === dispatcherId);
+    return match?.name || `Dispatcher ${dispatcherId}`;
+  }
+
   assignableDriversForSelectedDispatcher(): DriverRow[] {
     const selectedId = this.selectedDispatcherId();
     if (!selectedId) return [];
-    return this.drivers()
-      .filter((driver) => !this.isArchivedStatus(driver.status))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return this.landmarkOtrDrivers();
   }
 
   openAssignDriverModal(): void {
