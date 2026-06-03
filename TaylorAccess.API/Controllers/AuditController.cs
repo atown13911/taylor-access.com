@@ -108,15 +108,21 @@ public class AuditController : ControllerBase
             );
         }
 
+        var warning = !mongoConnected
+            ? "Audit storage is currently unavailable (MongoDB not connected). Showing PostgreSQL fallback results."
+            : null;
+        if (total == 0)
+        {
+            warning = $"No audit rows returned. source={(sqlFallbackUsed ? "postgres" : "mongo")}; mongoConnected={mongoConnected}; orgFilter={(orgFilter.HasValue ? orgFilter.Value.ToString() : "none")}; userId={user.Id}; from={(fromUtc?.ToString("O") ?? "none")}; to={(toUtc?.ToString("O") ?? "none")}.";
+        }
+
         return Ok(new
         {
             data = paged,
             meta = new { total, page, limit, pages = (int)Math.Ceiling((double)total / limit) },
             mongoConnected,
             dataSource = sqlFallbackUsed ? "postgres" : "mongo",
-            warning = !mongoConnected
-                ? "Audit storage is currently unavailable (MongoDB not connected). Showing PostgreSQL fallback results."
-                : null
+            warning
         });
     }
 
@@ -192,6 +198,14 @@ public class AuditController : ControllerBase
             );
         }
 
+        var warning = !mongoConnected
+            ? "Audit storage is currently unavailable (MongoDB not connected). Summary is using PostgreSQL fallback."
+            : null;
+        if (logs.Count == 0)
+        {
+            warning = $"Audit summary has zero rows. source={(sqlFallbackUsed ? "postgres" : "mongo")}; mongoConnected={mongoConnected}; orgFilter={(orgFilter.HasValue ? orgFilter.Value.ToString() : "none")}; userId={user.Id}; from={fromDate:O}; to={toDate:O}.";
+        }
+
         return Ok(new
         {
             period = new { from = fromDate, to = toDate },
@@ -205,9 +219,7 @@ public class AuditController : ControllerBase
             recentActivity = logs.OrderByDescending(l => l.Timestamp).Take(10),
             mongoConnected,
             dataSource = sqlFallbackUsed ? "postgres" : "mongo",
-            warning = !mongoConnected
-                ? "Audit storage is currently unavailable (MongoDB not connected). Summary is using PostgreSQL fallback."
-                : null
+            warning
         });
     }
 
