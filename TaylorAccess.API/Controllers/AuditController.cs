@@ -111,6 +111,7 @@ public class AuditController : ControllerBase
         var sqlFallbackUsed = false;
         int total;
         List<AuditLog> paged;
+        string? bootstrapInsertError = null;
 
         if (logs.Count > 0)
         {
@@ -137,6 +138,20 @@ public class AuditController : ControllerBase
         if (total == 0)
         {
             await EnsureBootstrapAuditRecordAsync(user, orgFilter);
+            try
+            {
+                await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                    INSERT INTO ""AuditLogs""
+                    (""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""Action"", ""EntityType"", ""EntityName"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""Timestamp"", ""Severity"")
+                    VALUES
+                    ({(int?)null}, {(int?)null}, {"System"}, {"system@taylor-access.local"}, {"audit_bootstrap_direct"}, {"System"}, {"AuditLogs"}, {"Direct bootstrap insert from GET /api/v1/audit"}, {"admin"}, {"/api/v1/audit"}, {"GET"}, {DateTime.UtcNow}, {"info"});
+                ");
+            }
+            catch (Exception ex)
+            {
+                bootstrapInsertError = ex.Message;
+            }
+
             (total, paged) = await QuerySqlLogsAsync(
                 entityType: entityType,
                 entityId: entityId,
@@ -157,7 +172,7 @@ public class AuditController : ControllerBase
             : null;
         if (total == 0)
         {
-            warning = $"No audit rows returned. source={(sqlFallbackUsed ? "postgres" : "mongo")}; mongoConnected={mongoConnected}; orgFilter={(orgFilter.HasValue ? orgFilter.Value.ToString() : "none")}; userId={user.Id}; from={(fromUtc?.ToString("O") ?? "none")}; to={(toUtc?.ToString("O") ?? "none")}.";
+            warning = $"No audit rows returned. source={(sqlFallbackUsed ? "postgres" : "mongo")}; mongoConnected={mongoConnected}; orgFilter={(orgFilter.HasValue ? orgFilter.Value.ToString() : "none")}; userId={user.Id}; from={(fromUtc?.ToString("O") ?? "none")}; to={(toUtc?.ToString("O") ?? "none")}; directBootstrapError={(string.IsNullOrWhiteSpace(bootstrapInsertError) ? "none" : bootstrapInsertError)}.";
         }
 
         return Ok(new
