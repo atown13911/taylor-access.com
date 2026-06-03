@@ -1524,18 +1524,12 @@ export class DriverListComponent implements OnInit {
       const usersRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
       const users = Array.isArray(usersRes?.data) ? usersRes.data : (Array.isArray(usersRes) ? usersRes : []);
       debug.usersFetched = users.length;
-      let vanTacTmsClientIds = new Set<string>();
-      try {
-        const clientsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/clients`).toPromise();
-        const clients = this.asArray(clientsRes);
-        debug.clientsFetched = clients.length;
-        vanTacTmsClientIds = this.resolveVanTacTmsClientIds(clients);
-        debug.vanTacTmsClientIds = Array.from(vanTacTmsClientIds);
-      } catch {
-        vanTacTmsClientIds = new Set<string>();
-      }
+      const vanTacTmsClientIds = new Set<string>();
+      debug.clientsFetched = 0;
+      debug.vanTacTmsClientIds = [];
 
       const candidates: DispatchUserRow[] = [];
+      const dispatcherRoleId = '4';
 
       for (const user of users) {
         const userId = Number(user?.id);
@@ -1545,41 +1539,24 @@ export class DriverListComponent implements OnInit {
 
         let appDispatchEligible = false;
         try {
-          debug.assignmentCalls += 1;
-          const assignmentsRes: any = await this.http.get<any[]>(`${this.baseUrl}/oauth/users/${userId}/apps`).toPromise();
-          if (debug.sampleAssignmentRootKeys.length < 8 && assignmentsRes && typeof assignmentsRes === 'object') {
-            const keys = Object.keys(assignmentsRes).slice(0, 8);
-            debug.sampleAssignmentRootKeys.push(`u:${userId} keys:[${keys.join(', ')}]`);
-          }
-
-          const assignments = this.extractAppAssignments(assignmentsRes);
-          if (assignments.length === 0) debug.usersWithEmptyAssignments += 1;
-          if (debug.sampleAssignmentSummaries.length < 8 && assignments.length > 0) {
-            for (const assignment of assignments.slice(0, 2)) {
-              if (debug.sampleAssignmentSummaries.length >= 8) break;
-              const summary = [
-                `u:${userId}`,
-                `client:${String(assignment?.appClientId ?? assignment?.clientId ?? 'n/a')}`,
-                `app:${String(assignment?.appName ?? assignment?.clientName ?? assignment?.applicationName ?? 'n/a')}`,
-                `role:${String(assignment?.role?.name ?? assignment?.role ?? assignment?.appRole ?? assignment?.roleName ?? 'n/a')}`,
-                `roleId:${String(assignment?.roleId ?? assignment?.role?.id ?? 'n/a')}`,
-                `status:${String(assignment?.status ?? 'n/a')}`,
-                `perms:${String(assignment?.permissions ?? '').slice(0, 40)}`
-              ].join(' | ');
-              debug.sampleAssignmentSummaries.push(summary);
+          debug.roleChecks += 1;
+          const userRolesRes: any = await this.adminService.getUserRoles(String(userId)).toPromise();
+          const roles = Array.isArray(userRolesRes?.roles) ? userRolesRes.roles : [];
+          const matchedRole = roles.find((role: any) => {
+            const roleId = String(role?.id ?? role?.roleId ?? '').trim();
+            return roleId === dispatcherRoleId;
+          });
+          appDispatchEligible = !!matchedRole;
+          if (appDispatchEligible) {
+            debug.roleDispatchMatches += 1;
+          } else {
+            if (debug.sampleRejectedUsers.length < 8) {
+              const roleSummary = roles
+                .map((r: any) => `${String(r?.id ?? r?.roleId ?? 'n/a')}:${String(r?.name ?? '').trim()}`)
+                .join('|');
+              debug.sampleRejectedUsers.push(`${String(user?.email ?? user?.name ?? `User ${userId}`).trim()} [roles ${roleSummary || 'none'}]`);
             }
           }
-
-          const assignmentDispatchEligible = assignments.some((assignment: any) =>
-            this.assignmentHasDispatchRights(assignment) &&
-            (
-              vanTacTmsClientIds.size
-                ? this.assignmentBelongsToClientIds(assignment, vanTacTmsClientIds)
-                : this.assignmentMatchesDispatchApp(assignment)
-            )
-          );
-
-          appDispatchEligible = assignmentDispatchEligible;
         } catch {
           debug.assignmentErrors += 1;
           appDispatchEligible = false;
