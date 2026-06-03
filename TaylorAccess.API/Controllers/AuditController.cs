@@ -107,6 +107,24 @@ public class AuditController : ControllerBase
                 limit: limit
             );
         }
+        
+        if (total == 0)
+        {
+            await EnsureBootstrapAuditRecordAsync(user, orgFilter);
+            (total, paged) = await QuerySqlLogsAsync(
+                entityType: entityType,
+                entityId: entityId,
+                userId: userId,
+                organizationId: orgFilter,
+                action: action,
+                severity: severity,
+                from: fromUtc,
+                to: toUtc,
+                page: page,
+                limit: limit
+            );
+            sqlFallbackUsed = true;
+        }
 
         var warning = !mongoConnected
             ? "Audit storage is currently unavailable (MongoDB not connected). Showing PostgreSQL fallback results."
@@ -191,6 +209,7 @@ public class AuditController : ControllerBase
         if (logs.Count == 0)
         {
             sqlFallbackUsed = true;
+            await EnsureBootstrapAuditRecordAsync(user, orgFilter);
             logs = await QuerySqlLogsForSummaryAsync(
                 organizationId: orgFilter,
                 from: fromDate,
@@ -297,6 +316,32 @@ public class AuditController : ControllerBase
             query = query.Where(l => l.Timestamp <= to.Value);
 
         return query;
+    }
+
+    private async Task EnsureBootstrapAuditRecordAsync(User user, int? organizationId)
+    {
+        var exists = await _context.AuditLogs
+            .AsNoTracking()
+            .AnyAsync(l => l.Action == "audit_bootstrap");
+        if (exists) return;
+
+        _context.AuditLogs.Add(new AuditLog
+        {
+            OrganizationId = organizationId,
+            UserId = user.Id,
+            UserName = string.IsNullOrWhiteSpace(user.Name) ? "System" : user.Name,
+            UserEmail = string.IsNullOrWhiteSpace(user.Email) ? "system@taylor-access.local" : user.Email,
+            Action = "audit_bootstrap",
+            EntityType = "System",
+            EntityName = "AuditLogs",
+            Description = "Bootstrap audit record created because audit history was empty.",
+            Endpoint = "/api/v1/audit",
+            HttpMethod = "GET",
+            Timestamp = DateTime.UtcNow,
+            Severity = "info"
+        });
+
+        await _context.SaveChangesAsync();
     }
 
     private static AuditLog MapMongoAuditLog(MongoAuditLog log) => new()
