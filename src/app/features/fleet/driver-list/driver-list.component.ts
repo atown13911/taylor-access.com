@@ -67,6 +67,7 @@ export class DriverListComponent implements OnInit {
   showAssignDriverModal = signal(false);
   assignDriverSaving = signal(false);
   assignDriverId = signal<string | null>(null);
+  dispatcherAssignmentSavingId = signal<string | null>(null);
 
   // Modal state
   showModal = signal(false);
@@ -245,6 +246,7 @@ export class DriverListComponent implements OnInit {
     this.loadDrivers();
     this.loadFleets();
     this.loadOrganizations();
+    this.loadDispatchUsers();
   }
 
   pageTitle(): string {
@@ -568,6 +570,8 @@ export class DriverListComponent implements OnInit {
           medicalCardExpiry: d.medicalCardExpiry || '',
           payRate: d.payRate || 0,
           payType: d.payType || '',
+          notes: String(d.notes ?? driver.notes ?? '').trim(),
+          dispatchUserId: this.resolveDispatchUserId(d),
         };
         if (this._fetchTarget === 'panel') this.selectedDriver.set(full);
         else this.profileDriver.set(full);
@@ -1562,6 +1566,30 @@ export class DriverListComponent implements OnInit {
     return match?.name || `Dispatcher ${id}`;
   }
 
+  dispatcherSelectValue(driver: any): number | null {
+    return this.toNullableNumber(driver?.dispatchUserId);
+  }
+
+  isDispatcherAssignmentSaving(driverId: string | number | null | undefined): boolean {
+    return this.dispatcherAssignmentSavingId() === String(driverId ?? '');
+  }
+
+  assignDispatcherFromDriversTable(driver: DriverRow, dispatcherId: number | null): void {
+    this.persistDispatcherAssignment(driver, dispatcherId, true);
+  }
+
+  assignDispatcherFromSelectedDriver(dispatcherId: number | null): void {
+    const driver = this.selectedDriver();
+    if (!driver?.id) return;
+    this.persistDispatcherAssignment(driver, dispatcherId, false);
+  }
+
+  assignDispatcherFromProfileDriver(dispatcherId: number | null): void {
+    const driver = this.profileDriver();
+    if (!driver?.id) return;
+    this.persistDispatcherAssignment(driver, dispatcherId, false);
+  }
+
   hasDispatcherAssignment(driver: DriverRow): boolean {
     return this.toNullableNumber(driver.dispatchUserId) !== null;
   }
@@ -1667,6 +1695,62 @@ export class DriverListComponent implements OnInit {
       error: (err: any) => {
         this.toast.error(err?.error?.error || 'Failed to assign driver', 'Assign Failed');
         this.assignDriverSaving.set(false);
+      }
+    });
+  }
+
+  private persistDispatcherAssignment(driverLike: any, dispatcherId: number | null, showToast: boolean): void {
+    const driverId = String(driverLike?.id ?? '').trim();
+    if (!driverId) return;
+
+    const nextDispatcherId = this.toNullableNumber(dispatcherId);
+    const currentDispatcherId = this.toNullableNumber(driverLike?.dispatchUserId);
+    if (currentDispatcherId === nextDispatcherId) return;
+
+    const existingNotes = String(driverLike?.notes ?? '').trim();
+    const payload = {
+      dispatchUserId: nextDispatcherId,
+      notes: this.composeDriverNotesWithDispatch(existingNotes, nextDispatcherId)
+    };
+
+    this.dispatcherAssignmentSavingId.set(driverId);
+    this.api.updateDriver(driverId, payload).subscribe({
+      next: () => {
+        this.drivers.update(rows =>
+          rows.map(row =>
+            String(row.id) === driverId
+              ? { ...row, dispatchUserId: nextDispatcherId, notes: payload.notes ?? undefined }
+              : row
+          )
+        );
+
+        this.selectedDriver.update(current =>
+          current && String(current.id) === driverId
+            ? { ...current, dispatchUserId: nextDispatcherId, notes: payload.notes ?? undefined }
+            : current
+        );
+        this.profileDriver.update(current =>
+          current && String(current.id) === driverId
+            ? { ...current, dispatchUserId: nextDispatcherId, notes: payload.notes ?? undefined }
+            : current
+        );
+
+        if (showToast) {
+          const dispatcherName = nextDispatcherId
+            ? this.availableDispatchUsers().find((u) => u.id === nextDispatcherId)?.name || `Dispatcher ${nextDispatcherId}`
+            : null;
+          if (dispatcherName) {
+            this.toast.success(`${driverLike?.name || 'Driver'} assigned to ${dispatcherName}`, 'Dispatcher Assigned');
+          } else {
+            this.toast.success(`${driverLike?.name || 'Driver'} unassigned from dispatcher`, 'Dispatcher Unassigned');
+          }
+        }
+
+        this.dispatcherAssignmentSavingId.set(null);
+      },
+      error: (err: any) => {
+        this.toast.error(err?.error?.error || 'Failed to update dispatcher assignment', 'Assign Failed');
+        this.dispatcherAssignmentSavingId.set(null);
       }
     });
   }
