@@ -377,6 +377,7 @@ public class RolesController : ControllerBase
             await db.OpenAsync();
 
             var userColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var userColumnLookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             await using (var colsCmd = db.CreateCommand())
             {
                 colsCmd.CommandText = @"
@@ -390,15 +391,28 @@ public class RolesController : ControllerBase
                 {
                     var col = colsReader["column_name"]?.ToString();
                     if (!string.IsNullOrWhiteSpace(col))
+                    {
                         userColumns.Add(col);
+                        if (!userColumnLookup.ContainsKey(col))
+                            userColumnLookup[col] = col;
+                    }
                 }
             }
 
             string FirstExisting(params string[] candidates)
-                => candidates.FirstOrDefault(c => userColumns.Contains(c)) ?? string.Empty;
+            {
+                foreach (var candidate in candidates)
+                {
+                    if (userColumnLookup.TryGetValue(candidate, out var actual))
+                        return actual;
+                }
+                return string.Empty;
+            }
 
             var phoneColumns = new[] { "Phone", "WorkPhone", "CellPhone", "Cellphone", "phone", "work_phone", "cell_phone", "phone_number" }
-                .Where(userColumns.Contains)
+                .Select(candidate => FirstExisting(candidate))
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(c => $@"u.""{c}""")
                 .ToList();
             var phoneExpr = phoneColumns.Count > 0
