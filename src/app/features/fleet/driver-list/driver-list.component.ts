@@ -47,6 +47,8 @@ interface DispatchLoadDebug {
   usersRejectedNoDispatchRights: number;
   sampleRejectedUsers: string[];
   roleChecks: number;
+  roleIdMatches: number;
+  roleNameMatches: number;
   roleDispatchMatches: number;
   sampleAssignmentSummaries: string[];
   usersWithEmptyAssignments: number;
@@ -101,6 +103,8 @@ export class DriverListComponent implements OnInit {
     usersRejectedNoDispatchRights: 0,
     sampleRejectedUsers: [],
     roleChecks: 0,
+    roleIdMatches: 0,
+    roleNameMatches: 0,
     roleDispatchMatches: 0,
     sampleAssignmentSummaries: [],
     usersWithEmptyAssignments: 0,
@@ -1515,6 +1519,8 @@ export class DriverListComponent implements OnInit {
       usersRejectedNoDispatchRights: 0,
       sampleRejectedUsers: [],
       roleChecks: 0,
+      roleIdMatches: 0,
+      roleNameMatches: 0,
       roleDispatchMatches: 0,
       sampleAssignmentSummaries: [],
       usersWithEmptyAssignments: 0,
@@ -1542,12 +1548,19 @@ export class DriverListComponent implements OnInit {
           debug.roleChecks += 1;
           const userRolesRes: any = await this.adminService.getUserRoles(String(userId)).toPromise();
           const roles = Array.isArray(userRolesRes?.roles) ? userRolesRes.roles : [];
-          const matchedRole = roles.find((role: any) => {
+          const matchedRoleById = roles.find((role: any) => {
             const roleId = String(role?.id ?? role?.roleId ?? '').trim();
             return roleId === dispatcherRoleId;
           });
-          appDispatchEligible = !!matchedRole;
+          const matchedRoleByName = roles.find((role: any) => {
+            const roleName = String(role?.name ?? role?.key ?? '').trim().toLowerCase();
+            return roleName === 'dispatcher';
+          });
+
+          appDispatchEligible = !!matchedRoleById || !!matchedRoleByName;
           if (appDispatchEligible) {
+            if (matchedRoleById) debug.roleIdMatches += 1;
+            if (matchedRoleByName) debug.roleNameMatches += 1;
             debug.roleDispatchMatches += 1;
           } else {
             if (debug.sampleRejectedUsers.length < 8) {
