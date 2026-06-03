@@ -429,14 +429,9 @@
   white-space: nowrap;
 }
 
-.dispatcher-inline-select {
-  min-width: 140px;
-  padding: 0.35rem 0.45rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.03);
+.dispatcher-display {
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
 }
 
 .action-btn {
@@ -942,19 +937,6 @@
 
 .dispatcher-detail-row {
   align-items: center;
-
-  .dispatcher-info-select {
-    min-width: 160px;
-  }
-}
-
-.dispatcher-info-select {
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--bg-primary, #010409);
-  color: var(--text-primary);
-  font-size: 0.8rem;
 }
 
 .compliance-row {

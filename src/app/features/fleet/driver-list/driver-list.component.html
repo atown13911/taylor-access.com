@@ -272,18 +272,7 @@
               </td>
               <td>{{ formatDate(driver.hireDate) }}</td>
               <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
-              <td (click)="$event.stopPropagation()">
-                <select
-                  class="dispatcher-inline-select"
-                  [ngModel]="dispatcherSelectValue(driver)"
-                  (ngModelChange)="assignDispatcherFromDriversTable(driver, $event)"
-                  [disabled]="loadingDispatchUsers() || isDispatcherAssignmentSaving(driver.id)">
-                  <option [ngValue]="null">Unassigned</option>
-                  @for (dispatcher of availableDispatchUsers(); track dispatcher.id) {
-                    <option [ngValue]="dispatcher.id">{{ dispatcher.name }}</option>
-                  }
-                </select>
-              </td>
+              <td><span class="dispatcher-display">{{ resolveDispatcherName(driver) }}</span></td>
               <td class="actions-cell">
                 <button class="action-btn" title="View Profile" (click)="$event.stopPropagation(); viewDriver(driver)"><i class='bx bx-user'></i></button>
                 <button class="action-btn" title="Edit" (click)="$event.stopPropagation(); editDriver(driver)"><i class='bx bx-edit'></i></button>
@@ -688,16 +677,7 @@
         <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
         <div class="detail-row dispatcher-detail-row">
           <span class="label">Dispatcher</span>
-          <select
-            class="dispatcher-info-select"
-            [ngModel]="dispatcherSelectValue(selectedDriver())"
-            (ngModelChange)="assignDispatcherFromSelectedDriver($event)"
-            [disabled]="loadingDispatchUsers() || isDispatcherAssignmentSaving(selectedDriver()?.id)">
-            <option [ngValue]="null">Unassigned</option>
-            @for (dispatcher of availableDispatchUsers(); track dispatcher.id) {
-              <option [ngValue]="dispatcher.id">{{ dispatcher.name }}</option>
-            }
-          </select>
+          <span class="dispatcher-display">{{ resolveDispatcherName(selectedDriver()!) }}</span>
         </div>
       </div>
 
@@ -908,16 +888,7 @@
                 <div class="profile-field"><span class="profile-label">Pay</span><span class="profile-value">{{ profileDriver()!.payType || '—' }} — {{ profileDriver()!.payRate || '—' }}</span></div>
                 <div class="profile-field full">
                   <span class="profile-label">Dispatcher</span>
-                  <select
-                    class="dispatcher-info-select"
-                    [ngModel]="dispatcherSelectValue(profileDriver())"
-                    (ngModelChange)="assignDispatcherFromProfileDriver($event)"
-                    [disabled]="loadingDispatchUsers() || isDispatcherAssignmentSaving(profileDriver()?.id)">
-                    <option [ngValue]="null">Unassigned</option>
-                    @for (dispatcher of availableDispatchUsers(); track dispatcher.id) {
-                      <option [ngValue]="dispatcher.id">{{ dispatcher.name }}</option>
-                    }
-                  </select>
+                  <span class="profile-value dispatcher-display">{{ resolveDispatcherName(profileDriver()!) }}</span>
                 </div>
               </div>
             </div>
