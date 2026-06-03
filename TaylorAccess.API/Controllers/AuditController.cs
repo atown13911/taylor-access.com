@@ -47,25 +47,6 @@ public class AuditController : ControllerBase
         var user = await _currentUserService.GetUserAsync();
         if (user == null) return Unauthorized(new { message = "User not found" });
 
-        // Write a lightweight view event so audit recording can be verified
-        // immediately when this endpoint is opened.
-        await _auditService.LogAsync(new AuditLog
-        {
-            OrganizationId = user.OrganizationId,
-            UserId = user.Id > 0 ? user.Id : null,
-            UserName = user.Name,
-            UserEmail = user.Email,
-            Action = "audit_view",
-            EntityType = "AuditLog",
-            EntityName = "Audit Logs",
-            Description = "Viewed audit logs",
-            Module = "admin",
-            Endpoint = "/api/v1/audit",
-            HttpMethod = "GET",
-            Timestamp = DateTime.UtcNow,
-            Severity = "info"
-        });
-
         var role = user.Role?.ToLowerInvariant();
         int? orgFilter = (role == "product_owner" || role == "superadmin" || role == "development")
             ? null
@@ -111,8 +92,6 @@ public class AuditController : ControllerBase
         var sqlFallbackUsed = false;
         int total;
         List<AuditLog> paged;
-        string? bootstrapInsertError = null;
-
         if (logs.Count > 0)
         {
             total = logs.Count;
@@ -138,20 +117,6 @@ public class AuditController : ControllerBase
         if (total == 0)
         {
             await EnsureBootstrapAuditRecordAsync(user, orgFilter);
-            try
-            {
-                await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                    INSERT INTO ""AuditLogs""
-                    (""Id"", ""OrganizationId"", ""UserId"", ""UserName"", ""UserEmail"", ""Action"", ""EntityType"", ""EntityName"", ""Description"", ""Module"", ""Endpoint"", ""HttpMethod"", ""Timestamp"", ""Severity"")
-                    VALUES
-                    ((SELECT COALESCE(MAX(""Id""), 0) + 1 FROM ""AuditLogs""), {(int?)null}, {(int?)null}, {"System"}, {"system@taylor-access.local"}, {"audit_bootstrap_direct"}, {"System"}, {"AuditLogs"}, {"Direct bootstrap insert from GET /api/v1/audit"}, {"admin"}, {"/api/v1/audit"}, {"GET"}, {DateTime.UtcNow}, {"info"});
-                ");
-            }
-            catch (Exception ex)
-            {
-                bootstrapInsertError = ex.Message;
-            }
-
             (total, paged) = await QuerySqlLogsAsync(
                 entityType: entityType,
                 entityId: entityId,
@@ -172,7 +137,7 @@ public class AuditController : ControllerBase
             : null;
         if (total == 0)
         {
-            warning = $"No audit rows returned. source={(sqlFallbackUsed ? "postgres" : "mongo")}; mongoConnected={mongoConnected}; orgFilter={(orgFilter.HasValue ? orgFilter.Value.ToString() : "none")}; userId={user.Id}; from={(fromUtc?.ToString("O") ?? "none")}; to={(toUtc?.ToString("O") ?? "none")}; directBootstrapError={(string.IsNullOrWhiteSpace(bootstrapInsertError) ? "none" : bootstrapInsertError)}.";
+            warning = "No audit rows found for the selected filters and date range.";
         }
 
         return Ok(new
@@ -294,7 +259,7 @@ public class AuditController : ControllerBase
             : null;
         if (logs.Count == 0)
         {
-            warning = $"Audit summary has zero rows. source={(sqlFallbackUsed ? "postgres" : "mongo")}; mongoConnected={mongoConnected}; orgFilter={(orgFilter.HasValue ? orgFilter.Value.ToString() : "none")}; userId={user.Id}; from={fromDate:O}; to={toDate:O}.";
+            warning = "Audit summary has no rows for the selected date range.";
         }
 
         return Ok(new
