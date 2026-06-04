@@ -70,6 +70,31 @@ public class DispatchersController : ControllerBase
             .OrderBy(d => d.Name)
             .ToList();
 
+        var currentUserEmail = (user.Email ?? string.Empty).Trim();
+        var currentUserName = (user.Name ?? string.Empty).Trim();
+        var currentUserId = user.Id > 0 ? user.Id : 0;
+        var currentRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
+        var isCurrentUserDispatcherRole = currentRole.Contains("dispatcher");
+        var currentUserAlreadyListed = activeDispatchers.Any(d =>
+            (currentUserId > 0 && d.Id == currentUserId) ||
+            (!string.IsNullOrWhiteSpace(currentUserEmail) &&
+             string.Equals((d.Email ?? string.Empty).Trim(), currentUserEmail, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(currentUserName) &&
+             string.Equals((d.Name ?? string.Empty).Trim(), currentUserName, StringComparison.OrdinalIgnoreCase))
+        );
+        if (isCurrentUserDispatcherRole && !currentUserAlreadyListed)
+        {
+            activeDispatchers.Add(new DispatchUserWire
+            {
+                Id = currentUserId,
+                Name = string.IsNullOrWhiteSpace(currentUserName) ? "Dispatcher" : currentUserName,
+                Email = currentUserEmail,
+                Phone = string.Empty,
+                Title = "Dispatcher",
+                Status = "active"
+            });
+        }
+
         var driverQuery = _context.Drivers
             .AsNoTracking()
             .Where(d => !d.IsDeleted);
@@ -110,7 +135,7 @@ public class DispatchersController : ControllerBase
             .Select(d =>
             {
                 var fleetName = ResolveFleetName(d, fleetNameById, fleetDriverLookup);
-                var dispatchUserId = ResolveDispatchUserIdFromNotes(d.Notes);
+                var dispatchMeta = ResolveDispatchMetadataFromNotes(d.Notes);
                 var normalizedStatus = NormalizeStatus(d.Status);
                 return new DispatcherDriverDto
                 {
@@ -122,7 +147,8 @@ public class DispatchersController : ControllerBase
                     FleetId = d.FleetId,
                     FleetName = fleetName,
                     HireDate = d.HireDate?.ToDateTime(TimeOnly.MinValue),
-                    DispatchUserId = dispatchUserId
+                    DispatchUserId = dispatchMeta.DispatchUserId,
+                    DispatcherName = dispatchMeta.DispatcherName
                 };
             })
             .Where(d => IsActiveStatus(d.Status))
@@ -162,21 +188,49 @@ public class DispatchersController : ControllerBase
                 driver.DispatcherName = name;
         }
 
-        var assignedDriversByDispatcher = activeLandmarkDrivers
-            .Where(d => d.DispatchUserId.HasValue)
-            .GroupBy(d => d.DispatchUserId!.Value)
-            .ToDictionary(
-                g => g.Key,
-                g => g
-                    .OrderBy(d => d.Name)
-                    .Select(d => new DispatcherAssignedDriverDto
-                    {
-                        DriverId = d.Id.ToString(),
-                        Name = d.Name,
-                        Email = d.Email
-                    })
-                    .ToList()
-            );
+        var dispatchersById = activeDispatchers
+            .Where(d => d.Id > 0)
+            .ToDictionary(d => d.Id, d => d);
+        var dispatchersByName = activeDispatchers
+            .Where(d => !string.IsNullOrWhiteSpace(d.Name))
+            .GroupBy(d => NormalizePersonName(d.Name))
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var assignedDriversByDispatcher = activeDispatchers
+            .ToDictionary(d => d.Id, _ => new List<DispatcherAssignedDriverDto>());
+
+        foreach (var driver in activeLandmarkDrivers)
+        {
+            DispatchUserWire? matchedDispatcher = null;
+            if (driver.DispatchUserId.HasValue && dispatchersById.TryGetValue(driver.DispatchUserId.Value, out var byId))
+                matchedDispatcher = byId;
+
+            if (matchedDispatcher == null)
+            {
+                var nameKey = NormalizePersonName(driver.DispatcherName);
+                if (!string.IsNullOrWhiteSpace(nameKey) && dispatchersByName.TryGetValue(nameKey, out var byName))
+                    matchedDispatcher = byName;
+            }
+
+            if (matchedDispatcher == null)
+                continue;
+
+            assignedDriversByDispatcher.TryAdd(matchedDispatcher.Id, new List<DispatcherAssignedDriverDto>());
+            assignedDriversByDispatcher[matchedDispatcher.Id].Add(new DispatcherAssignedDriverDto
+            {
+                DriverId = driver.Id.ToString(),
+                Name = driver.Name,
+                Email = driver.Email
+            });
+        }
+
+        foreach (var key in assignedDriversByDispatcher.Keys.ToList())
+        {
+            assignedDriversByDispatcher[key] = assignedDriversByDispatcher[key]
+                .OrderBy(d => d.Name)
+                .ToList();
+        }
 
         var dispatcherRows = activeDispatchers.Select(d =>
         {
@@ -399,12 +453,27 @@ public class DispatchersController : ControllerBase
         return "—";
     }
 
-    private static int? ResolveDispatchUserIdFromNotes(string? notes)
+    private static (int? DispatchUserId, string? DispatcherName) ResolveDispatchMetadataFromNotes(string? notes)
     {
         var raw = notes ?? string.Empty;
         var match = System.Text.RegularExpressions.Regex.Match(raw, @"\[dispatch-assignee-id:(\d+)(?:\|name:[^\]]+)?\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (!match.Success) return null;
-        return int.TryParse(match.Groups[1].Value, out var id) && id > 0 ? id : null;
+        if (!match.Success) return (null, null);
+        int? parsedId = int.TryParse(match.Groups[1].Value, out var id) && id > 0 ? id : null;
+        var nameMatch = System.Text.RegularExpressions.Regex.Match(raw, @"\[dispatch-assignee-id:\d+\|name:([^\]]+)\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var parsedName = nameMatch.Success ? (nameMatch.Groups[1].Value ?? string.Empty).Trim() : null;
+        return (parsedId, string.IsNullOrWhiteSpace(parsedName) ? null : parsedName);
+    }
+
+    private static string NormalizePersonName(string? value)
+    {
+        return (value ?? string.Empty)
+            .Trim()
+            .ToLowerInvariant()
+            .Replace("_", " ")
+            .Replace("-", " ")
+            .Replace(".", " ")
+            .Replace(",", " ")
+            .Replace("  ", " ");
     }
 
     private static string NormalizeStatus(string? status)
