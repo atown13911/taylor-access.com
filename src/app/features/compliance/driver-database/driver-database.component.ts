@@ -1084,6 +1084,14 @@ export class DriverDatabaseComponent implements OnInit {
     const item = this.compUploadItem();
     if (!driver || !item) return;
     if (!this.compForm.documentName.trim()) { this.toast.error('Document name required', 'Required'); return; }
+    const apiDriverId = this.resolveApiDriverId(driver);
+    if (!apiDriverId) {
+      this.toast.error(
+        'This onboarding profile is not linked to a Driver record yet. Create/activate the driver first, then upload documents.',
+        'Driver record required'
+      );
+      return;
+    }
 
     this.compSaving.set(true);
     const editId = (this as any)._editingDocId;
@@ -1108,7 +1116,7 @@ export class DriverDatabaseComponent implements OnInit {
       });
     } else {
       const fd = new FormData();
-      fd.append('driverId', driver.id);
+      fd.append('driverId', apiDriverId);
       fd.append('category', this.catMap[item.key] || item.key);
       fd.append('subCategory', this.subMap[item.key] || item.key);
       fd.append('documentName', this.compForm.documentName);
@@ -1203,5 +1211,17 @@ export class DriverDatabaseComponent implements OnInit {
   private isApiDriverId(id: unknown): boolean {
     const value = String(id ?? '').trim();
     return /^[0-9]+$/.test(value);
+  }
+
+  private resolveApiDriverId(driver: any): string | null {
+    const candidates = [
+      driver?.id,
+      ...(Array.isArray(driver?._aliasDriverIds) ? driver._aliasDriverIds : [])
+    ]
+      .map((id: any) => String(id ?? '').trim())
+      .filter((id: string) => !!id);
+
+    const match = candidates.find((id: string) => this.isApiDriverId(id));
+    return match || null;
   }
 }
