@@ -24,6 +24,7 @@ export class TagsPermitsComponent implements OnInit {
   private readonly fuelCardAssignmentOverridesKey = 'ta_fuel_card_assignment_overrides_v1';
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'>('permits');
+  trailerSubTab = signal<'active' | 'inactive'>('active');
   permits = signal<any[]>([]);
   trailers = signal<any[]>([]);
   drivers = signal<any[]>([]);
@@ -137,6 +138,7 @@ export class TagsPermitsComponent implements OnInit {
     const search = this.searchTerm().toLowerCase();
     const status = this.statusFilter();
     const type = this.typeFilter();
+    const trailerSubTab = this.trailerSubTab();
 
     if (search) {
       list = list.filter(p =>
@@ -148,6 +150,11 @@ export class TagsPermitsComponent implements OnInit {
         (p.state || '').toLowerCase().includes(search)
       );
     }
+    list = list.filter((p: any) => {
+      const assignmentStatus = this.getTrailerAssignmentStatus(p);
+      if (trailerSubTab === 'active') return assignmentStatus === 'active';
+      return assignmentStatus === 'inactive' || assignmentStatus === 'returned' || assignmentStatus === 'closed_out';
+    });
     if (type) list = list.filter(p => (p.permitType || '') === type);
     if (status === 'active' || status === 'inactive' || status === 'returned' || status === 'closed_out') {
       list = list.filter(p => this.getTrailerAssignmentStatus(p) === status);
@@ -538,6 +545,7 @@ export class TagsPermitsComponent implements OnInit {
     this.activeTab.set(tab);
 
     if (tab === 'trailer') {
+      this.trailerSubTab.set('active');
       const value = this.statusFilter();
       if (value && value !== 'active' && value !== 'inactive' && value !== 'returned' && value !== 'closed_out') {
         this.statusFilter.set('');

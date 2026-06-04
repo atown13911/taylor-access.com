@@ -50,6 +50,17 @@
     </button>
   </div>
 
+  @if (activeTab() === 'trailer') {
+    <div class="tp-subtabs">
+      <button class="tp-subtab" [class.active]="trailerSubTab() === 'active'" (click)="trailerSubTab.set('active')">
+        Active
+      </button>
+      <button class="tp-subtab" [class.active]="trailerSubTab() === 'inactive'" (click)="trailerSubTab.set('inactive')">
+        Inactive
+      </button>
+    </div>
+  }
+
   <!-- Search & Filter -->
   <div class="tp-filters">
     <div class="tp-search">
