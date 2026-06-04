@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using NpgsqlTypes;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Services;
 
@@ -116,6 +117,8 @@ public class DispatchersController : ControllerBase
             })
             .ToListAsync();
 
+        var dbAssignmentMap = await TryGetDriverDispatchAssignmentMapAsync(drivers.Select(d => d.Id));
+
         var fleetQuery = _context.Fleets.AsNoTracking().AsQueryable();
         if (!canBypassOrgFilter)
             fleetQuery = fleetQuery.Where(f => allowedOrgIds.Contains(f.OrganizationId));
@@ -136,6 +139,13 @@ public class DispatchersController : ControllerBase
             {
                 var fleetName = ResolveFleetName(d, fleetNameById, fleetDriverLookup);
                 var dispatchMeta = ResolveDispatchMetadataFromNotes(d.Notes);
+                if (dbAssignmentMap.TryGetValue(d.Id, out var dbAssignment))
+                {
+                    if (dbAssignment.DispatchUserId.HasValue)
+                        dispatchMeta.DispatchUserId = dbAssignment.DispatchUserId;
+                    if (string.IsNullOrWhiteSpace(dispatchMeta.DispatcherName) && !string.IsNullOrWhiteSpace(dbAssignment.DispatcherName))
+                        dispatchMeta.DispatcherName = dbAssignment.DispatcherName;
+                }
                 var normalizedStatus = NormalizeStatus(d.Status);
                 return new DispatcherDriverDto
                 {
@@ -248,7 +258,7 @@ public class DispatchersController : ControllerBase
             };
         }).OrderBy(d => d.Name).ToList();
 
-        var driversWithDispatcher = activeLandmarkDrivers.Count(d => d.DispatchUserId.HasValue);
+        var driversWithDispatcher = activeLandmarkDrivers.Count(d => d.DispatchUserId.HasValue || !string.IsNullOrWhiteSpace(d.DispatcherName));
         var summary = new
         {
             totalDispatchers = dispatcherRows.Count,
@@ -276,6 +286,93 @@ public class DispatchersController : ControllerBase
                 drivers = "default_db"
             }
         });
+    }
+
+    private async Task<Dictionary<int, DriverDispatchAssignmentWire>> TryGetDriverDispatchAssignmentMapAsync(IEnumerable<int> driverIds)
+    {
+        var ids = driverIds.Distinct().Where(i => i > 0).ToArray();
+        if (ids.Length == 0) return new Dictionary<int, DriverDispatchAssignmentWire>();
+
+        var conn = ResolvePrimaryDbConnectionString();
+        if (string.IsNullOrWhiteSpace(conn)) return new Dictionary<int, DriverDispatchAssignmentWire>();
+
+        try
+        {
+            await using var db = new NpgsqlConnection(conn);
+            await db.OpenAsync();
+
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var colsCmd = db.CreateCommand())
+            {
+                colsCmd.CommandText = @"
+                    select column_name
+                    from information_schema.columns
+                    where table_schema = 'public'
+                      and table_name = 'Drivers';";
+                await using var reader = await colsCmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var col = reader["column_name"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(col))
+                        columns.Add(col);
+                }
+            }
+
+            string? FirstExisting(params string[] candidates)
+            {
+                foreach (var c in candidates)
+                {
+                    if (columns.Contains(c))
+                        return c;
+                }
+                return null;
+            }
+
+            var idColumn = FirstExisting("DispatchUserId", "DispatcherUserId", "AssignedDispatcherId", "dispatchUserId", "dispatcherUserId", "assignedDispatcherId");
+            var nameColumn = FirstExisting("DispatchUserName", "DispatcherName", "AssignedDispatcherName", "dispatchUserName", "dispatcherName", "assignedDispatcherName");
+            if (idColumn == null && nameColumn == null)
+                return new Dictionary<int, DriverDispatchAssignmentWire>();
+
+            var emailColumn = FirstExisting("DispatchUserEmail", "DispatcherEmail", "AssignedDispatcherEmail", "dispatchUserEmail", "dispatcherEmail", "assignedDispatcherEmail");
+            var idExpr = idColumn == null ? "null" : $@"d.""{idColumn}""";
+            var nameExpr = nameColumn == null ? "null" : $@"d.""{nameColumn}""";
+            var emailExpr = emailColumn == null ? "null" : $@"d.""{emailColumn}""";
+
+            await using var cmd = db.CreateCommand();
+            cmd.CommandText = $@"
+                select
+                    d.""Id"",
+                    {idExpr} as ""DispatchUserId"",
+                    {nameExpr} as ""DispatcherName"",
+                    {emailExpr} as ""DispatcherEmail""
+                from ""Drivers"" d
+                where d.""Id"" = any(@driverIds);";
+            cmd.Parameters.Add(new NpgsqlParameter("@driverIds", NpgsqlDbType.Array | NpgsqlDbType.Integer) { Value = ids });
+
+            var map = new Dictionary<int, DriverDispatchAssignmentWire>();
+            await using var assignmentReader = await cmd.ExecuteReaderAsync();
+            while (await assignmentReader.ReadAsync())
+            {
+                var driverId = assignmentReader.GetInt32(assignmentReader.GetOrdinal("Id"));
+                var dispatchUserIdRaw = assignmentReader["DispatchUserId"]?.ToString();
+                var parsedDispatchUserId = int.TryParse(dispatchUserIdRaw, out var parsedId) && parsedId > 0 ? parsedId : (int?)null;
+                var dispatcherName = assignmentReader["DispatcherName"]?.ToString();
+                var dispatcherEmail = assignmentReader["DispatcherEmail"]?.ToString();
+
+                map[driverId] = new DriverDispatchAssignmentWire
+                {
+                    DispatchUserId = parsedDispatchUserId,
+                    DispatcherName = string.IsNullOrWhiteSpace(dispatcherName) ? null : dispatcherName.Trim(),
+                    DispatcherEmail = string.IsNullOrWhiteSpace(dispatcherEmail) ? null : dispatcherEmail.Trim()
+                };
+            }
+
+            return map;
+        }
+        catch
+        {
+            return new Dictionary<int, DriverDispatchAssignmentWire>();
+        }
     }
 
     private async Task<(List<DispatchUserWire> users, string source)> GetDispatchersByRoleIdAsync(int roleId)
@@ -433,6 +530,25 @@ public class DispatchersController : ControllerBase
         return raw;
     }
 
+    private string? ResolvePrimaryDbConnectionString()
+    {
+        var raw = _configuration.GetConnectionString("DefaultConnection")
+            ?? Environment.GetEnvironmentVariable("DATABASE_URL");
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
+        if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(raw);
+            var userInfo = uri.UserInfo.Split(':');
+            if (userInfo.Length >= 2)
+            {
+                return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Disable;Trust Server Certificate=true";
+            }
+        }
+        return raw;
+    }
+
     private static string ResolveFleetName(
         DriverWire driver,
         IReadOnlyDictionary<int, string> fleetNameById,
@@ -556,5 +672,12 @@ public class DispatchersController : ControllerBase
         public DateTime? HireDate { get; set; }
         public int? DispatchUserId { get; set; }
         public string? DispatcherName { get; set; }
+    }
+
+    private sealed class DriverDispatchAssignmentWire
+    {
+        public int? DispatchUserId { get; set; }
+        public string? DispatcherName { get; set; }
+        public string? DispatcherEmail { get; set; }
     }
 }
