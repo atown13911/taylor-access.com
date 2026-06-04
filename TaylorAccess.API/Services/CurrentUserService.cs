@@ -75,9 +75,18 @@ public class CurrentUserService
         var email = Email;
         if (!string.IsNullOrEmpty(email))
         {
+            var claimUserId = UserId;
+            var claimRole = (Role ?? string.Empty).Trim().ToLowerInvariant();
+
             _cachedUser = await _context.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == email.ToLower());
+                .Where(u => u.Email.ToLower() == email.ToLower())
+                .OrderByDescending(u => claimUserId.HasValue && u.Id == claimUserId.Value)
+                .ThenByDescending(u => !string.IsNullOrWhiteSpace(claimRole) && u.Role.ToLower() == claimRole)
+                .ThenByDescending(u => u.Status.ToLower() == "active")
+                .ThenByDescending(u => u.OrganizationId.HasValue)
+                .ThenByDescending(u => u.UpdatedAt)
+                .FirstOrDefaultAsync();
         }
 
         // Fall back to numeric ID only if no email claim (native TA JWTs without email)
@@ -195,6 +204,28 @@ public class CurrentUserService
                     .Select(uo => uo.OrganizationId)
                     .ToListAsync();
                 foreach (var id in fromLocalUser)
+                    if (id > 0) orgIds.Add(id);
+            }
+        }
+
+        // 3) Defensive fallback: if duplicate/local-migrated user rows exist, gather org memberships
+        // across any Users that share this authenticated email.
+        var email = (Email ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            var emailUserIds = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Email.ToLower() == email.ToLower())
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            if (emailUserIds.Count > 0)
+            {
+                var fromEmailUsers = await _context.UserOrganizations
+                    .Where(uo => emailUserIds.Contains(uo.UserId))
+                    .Select(uo => uo.OrganizationId)
+                    .ToListAsync();
+                foreach (var id in fromEmailUsers)
                     if (id > 0) orgIds.Add(id);
             }
         }
