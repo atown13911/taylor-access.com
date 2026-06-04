@@ -113,12 +113,15 @@ builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
     ?? "VanTacRailwaySecretKey123456789012345678901234567890";
+var gatewayJwtKey = Environment.GetEnvironmentVariable("TTAC_JWT_SECRET_KEY") ?? string.Empty;
 var portalJwtKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET")
     ?? Environment.GetEnvironmentVariable("TTAC_PORTAL_JWT_SECRET")
     ?? string.Empty;
 var signingKeys = new List<SecurityKey>();
 if (!string.IsNullOrWhiteSpace(jwtKey))
     signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)));
+if (!string.IsNullOrWhiteSpace(gatewayJwtKey) && !string.Equals(gatewayJwtKey, jwtKey, StringComparison.Ordinal))
+    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(gatewayJwtKey)));
 if (!string.IsNullOrWhiteSpace(portalJwtKey) && !string.Equals(portalJwtKey, jwtKey, StringComparison.Ordinal))
     signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalJwtKey)));
 
