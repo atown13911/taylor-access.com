@@ -59,6 +59,67 @@
     </div>
   </div>
 
+  <section class="card density-card">
+    <div class="density-header">
+      <h2><i class="bx bx-line-chart"></i> Fleet Applicant Density Curve</h2>
+      <div class="density-meta">
+        <span>{{ fleetApplicantCount() }} fleet applicants</span>
+        <span>Window: last {{ applicantDensityWindowDays }} days</span>
+        <span>Peak: {{ peakDensityLabel() }}</span>
+      </div>
+    </div>
+    @if (fleetApplicantDensityData().length > 0) {
+      <ngx-charts-line-chart
+        [results]="fleetApplicantDensityChartData()"
+        [scheme]="fleetApplicantDensityScheme"
+        [xAxis]="true"
+        [yAxis]="true"
+        [autoScale]="true"
+        [showXAxisLabel]="true"
+        [xAxisLabel]="'Applied date'"
+        [showYAxisLabel]="true"
+        [yAxisLabel]="'Density'"
+        [legend]="false"
+        [animations]="true"
+        [timeline]="false"
+        [gradient]="true">
+      </ngx-charts-line-chart>
+    } @else {
+      <div class="chart-empty">No fleet applicant trend data available yet.</div>
+    }
+  </section>
+
+  <section class="card state-heatmap-card">
+    <div class="heatmap-header">
+      <h2><i class="bx bx-map-alt"></i> Fleet Applicant State Heatmap</h2>
+      <span class="heatmap-subtitle">Compact state intensity by applicant count</span>
+    </div>
+
+    <div class="state-heatmap-grid">
+      @for (tile of stateHeatmapTiles(); track tile.state) {
+        <div
+          class="state-tile"
+          [class.has-data]="tile.count > 0"
+          [style.--intensity]="tile.intensity"
+          [attr.title]="tile.state + ': ' + tile.count + ' applicants'"
+        >
+          <span class="state-code">{{ tile.state }}</span>
+          <span class="state-count">{{ tile.count }}</span>
+        </div>
+      }
+    </div>
+
+    @if (topStateBreakdown().length > 0) {
+      <div class="top-states">
+        @for (row of topStateBreakdown(); track row.state) {
+          <span class="top-state-pill">{{ row.state }}: {{ row.count }}</span>
+        }
+      </div>
+    } @else {
+      <div class="chart-empty">No applicant state data available yet.</div>
+    }
+  </section>
+
   <div class="content-grid">
     <section class="card">
       <h2><i class="bx bx-list-check"></i> Action Needed</h2>

@@ -90,6 +90,116 @@
   font-size: 0.82rem;
 }
 
+.density-card {
+  min-height: 320px;
+}
+
+.density-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.density-meta {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.density-meta span {
+  font-size: 0.76rem;
+  color: rgba(230, 247, 255, 0.75);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.chart-empty {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  color: rgba(230, 247, 255, 0.62);
+  border: 1px dashed rgba(0, 212, 255, 0.2);
+  border-radius: 10px;
+}
+
+.state-heatmap-card {
+  padding-bottom: 12px;
+}
+
+.heatmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.heatmap-subtitle {
+  color: rgba(230, 247, 255, 0.62);
+  font-size: 0.78rem;
+}
+
+.state-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+.state-tile {
+  --intensity: 0;
+  border: 1px solid rgba(0, 212, 255, 0.14);
+  border-radius: 8px;
+  min-height: 42px;
+  padding: 4px 5px;
+  background: rgba(8, 14, 26, 0.6);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  line-height: 1.05;
+}
+
+.state-tile.has-data {
+  border-color: rgba(0, 212, 255, calc(0.22 + (var(--intensity) * 0.55)));
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 212, 255, calc(0.16 + (var(--intensity) * 0.46))),
+      rgba(0, 110, 173, calc(0.14 + (var(--intensity) * 0.40)))
+    );
+}
+
+.state-code {
+  font-size: 0.69rem;
+  font-weight: 700;
+}
+
+.state-count {
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: rgba(230, 247, 255, 0.82);
+}
+
+.top-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.top-state-pill {
+  border: 1px solid rgba(0, 212, 255, 0.24);
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.74rem;
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
@@ -162,8 +272,30 @@
   font-size: 0.78rem;
 }
 
+::ng-deep ngx-charts-line-chart {
+  display: block;
+  min-height: 240px;
+}
+
+::ng-deep .ngx-charts text {
+  fill: rgba(230, 247, 255, 0.84);
+}
+
 @media (max-width: 940px) {
+  .density-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .density-meta {
+    justify-content: flex-start;
+  }
+
   .content-grid {
     grid-template-columns: 1fr;
+  }
+
+  .state-heatmap-grid {
+    grid-template-columns: repeat(8, minmax(40px, 1fr));
   }
 }
