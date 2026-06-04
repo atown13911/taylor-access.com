@@ -1736,6 +1736,68 @@ export class TagsPermitsComponent implements OnInit {
     this.toast.success('Trailer moved to inactive', 'Status updated');
   }
 
+  async reactivateTrailer(row: any): Promise<void> {
+    const trailerId = String(this.resolveTrailerId(row) ?? '').trim();
+    if (!trailerId) {
+      this.toast.error('Invalid trailer id', 'Status update');
+      return;
+    }
+    if (!confirm(`Reactivate trailer ${row?.permitNumber || row?.assignedTruckNumber || trailerId}?`)) return;
+
+    const activeTrailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out' = 'active';
+    const persistedDriverId = row?.assignedDriverId ?? null;
+    const persistedDriverName = String(row?.assignedDriverName || '').trim() || null;
+    const trailerPayload = {
+      status: this.mapTrailerBackendStatus(activeTrailerStatus),
+      assignmentStatus: activeTrailerStatus,
+      trailerStatus: activeTrailerStatus,
+      assignedDriverId: persistedDriverId,
+      driverId: persistedDriverId,
+      assignedDriverName: persistedDriverName,
+      ownerName: persistedDriverName
+    };
+    const equipmentPayload = {
+      status: this.mapEquipmentBackendStatus(activeTrailerStatus),
+      assignmentStatus: activeTrailerStatus,
+      trailerStatus: activeTrailerStatus,
+      assignedDriverId: persistedDriverId,
+      driverId: persistedDriverId,
+      ownerName: persistedDriverName
+    };
+
+    const requests = [
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${trailerId}`), equipmentPayload)),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${trailerId}`), equipmentPayload)),
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/trailers/${trailerId}`), trailerPayload)),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/trailers/${trailerId}`), trailerPayload))
+    ];
+
+    let success = false;
+    for (const request of requests) {
+      try {
+        await request();
+        success = true;
+        break;
+      } catch {
+        // Try next status update strategy.
+      }
+    }
+
+    if (!success) {
+      this.toast.error('Failed to reactivate trailer', 'Status update');
+      return;
+    }
+
+    this.setTrailerStatusOverride(trailerId, activeTrailerStatus);
+    this.setTrailerFieldOverride(trailerId, {
+      trailerStatus: activeTrailerStatus,
+      assignedDriverId: persistedDriverId,
+      assignedDriverName: persistedDriverName || ''
+    });
+    this.loadData();
+    this.toast.success('Trailer reactivated', 'Status updated');
+  }
+
   async copyAssignedFuelCard(value: string): Promise<void> {
     const text = String(value ?? '').trim();
     if (!text || text === 'Unassigned') return;

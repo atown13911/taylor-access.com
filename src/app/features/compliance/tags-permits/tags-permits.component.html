@@ -261,6 +261,10 @@
                   <button class="tp-icon-btn" title="Move to inactive" (click)="$event.stopPropagation(); moveTrailerToInactive(p)">
                     <i class="bx bx-pause-circle"></i>
                   </button>
+                } @else {
+                  <button class="tp-icon-btn" title="Reactivate trailer" (click)="$event.stopPropagation(); reactivateTrailer(p)">
+                    <i class="bx bx-play-circle"></i>
+                  </button>
                 }
                 <button class="tp-icon-btn" title="Edit" (click)="$event.stopPropagation(); editPermit(p)"><i class="bx bx-edit"></i></button>
                 <button class="tp-icon-btn danger" title="Delete" (click)="$event.stopPropagation(); deletePermit(p)"><i class="bx bx-trash"></i></button>
