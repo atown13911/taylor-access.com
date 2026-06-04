@@ -1223,15 +1223,8 @@ export class DriverDatabaseComponent implements OnInit {
         return;
       }
 
-      if (!this.isOnboardingStatus(driver?.status)) {
-        this.toast.error(
-          'This onboarding profile is not linked to a Driver record yet. Create/activate the driver first, then upload documents.',
-          'Driver record required'
-        );
-        this.compSaving.set(false);
-        return;
-      }
-
+      // If we cannot resolve a numeric driver id, attempt to create/link one.
+      // Some onboarding records arrive with non-standard status labels.
       this.createDriverFromOnboardingProfile(driver, item);
     }
   }
