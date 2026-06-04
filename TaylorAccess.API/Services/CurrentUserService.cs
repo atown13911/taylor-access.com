@@ -160,15 +160,39 @@ public class CurrentUserService
 
     public async Task<List<int>> GetUserOrganizationIdsAsync()
     {
-        var userId = UserId;
-        if (!userId.HasValue) return new List<int>();
+        var orgIds = new HashSet<int>();
 
-        var orgIds = await _context.UserOrganizations
-            .Where(uo => uo.UserId == userId.Value)
-            .Select(uo => uo.OrganizationId)
-            .ToListAsync();
+        // 1) Token userId claim (works when token subject matches Taylor Access user id).
+        var claimUserId = UserId;
+        if (claimUserId.HasValue && claimUserId.Value > 0)
+        {
+            var fromClaim = await _context.UserOrganizations
+                .Where(uo => uo.UserId == claimUserId.Value)
+                .Select(uo => uo.OrganizationId)
+                .ToListAsync();
+            foreach (var id in fromClaim)
+                if (id > 0) orgIds.Add(id);
+        }
 
-        return orgIds;
+        // 2) Local Taylor Access user resolved by email/id (handles Portal-vs-local id mismatches).
+        var localUser = await GetUserAsync();
+        if (localUser != null)
+        {
+            if (localUser.OrganizationId.HasValue && localUser.OrganizationId.Value > 0)
+                orgIds.Add(localUser.OrganizationId.Value);
+
+            if (localUser.Id > 0)
+            {
+                var fromLocalUser = await _context.UserOrganizations
+                    .Where(uo => uo.UserId == localUser.Id)
+                    .Select(uo => uo.OrganizationId)
+                    .ToListAsync();
+                foreach (var id in fromLocalUser)
+                    if (id > 0) orgIds.Add(id);
+            }
+        }
+
+        return orgIds.ToList();
     }
 
     private async Task<(bool lookedUp, bool found, string? status)> TryGetPortalUserStatusAsync()
