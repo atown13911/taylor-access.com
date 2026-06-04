@@ -575,6 +575,19 @@ export class DriverDatabaseComponent implements OnInit {
     { key: 'i9', label: 'I-9' }, { key: 'w9', label: 'W-9' },
     { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' }
   ];
+  private readonly onboardingPaperworkKeys = [
+    'cdl',
+    'medical',
+    'mvr',
+    'drug',
+    'dqf',
+    'employment',
+    'contract',
+    'i9',
+    'w9',
+    'directDeposit',
+    'deduction'
+  ];
 
   selectDriver(driver: any) {
     if (this.selectedDriver()?.id === driver.id) {
@@ -727,6 +740,88 @@ export class DriverDatabaseComponent implements OnInit {
       this.activeStatusTab() === 'closeout' &&
       this.isCloseoutStatus(driver?.status) &&
       !this.isArchivedStatus(driver?.status);
+  }
+
+  canReactivateDriver(driver: any): boolean {
+    return !this.isApplicantRow(driver) &&
+      this.isCloseoutStatus(driver?.status) &&
+      !this.isArchivedStatus(driver?.status);
+  }
+
+  canUploadOnboardingPaperwork(driver: any): boolean {
+    return this.isOnboardingStatus(driver?.status);
+  }
+
+  canActivateOnboardingDriver(driver: any): boolean {
+    if (!this.canUploadOnboardingPaperwork(driver)) return false;
+    if (!this.resolveApiDriverId(driver)) return false;
+    return this.getMissingOnboardingPaperworkItems(driver).length === 0;
+  }
+
+  getOnboardingChecklistTooltip(driver: any): string {
+    const missing = this.getMissingOnboardingPaperworkItems(driver);
+    if (!missing.length) return 'All onboarding paperwork uploaded. Ready to move to active.';
+    const labels = missing.map((item: any) => item.label);
+    return `Missing (${missing.length}): ${labels.join(', ')}`;
+  }
+
+  showOnboardingChecklist(driver: any): void {
+    const missing = this.getMissingOnboardingPaperworkItems(driver).map((item: any) => item.label);
+    if (!missing.length) {
+      this.toast.success('All required onboarding paperwork is uploaded.', 'Checklist complete');
+      return;
+    }
+    this.toast.error(`Missing paperwork: ${missing.join(', ')}`, 'Checklist');
+  }
+
+  openOnboardingUpload(driver: any): void {
+    const nextItem = this.getMissingOnboardingPaperworkItems(driver)[0] ?? this.complianceItems[0];
+    if (!nextItem) {
+      this.toast.error('No compliance item available for upload.', 'Unavailable');
+      return;
+    }
+
+    this.ensureSelectedDriverForCompliance(driver);
+    this.openCompUpload(nextItem);
+  }
+
+  activateOnboardingDriver(driver: any): void {
+    if (!this.canActivateOnboardingDriver(driver)) {
+      const missing = this.getMissingOnboardingPaperworkItems(driver).map((item: any) => item.label);
+      if (missing.length > 0) {
+        this.toast.error(`Missing paperwork: ${missing.join(', ')}`, 'Cannot activate');
+      } else {
+        this.toast.error('Driver record is not ready for activation.', 'Cannot activate');
+      }
+      return;
+    }
+
+    const apiDriverId = this.resolveApiDriverId(driver);
+    if (!apiDriverId) {
+      this.toast.error('Missing numeric Driver ID for activation.', 'Cannot activate');
+      return;
+    }
+
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${apiDriverId}`, { ...driver, status: 'active' }).subscribe({
+      next: () => {
+        this.toast.success(`${driver?.name || 'Driver'} moved to active.`, 'Driver activated');
+        this.drivers.update((rows: any[]) =>
+          rows.map((row: any) => {
+            const sameRow = `${row?.id ?? ''}` === `${driver?.id ?? ''}`;
+            const linkedAlias = Array.isArray(row?._aliasDriverIds)
+              && row._aliasDriverIds.some((id: any) => `${id ?? ''}` === `${apiDriverId}`);
+            if (!sameRow && !linkedAlias) return row;
+            return { ...row, status: 'active' };
+          })
+        );
+        if (`${this.selectedDriver()?.id ?? ''}` === `${driver?.id ?? ''}`) {
+          this.selectedDriver.set({ ...(this.selectedDriver() || {}), status: 'active' });
+        }
+      },
+      error: () => {
+        this.toast.error('Failed to activate driver.', 'Activation failed');
+      }
+    });
   }
 
   isApplicantRow(driver: any): boolean {
@@ -1025,6 +1120,21 @@ export class DriverDatabaseComponent implements OnInit {
       return 'inactive';
     }
     return this.isActiveStatus(driver?.status) ? 'active' : 'inactive';
+  }
+
+  private getMissingOnboardingPaperworkItems(driver: any): any[] {
+    return this.onboardingPaperworkKeys
+      .filter((key: string) => this.getItemStatus(driver, key) === 'none')
+      .map((key: string) => this.complianceItems.find((item: any) => item.key === key))
+      .filter((item: any) => !!item);
+  }
+
+  private ensureSelectedDriverForCompliance(driver: any): void {
+    this.selectedDriver.set(driver);
+    this.loadDriverDocs(driver.id);
+    if (this.isApiDriverId(driver.id)) {
+      this.loadDriverDetails(driver.id);
+    }
   }
 
   editCompDoc(item: any): void {

@@ -390,7 +390,7 @@
 
 // Actions column
 .col-actions {
-  width: 96px;
+  width: 156px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -424,6 +424,21 @@
     background: rgba(100, 149, 237, 0.12);
     color: #8bb8ff;
     &:hover { background: rgba(100, 149, 237, 0.22); box-shadow: 0 0 10px rgba(100, 149, 237, 0.3); }
+  }
+  &.upload {
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--cyan);
+    &:hover { background: rgba(0, 212, 255, 0.2); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
+  }
+  &.activate {
+    background: rgba(0, 255, 136, 0.12);
+    color: #00ff88;
+    &:hover { background: rgba(0, 255, 136, 0.22); box-shadow: 0 0 10px rgba(0, 255, 136, 0.3); }
+  }
+  &.checklist {
+    background: rgba(255, 187, 36, 0.12);
+    color: #fbbf24;
+    &:hover { background: rgba(255, 187, 36, 0.22); box-shadow: 0 0 10px rgba(255, 187, 36, 0.3); }
   }
 }
 

@@ -132,14 +132,26 @@
                 <span class="overall-badge" [class]="'overall-' + getOverallStatus(driver)">{{ getOverallLabel(driver) }}</span>
               </td>
               <td class="col-actions" (click)="$event.stopPropagation()">
-                @if (isApplicantRow(driver)) {
+                @if (canUploadOnboardingPaperwork(driver)) {
+                  <button class="action-btn checklist" [title]="getOnboardingChecklistTooltip(driver)" (click)="showOnboardingChecklist(driver)">
+                    <i class='bx bx-list-check'></i>
+                  </button>
+                  <button class="action-btn upload" [title]="'Upload onboarding paperwork • ' + getOnboardingChecklistTooltip(driver)" (click)="openOnboardingUpload(driver)">
+                    <i class='bx bx-upload'></i>
+                  </button>
+                  @if (canActivateOnboardingDriver(driver)) {
+                    <button class="action-btn activate" title="Move driver to active" (click)="activateOnboardingDriver(driver)">
+                      <i class='bx bx-user-check'></i>
+                    </button>
+                  }
+                } @else if (isApplicantRow(driver)) {
                   <span class="empty-row">—</span>
                 } @else {
                   @if (canSuspendDriver(driver)) {
                     <button class="action-btn suspend" title="Suspend Driver" (click)="suspendDriver(driver)">
                       <i class='bx bx-pause-circle'></i>
                     </button>
-                  } @else {
+                  } @else if (canReactivateDriver(driver)) {
                     <button class="action-btn reactivate" title="Reactivate Driver" (click)="reactivateDriver(driver)">
                       <i class='bx bx-play-circle'></i>
                     </button>
