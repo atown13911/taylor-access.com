@@ -257,6 +257,11 @@
               </td>
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
+                @if (getTrailerAssignmentStatus(p) === 'active') {
+                  <button class="tp-icon-btn" title="Move to inactive" (click)="$event.stopPropagation(); moveTrailerToInactive(p)">
+                    <i class="bx bx-pause-circle"></i>
+                  </button>
+                }
                 <button class="tp-icon-btn" title="Edit" (click)="$event.stopPropagation(); editPermit(p)"><i class="bx bx-edit"></i></button>
                 <button class="tp-icon-btn danger" title="Delete" (click)="$event.stopPropagation(); deletePermit(p)"><i class="bx bx-trash"></i></button>
               </td>
@@ -568,8 +573,8 @@
       </div>
 
       <div class="tp-trailer-drawer-photo">
-        @if (selectedTrailerDrawer()?.photoUrl) {
-          <img [src]="selectedTrailerDrawer()?.photoUrl" alt="Trailer photo">
+        @if (trailerDrawerPhotoPreviewUrl()) {
+          <img [src]="trailerDrawerPhotoPreviewUrl()!" alt="Trailer photo">
         } @else {
           <div class="tp-photo-placeholder">
             <i class="bx bx-image"></i>

@@ -552,7 +552,8 @@ using (var scope = app.Services.CreateScope())
             ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
             ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_TrailerPhotos_Org_TrailerId""
+        DROP INDEX IF EXISTS ""IX_TrailerPhotos_Org_TrailerId"";
+        CREATE INDEX IF NOT EXISTS ""IX_TrailerPhotos_Org_TrailerId""
             ON ""TrailerPhotos"" (""OrganizationId"", ""TrailerId"");
         CREATE INDEX IF NOT EXISTS ""IX_TrailerPhotos_TrailerId_UpdatedAt""
             ON ""TrailerPhotos"" (""TrailerId"", ""UpdatedAt"");

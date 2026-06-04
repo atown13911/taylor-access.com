@@ -53,6 +53,7 @@ export class TagsPermitsComponent implements OnInit {
   trailerPhotoBatchUploading = signal(false);
   trailerPhotoFileName = signal('');
   trailerPhotoPreviewUrl = signal<string | null>(null);
+  trailerDrawerPhotoPreviewUrl = signal<string | null>(null);
   trailerPhotoHistory = signal<any[]>([]);
   trailerPhotoHistoryLoading = signal(false);
   private trailerPhotoFile: File | null = null;
@@ -614,6 +615,7 @@ export class TagsPermitsComponent implements OnInit {
 
   closeTrailerDrawer(): void {
     this.selectedTrailerDrawer.set(null);
+    this.setTrailerDrawerPhotoPreview(null);
     this.trailerPhotoHistory.set([]);
     this.trailerPhotoHistoryLoading.set(false);
   }
@@ -1102,7 +1104,7 @@ export class TagsPermitsComponent implements OnInit {
     const rawUrl = String(photo?.photoUrl || '').trim();
     if (!rawUrl) return;
     const absoluteUrl = rawUrl.startsWith('/api/') ? `${this.apiUrl}${rawUrl}` : rawUrl;
-    window.open(absoluteUrl, '_blank');
+    this.openPhotoUrlWithAuth(absoluteUrl, String(photo?.fileName || '').trim() || 'trailer-photo');
   }
 
   async deleteTrailerPhotoFromHistory(photo: any): Promise<void> {
@@ -1674,6 +1676,66 @@ export class TagsPermitsComponent implements OnInit {
     });
   }
 
+  async moveTrailerToInactive(row: any): Promise<void> {
+    const trailerId = String(this.resolveTrailerId(row) ?? '').trim();
+    if (!trailerId) {
+      this.toast.error('Invalid trailer id', 'Status update');
+      return;
+    }
+    if (!confirm(`Move trailer ${row?.permitNumber || row?.assignedTruckNumber || trailerId} to inactive?`)) return;
+
+    const inactiveTrailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out' = 'inactive';
+    const trailerPayload = {
+      status: this.mapTrailerBackendStatus(inactiveTrailerStatus),
+      assignmentStatus: inactiveTrailerStatus,
+      trailerStatus: inactiveTrailerStatus,
+      assignedDriverId: null,
+      driverId: null,
+      assignedDriverName: null,
+      ownerName: null
+    };
+    const equipmentPayload = {
+      status: this.mapEquipmentBackendStatus(inactiveTrailerStatus),
+      assignmentStatus: inactiveTrailerStatus,
+      trailerStatus: inactiveTrailerStatus,
+      assignedDriverId: null,
+      driverId: null,
+      ownerName: null
+    };
+
+    const requests = [
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${trailerId}`), equipmentPayload)),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${trailerId}`), equipmentPayload)),
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/trailers/${trailerId}`), trailerPayload)),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/trailers/${trailerId}`), trailerPayload))
+    ];
+
+    let success = false;
+    for (const request of requests) {
+      try {
+        await request();
+        success = true;
+        break;
+      } catch {
+        // Try next status update strategy.
+      }
+    }
+
+    if (!success) {
+      this.toast.error('Failed to move trailer to inactive', 'Status update');
+      return;
+    }
+
+    this.setTrailerStatusOverride(trailerId, inactiveTrailerStatus);
+    this.setTrailerFieldOverride(trailerId, {
+      trailerStatus: inactiveTrailerStatus,
+      assignedDriverId: null,
+      assignedDriverName: ''
+    });
+    this.loadData();
+    this.toast.success('Trailer moved to inactive', 'Status updated');
+  }
+
   async copyAssignedFuelCard(value: string): Promise<void> {
     const text = String(value ?? '').trim();
     if (!text || text === 'Unassigned') return;
@@ -1920,10 +1982,57 @@ export class TagsPermitsComponent implements OnInit {
       );
       const rows = Array.isArray(res?.data) ? res.data : [];
       this.trailerPhotoHistory.set(rows);
+      await this.loadTrailerDrawerPreview(id);
     } catch {
       this.trailerPhotoHistory.set([]);
+      this.setTrailerDrawerPhotoPreview(null);
     } finally {
       this.trailerPhotoHistoryLoading.set(false);
     }
+  }
+
+  private async loadTrailerDrawerPreview(trailerId: string): Promise<void> {
+    const encodedTrailerId = encodeURIComponent(String(trailerId || '').trim());
+    if (!encodedTrailerId) {
+      this.setTrailerDrawerPhotoPreview(null);
+      return;
+    }
+    try {
+      const blob = await firstValueFrom(
+        this.http.get(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/view`, { responseType: 'blob' })
+      );
+      if (!blob || blob.size <= 0) {
+        this.setTrailerDrawerPhotoPreview(null);
+        return;
+      }
+      this.setTrailerDrawerPhotoPreview(URL.createObjectURL(blob));
+    } catch {
+      this.setTrailerDrawerPhotoPreview(null);
+    }
+  }
+
+  private setTrailerDrawerPhotoPreview(url: string | null): void {
+    const previous = this.trailerDrawerPhotoPreviewUrl();
+    if (previous && previous.startsWith('blob:')) {
+      URL.revokeObjectURL(previous);
+    }
+    this.trailerDrawerPhotoPreviewUrl.set(url);
+  }
+
+  private openPhotoUrlWithAuth(url: string, fileName: string): void {
+    this.http.get(url, { responseType: 'blob' }).subscribe({
+      next: (blob: Blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const opened = window.open(objectUrl, '_blank');
+        if (!opened) {
+          const a = document.createElement('a');
+          a.href = objectUrl;
+          a.download = fileName || 'trailer-photo';
+          a.click();
+        }
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      },
+      error: () => this.toast.error('Failed to load trailer photo', 'Photo')
+    });
   }
 }
