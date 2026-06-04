@@ -1194,14 +1194,6 @@ export class DriverDatabaseComponent implements OnInit {
     const item = this.compUploadItem();
     if (!driver || !item) return;
     if (!this.compForm.documentName.trim()) { this.toast.error('Document name required', 'Required'); return; }
-    const apiDriverId = this.resolveApiDriverId(driver);
-    if (!apiDriverId) {
-      this.toast.error(
-        'This onboarding profile is not linked to a Driver record yet. Create/activate the driver first, then upload documents.',
-        'Driver record required'
-      );
-      return;
-    }
 
     this.compSaving.set(true);
     const editId = (this as any)._editingDocId;
@@ -1225,27 +1217,112 @@ export class DriverDatabaseComponent implements OnInit {
         error: () => { this.toast.error('Update failed', 'Error'); this.compSaving.set(false); }
       });
     } else {
-      const fd = new FormData();
-      fd.append('driverId', apiDriverId);
-      fd.append('category', this.catMap[item.key] || item.key);
-      fd.append('subCategory', this.subMap[item.key] || item.key);
-      fd.append('documentName', this.compForm.documentName);
-      fd.append('documentNumber', this.compForm.documentNumber);
-      if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
-      if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
-      fd.append('notes', this.compForm.notes);
-      if (this.compFile) fd.append('file', this.compFile);
+      const apiDriverId = this.resolveApiDriverId(driver);
+      if (apiDriverId) {
+        this.createComplianceDocumentUpload(driver, item, apiDriverId);
+        return;
+      }
 
-      this.api.createDriverDocument(fd).subscribe({
-        next: () => {
-          this.toast.success(`${item.label} uploaded`, 'Success');
+      if (!this.isOnboardingStatus(driver?.status)) {
+        this.toast.error(
+          'This onboarding profile is not linked to a Driver record yet. Create/activate the driver first, then upload documents.',
+          'Driver record required'
+        );
+        this.compSaving.set(false);
+        return;
+      }
+
+      this.createDriverFromOnboardingProfile(driver, item);
+    }
+  }
+
+  private createComplianceDocumentUpload(driver: any, item: any, apiDriverId: string): void {
+    const fd = new FormData();
+    fd.append('driverId', apiDriverId);
+    fd.append('category', this.catMap[item.key] || item.key);
+    fd.append('subCategory', this.subMap[item.key] || item.key);
+    fd.append('documentName', this.compForm.documentName);
+    fd.append('documentNumber', this.compForm.documentNumber);
+    if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
+    if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
+    fd.append('notes', this.compForm.notes);
+    if (this.compFile) fd.append('file', this.compFile);
+
+    this.api.createDriverDocument(fd).subscribe({
+      next: () => {
+        this.toast.success(`${item.label} uploaded`, 'Success');
+        this.compSaving.set(false);
+        this.compUploadOpen.set(false);
+        this.loadAllDocs();
+        this.loadDriverDocs(driver.id);
+      },
+      error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
+    });
+  }
+
+  private createDriverFromOnboardingProfile(driver: any, item: any): void {
+    const name = String(driver?.name ?? '').trim();
+    const phone = String(driver?.phone ?? '').trim();
+    if (!name || !phone) {
+      this.toast.error('Onboarding profile must include full name and phone before document upload.', 'Driver record required');
+      this.compSaving.set(false);
+      return;
+    }
+
+    const payload = {
+      name,
+      phone,
+      email: String(driver?.email ?? '').trim() || null,
+      licenseNumber: String(driver?.licenseNumber ?? '').trim() || null,
+      licenseState: String(driver?.licenseState ?? '').trim() || null,
+      licenseExpiry: driver?.licenseExpiry || driver?.licenseExpiration || null,
+      status: 'onboarding',
+      driverType: driver?.driverType || null,
+      notes: 'Auto-created from onboarding compliance upload'
+    };
+
+    this.api.createDriver(payload).subscribe({
+      next: (res: any) => {
+        const created = res?.data || res;
+        const createdId = String(created?.id ?? '').trim();
+        if (!this.isApiDriverId(createdId)) {
+          this.toast.error('Driver created but ID mapping failed. Refresh and try upload again.', 'Driver link failed');
           this.compSaving.set(false);
-          this.compUploadOpen.set(false);
-          this.loadAllDocs();
-          this.loadDriverDocs(driver.id);
-        },
-        error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
-      });
+          return;
+        }
+
+        this.linkDriverAliasId(driver, createdId);
+        this.toast.success('Driver record linked. Continuing upload...', 'Driver record created');
+        this.createComplianceDocumentUpload(driver, item, createdId);
+      },
+      error: (err: any) => {
+        const msg = err?.error?.error || 'Failed to create linked driver record.';
+        this.toast.error(msg, 'Driver record required');
+        this.compSaving.set(false);
+      }
+    });
+  }
+
+  private linkDriverAliasId(driver: any, apiDriverId: string): void {
+    const baseIds = new Set<string>(
+      [
+        String(driver?.id ?? '').trim(),
+        ...(Array.isArray(driver?._aliasDriverIds) ? driver._aliasDriverIds.map((id: any) => String(id ?? '').trim()) : []),
+        apiDriverId
+      ].filter((id: string) => !!id)
+    );
+
+    const patch = {
+      _aliasDriverIds: Array.from(baseIds),
+      _linkedDriverId: apiDriverId
+    };
+
+    this.drivers.update((rows: any[]) =>
+      rows.map((row: any) => (`${row?.id ?? ''}` === `${driver?.id ?? ''}` ? { ...row, ...patch } : row))
+    );
+
+    if (`${this.selectedDriver()?.id ?? ''}` === `${driver?.id ?? ''}`) {
+      this.selectedDriver.set({ ...(this.selectedDriver() || {}), ...patch });
     }
   }
 
