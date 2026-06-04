@@ -108,10 +108,19 @@ else
 builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// JWT Authentication — Portal is the sole authority, accept any valid Portal token
+// JWT Authentication — accept both Taylor Access and Portal signing keys.
+// This avoids blanket 401s when clients present Portal-issued tokens.
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
     ?? "VanTacRailwaySecretKey123456789012345678901234567890";
+var portalJwtKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET")
+    ?? Environment.GetEnvironmentVariable("TTAC_PORTAL_JWT_SECRET")
+    ?? string.Empty;
+var signingKeys = new List<SecurityKey>();
+if (!string.IsNullOrWhiteSpace(jwtKey))
+    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)));
+if (!string.IsNullOrWhiteSpace(portalJwtKey) && !string.Equals(portalJwtKey, jwtKey, StringComparison.Ordinal))
+    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalJwtKey)));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -119,7 +128,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            IssuerSigningKeys = signingKeys,
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateLifetime = true,
