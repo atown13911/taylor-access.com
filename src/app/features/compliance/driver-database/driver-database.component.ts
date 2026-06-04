@@ -180,8 +180,9 @@ export class DriverDatabaseComponent implements OnInit {
       const hiredApplicants = applicantsRes.status === 'fulfilled'
         ? applicantsRes.value
         : [];
+      const linkedOnboardingApplicants = await this.ensureOnboardingDriversHaveNumericIds(rawDrivers, hiredApplicants);
 
-      this.drivers.set(this.deduplicateDrivers([...rawDrivers, ...hiredApplicants]));
+      this.drivers.set(this.deduplicateDrivers([...rawDrivers, ...linkedOnboardingApplicants]));
     } catch (err) {
       console.error('Failed to load drivers:', err);
       this.drivers.set([]);
@@ -1262,17 +1263,14 @@ export class DriverDatabaseComponent implements OnInit {
       return;
     }
 
-    const payload = {
-      name,
-      phone,
-      email: String(driver?.email ?? '').trim() || null,
-      licenseNumber: String(driver?.licenseNumber ?? '').trim() || null,
-      licenseState: String(driver?.licenseState ?? '').trim() || null,
-      licenseExpiry: driver?.licenseExpiry || driver?.licenseExpiration || null,
-      status: 'onboarding',
-      driverType: driver?.driverType || null,
-      notes: 'Auto-created from onboarding compliance upload'
-    };
+    const existingDriverId = this.findBestMatchingDriverId(driver, this.drivers());
+    if (existingDriverId) {
+      this.linkDriverAliasId(driver, existingDriverId);
+      this.createComplianceDocumentUpload(driver, item, existingDriverId);
+      return;
+    }
+
+    const payload = this.buildOnboardingDriverPayload(driver);
 
     this.api.createDriver(payload).subscribe({
       next: (res: any) => {
@@ -1294,6 +1292,106 @@ export class DriverDatabaseComponent implements OnInit {
         this.compSaving.set(false);
       }
     });
+  }
+
+  private async ensureOnboardingDriversHaveNumericIds(rawDrivers: any[], onboardingRows: any[]): Promise<any[]> {
+    if (!Array.isArray(onboardingRows) || onboardingRows.length === 0) return onboardingRows || [];
+
+    const linkedRows: any[] = [];
+    for (const row of onboardingRows) {
+      const existingApiId = this.resolveApiDriverId(row);
+      if (existingApiId) {
+        linkedRows.push(row);
+        continue;
+      }
+
+      const matchedId = this.findBestMatchingDriverId(row, rawDrivers);
+      if (matchedId) {
+        linkedRows.push(this.withLinkedDriverId(row, matchedId));
+        continue;
+      }
+
+      const createdId = await this.createOnboardingDriverRecordAsync(row);
+      if (createdId) {
+        linkedRows.push(this.withLinkedDriverId(row, createdId));
+        continue;
+      }
+
+      linkedRows.push(row);
+    }
+
+    return linkedRows;
+  }
+
+  private async createOnboardingDriverRecordAsync(row: any): Promise<string | null> {
+    const name = String(row?.name ?? '').trim();
+    const phone = String(row?.phone ?? '').trim();
+    if (!name || !phone) return null;
+
+    try {
+      const payload = this.buildOnboardingDriverPayload(row);
+      const res: any = await this.api.createDriver(payload).toPromise();
+      const created = res?.data || res;
+      const createdId = String(created?.id ?? '').trim();
+      return this.isApiDriverId(createdId) ? createdId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private buildOnboardingDriverPayload(driver: any): any {
+    return {
+      name: String(driver?.name ?? '').trim(),
+      phone: String(driver?.phone ?? '').trim(),
+      email: String(driver?.email ?? '').trim() || null,
+      licenseNumber: String(driver?.licenseNumber ?? '').trim() || null,
+      licenseState: String(driver?.licenseState ?? '').trim() || null,
+      licenseExpiry: driver?.licenseExpiry || driver?.licenseExpiration || null,
+      status: 'onboarding',
+      driverType: driver?.driverType || null,
+      notes: 'Auto-created from onboarding compliance flow'
+    };
+  }
+
+  private withLinkedDriverId(row: any, apiDriverId: string): any {
+    const idSet = new Set<string>(
+      [
+        String(row?.id ?? '').trim(),
+        ...(Array.isArray(row?._aliasDriverIds) ? row._aliasDriverIds.map((id: any) => String(id ?? '').trim()) : []),
+        apiDriverId
+      ].filter((id: string) => !!id)
+    );
+    return {
+      ...row,
+      _aliasDriverIds: Array.from(idSet),
+      _linkedDriverId: apiDriverId
+    };
+  }
+
+  private findBestMatchingDriverId(target: any, candidates: any[]): string | null {
+    if (!Array.isArray(candidates) || candidates.length === 0) return null;
+
+    const targetEmail = String(target?.email ?? '').trim().toLowerCase();
+    const targetPhone = String(target?.phone ?? '').replace(/\D+/g, '');
+    const targetName = String(target?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+    const match = candidates.find((candidate: any) => {
+      const candidateId = String(candidate?.id ?? '').trim();
+      if (!this.isApiDriverId(candidateId)) return false;
+
+      const candidateEmail = String(candidate?.email ?? '').trim().toLowerCase();
+      const candidatePhone = String(candidate?.phone ?? '').replace(/\D+/g, '');
+      const candidateName = String(candidate?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+      if (targetEmail && candidateEmail && targetEmail === candidateEmail) return true;
+      if (targetPhone && candidatePhone && targetPhone === candidatePhone) return true;
+      if (targetName && candidateName && targetName === candidateName) return true;
+      return false;
+    });
+
+    if (!match) return null;
+    const candidateId = String(match?.id ?? '').trim();
+    return this.isApiDriverId(candidateId) ? candidateId : null;
   }
 
   private linkDriverAliasId(driver: any, apiDriverId: string): void {
