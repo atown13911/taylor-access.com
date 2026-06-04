@@ -59,8 +59,8 @@ public class CurrentUserService
         if (IsInactiveStatus(claimStatus)) return false;
 
         var lookup = await TryGetPortalUserStatusAsync();
-        if (lookup.lookedUp)
-            return lookup.found && !IsInactiveStatus(lookup.status);
+        if (lookup.lookedUp && lookup.found)
+            return !IsInactiveStatus(lookup.status);
 
         var user = await GetUserAsync();
         return user != null && !IsInactiveStatus(user.Status);
@@ -200,14 +200,14 @@ public class CurrentUserService
 
             var value = await cmd.ExecuteScalarAsync();
             if (value == null || value == DBNull.Value)
-                return (true, false, null);
+                return (false, false, null);
 
             return (true, true, value.ToString());
         }
         catch
         {
-            // If portal lookup fails, deny access rather than allowing potentially disabled users.
-            return (true, false, "disabled");
+            // Fail open to local user checks to avoid locking active users out during transient portal DB issues.
+            return (false, false, null);
         }
     }
 
