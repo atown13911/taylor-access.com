@@ -1,0 +1,91 @@
+<div class="fleet-dashboard">
+  <div class="page-header">
+    <div>
+      <h1><i class="bx bx-tachometer"></i> Fleet Dashboard</h1>
+      <p>Central view of drivers, carriers, and fleet entities.</p>
+    </div>
+    <button type="button" class="btn-refresh" (click)="loadDashboard()" [disabled]="loading()">
+      <i class="bx" [class.bx-refresh]="!loading()" [class.bx-loader-alt]="loading()" [class.bx-spin]="loading()"></i>
+      Refresh
+    </button>
+  </div>
+
+  @if (error()) {
+    <div class="banner error">{{ error() }}</div>
+  }
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <i class="bx bx-id-card stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ stats().totalDrivers }}</span>
+        <span class="stat-label">Total Drivers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class="bx bx-user-check stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ stats().activeDrivers }}</span>
+        <span class="stat-label">Active Drivers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class="bx bx-user-x stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ stats().inactiveDrivers }}</span>
+        <span class="stat-label">Inactive Drivers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class="bx bxs-truck stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ stats().totalCarriers }}</span>
+        <span class="stat-label">Total Carriers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class="bx bx-check-shield stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ stats().activeCarriers }}</span>
+        <span class="stat-label">Active Carriers</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <i class="bx bx-collection stat-icon"></i>
+      <div>
+        <span class="stat-value">{{ stats().totalFleets }}</span>
+        <span class="stat-label">Fleet Entities</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <section class="card">
+      <h2><i class="bx bx-list-check"></i> Action Needed</h2>
+      <ul>
+        @for (item of actionItems(); track item) {
+          <li>{{ item }}</li>
+        }
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2><i class="bx bx-link"></i> Quick Navigation</h2>
+      <div class="quick-links">
+        @for (link of quickLinks; track link.route) {
+          <a class="quick-link" [routerLink]="link.route">
+            <i [class]="link.icon"></i>
+            <div>
+              <strong>{{ link.label }}</strong>
+              <span>{{ link.detail }}</span>
+            </div>
+          </a>
+        }
+      </div>
+    </section>
+  </div>
+
+  @if (lastUpdated()) {
+    <div class="last-updated">Last updated: {{ lastUpdated() | date:'MMM d, y h:mm a' }}</div>
+  }
+</div>

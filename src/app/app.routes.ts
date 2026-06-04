@@ -58,6 +58,15 @@ export const routes: Routes = [
         loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
       },
       {
+        path: 'fleet/dashboard',
+        loadComponent: () => import('./features/fleet/fleet-dashboard/fleet-dashboard.component').then(m => m.FleetDashboardComponent)
+      },
+      {
+        path: 'fleet',
+        redirectTo: 'fleet/dashboard',
+        pathMatch: 'full'
+      },
+      {
         path: 'dispatchers',
         loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
       },

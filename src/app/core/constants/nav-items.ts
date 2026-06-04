@@ -34,7 +34,8 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   { label: 'Labels', icon: 'bx-purchase-tag', route: '/labels' },
   { label: 'Proofs', icon: 'bx-check-shield', route: '/proofs' },
   // Fleet
-  { label: 'Driver Roster', icon: 'bx-id-card', route: '/drivers', section: 'Fleet' },
+  { label: 'Fleet Dashboard', icon: 'bx-tachometer', route: '/fleet/dashboard', section: 'Fleet' },
+  { label: 'Driver Roster', icon: 'bx-id-card', route: '/drivers' },
   { label: 'Carriers', icon: 'bxs-truck', route: '/carriers' },
   { label: 'Vehicles', icon: 'bx-car', route: '/vehicles' },
   { label: 'Fleet Mgmt', icon: 'bx-group', route: '/fleets' },

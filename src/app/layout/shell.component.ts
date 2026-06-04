@@ -75,6 +75,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
         { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
         { label: 'Applicants', icon: 'bx bx-user-plus', route: '/hr/applicants' },
+        { label: 'Fleet Dashboard', icon: 'bx bx-tachometer', route: '/fleet/dashboard' },
         { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
         { label: 'Dispatchers', icon: 'bx bx-user-voice', route: '/dispatchers' },
         { label: 'Carriers', icon: 'bx bxs-truck', route: '/carriers' },
