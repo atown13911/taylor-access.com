@@ -213,14 +213,20 @@ public class CurrentUserService
         var email = (Email ?? string.Empty).Trim();
         if (!string.IsNullOrWhiteSpace(email))
         {
-            var emailUserIds = await _context.Users
+            var emailUsers = await _context.Users
                 .AsNoTracking()
                 .Where(u => u.Email.ToLower() == email.ToLower())
-                .Select(u => u.Id)
                 .ToListAsync();
 
-            if (emailUserIds.Count > 0)
+            if (emailUsers.Count > 0)
             {
+                foreach (var emailUser in emailUsers)
+                {
+                    if (emailUser.OrganizationId.HasValue && emailUser.OrganizationId.Value > 0)
+                        orgIds.Add(emailUser.OrganizationId.Value);
+                }
+
+                var emailUserIds = emailUsers.Select(u => u.Id).ToList();
                 var fromEmailUsers = await _context.UserOrganizations
                     .Where(uo => emailUserIds.Contains(uo.UserId))
                     .Select(uo => uo.OrganizationId)
