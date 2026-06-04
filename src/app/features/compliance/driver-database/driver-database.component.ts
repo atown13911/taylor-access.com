@@ -1256,9 +1256,8 @@ export class DriverDatabaseComponent implements OnInit {
 
   private createDriverFromOnboardingProfile(driver: any, item: any): void {
     const name = String(driver?.name ?? '').trim();
-    const phone = String(driver?.phone ?? '').trim();
-    if (!name || !phone) {
-      this.toast.error('Onboarding profile must include full name and phone before document upload.', 'Driver record required');
+    if (!name) {
+      this.toast.error('Onboarding profile must include full name before document upload.', 'Driver record required');
       this.compSaving.set(false);
       return;
     }

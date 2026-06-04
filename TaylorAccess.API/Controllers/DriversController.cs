@@ -141,7 +141,22 @@ public class DriversController : ControllerBase
         // Input validation
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest(new { error = "Full Name is required" });
-        if (string.IsNullOrWhiteSpace(request.Phone))
+
+        var normalizedStatus = (request.Status ?? string.Empty).Trim().ToLowerInvariant();
+        var isOnboardingStatus =
+            normalizedStatus == "onboarding" ||
+            normalizedStatus == "pending" ||
+            normalizedStatus == "invited" ||
+            normalizedStatus == "application" ||
+            normalizedStatus == "applicant" ||
+            normalizedStatus == "orientation" ||
+            normalizedStatus == "recruiting" ||
+            normalizedStatus == "pre-hire" ||
+            normalizedStatus == "prehire" ||
+            normalizedStatus == "background-check" ||
+            normalizedStatus == "training";
+
+        if (string.IsNullOrWhiteSpace(request.Phone) && !isOnboardingStatus)
             return BadRequest(new { error = "Phone number is required" });
 
         var user = await _currentUserService.GetUserAsync();
