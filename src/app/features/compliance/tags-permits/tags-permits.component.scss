@@ -336,12 +336,13 @@
 
 .tp-trailer-drawer {
   position: fixed;
-  top: 0;
-  right: 0;
-  height: 100vh;
-  width: min(420px, 92vw);
+  top: 76px;
+  right: 12px;
+  height: calc(100vh - 88px);
+  width: min(400px, calc(100vw - 24px));
   background: #0d0d14;
-  border-left: 1px solid rgba(0, 212, 255, 0.2);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 14px;
   box-shadow: -14px 0 28px rgba(0, 0, 0, 0.45);
   z-index: 99999;
   display: flex;
@@ -349,6 +350,17 @@
   gap: 0.85rem;
   padding: 1rem;
   overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .tp-trailer-drawer {
+    top: 64px;
+    right: 0;
+    height: calc(100vh - 64px);
+    width: min(420px, 100vw);
+    border-radius: 0;
+    border-right: none;
+  }
 }
 
 .tp-trailer-drawer-header {
@@ -439,6 +451,77 @@
     white-space: pre-wrap;
     word-break: break-word;
   }
+}
+
+.tp-trailer-photo-table {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.65rem;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.74rem;
+  }
+
+  th, td {
+    padding: 0.4rem 0.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    text-align: left;
+    color: var(--text-secondary);
+  }
+
+  th {
+    color: var(--cyan);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+}
+
+.tp-trailer-photo-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+
+  span {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  strong {
+    color: var(--cyan);
+    font-size: 0.82rem;
+  }
+}
+
+.tp-file-name {
+  color: var(--text-primary) !important;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tp-photo-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.tp-trailer-photo-empty,
+.tp-trailer-photo-loading {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  padding: 0.5rem 0.15rem 0.3rem;
 }
 
 // Floating Action Button

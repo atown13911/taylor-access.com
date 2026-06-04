@@ -50,8 +50,11 @@ export class TagsPermitsComponent implements OnInit {
   uploadTarget = signal<any>(null);   // permit being uploaded to
   permitDocFile: File | null = null;
   trailerPhotoUploading = signal(false);
+  trailerPhotoBatchUploading = signal(false);
   trailerPhotoFileName = signal('');
   trailerPhotoPreviewUrl = signal<string | null>(null);
+  trailerPhotoHistory = signal<any[]>([]);
+  trailerPhotoHistoryLoading = signal(false);
   private trailerPhotoFile: File | null = null;
   private trailerStatusOverrides = signal<Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>>({});
   private trailerFieldOverrides = signal<Record<string, Partial<{
@@ -606,10 +609,13 @@ export class TagsPermitsComponent implements OnInit {
   openTrailerDrawer(row: any): void {
     if (this.activeTab() !== 'trailer') return;
     this.selectedTrailerDrawer.set(row);
+    void this.loadTrailerPhotoHistory(this.resolveTrailerId(row));
   }
 
   closeTrailerDrawer(): void {
     this.selectedTrailerDrawer.set(null);
+    this.trailerPhotoHistory.set([]);
+    this.trailerPhotoHistoryLoading.set(false);
   }
 
   openTrailerEditFromDrawer(): void {
@@ -1001,6 +1007,25 @@ export class TagsPermitsComponent implements OnInit {
     input.click();
   }
 
+  openDrawerTrailerPhotoPicker(): void {
+    const input = document.getElementById('trailer-drawer-photo-input') as HTMLInputElement | null;
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
+  onDrawerTrailerPhotosSelected(event: Event): void {
+    const files = Array.from((event.target as HTMLInputElement)?.files || []);
+    if (!files.length) return;
+    const trailer = this.selectedTrailerDrawer();
+    const trailerId = this.resolveTrailerId(trailer);
+    if (!trailerId) {
+      this.toast.error('Select a trailer first.', 'Photo upload');
+      return;
+    }
+    void this.uploadTrailerPhotoBatch(trailerId, files);
+  }
+
   onTrailerPhotoSelected(event: Event): void {
     const file = (event.target as HTMLInputElement)?.files?.[0];
     if (!file) return;
@@ -1037,12 +1062,70 @@ export class TagsPermitsComponent implements OnInit {
       this.trailerPhotoFile = null;
       this.trailerPhotoFileName.set('');
       this.toast.success('Trailer photo uploaded', 'Success');
+      await this.loadTrailerPhotoHistory(trailerId);
       this.loadData();
     } catch (err: any) {
       this.toast.error(this.extractErrorMessage(err, 'Failed to upload trailer photo'), 'Photo upload');
     } finally {
       this.trailerPhotoUploading.set(false);
     }
+  }
+
+  private async uploadTrailerPhotoBatch(trailerId: any, files: File[]): Promise<void> {
+    const normalizedTrailerId = String(trailerId ?? '').trim();
+    if (!normalizedTrailerId || !files.length) return;
+
+    this.trailerPhotoBatchUploading.set(true);
+    let successCount = 0;
+    for (const file of files) {
+      try {
+        await this.tryUploadTrailerPhoto(normalizedTrailerId, file);
+        successCount++;
+      } catch {
+        // Keep uploading remaining files.
+      }
+    }
+
+    await this.loadTrailerPhotoHistory(normalizedTrailerId);
+    await this.syncTrailerPhotoOverrides();
+    this.loadData();
+    this.trailerPhotoBatchUploading.set(false);
+
+    if (successCount > 0) {
+      this.toast.success(`${successCount} trailer photo${successCount === 1 ? '' : 's'} uploaded`, 'Success');
+    } else {
+      this.toast.error('Failed to upload trailer photos', 'Photo upload');
+    }
+  }
+
+  openTrailerPhotoFromHistory(photo: any): void {
+    const rawUrl = String(photo?.photoUrl || '').trim();
+    if (!rawUrl) return;
+    const absoluteUrl = rawUrl.startsWith('/api/') ? `${this.apiUrl}${rawUrl}` : rawUrl;
+    window.open(absoluteUrl, '_blank');
+  }
+
+  async deleteTrailerPhotoFromHistory(photo: any): Promise<void> {
+    const id = Number(photo?.id || 0);
+    if (!id || !confirm('Delete this trailer photo?')) return;
+    try {
+      await firstValueFrom(this.http.delete(`${this.apiUrl}/api/v1/trailer-photos/photo/${id}`));
+      const trailerId = this.resolveTrailerId(this.selectedTrailerDrawer());
+      await this.loadTrailerPhotoHistory(trailerId);
+      await this.syncTrailerPhotoOverrides();
+      this.loadData();
+      this.toast.success('Trailer photo deleted', 'Deleted');
+    } catch {
+      this.toast.error('Failed to delete trailer photo', 'Error');
+    }
+  }
+
+  formatFileSize(size: any): string {
+    const bytes = Number(size || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   viewPermitDoc(p: any): void {
@@ -1670,9 +1753,19 @@ export class TagsPermitsComponent implements OnInit {
     const payload = new FormData();
     payload.append('file', file);
     const encodedTrailerId = encodeURIComponent(String(trailerId).trim());
-    await firstValueFrom(
+    const res: any = await firstValueFrom(
       this.http.post<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/upload`, payload)
     );
+    const preferred = String(
+      res?.latestPhotoUrl ??
+      res?.photoUrl ??
+      res?.data?.latestPhotoUrl ??
+      res?.data?.photoUrl ??
+      ''
+    ).trim();
+    if (preferred) {
+      return preferred.startsWith('/api/') ? `${this.apiUrl}${preferred}` : preferred;
+    }
     return this.buildTrailerPhotoViewUrl(trailerId);
   }
 
@@ -1809,6 +1902,28 @@ export class TagsPermitsComponent implements OnInit {
       }
     } catch {
       // Ignore photo override sync failures.
+    }
+  }
+
+  private async loadTrailerPhotoHistory(trailerId: any): Promise<void> {
+    const id = String(trailerId ?? '').trim();
+    if (!id) {
+      this.trailerPhotoHistory.set([]);
+      return;
+    }
+
+    this.trailerPhotoHistoryLoading.set(true);
+    try {
+      const encodedTrailerId = encodeURIComponent(id);
+      const res: any = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/photos`)
+      );
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      this.trailerPhotoHistory.set(rows);
+    } catch {
+      this.trailerPhotoHistory.set([]);
+    } finally {
+      this.trailerPhotoHistoryLoading.set(false);
     }
   }
 }

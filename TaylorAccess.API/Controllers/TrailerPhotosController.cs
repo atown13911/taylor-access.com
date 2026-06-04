@@ -88,36 +88,69 @@ public class TrailerPhotosController : ControllerBase
         await file.CopyToAsync(memoryStream);
         var base64Content = Convert.ToBase64String(memoryStream.ToArray());
 
-        var existing = await _context.TrailerPhotos
-            .FirstOrDefaultAsync(p => p.TrailerId == normalizedTrailerId && p.OrganizationId == organizationId);
-
-        if (existing == null)
+        var photo = new TrailerPhoto
         {
-            existing = new TrailerPhoto
-            {
-                TrailerId = normalizedTrailerId,
-                OrganizationId = organizationId,
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.TrailerPhotos.Add(existing);
-        }
-
-        existing.FileName = file.FileName;
-        existing.ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
-        existing.FileSize = file.Length;
-        existing.FileContent = base64Content;
-        existing.UploadedByUserId = user.Id > 0 ? user.Id : null;
-        existing.UploadedBy = user.Email;
-        existing.UpdatedAt = DateTime.UtcNow;
+            TrailerId = normalizedTrailerId,
+            OrganizationId = organizationId,
+            FileName = file.FileName,
+            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            FileSize = file.Length,
+            FileContent = base64Content,
+            UploadedByUserId = user.Id > 0 ? user.Id : null,
+            UploadedBy = user.Email,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _context.TrailerPhotos.Add(photo);
 
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
-            id = existing.Id,
-            trailerId = existing.TrailerId,
-            photoUrl = BuildViewUrl(existing.TrailerId)
+            id = photo.Id,
+            trailerId = photo.TrailerId,
+            photoUrl = BuildPhotoViewUrl(photo.Id),
+            latestPhotoUrl = BuildViewUrl(photo.TrailerId)
         });
+    }
+
+    [HttpGet("{trailerId}/photos")]
+    public async Task<ActionResult<object>> GetTrailerPhotoList([FromRoute] string trailerId)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        if (!hasUnrestrictedAccess && user.OrganizationId == null)
+            return Unauthorized(new { message = "User must belong to an organization" });
+
+        var normalizedTrailerId = NormalizeTrailerId(trailerId);
+        if (string.IsNullOrWhiteSpace(normalizedTrailerId))
+            return BadRequest(new { error = "Trailer id is required" });
+
+        var query = _context.TrailerPhotos.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess)
+            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+
+        var photos = await query
+            .Where(p => p.TrailerId == normalizedTrailerId)
+            .OrderByDescending(p => p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Select(p => new
+            {
+                p.Id,
+                p.TrailerId,
+                p.FileName,
+                p.ContentType,
+                p.FileSize,
+                p.UploadedBy,
+                p.CreatedAt,
+                p.UpdatedAt,
+                photoUrl = BuildPhotoViewUrl(p.Id)
+            })
+            .ToListAsync();
+
+        return Ok(new { data = photos });
     }
 
     [HttpGet("{trailerId}/view")]
@@ -150,6 +183,54 @@ public class TrailerPhotosController : ControllerBase
         return File(bytes, contentType);
     }
 
+    [HttpGet("photo/{photoId:int}/view")]
+    public async Task<ActionResult> ViewTrailerPhotoById([FromRoute] int photoId)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        if (!hasUnrestrictedAccess && user.OrganizationId == null)
+            return Unauthorized(new { message = "User must belong to an organization" });
+
+        var query = _context.TrailerPhotos.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess)
+            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+
+        var photo = await query.FirstOrDefaultAsync(p => p.Id == photoId);
+        if (photo == null || string.IsNullOrWhiteSpace(photo.FileContent))
+            return NotFound(new { error = "Trailer photo not found" });
+
+        var bytes = Convert.FromBase64String(photo.FileContent);
+        var contentType = string.IsNullOrWhiteSpace(photo.ContentType) ? "application/octet-stream" : photo.ContentType;
+        var safeFileName = string.IsNullOrWhiteSpace(photo.FileName) ? $"trailer-{photo.TrailerId}-{photo.Id}" : photo.FileName;
+        Response.Headers.Append("Content-Disposition", $"inline; filename=\"{safeFileName}\"");
+        return File(bytes, contentType);
+    }
+
+    [HttpDelete("photo/{photoId:int}")]
+    public async Task<ActionResult<object>> DeleteTrailerPhoto([FromRoute] int photoId)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        if (!hasUnrestrictedAccess && user.OrganizationId == null)
+            return Unauthorized(new { message = "User must belong to an organization" });
+
+        var query = _context.TrailerPhotos.AsQueryable();
+        if (!hasUnrestrictedAccess)
+            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+
+        var photo = await query.FirstOrDefaultAsync(p => p.Id == photoId);
+        if (photo == null)
+            return NotFound(new { error = "Trailer photo not found" });
+
+        _context.TrailerPhotos.Remove(photo);
+        await _context.SaveChangesAsync();
+        return Ok(new { success = true, id = photoId });
+    }
+
     private static string NormalizeTrailerId(string? trailerId) =>
         (trailerId ?? string.Empty).Trim();
 
@@ -158,4 +239,7 @@ public class TrailerPhotosController : ControllerBase
         var encodedTrailerId = Uri.EscapeDataString(trailerId);
         return $"/api/v1/trailer-photos/{encodedTrailerId}/view";
     }
+
+    private static string BuildPhotoViewUrl(int photoId) =>
+        $"/api/v1/trailer-photos/photo/{photoId}/view";
 }

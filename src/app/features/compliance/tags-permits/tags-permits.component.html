@@ -114,6 +114,10 @@
   <input type="file" id="trailer-photo-input" style="display:none"
     accept="image/*"
     (change)="onTrailerPhotoSelected($event)">
+  <input type="file" id="trailer-drawer-photo-input" style="display:none"
+    accept="image/*"
+    multiple
+    (change)="onDrawerTrailerPhotosSelected($event)">
 
   <!-- Permit-based Tabs -->
   @if ((activeTab() === 'permits' || activeTab() === 'irp' || activeTab() === 'elds' || activeTab() === 'cameras' || activeTab() === 'cables') && !loading()) {
@@ -578,8 +582,15 @@
         <button class="tp-btn primary" (click)="openTrailerEditFromDrawer()">
           <i class="bx bx-edit"></i> Edit Trailer
         </button>
+        <button class="tp-btn" (click)="openDrawerTrailerPhotoPicker()" [disabled]="trailerPhotoBatchUploading()">
+          @if (trailerPhotoBatchUploading()) {
+            <i class="bx bx-loader-alt bx-spin"></i> Uploading...
+          } @else {
+            <i class="bx bx-images"></i> Upload Photos
+          }
+        </button>
         <button class="tp-btn" (click)="openTrailerPhotoFromDrawer()">
-          <i class="bx bx-image-add"></i> Upload / View Photo
+          <i class="bx bx-image-add"></i> Photo Upload Tab
         </button>
       </div>
 
@@ -595,6 +606,46 @@
       <div class="tp-trailer-drawer-notes">
         <span>Notes</span>
         <p>{{ selectedTrailerDrawer()?.notes || 'No notes' }}</p>
+      </div>
+
+      <div class="tp-trailer-photo-table">
+        <div class="tp-trailer-photo-table-head">
+          <span>Uploaded Photos</span>
+          <strong>{{ trailerPhotoHistory().length }}</strong>
+        </div>
+        @if (trailerPhotoHistoryLoading()) {
+          <div class="tp-trailer-photo-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading photos...</div>
+        } @else if (trailerPhotoHistory().length === 0) {
+          <div class="tp-trailer-photo-empty">No uploaded photos yet.</div>
+        } @else {
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Size</th>
+                <th>Uploaded</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (photo of trailerPhotoHistory(); track photo.id) {
+                <tr>
+                  <td class="tp-file-name">{{ photo.fileName || ('Photo #' + photo.id) }}</td>
+                  <td>{{ formatFileSize(photo.fileSize) }}</td>
+                  <td>{{ formatDate(photo.createdAt) }}</td>
+                  <td class="tp-photo-actions-cell">
+                    <button class="tp-icon-btn" title="View photo" (click)="openTrailerPhotoFromHistory(photo)">
+                      <i class="bx bx-show"></i>
+                    </button>
+                    <button class="tp-icon-btn danger" title="Delete photo" (click)="deleteTrailerPhotoFromHistory(photo)">
+                      <i class="bx bx-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
       </div>
     </aside>
   }
