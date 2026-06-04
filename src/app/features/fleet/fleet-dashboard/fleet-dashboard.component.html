@@ -69,22 +69,29 @@
       </div>
     </div>
     <div class="density-visual-shell">
-      @if (fleetApplicantDensityData().length > 0) {
-        <ngx-charts-area-chart
-          [results]="fleetApplicantDensityChartData()"
-          [scheme]="fleetApplicantDensityScheme"
-          [xAxis]="true"
-          [yAxis]="true"
-          [autoScale]="true"
-          [showXAxisLabel]="true"
-          [xAxisLabel]="'Week'"
-          [showYAxisLabel]="true"
-          [yAxisLabel]="'Applicants'"
-          [legend]="false"
-          [animations]="true"
-          [timeline]="false"
-          [gradient]="true">
-        </ngx-charts-area-chart>
+      @if (fleetApplicantCandlestickData().length > 0) {
+        <svg class="candlestick-chart" [attr.viewBox]="'0 0 ' + candlestickChartWidth + ' ' + candlestickChartHeight" role="img" aria-label="Daily applicant candlestick chart">
+          @for (yTick of candlestickYTicks(); track yTick) {
+            <line class="candle-gridline" [attr.x1]="candlestickPaddingLeft" [attr.y1]="getCandleY(yTick)" [attr.x2]="candlestickChartWidth - candlestickPaddingRight" [attr.y2]="getCandleY(yTick)"></line>
+            <text class="candle-y-label" [attr.x]="candlestickPaddingLeft - 8" [attr.y]="getCandleY(yTick) + 4">{{ yTick }}</text>
+          }
+
+          @for (tick of candlestickXTicks(); track tick.index) {
+            <line class="candle-tick-line" [attr.x1]="getCandleX(tick.index)" [attr.y1]="candlestickChartHeight - candlestickPaddingBottom" [attr.x2]="getCandleX(tick.index)" [attr.y2]="candlestickChartHeight - candlestickPaddingBottom + 4"></line>
+            <text class="candle-x-label" [attr.x]="getCandleX(tick.index)" [attr.y]="candlestickChartHeight - 8">{{ tick.label }}</text>
+          }
+
+          @for (point of fleetApplicantCandlestickData(); track point.dateKey; let i = $index) {
+            <line class="candle-wick" [attr.x1]="getCandleX(i)" [attr.y1]="getCandleY(point.high)" [attr.x2]="getCandleX(i)" [attr.y2]="getCandleY(point.low)"></line>
+            <rect [attr.class]="'candle-body ' + getCandleBodyClass(point)"
+              [attr.x]="getCandleX(i) - (getCandleBodyWidth() / 2)"
+              [attr.y]="getCandleBodyY(point)"
+              [attr.width]="getCandleBodyWidth()"
+              [attr.height]="getCandleBodyHeight(point)">
+              <title>{{ point.dateKey }}: open {{ point.open }}, high {{ point.high }}, low {{ point.low }}, close {{ point.close }}</title>
+            </rect>
+          }
+        </svg>
       } @else {
         <div class="chart-empty">No fleet applicant trend data available yet.</div>
       }

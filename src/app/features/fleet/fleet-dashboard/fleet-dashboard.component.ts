@@ -21,6 +21,15 @@ interface ChartPoint {
   value: number;
 }
 
+interface CandlestickPoint {
+  dateKey: string;
+  label: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 interface FleetApplicantRow {
   position: string;
   appliedDate: string;
@@ -51,6 +60,7 @@ export class FleetDashboardComponent implements OnInit {
   error = signal<string | null>(null);
   lastUpdated = signal<Date | null>(null);
   fleetApplicantDensityData = signal<ChartPoint[]>([]);
+  fleetApplicantCandlestickData = signal<CandlestickPoint[]>([]);
   fleetApplicantCount = signal(0);
   fleetApplicantStateCounts = signal<Map<string, number>>(new Map());
   currentDriverStateCounts = signal<Map<string, number>>(new Map());
@@ -101,7 +111,46 @@ export class FleetDashboardComponent implements OnInit {
   ]);
 
   readonly applicantDensityWindowLabel = computed(() => {
-    return `YTD ${this.applicantDensityYear} (weekly)`;
+    return `YTD ${this.applicantDensityYear} (daily candlesticks)`;
+  });
+
+  readonly candlestickChartWidth = 1040;
+  readonly candlestickChartHeight = 320;
+  readonly candlestickPaddingLeft = 46;
+  readonly candlestickPaddingRight = 14;
+  readonly candlestickPaddingTop = 14;
+  readonly candlestickPaddingBottom = 34;
+
+  readonly candlestickMax = computed(() => {
+    const data = this.fleetApplicantCandlestickData();
+    if (data.length === 0) return 1;
+    return Math.max(...data.map((d) => d.high), 1);
+  });
+
+  readonly candlestickXTicks = computed(() => {
+    const points = this.fleetApplicantCandlestickData();
+    const ticks: Array<{ index: number; label: string }> = [];
+    for (let i = 0; i < points.length; i++) {
+      const current = points[i];
+      const previous = i > 0 ? points[i - 1] : null;
+      const monthChanged = !previous || current.dateKey.slice(0, 7) !== previous.dateKey.slice(0, 7);
+      if (monthChanged) ticks.push({ index: i, label: current.label });
+    }
+    if (ticks.length > 0 && ticks[ticks.length - 1]?.index !== points.length - 1) {
+      const last = points[points.length - 1];
+      ticks.push({ index: points.length - 1, label: last.label });
+    }
+    return ticks;
+  });
+
+  readonly candlestickYTicks = computed(() => {
+    const max = this.candlestickMax();
+    const segments = 5;
+    const ticks: number[] = [];
+    for (let i = 0; i <= segments; i++) {
+      ticks.push(Math.round((max / segments) * i));
+    }
+    return ticks;
   });
 
   readonly topStateBreakdown = computed(() => {
@@ -119,10 +168,10 @@ export class FleetDashboardComponent implements OnInit {
   });
 
   readonly peakDensityLabel = computed(() => {
-    const points = this.fleetApplicantDensityData();
+    const points = this.fleetApplicantCandlestickData();
     if (points.length === 0) return 'N/A';
-    const peak = points.reduce((best, point) => (point.value > best.value ? point : best), points[0]);
-    return peak?.name || 'N/A';
+    const peak = points.reduce((best, point) => (point.high > best.high ? point : best), points[0]);
+    return peak?.label || 'N/A';
   });
 
   ngOnInit(): void {
@@ -161,6 +210,7 @@ export class FleetDashboardComponent implements OnInit {
     } catch {
       this.error.set('Unable to load fleet dashboard data right now.');
       this.fleetApplicantDensityData.set([]);
+      this.fleetApplicantCandlestickData.set([]);
       this.fleetApplicantCount.set(0);
       this.fleetApplicantStateCounts.set(new Map());
       this.currentDriverStateCounts.set(new Map());
@@ -187,11 +237,13 @@ export class FleetDashboardComponent implements OnInit {
     const applicantRows = this.parseFleetApplicants(recordsPayload);
     const fleetApplicants = applicantRows.filter((row) => this.isFleetPosition(row.position, positionsGroupMap));
     const densityPoints = this.buildDensityPointsYtdWeekly(fleetApplicants);
+    const candlesticks = this.buildDailyCandlesticks(fleetApplicants);
     const applicantStateCounts = this.buildStateCounts(fleetApplicants);
     const currentDriverStateCounts = this.buildCurrentDriverStateCounts(driverPayload);
 
     this.fleetApplicantCount.set(fleetApplicants.length);
     this.fleetApplicantDensityData.set(densityPoints);
+    this.fleetApplicantCandlestickData.set(candlesticks);
     this.fleetApplicantStateCounts.set(applicantStateCounts);
     this.currentDriverStateCounts.set(currentDriverStateCounts);
     void this.refreshUsMap(applicantStateCounts, currentDriverStateCounts);
@@ -296,6 +348,55 @@ export class FleetDashboardComponent implements OnInit {
     return counts;
   }
 
+  private buildDailyCandlesticks(rows: FleetApplicantRow[]): CandlestickPoint[] {
+    const start = new Date(this.applicantDensityYear, 0, 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(0, 0, 0, 0);
+    const ytdEnd = end.getFullYear() === this.applicantDensityYear ? end : new Date(this.applicantDensityYear, 11, 31);
+    ytdEnd.setHours(0, 0, 0, 0);
+
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      if (!parsed || parsed < start || parsed > ytdEnd) continue;
+      const key = this.formatDateOnly(parsed);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const points: CandlestickPoint[] = [];
+    let cursor = new Date(start);
+    let previousClose = 0;
+    while (cursor <= ytdEnd) {
+      const key = this.formatDateOnly(cursor);
+      const close = counts.get(key) ?? 0;
+      const open = previousClose;
+
+      const prevDate = new Date(cursor);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const nextDate = new Date(cursor);
+      nextDate.setDate(nextDate.getDate() + 1);
+      const prevCount = counts.get(this.formatDateOnly(prevDate)) ?? open;
+      const nextCount = counts.get(this.formatDateOnly(nextDate)) ?? close;
+      const high = Math.max(open, close, prevCount, nextCount);
+      const low = Math.min(open, close, prevCount, nextCount);
+
+      points.push({
+        dateKey: key,
+        label: this.formatChartWeekLabel(cursor),
+        open,
+        high,
+        low,
+        close
+      });
+
+      previousClose = close;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return points;
+  }
+
   private smoothDensity(points: ChartPoint[], radius: number): ChartPoint[] {
     if (points.length === 0) return [];
     const smoothed: ChartPoint[] = [];
@@ -319,6 +420,44 @@ export class FleetDashboardComponent implements OnInit {
     }
 
     return smoothed;
+  }
+
+  getCandleX(index: number): number {
+    const points = this.fleetApplicantCandlestickData();
+    const innerWidth = this.candlestickChartWidth - this.candlestickPaddingLeft - this.candlestickPaddingRight;
+    if (points.length <= 1) return this.candlestickPaddingLeft;
+    return this.candlestickPaddingLeft + ((innerWidth * index) / (points.length - 1));
+  }
+
+  getCandleY(value: number): number {
+    const max = this.candlestickMax();
+    const innerHeight = this.candlestickChartHeight - this.candlestickPaddingTop - this.candlestickPaddingBottom;
+    const safeMax = Math.max(max, 1);
+    const ratio = Math.max(0, Math.min(1, value / safeMax));
+    return this.candlestickPaddingTop + (innerHeight * (1 - ratio));
+  }
+
+  getCandleBodyWidth(): number {
+    const points = this.fleetApplicantCandlestickData();
+    const innerWidth = this.candlestickChartWidth - this.candlestickPaddingLeft - this.candlestickPaddingRight;
+    if (points.length <= 1) return 4;
+    const step = innerWidth / (points.length - 1);
+    return Math.max(2, Math.min(10, step * 0.65));
+  }
+
+  getCandleBodyY(point: CandlestickPoint): number {
+    return this.getCandleY(Math.max(point.open, point.close));
+  }
+
+  getCandleBodyHeight(point: CandlestickPoint): number {
+    const h = Math.abs(this.getCandleY(point.open) - this.getCandleY(point.close));
+    return Math.max(1.2, h);
+  }
+
+  getCandleBodyClass(point: CandlestickPoint): string {
+    if (point.close > point.open) return 'candle-up';
+    if (point.close < point.open) return 'candle-down';
+    return 'candle-flat';
   }
 
   private normalizeText(value: unknown): string {
