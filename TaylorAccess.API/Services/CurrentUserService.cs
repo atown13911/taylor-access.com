@@ -31,23 +31,21 @@ public class CurrentUserService
     {
         get
         {
-            var userIdClaim = _httpContextAccessor.HttpContext?.User
-                .FindFirst(ClaimTypes.NameIdentifier)?.Value
-                ?? _httpContextAccessor.HttpContext?.User.FindFirst("sub")?.Value;
+            var userIdClaim =
+                GetClaimValue(ClaimTypes.NameIdentifier, "sub", "userId", "userid", "user_id", "id");
             return int.TryParse(userIdClaim, out var userId) ? userId : null;
         }
     }
 
-    public string? Email => _httpContextAccessor.HttpContext?.User
-        .FindFirst(ClaimTypes.Email)?.Value
-        ?? _httpContextAccessor.HttpContext?.User.FindFirst("email")?.Value;
+    public string? Email =>
+        GetClaimValue(ClaimTypes.Email, "email", "preferred_username", "upn", "unique_name");
 
-    public string? Name => _httpContextAccessor.HttpContext?.User
-        .FindFirst(ClaimTypes.Name)?.Value 
+    public string? Name =>
+        GetClaimValue(ClaimTypes.Name, "name", "given_name", "preferred_username")
         ?? _httpContextAccessor.HttpContext?.User.Identity?.Name;
 
-    public string? Role => _httpContextAccessor.HttpContext?.User
-        .FindFirst(ClaimTypes.Role)?.Value;
+    public string? Role =>
+        GetClaimValue(ClaimTypes.Role, "role", "roles");
 
     public bool IsAuthenticated => 
         _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
@@ -237,6 +235,21 @@ public class CurrentUserService
         }
 
         return orgIds.ToList();
+    }
+
+    private string? GetClaimValue(params string[] claimTypes)
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        if (user == null || claimTypes == null || claimTypes.Length == 0) return null;
+
+        foreach (var claimType in claimTypes)
+        {
+            if (string.IsNullOrWhiteSpace(claimType)) continue;
+            var value = user.FindFirst(claimType)?.Value;
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+
+        return null;
     }
 
     private List<int> GetOrganizationIdsFromClaims()

@@ -57,7 +57,10 @@ public class DriversController : ControllerBase
         var canBypassOrgFilter =
             userRole == "product_owner" ||
             userRole == "superadmin" ||
-            userRole == "development";
+            userRole == "super_admin" ||
+            userRole == "development" ||
+            userRole == "admin" ||
+            userRole == "administrator";
 
         var allowedOrgIds = new HashSet<int>();
         if (!canBypassOrgFilter)
