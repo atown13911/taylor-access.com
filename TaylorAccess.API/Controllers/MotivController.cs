@@ -730,7 +730,12 @@ public class MotivController : ControllerBase
             target.TruckMake = vehicleMake ?? target.TruckMake;
             target.TruckModel = vehicleModel ?? target.TruckModel;
             target.TruckVin = vehicleVin ?? target.TruckVin;
-            target.DriverType = "driver";
+            // Preserve manually selected driver types (e.g. owner_operator, lease).
+            // Only default to "driver" when the row has no type yet.
+            if (string.IsNullOrWhiteSpace(target.DriverType))
+            {
+                target.DriverType = "driver";
+            }
             target.Notes = BuildMotivSyncNote(target.Notes, motiveUserId);
             target.UpdatedAt = DateTime.UtcNow;
             enrichedDrivers++;
