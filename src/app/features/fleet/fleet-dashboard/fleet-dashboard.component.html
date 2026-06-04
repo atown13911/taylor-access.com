@@ -96,6 +96,10 @@
       <h2><i class="bx bx-map-alt"></i> Fleet Applicant State Heatmap</h2>
       <span class="heatmap-subtitle">US choropleth by fleet applicant count</span>
     </div>
+    <div class="map-legend">
+      <span class="legend-item"><i class="legend-dot applicants"></i> Applicants</span>
+      <span class="legend-item"><i class="legend-dot drivers"></i> Current Drivers</span>
+    </div>
 
     @if (usMapLoading()) {
       <div class="chart-empty">Loading map...</div>
@@ -108,10 +112,10 @@
             <path
               class="us-state-path"
               [attr.d]="shape.path"
-              [attr.fill]="getMapFill(shape.intensity)"
+              [attr.fill]="getMapFill(shape)"
               [attr.data-state]="shape.code"
             >
-              <title>{{ shape.code }}: {{ shape.count }} applicants</title>
+              <title>{{ getMapTooltip(shape) }}</title>
             </path>
           }
         </svg>
@@ -124,6 +128,13 @@
       <div class="top-states">
         @for (row of topStateBreakdown(); track row.state) {
           <span class="top-state-pill">{{ row.state }}: {{ row.count }}</span>
+        }
+      </div>
+    }
+    @if (topDriverStateBreakdown().length > 0 && !usMapLoading()) {
+      <div class="top-states top-driver-states">
+        @for (row of topDriverStateBreakdown(); track row.state) {
+          <span class="top-state-pill driver">{{ row.state }} drivers: {{ row.count }}</span>
         }
       </div>
     }

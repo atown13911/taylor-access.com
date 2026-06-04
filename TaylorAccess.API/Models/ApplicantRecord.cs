@@ -22,6 +22,9 @@ public class ApplicantRecord
     [MaxLength(200)]
     public string? Source { get; set; }
 
+    [MaxLength(50)]
+    public string? State { get; set; }
+
     [MaxLength(200)]
     public string? TrainingGroupAssignment { get; set; }
 

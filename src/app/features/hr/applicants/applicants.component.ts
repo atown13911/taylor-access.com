@@ -17,6 +17,7 @@ interface ApplicantRow {
   age: number | null;
   position: string;
   source: string;
+  state: string;
   trainingGroupAssignment: string;
   status: ApplicantStatus;
   appliedDate: string;
@@ -777,6 +778,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <th>Age</th>
                 <th>Position</th>
                 <th>Source</th>
+                <th>State</th>
                 <th>Training Group</th>
                 <th>Status</th>
                 <th>Applied</th>
@@ -810,6 +812,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                     }
                   </td>
                   <td>{{ row.source || '—' }}</td>
+                  <td>{{ row.state || '—' }}</td>
                   <td>{{ row.trainingGroupAssignment || '—' }}</td>
                   <td>
                     <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
@@ -862,7 +865,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="11" class="empty">No applicants yet.</td>
+                  <td colspan="12" class="empty">No applicants yet.</td>
                 </tr>
               }
             </tbody>
@@ -910,6 +913,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <div class="form-row">
               <label>Source</label>
               <input type="text" [(ngModel)]="draft.source" placeholder="Indeed, Referral, LinkedIn..." />
+            </div>
+            <div class="form-row">
+              <label>State</label>
+              <input type="text" [(ngModel)]="draft.state" placeholder="SC, TX, GA..." />
             </div>
             <div class="form-row">
               <label>Training Group Assignment</label>
@@ -991,6 +998,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <input type="text" [(ngModel)]="editDraft.source" />
             </div>
             <div class="form-row">
+              <label>State</label>
+              <input type="text" [(ngModel)]="editDraft.state" />
+            </div>
+            <div class="form-row">
               <label>Training Group Assignment</label>
               <input type="text" [(ngModel)]="editDraft.trainingGroupAssignment" />
             </div>
@@ -1039,6 +1050,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <div><span>Name</span><strong>{{ row.fullName || '—' }}</strong></div>
                 <div><span>Position</span><strong>{{ row.position || '—' }}</strong></div>
                 <div><span>Source</span><strong>{{ row.source || '—' }}</strong></div>
+                <div><span>State</span><strong>{{ row.state || '—' }}</strong></div>
                 <div><span>Applied</span><strong>{{ row.appliedDate || '—' }}</strong></div>
               </div>
               <div class="form-row">
@@ -1932,6 +1944,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: row.age,
       position: row.position,
       source: row.source,
+      state: row.state,
       trainingGroupAssignment: row.trainingGroupAssignment,
       status: row.status,
       isHistorical: row.isHistorical,
@@ -1955,6 +1968,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: this.normalizeAge(this.draft.age),
       position: position || null,
       source: String(this.draft.source || '').trim() || null,
+      state: String(this.draft.state || '').trim() || null,
       trainingGroupAssignment: String(this.draft.trainingGroupAssignment || '').trim() || null,
       status: this.draft.status || 'new',
       isHistorical: isHistoricalEntry,
@@ -2019,6 +2033,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: this.normalizeAge(this.editDraft.age),
       position: this.normalizePositionName(this.editDraft.position) || null,
       source: this.normalizePositionName(this.editDraft.source) || null,
+      state: this.normalizePositionName(this.editDraft.state) || null,
       trainingGroupAssignment: this.normalizePositionName(this.editDraft.trainingGroupAssignment) || null,
       status: this.normalizeStatus(this.editDraft.status),
       isHistorical: this.toBoolean(this.editDraft.isHistorical, false),
@@ -2356,6 +2371,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       age: null as number | null,
       position: '',
       source: '',
+      state: '',
       trainingGroupAssignment: '',
       isHistorical: false,
       appliedDate: new Date().toISOString().slice(0, 10),
@@ -2859,6 +2875,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
           age: this.normalizeAge(row['age'] ?? row['Age']),
           position: this.normalizePositionName(row['position'] ?? row['Position']),
           source: this.normalizePositionName(row['source'] ?? row['Source']),
+          state: this.normalizePositionName(row['state'] ?? row['State']),
           trainingGroupAssignment: this.normalizePositionName(row['trainingGroupAssignment'] ?? row['TrainingGroupAssignment']),
           status: this.normalizeStatus(row['status'] ?? row['Status']),
           appliedDate: this.toIsoDateOnly(row['appliedDate'] ?? row['AppliedDate']),

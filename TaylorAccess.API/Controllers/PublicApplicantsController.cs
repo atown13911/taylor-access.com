@@ -92,6 +92,7 @@ public class PublicApplicantsController : ControllerBase
             FullName = fullName,
             Position = position,
             Source = "Landmark Trucking (website)",
+            State = string.IsNullOrWhiteSpace(body.HomeState) ? null : body.HomeState.Trim(),
             Status = "new",
             IsHistorical = false,
             AppliedDate = DateTime.UtcNow,

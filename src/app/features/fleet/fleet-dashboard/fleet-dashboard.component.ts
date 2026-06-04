@@ -30,8 +30,10 @@ interface FleetApplicantRow {
 interface UsStateShape {
   code: string;
   path: string;
-  count: number;
-  intensity: number;
+  applicantCount: number;
+  driverCount: number;
+  applicantIntensity: number;
+  driverIntensity: number;
 }
 
 @Component({
@@ -51,6 +53,7 @@ export class FleetDashboardComponent implements OnInit {
   fleetApplicantDensityData = signal<ChartPoint[]>([]);
   fleetApplicantCount = signal(0);
   fleetApplicantStateCounts = signal<Map<string, number>>(new Map());
+  currentDriverStateCounts = signal<Map<string, number>>(new Map());
   usStateShapes = signal<UsStateShape[]>([]);
   usMapLoading = signal(false);
   usMapError = signal<string | null>(null);
@@ -108,6 +111,13 @@ export class FleetDashboardComponent implements OnInit {
     return entries.map(([state, count]) => ({ state, count }));
   });
 
+  readonly topDriverStateBreakdown = computed(() => {
+    const entries = Array.from(this.currentDriverStateCounts().entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    return entries.map(([state, count]) => ({ state, count }));
+  });
+
   readonly peakDensityLabel = computed(() => {
     const points = this.fleetApplicantDensityData();
     if (points.length === 0) return 'N/A';
@@ -124,14 +134,15 @@ export class FleetDashboardComponent implements OnInit {
     this.error.set(null);
 
     try {
-      const [totalDrivers, activeDrivers, inactiveDrivers, carriers, fleets, applicantRows, applicantPositions] = await Promise.all([
+      const [totalDrivers, activeDrivers, inactiveDrivers, carriers, fleets, applicantRows, applicantPositions, driverRows] = await Promise.all([
         this.fetchTotal('/api/v1/drivers?limit=1'),
         this.fetchTotal('/api/v1/drivers?status=active&limit=1'),
         this.fetchTotal('/api/v1/drivers?status=inactive&limit=1'),
         this.fetchDataArray('/api/v1/carriers'),
         this.fetchDataArray('/api/v1/fleets'),
         this.fetchDataArray('/api/v1/applicants/records?includeCv=false'),
-        this.fetchDataArray('/api/v1/applicants/positions')
+        this.fetchDataArray('/api/v1/applicants/positions'),
+        this.fetchDataArray('/api/v1/drivers?limit=5000')
       ]);
 
       const totalCarriers = carriers.length;
@@ -145,13 +156,14 @@ export class FleetDashboardComponent implements OnInit {
         activeCarriers,
         totalFleets: fleets.length
       });
-      this.updateFleetApplicantInsights(applicantRows, applicantPositions);
+      this.updateFleetApplicantInsights(applicantRows, applicantPositions, driverRows);
       this.lastUpdated.set(new Date());
     } catch {
       this.error.set('Unable to load fleet dashboard data right now.');
       this.fleetApplicantDensityData.set([]);
       this.fleetApplicantCount.set(0);
       this.fleetApplicantStateCounts.set(new Map());
+      this.currentDriverStateCounts.set(new Map());
       this.usStateShapes.set([]);
     } finally {
       this.loading.set(false);
@@ -170,17 +182,19 @@ export class FleetDashboardComponent implements OnInit {
     return Array.isArray(response?.data) ? response.data : [];
   }
 
-  private updateFleetApplicantInsights(recordsPayload: unknown[], positionsPayload: unknown[]): void {
+  private updateFleetApplicantInsights(recordsPayload: unknown[], positionsPayload: unknown[], driverPayload: unknown[]): void {
     const positionsGroupMap = this.buildPositionGroupMap(positionsPayload);
     const applicantRows = this.parseFleetApplicants(recordsPayload);
     const fleetApplicants = applicantRows.filter((row) => this.isFleetPosition(row.position, positionsGroupMap));
     const densityPoints = this.buildDensityPointsYtdWeekly(fleetApplicants);
-    const stateCounts = this.buildStateCounts(fleetApplicants);
+    const applicantStateCounts = this.buildStateCounts(fleetApplicants);
+    const currentDriverStateCounts = this.buildCurrentDriverStateCounts(driverPayload);
 
     this.fleetApplicantCount.set(fleetApplicants.length);
     this.fleetApplicantDensityData.set(densityPoints);
-    this.fleetApplicantStateCounts.set(stateCounts);
-    void this.refreshUsMap(stateCounts);
+    this.fleetApplicantStateCounts.set(applicantStateCounts);
+    this.currentDriverStateCounts.set(currentDriverStateCounts);
+    void this.refreshUsMap(applicantStateCounts, currentDriverStateCounts);
   }
 
   private buildPositionGroupMap(payload: unknown[]): Map<string, 'fleet' | 'office'> {
@@ -261,6 +275,27 @@ export class FleetDashboardComponent implements OnInit {
     return map;
   }
 
+  private buildCurrentDriverStateCounts(payload: unknown[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const item of payload) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      const status = this.normalizeText(row['status'] ?? row['Status']).toLowerCase();
+      const isCurrent =
+        !status ||
+        (status !== 'inactive' &&
+          status !== 'terminated' &&
+          status !== 'archived' &&
+          status !== 'deleted');
+      if (!isCurrent) continue;
+
+      const state = this.extractDriverState(row);
+      if (!state) continue;
+      counts.set(state, (counts.get(state) ?? 0) + 1);
+    }
+    return counts;
+  }
+
   private smoothDensity(points: ChartPoint[], radius: number): ChartPoint[] {
     if (points.length === 0) return [];
     const smoothed: ChartPoint[] = [];
@@ -290,7 +325,7 @@ export class FleetDashboardComponent implements OnInit {
     return String(value ?? '').trim();
   }
 
-  private async refreshUsMap(stateCounts: Map<string, number>): Promise<void> {
+  private async refreshUsMap(applicantStateCounts: Map<string, number>, driverStateCounts: Map<string, number>): Promise<void> {
     this.usMapLoading.set(true);
     this.usMapError.set(null);
     try {
@@ -306,7 +341,8 @@ export class FleetDashboardComponent implements OnInit {
       const features = Array.isArray(geoCollection?.features) ? geoCollection.features : [];
       const projection = geoAlbersUsa().fitSize([960, 600], geoCollection);
       const pathGenerator = geoPath(projection);
-      const maxCount = Math.max(...Array.from(stateCounts.values()), 1);
+      const maxApplicantCount = Math.max(...Array.from(applicantStateCounts.values()), 1);
+      const maxDriverCount = Math.max(...Array.from(driverStateCounts.values()), 1);
 
       const nextShapes: UsStateShape[] = [];
       for (const feature of features) {
@@ -315,12 +351,15 @@ export class FleetDashboardComponent implements OnInit {
         if (!code) continue;
         const path = pathGenerator(feature);
         if (!path) continue;
-        const count = stateCounts.get(code) ?? 0;
+        const applicantCount = applicantStateCounts.get(code) ?? 0;
+        const driverCount = driverStateCounts.get(code) ?? 0;
         nextShapes.push({
           code,
           path,
-          count,
-          intensity: maxCount > 0 ? count / maxCount : 0
+          applicantCount,
+          driverCount,
+          applicantIntensity: maxApplicantCount > 0 ? applicantCount / maxApplicantCount : 0,
+          driverIntensity: maxDriverCount > 0 ? driverCount / maxDriverCount : 0
         });
       }
 
@@ -334,11 +373,22 @@ export class FleetDashboardComponent implements OnInit {
     }
   }
 
-  getMapFill(intensity: number): string {
-    const level = Math.max(0, Math.min(1, intensity || 0));
-    if (level <= 0) return 'rgba(10, 18, 30, 0.85)';
-    const alpha = 0.2 + (level * 0.75);
-    return `rgba(0, 212, 255, ${alpha.toFixed(3)})`;
+  getMapFill(shape: UsStateShape): string {
+    const applicantLevel = Math.max(0, Math.min(1, shape.applicantIntensity || 0));
+    const driverLevel = Math.max(0, Math.min(1, shape.driverIntensity || 0));
+    if (driverLevel > 0) {
+      const alpha = 0.28 + (driverLevel * 0.72);
+      return `rgba(168, 85, 247, ${alpha.toFixed(3)})`;
+    }
+    if (applicantLevel > 0) {
+      const alpha = 0.22 + (applicantLevel * 0.72);
+      return `rgba(56, 189, 248, ${alpha.toFixed(3)})`;
+    }
+    return 'rgba(10, 18, 30, 0.85)';
+  }
+
+  getMapTooltip(shape: UsStateShape): string {
+    return `${shape.code}: ${shape.applicantCount} applicants, ${shape.driverCount} current drivers`;
   }
 
   private extractApplicantState(row: Record<string, unknown>): string | null {
@@ -363,6 +413,30 @@ export class FleetDashboardComponent implements OnInit {
         const normalized = this.normalizeUsState(homeStateMatch[1]);
         if (normalized) return normalized;
       }
+    }
+
+    return null;
+  }
+
+  private extractDriverState(row: Record<string, unknown>): string | null {
+    const directCandidates = [
+      row['state'],
+      row['State'],
+      row['licenseState'],
+      row['LicenseState'],
+      row['addressState'],
+      row['AddressState']
+    ];
+    for (const value of directCandidates) {
+      const normalized = this.normalizeUsState(value);
+      if (normalized) return normalized;
+    }
+
+    const addressRef = row['addressRef'] ?? row['AddressRef'];
+    if (addressRef && typeof addressRef === 'object') {
+      const nested = addressRef as Record<string, unknown>;
+      const normalized = this.normalizeUsState(nested['state'] ?? nested['State']);
+      if (normalized) return normalized;
     }
 
     return null;

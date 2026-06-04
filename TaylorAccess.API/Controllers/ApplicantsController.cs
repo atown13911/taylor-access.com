@@ -39,6 +39,7 @@ public class ApplicantsController : ControllerBase
                 a.Age,
                 a.Position,
                 a.Source,
+                a.State,
                 a.TrainingGroupAssignment,
                 a.Status,
                 a.IsHistorical,
@@ -71,6 +72,7 @@ public class ApplicantsController : ControllerBase
             Age = request.Age is >= 16 and <= 100 ? request.Age : null,
             Position = string.IsNullOrWhiteSpace(request.Position) ? null : request.Position.Trim(),
             Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim(),
+            State = string.IsNullOrWhiteSpace(request.State) ? null : request.State.Trim(),
             TrainingGroupAssignment = string.IsNullOrWhiteSpace(request.TrainingGroupAssignment) ? null : request.TrainingGroupAssignment.Trim(),
             Status = NormalizeStatus(request.Status),
             IsHistorical = request.IsHistorical ?? false,
@@ -96,6 +98,7 @@ public class ApplicantsController : ControllerBase
                 row.Age,
                 row.Position,
                 row.Source,
+                row.State,
                 row.TrainingGroupAssignment,
                 row.Status,
                 row.IsHistorical,
@@ -142,6 +145,7 @@ public class ApplicantsController : ControllerBase
         row.Age = request.Age is >= 16 and <= 100 ? request.Age : null;
         row.Position = string.IsNullOrWhiteSpace(request.Position) ? null : request.Position.Trim();
         row.Source = string.IsNullOrWhiteSpace(request.Source) ? null : request.Source.Trim();
+        row.State = string.IsNullOrWhiteSpace(request.State) ? null : request.State.Trim();
         row.TrainingGroupAssignment = string.IsNullOrWhiteSpace(request.TrainingGroupAssignment) ? null : request.TrainingGroupAssignment.Trim();
         row.Status = NormalizeStatus(request.Status);
         if (request.IsHistorical.HasValue)
@@ -164,6 +168,7 @@ public class ApplicantsController : ControllerBase
                 row.Age,
                 row.Position,
                 row.Source,
+                row.State,
                 row.TrainingGroupAssignment,
                 row.Status,
                 row.IsHistorical,
@@ -600,6 +605,7 @@ public record CreateApplicantRecordRequest(
     int? Age,
     string? Position,
     string? Source,
+    string? State,
     string? TrainingGroupAssignment,
     string? Status,
     bool? IsHistorical,
@@ -615,6 +621,7 @@ public record UpdateApplicantRecordRequest(
     int? Age,
     string? Position,
     string? Source,
+    string? State,
     string? TrainingGroupAssignment,
     string? Status,
     bool? IsHistorical,

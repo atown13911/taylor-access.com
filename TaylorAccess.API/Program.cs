@@ -314,6 +314,8 @@ using (var scope = app.Services.CreateScope())
         ADD COLUMN IF NOT EXISTS ""TrainingGroupAssignment"" VARCHAR(200);
         ALTER TABLE IF EXISTS ""ApplicantRecords""
         ADD COLUMN IF NOT EXISTS ""IsHistorical"" BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE IF EXISTS ""ApplicantRecords""
+        ADD COLUMN IF NOT EXISTS ""State"" VARCHAR(50);
 
         CREATE TABLE IF NOT EXISTS ""TimeOffRequests"" (
             ""Id"" SERIAL PRIMARY KEY,
@@ -628,6 +630,7 @@ using (var scope = app.Services.CreateScope())
             ""Age"" INTEGER NULL,
             ""Position"" VARCHAR(200) NULL,
             ""Source"" VARCHAR(200) NULL,
+            ""State"" VARCHAR(50) NULL,
             ""Status"" VARCHAR(20) NOT NULL DEFAULT 'new',
             ""IsHistorical"" BOOLEAN NOT NULL DEFAULT FALSE,
             ""AppliedDate"" TIMESTAMP NULL,
