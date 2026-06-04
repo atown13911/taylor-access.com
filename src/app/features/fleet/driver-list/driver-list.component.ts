@@ -163,10 +163,6 @@ export class DriverListComponent implements OnInit {
     const fleet = this.fleetFilter();
     let pool = this.tabbedDrivers();
 
-    if (this.dispatchersView()) {
-      pool = pool.filter((d) => this.toNullableNumber(d.dispatchUserId) !== null);
-    }
-
     if (fleet === 'unassigned') {
       pool = pool.filter((d) => String(d.fleetName || '').trim() === '—');
     } else if (fleet !== 'all') {
