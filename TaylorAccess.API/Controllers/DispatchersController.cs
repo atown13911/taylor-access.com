@@ -162,27 +162,43 @@ public class DispatchersController : ControllerBase
                 driver.DispatcherName = name;
         }
 
-        var assignedCountByDispatcher = activeLandmarkDrivers
+        var assignedDriversByDispatcher = activeLandmarkDrivers
             .Where(d => d.DispatchUserId.HasValue)
             .GroupBy(d => d.DispatchUserId!.Value)
-            .ToDictionary(g => g.Key, g => g.Count());
+            .ToDictionary(
+                g => g.Key,
+                g => g
+                    .OrderBy(d => d.Name)
+                    .Select(d => new DispatcherAssignedDriverDto
+                    {
+                        DriverId = d.Id.ToString(),
+                        Name = d.Name,
+                        Email = d.Email
+                    })
+                    .ToList()
+            );
 
-        var dispatcherRows = activeDispatchers.Select(d => new DispatcherOverviewDto
+        var dispatcherRows = activeDispatchers.Select(d =>
         {
-            Id = d.Id,
-            Name = d.Name,
-            Email = d.Email,
-            Phone = d.Phone,
-            Title = string.IsNullOrWhiteSpace(d.Title) ? "Dispatcher" : d.Title,
-            Status = string.IsNullOrWhiteSpace(d.Status) ? "active" : d.Status!.ToLowerInvariant(),
-            AssignedDrivers = assignedCountByDispatcher.GetValueOrDefault(d.Id, 0)
+            var assignedDrivers = assignedDriversByDispatcher.GetValueOrDefault(d.Id, new List<DispatcherAssignedDriverDto>());
+            return new DispatcherOverviewDto
+            {
+                Id = d.Id,
+                Name = d.Name,
+                Email = d.Email,
+                Phone = d.Phone,
+                Title = string.IsNullOrWhiteSpace(d.Title) ? "Dispatcher" : d.Title,
+                Status = string.IsNullOrWhiteSpace(d.Status) ? "active" : d.Status!.ToLowerInvariant(),
+                AssignedDrivers = assignedDrivers,
+                AssignedDriverCount = assignedDrivers.Count
+            };
         }).OrderBy(d => d.Name).ToList();
 
         var driversWithDispatcher = activeLandmarkDrivers.Count(d => d.DispatchUserId.HasValue);
         var summary = new
         {
             totalDispatchers = dispatcherRows.Count,
-            dispatchersWithAssignedDrivers = dispatcherRows.Count(d => d.AssignedDrivers > 0),
+            dispatchersWithAssignedDrivers = dispatcherRows.Count(d => d.AssignedDriverCount > 0),
             driversWithDispatcher,
             unassignedDrivers = Math.Max(activeLandmarkDrivers.Count - driversWithDispatcher, 0)
         };
@@ -448,7 +464,15 @@ public class DispatchersController : ControllerBase
         public string? Phone { get; set; }
         public string? Title { get; set; }
         public string? Status { get; set; }
-        public int AssignedDrivers { get; set; }
+        public List<DispatcherAssignedDriverDto> AssignedDrivers { get; set; } = new();
+        public int AssignedDriverCount { get; set; }
+    }
+
+    private sealed class DispatcherAssignedDriverDto
+    {
+        public string DriverId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
     }
 
     private sealed class DispatcherDriverDto
