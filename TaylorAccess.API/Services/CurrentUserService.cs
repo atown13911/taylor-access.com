@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TaylorAccess.API.Data;
@@ -96,9 +97,9 @@ public class CurrentUserService
         if (_cachedUser == null && IsAuthenticated)
         {
             var role = Role?.Trim();
-            var orgClaim = _httpContextAccessor.HttpContext?.User.FindFirst("orgId")?.Value
-                ?? _httpContextAccessor.HttpContext?.User.FindFirst("organizationId")?.Value;
-            int? orgId = int.TryParse(orgClaim, out var parsedOrg) ? parsedOrg : null;
+            var orgIdsFromClaims = GetOrganizationIdsFromClaims();
+            int? orgId = orgIdsFromClaims.FirstOrDefault();
+            if (orgId <= 0) orgId = null;
             var userId = UserId;
             var claimEmail = Email;
             var claimName = Name;
@@ -162,6 +163,12 @@ public class CurrentUserService
     {
         var orgIds = new HashSet<int>();
 
+        // 0) Organization ids from JWT claims (supports multi-org tokens).
+        foreach (var id in GetOrganizationIdsFromClaims())
+        {
+            if (id > 0) orgIds.Add(id);
+        }
+
         // 1) Token userId claim (works when token subject matches Taylor Access user id).
         var claimUserId = UserId;
         if (claimUserId.HasValue && claimUserId.Value > 0)
@@ -193,6 +200,42 @@ public class CurrentUserService
         }
 
         return orgIds.ToList();
+    }
+
+    private List<int> GetOrganizationIdsFromClaims()
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        if (user == null) return new List<int>();
+
+        var claimKeys = new[]
+        {
+            "orgId",
+            "organizationId",
+            "org_id",
+            "orgIds",
+            "organizationIds",
+            "organizations"
+        };
+
+        var values = user.Claims
+            .Where(c => claimKeys.Contains(c.Type, StringComparer.OrdinalIgnoreCase))
+            .Select(c => c.Value)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToList();
+
+        var ids = new HashSet<int>();
+        foreach (var raw in values)
+        {
+            foreach (Match match in Regex.Matches(raw, @"\d+"))
+            {
+                if (int.TryParse(match.Value, out var id) && id > 0)
+                {
+                    ids.Add(id);
+                }
+            }
+        }
+
+        return ids.ToList();
     }
 
     private async Task<(bool lookedUp, bool found, string? status)> TryGetPortalUserStatusAsync()
