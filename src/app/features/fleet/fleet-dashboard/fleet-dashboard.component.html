@@ -92,31 +92,38 @@
   <section class="card state-heatmap-card">
     <div class="heatmap-header">
       <h2><i class="bx bx-map-alt"></i> Fleet Applicant State Heatmap</h2>
-      <span class="heatmap-subtitle">Compact state intensity by applicant count</span>
+      <span class="heatmap-subtitle">US choropleth by fleet applicant count</span>
     </div>
 
-    <div class="state-heatmap-grid">
-      @for (tile of stateHeatmapTiles(); track tile.state) {
-        <div
-          class="state-tile"
-          [class.has-data]="tile.count > 0"
-          [style.--intensity]="tile.intensity"
-          [attr.title]="tile.state + ': ' + tile.count + ' applicants'"
-        >
-          <span class="state-code">{{ tile.state }}</span>
-          <span class="state-count">{{ tile.count }}</span>
-        </div>
-      }
-    </div>
+    @if (usMapLoading()) {
+      <div class="chart-empty">Loading map...</div>
+    } @else if (usMapError()) {
+      <div class="chart-empty">{{ usMapError() }}</div>
+    } @else if (usStateShapes().length > 0) {
+      <div class="us-map-wrap">
+        <svg class="us-map" [attr.viewBox]="usMapViewBox" role="img" aria-label="Fleet applicant heatmap by state">
+          @for (shape of usStateShapes(); track shape.code) {
+            <path
+              class="us-state-path"
+              [attr.d]="shape.path"
+              [attr.fill]="getMapFill(shape.intensity)"
+              [attr.data-state]="shape.code"
+            >
+              <title>{{ shape.code }}: {{ shape.count }} applicants</title>
+            </path>
+          }
+        </svg>
+      </div>
+    } @else {
+      <div class="chart-empty">No applicant state data available yet.</div>
+    }
 
-    @if (topStateBreakdown().length > 0) {
+    @if (topStateBreakdown().length > 0 && !usMapLoading()) {
       <div class="top-states">
         @for (row of topStateBreakdown(); track row.state) {
           <span class="top-state-pill">{{ row.state }}: {{ row.count }}</span>
         }
       </div>
-    } @else {
-      <div class="chart-empty">No applicant state data available yet.</div>
     }
   </section>
 

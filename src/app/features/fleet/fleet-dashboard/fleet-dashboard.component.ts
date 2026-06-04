@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
+import { geoAlbersUsa, geoPath } from 'd3-geo';
+import * as topojson from 'topojson-client';
 import { environment } from '../../../../environments/environment';
 
 interface FleetDashboardStats {
@@ -25,6 +27,13 @@ interface FleetApplicantRow {
   state: string | null;
 }
 
+interface UsStateShape {
+  code: string;
+  path: string;
+  count: number;
+  intensity: number;
+}
+
 @Component({
   selector: 'app-fleet-dashboard',
   standalone: true,
@@ -42,7 +51,13 @@ export class FleetDashboardComponent implements OnInit {
   fleetApplicantDensityData = signal<ChartPoint[]>([]);
   fleetApplicantCount = signal(0);
   fleetApplicantStateCounts = signal<Map<string, number>>(new Map());
+  usStateShapes = signal<UsStateShape[]>([]);
+  usMapLoading = signal(false);
+  usMapError = signal<string | null>(null);
   readonly applicantDensityWindowDays = 60;
+  readonly usMapViewBox = '0 0 960 600';
+  private usMapLoaded = false;
+  private readonly usAtlasUrl = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
   readonly fleetApplicantDensityScheme: Color = {
     name: 'fleet-applicant-density',
     selectable: true,
@@ -81,17 +96,6 @@ export class FleetDashboardComponent implements OnInit {
   readonly fleetApplicantDensityChartData = computed(() => [
     { name: 'Fleet Applicant Density', series: this.fleetApplicantDensityData() }
   ]);
-
-  readonly stateHeatmapTiles = computed(() => {
-    const counts = this.fleetApplicantStateCounts();
-    const maxCount = Math.max(...Array.from(counts.values()), 1);
-    return this.usStateOrder
-      .map((state) => {
-        const count = counts.get(state) ?? 0;
-        const intensity = maxCount > 0 ? count / maxCount : 0;
-        return { state, count, intensity };
-      });
-  });
 
   readonly topStateBreakdown = computed(() => {
     const entries = Array.from(this.fleetApplicantStateCounts().entries())
@@ -144,6 +148,7 @@ export class FleetDashboardComponent implements OnInit {
       this.fleetApplicantDensityData.set([]);
       this.fleetApplicantCount.set(0);
       this.fleetApplicantStateCounts.set(new Map());
+      this.usStateShapes.set([]);
     } finally {
       this.loading.set(false);
     }
@@ -171,6 +176,7 @@ export class FleetDashboardComponent implements OnInit {
     this.fleetApplicantCount.set(fleetApplicants.length);
     this.fleetApplicantDensityData.set(densityPoints);
     this.fleetApplicantStateCounts.set(stateCounts);
+    void this.refreshUsMap(stateCounts);
   }
 
   private buildPositionGroupMap(payload: unknown[]): Map<string, 'fleet' | 'office'> {
@@ -276,6 +282,50 @@ export class FleetDashboardComponent implements OnInit {
     return String(value ?? '').trim();
   }
 
+  private async refreshUsMap(stateCounts: Map<string, number>): Promise<void> {
+    this.usMapLoading.set(true);
+    this.usMapError.set(null);
+    try {
+      const response: any = await this.http.get(this.usAtlasUrl).toPromise();
+      const geoCollection = topojson.feature(response, response.objects.states) as any;
+      const features = Array.isArray(geoCollection?.features) ? geoCollection.features : [];
+      const projection = geoAlbersUsa().fitSize([960, 600], geoCollection);
+      const pathGenerator = geoPath(projection);
+      const maxCount = Math.max(...Array.from(stateCounts.values()), 1);
+
+      const nextShapes: UsStateShape[] = [];
+      for (const feature of features) {
+        const fips = String(feature?.id ?? '').padStart(2, '0');
+        const code = this.fipsToStateCode.get(fips);
+        if (!code) continue;
+        const path = pathGenerator(feature);
+        if (!path) continue;
+        const count = stateCounts.get(code) ?? 0;
+        nextShapes.push({
+          code,
+          path,
+          count,
+          intensity: maxCount > 0 ? count / maxCount : 0
+        });
+      }
+
+      this.usStateShapes.set(nextShapes);
+      this.usMapLoaded = true;
+    } catch {
+      this.usMapError.set('Map layer unavailable right now.');
+      if (!this.usMapLoaded) this.usStateShapes.set([]);
+    } finally {
+      this.usMapLoading.set(false);
+    }
+  }
+
+  getMapFill(intensity: number): string {
+    const level = Math.max(0, Math.min(1, intensity || 0));
+    if (level <= 0) return 'rgba(10, 18, 30, 0.85)';
+    const alpha = 0.2 + (level * 0.75);
+    return `rgba(0, 212, 255, ${alpha.toFixed(3)})`;
+  }
+
   private extractApplicantState(row: Record<string, unknown>): string | null {
     const directCandidates = [
       row['state'],
@@ -340,13 +390,15 @@ export class FleetDashboardComponent implements OnInit {
     return `${y}-${m}-${d}`;
   }
 
-  private readonly usStateOrder = [
-    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
-  ];
+  private readonly fipsToStateCode = new Map<string, string>([
+    ['01', 'AL'], ['02', 'AK'], ['04', 'AZ'], ['05', 'AR'], ['06', 'CA'], ['08', 'CO'], ['09', 'CT'], ['10', 'DE'],
+    ['11', 'DC'], ['12', 'FL'], ['13', 'GA'], ['15', 'HI'], ['16', 'ID'], ['17', 'IL'], ['18', 'IN'], ['19', 'IA'],
+    ['20', 'KS'], ['21', 'KY'], ['22', 'LA'], ['23', 'ME'], ['24', 'MD'], ['25', 'MA'], ['26', 'MI'], ['27', 'MN'],
+    ['28', 'MS'], ['29', 'MO'], ['30', 'MT'], ['31', 'NE'], ['32', 'NV'], ['33', 'NH'], ['34', 'NJ'], ['35', 'NM'],
+    ['36', 'NY'], ['37', 'NC'], ['38', 'ND'], ['39', 'OH'], ['40', 'OK'], ['41', 'OR'], ['42', 'PA'], ['44', 'RI'],
+    ['45', 'SC'], ['46', 'SD'], ['47', 'TN'], ['48', 'TX'], ['49', 'UT'], ['50', 'VT'], ['51', 'VA'], ['53', 'WA'],
+    ['54', 'WV'], ['55', 'WI'], ['56', 'WY']
+  ]);
 
   private readonly usStateNameToCode = new Map<string, string>([
     ['AL', 'AL'], ['AK', 'AK'], ['AZ', 'AZ'], ['AR', 'AR'], ['CA', 'CA'], ['CO', 'CO'], ['CT', 'CT'], ['DE', 'DE'],

@@ -144,45 +144,29 @@
   font-size: 0.78rem;
 }
 
-.state-heatmap-grid {
-  display: grid;
-  grid-template-columns: repeat(13, minmax(44px, 1fr));
-  gap: 6px;
-}
-
-.state-tile {
-  --intensity: 0;
+.us-map-wrap {
   border: 1px solid rgba(0, 212, 255, 0.14);
-  border-radius: 8px;
-  min-height: 42px;
-  padding: 4px 5px;
-  background: rgba(8, 14, 26, 0.6);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  line-height: 1.05;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(7, 12, 22, 0.9);
+  padding: 8px;
 }
 
-.state-tile.has-data {
-  border-color: rgba(0, 212, 255, calc(0.22 + (var(--intensity) * 0.55)));
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0, 212, 255, calc(0.16 + (var(--intensity) * 0.46))),
-      rgba(0, 110, 173, calc(0.14 + (var(--intensity) * 0.40)))
-    );
+.us-map {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
-.state-code {
-  font-size: 0.69rem;
-  font-weight: 700;
+.us-state-path {
+  stroke: rgba(0, 212, 255, 0.28);
+  stroke-width: 1.2;
+  transition: fill 0.2s ease, stroke 0.2s ease;
 }
 
-.state-count {
-  margin-top: 2px;
-  font-size: 0.68rem;
-  color: rgba(230, 247, 255, 0.82);
+.us-state-path:hover {
+  stroke: rgba(255, 255, 255, 0.65);
+  stroke-width: 1.6;
 }
 
 .top-states {
@@ -293,9 +277,5 @@
 
   .content-grid {
     grid-template-columns: 1fr;
-  }
-
-  .state-heatmap-grid {
-    grid-template-columns: repeat(8, minmax(40px, 1fr));
   }
 }
