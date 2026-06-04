@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 
@@ -7,15 +8,22 @@ namespace TaylorAccess.API.Services;
 
 public class CurrentUserService
 {
+    private static readonly HashSet<string> InactiveStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "inactive", "archived", "deleted", "disabled", "suspended", "terminated", "locked"
+    };
+
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly TaylorAccessDbContext _context;
+    private readonly IConfiguration _configuration;
     private User? _cachedUser;
     private bool _userLoaded;
 
-    public CurrentUserService(IHttpContextAccessor httpContextAccessor, TaylorAccessDbContext context)
+    public CurrentUserService(IHttpContextAccessor httpContextAccessor, TaylorAccessDbContext context, IConfiguration configuration)
     {
         _httpContextAccessor = httpContextAccessor;
         _context = context;
+        _configuration = configuration;
     }
 
     public int? UserId
@@ -42,6 +50,21 @@ public class CurrentUserService
 
     public bool IsAuthenticated => 
         _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
+
+    public async Task<bool> IsPortalAccessAllowedAsync()
+    {
+        if (!IsAuthenticated) return false;
+
+        var claimStatus = _httpContextAccessor.HttpContext?.User.FindFirst("status")?.Value;
+        if (IsInactiveStatus(claimStatus)) return false;
+
+        var lookup = await TryGetPortalUserStatusAsync();
+        if (lookup.lookedUp)
+            return lookup.found && !IsInactiveStatus(lookup.status);
+
+        var user = await GetUserAsync();
+        return user != null && !IsInactiveStatus(user.Status);
+    }
 
     public async Task<User?> GetUserAsync()
     {
@@ -146,5 +169,72 @@ public class CurrentUserService
             .ToListAsync();
 
         return orgIds;
+    }
+
+    private async Task<(bool lookedUp, bool found, string? status)> TryGetPortalUserStatusAsync()
+    {
+        var conn = ResolvePortalDbConnectionString();
+        if (string.IsNullOrWhiteSpace(conn))
+            return (false, false, null);
+
+        var email = (Email ?? string.Empty).Trim();
+        var userId = UserId;
+        if (string.IsNullOrWhiteSpace(email) && !userId.HasValue)
+            return (true, false, null);
+
+        try
+        {
+            await using var db = new NpgsqlConnection(conn);
+            await db.OpenAsync();
+
+            await using var cmd = db.CreateCommand();
+            cmd.CommandText = @"
+                select ""Status""
+                from ""Users""
+                where (@email <> '' and lower(""Email"") = lower(@email))
+                   or (@userId > 0 and ""Id"" = @userId)
+                order by case when @email <> '' and lower(""Email"") = lower(@email) then 0 else 1 end
+                limit 1;";
+            cmd.Parameters.AddWithValue("email", email);
+            cmd.Parameters.AddWithValue("userId", userId ?? 0);
+
+            var value = await cmd.ExecuteScalarAsync();
+            if (value == null || value == DBNull.Value)
+                return (true, false, null);
+
+            return (true, true, value.ToString());
+        }
+        catch
+        {
+            // If portal lookup fails, deny access rather than allowing potentially disabled users.
+            return (true, false, "disabled");
+        }
+    }
+
+    private string? ResolvePortalDbConnectionString()
+    {
+        var raw = _configuration.GetConnectionString("PortalDbConnection")
+            ?? Environment.GetEnvironmentVariable("PORTAL_DB_CONNECTION")
+            ?? Environment.GetEnvironmentVariable("PORTAL_DATABASE_URL");
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
+        if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+            raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(raw);
+            var userInfo = uri.UserInfo.Split(':');
+            if (userInfo.Length >= 2)
+            {
+                return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Disable;Trust Server Certificate=true";
+            }
+        }
+
+        return raw;
+    }
+
+    private static bool IsInactiveStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return false;
+        return InactiveStatuses.Contains(status.Trim());
     }
 }

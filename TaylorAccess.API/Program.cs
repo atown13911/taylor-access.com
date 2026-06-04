@@ -125,6 +125,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(5)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var currentUserService = context.HttpContext.RequestServices.GetRequiredService<CurrentUserService>();
+                var isAllowed = await currentUserService.IsPortalAccessAllowedAsync();
+                if (!isAllowed)
+                    context.Fail("Portal access revoked or user is inactive.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
