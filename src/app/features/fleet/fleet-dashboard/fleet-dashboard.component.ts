@@ -54,7 +54,7 @@ export class FleetDashboardComponent implements OnInit {
   usStateShapes = signal<UsStateShape[]>([]);
   usMapLoading = signal(false);
   usMapError = signal<string | null>(null);
-  readonly applicantDensityWindowDays = 60;
+  readonly applicantDensityYear = new Date().getFullYear();
   readonly usMapViewBox = '0 0 960 600';
   private usMapLoaded = false;
   private readonly usAtlasUrl = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
@@ -62,7 +62,7 @@ export class FleetDashboardComponent implements OnInit {
     name: 'fleet-applicant-density',
     selectable: true,
     group: ScaleType.Ordinal,
-    domain: ['#00d4ff']
+    domain: ['#38bdf8']
   };
 
   stats = signal<FleetDashboardStats>({
@@ -96,6 +96,10 @@ export class FleetDashboardComponent implements OnInit {
   readonly fleetApplicantDensityChartData = computed(() => [
     { name: 'Fleet Applicant Density', series: this.fleetApplicantDensityData() }
   ]);
+
+  readonly applicantDensityWindowLabel = computed(() => {
+    return `YTD ${this.applicantDensityYear} (weekly)`;
+  });
 
   readonly topStateBreakdown = computed(() => {
     const entries = Array.from(this.fleetApplicantStateCounts().entries())
@@ -170,7 +174,7 @@ export class FleetDashboardComponent implements OnInit {
     const positionsGroupMap = this.buildPositionGroupMap(positionsPayload);
     const applicantRows = this.parseFleetApplicants(recordsPayload);
     const fleetApplicants = applicantRows.filter((row) => this.isFleetPosition(row.position, positionsGroupMap));
-    const densityPoints = this.buildDensityPoints(fleetApplicants, this.applicantDensityWindowDays);
+    const densityPoints = this.buildDensityPointsYtdWeekly(fleetApplicants);
     const stateCounts = this.buildStateCounts(fleetApplicants);
 
     this.fleetApplicantCount.set(fleetApplicants.length);
@@ -199,7 +203,7 @@ export class FleetDashboardComponent implements OnInit {
       const row = item as Record<string, unknown>;
       const position = this.normalizeText(row['position'] ?? row['Position']);
       const appliedDate = this.toDateOnlyIso(row['appliedDate'] ?? row['AppliedDate']);
-        const state = this.extractApplicantState(row);
+      const state = this.extractApplicantState(row);
       if (!position || !appliedDate) continue;
       rows.push({ position, appliedDate, state });
     }
@@ -215,33 +219,37 @@ export class FleetDashboardComponent implements OnInit {
     return fleetKeywords.some((keyword) => normalized.includes(keyword));
   }
 
-  private buildDensityPoints(rows: FleetApplicantRow[], dayWindow: number): ChartPoint[] {
-    const windowDays = Math.max(dayWindow, 14);
+  private buildDensityPointsYtdWeekly(rows: FleetApplicantRow[]): ChartPoint[] {
+    const start = new Date(this.applicantDensityYear, 0, 1);
+    start.setHours(0, 0, 0, 0);
     const end = new Date();
     end.setHours(0, 0, 0, 0);
-    const start = new Date(end);
-    start.setDate(start.getDate() - (windowDays - 1));
+    const ytdEnd = end.getFullYear() === this.applicantDensityYear ? end : new Date(this.applicantDensityYear, 11, 31);
+    ytdEnd.setHours(0, 0, 0, 0);
 
-    const counts = new Map<string, number>();
+    const weeklyCounts = new Map<number, number>();
     for (const row of rows) {
       const parsed = this.parseDateOnly(row.appliedDate);
-      if (!parsed || parsed < start || parsed > end) continue;
-      const key = row.appliedDate;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      if (!parsed || parsed < start || parsed > ytdEnd) continue;
+      const weekStart = this.startOfWeek(parsed);
+      const key = weekStart.getTime();
+      weeklyCounts.set(key, (weeklyCounts.get(key) ?? 0) + 1);
     }
 
-    const rawPoints: ChartPoint[] = [];
-    for (let i = 0; i < windowDays; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      const key = this.formatDateOnly(date);
-      rawPoints.push({
-        name: key,
-        value: counts.get(key) ?? 0
+    const points: ChartPoint[] = [];
+    let cursor = this.startOfWeek(start);
+    const endWeek = this.startOfWeek(ytdEnd);
+    while (cursor <= endWeek) {
+      const key = cursor.getTime();
+      points.push({
+        name: this.formatChartWeekLabel(cursor),
+        value: weeklyCounts.get(key) ?? 0
       });
+      cursor = new Date(cursor);
+      cursor.setDate(cursor.getDate() + 7);
     }
 
-    return this.smoothDensity(rawPoints, 3);
+    return this.smoothDensity(points, 2);
   }
 
   private buildStateCounts(rows: FleetApplicantRow[]): Map<string, number> {
@@ -286,8 +294,15 @@ export class FleetDashboardComponent implements OnInit {
     this.usMapLoading.set(true);
     this.usMapError.set(null);
     try {
-      const response: any = await this.http.get(this.usAtlasUrl).toPromise();
-      const geoCollection = topojson.feature(response, response.objects.states) as any;
+      const atlasResponse = await fetch(this.usAtlasUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'force-cache'
+      });
+      if (!atlasResponse.ok) throw new Error(`Atlas request failed: ${atlasResponse.status}`);
+      const atlasJson = await atlasResponse.json();
+      const geoCollection = topojson.feature(atlasJson, atlasJson.objects.states) as any;
       const features = Array.isArray(geoCollection?.features) ? geoCollection.features : [];
       const projection = geoAlbersUsa().fitSize([960, 600], geoCollection);
       const pathGenerator = geoPath(projection);
@@ -381,6 +396,22 @@ export class FleetDashboardComponent implements OnInit {
     if (Number.isNaN(parsed.getTime())) return null;
     parsed.setHours(0, 0, 0, 0);
     return parsed;
+  }
+
+  private startOfWeek(date: Date): Date {
+    const copy = new Date(date);
+    const day = copy.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    copy.setDate(copy.getDate() + diff);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  }
+
+  private formatChartWeekLabel(date: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: '2-digit'
+    }).format(date);
   }
 
   private formatDateOnly(date: Date): string {

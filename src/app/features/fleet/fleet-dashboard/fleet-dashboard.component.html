@@ -64,29 +64,31 @@
       <h2><i class="bx bx-line-chart"></i> Fleet Applicant Density Curve</h2>
       <div class="density-meta">
         <span>{{ fleetApplicantCount() }} fleet applicants</span>
-        <span>Window: last {{ applicantDensityWindowDays }} days</span>
+        <span>Window: {{ applicantDensityWindowLabel() }}</span>
         <span>Peak: {{ peakDensityLabel() }}</span>
       </div>
     </div>
-    @if (fleetApplicantDensityData().length > 0) {
-      <ngx-charts-line-chart
-        [results]="fleetApplicantDensityChartData()"
-        [scheme]="fleetApplicantDensityScheme"
-        [xAxis]="true"
-        [yAxis]="true"
-        [autoScale]="true"
-        [showXAxisLabel]="true"
-        [xAxisLabel]="'Applied date'"
-        [showYAxisLabel]="true"
-        [yAxisLabel]="'Density'"
-        [legend]="false"
-        [animations]="true"
-        [timeline]="false"
-        [gradient]="true">
-      </ngx-charts-line-chart>
-    } @else {
-      <div class="chart-empty">No fleet applicant trend data available yet.</div>
-    }
+    <div class="density-visual-shell">
+      @if (fleetApplicantDensityData().length > 0) {
+        <ngx-charts-area-chart
+          [results]="fleetApplicantDensityChartData()"
+          [scheme]="fleetApplicantDensityScheme"
+          [xAxis]="true"
+          [yAxis]="true"
+          [autoScale]="true"
+          [showXAxisLabel]="true"
+          [xAxisLabel]="'Week'"
+          [showYAxisLabel]="true"
+          [yAxisLabel]="'Applicants'"
+          [legend]="false"
+          [animations]="true"
+          [timeline]="false"
+          [gradient]="true">
+        </ngx-charts-area-chart>
+      } @else {
+        <div class="chart-empty">No fleet applicant trend data available yet.</div>
+      }
+    </div>
   </section>
 
   <section class="card state-heatmap-card">
