@@ -156,6 +156,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var isAllowed = await currentUserService.IsPortalAccessAllowedAsync();
                 if (!isAllowed)
                     context.Fail("Portal access revoked or user is inactive.");
+            },
+            OnAuthenticationFailed = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("AuthMonitoring");
+                var path = context.HttpContext.Request.Path.Value ?? "/";
+                logger.LogWarning(
+                    "JWT authentication failed for {Path}: {Reason}",
+                    path,
+                    context.Exception?.Message ?? "unknown_error");
+                return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                // Challenge indicates auth was required but not satisfied.
+                // Log only metadata and reason; never log token/header values.
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("AuthMonitoring");
+                var path = context.HttpContext.Request.Path.Value ?? "/";
+                logger.LogWarning(
+                    "JWT challenge for {Path}: error={Error}, description={Description}",
+                    path,
+                    context.Error ?? "unauthorized",
+                    context.ErrorDescription ?? "n/a");
+                return Task.CompletedTask;
             }
         };
     });
