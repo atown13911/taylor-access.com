@@ -125,6 +125,14 @@ if (!string.IsNullOrWhiteSpace(gatewayJwtKey) && !string.Equals(gatewayJwtKey, j
 if (!string.IsNullOrWhiteSpace(portalJwtKey) && !string.Equals(portalJwtKey, jwtKey, StringComparison.Ordinal))
     signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalJwtKey)));
 
+// Safety valve: disable strict portal-access DB status enforcement by default to avoid
+// mass 401 lockouts when cross-service identity/user-sync data is temporarily inconsistent.
+var enforcePortalAccessCheck = bool.TryParse(
+    Environment.GetEnvironmentVariable("ENFORCE_PORTAL_ACCESS_CHECK")
+    ?? builder.Configuration["Auth:EnforcePortalAccessCheck"],
+    out var parsedEnforcePortalAccessCheck)
+    && parsedEnforcePortalAccessCheck;
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -141,6 +149,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = async context =>
             {
+                if (!enforcePortalAccessCheck)
+                    return;
+
                 var currentUserService = context.HttpContext.RequestServices.GetRequiredService<CurrentUserService>();
                 var isAllowed = await currentUserService.IsPortalAccessAllowedAsync();
                 if (!isAllowed)
