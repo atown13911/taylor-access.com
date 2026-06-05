@@ -276,7 +276,7 @@ public class DriversController : ControllerBase
         // Status
         if (!string.IsNullOrEmpty(request.Status)) driver.Status = request.Status;
         if (request.IsOnline.HasValue) driver.IsOnline = request.IsOnline.Value;
-        if (request.DriverType != null) driver.DriverType = request.DriverType;
+        if (!string.IsNullOrWhiteSpace(request.DriverType)) driver.DriverType = request.DriverType.Trim();
         if (request.Ssn != null) driver.Ssn = request.Ssn;
         if (request.TruckNumber != null) driver.TruckNumber = request.TruckNumber;
         if (request.TruckMake != null) driver.TruckMake = request.TruckMake;
@@ -534,7 +534,7 @@ public class DriversController : ControllerBase
                 target.Status = mappedStatus;
                 target.IsOnline = false;
                 target.FleetId = PickInt(src, "fleetId") ?? target.FleetId;
-                target.DriverType = PickString(src, "driverType", "type") ?? target.DriverType;
+                // DriverType is HR-managed; preserve existing values when importing archived DrayTac rows.
                 target.Ssn = PickString(src, "ssn") ?? target.Ssn;
                 target.TruckNumber = PickString(src, "truckNumber", "unit", "unitNumber") ?? target.TruckNumber;
                 target.TruckMake = PickString(src, "truckMake", "vehicleMake") ?? target.TruckMake;

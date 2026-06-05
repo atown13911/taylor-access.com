@@ -391,7 +391,7 @@ export class DriverListComponent implements OnInit {
           ),
           fleetName: this.resolveFleetName(d),
           hireDate: d.hireDate || d.createdAt || '',
-          type: d.driverType || 'company',
+          type: this.normalizeDriverType(d.driverType),
           notes: String(d.notes ?? '').trim(),
           dispatchUserId: this.resolveDispatchUserId(d)
         }));
@@ -1117,7 +1117,7 @@ export class DriverListComponent implements OnInit {
           hireDate: d.hireDate ? d.hireDate.split('T')[0] : '',
           payRate: d.payRate || 0,
           payType: d.payType || 'mile',
-          driverType: d.driverType || 'company',
+          driverType: this.normalizeFormDriverType(d.driverType),
           dispatchUserId: this.resolveDispatchUserId(d),
           teamDriverId: d.teamDriverId || null,
           teamDriverName: d.teamDriverName || ''
@@ -1138,7 +1138,7 @@ export class DriverListComponent implements OnInit {
           truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
           emergencyContact: '', emergencyPhone: '',
           hireDate: driver.hireDate ? driver.hireDate.split('T')[0] : '',
-          payRate: 0, payType: 'mile', driverType: driver.type || 'company',
+          payRate: 0, payType: 'mile', driverType: this.normalizeFormDriverType(driver.type),
           dispatchUserId: this.resolveDispatchUserId(driver),
           teamDriverId: null, teamDriverName: ''
         });
@@ -1375,6 +1375,29 @@ export class DriverListComponent implements OnInit {
   formatDate(dateString: string): string {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  formatDriverType(type: string): string {
+    switch (this.normalizeDriverType(type)) {
+      case 'owner_operator': return 'Owner Operator';
+      case 'company': return 'Company';
+      case 'lease': return 'Lease';
+      case 'team': return 'Team';
+      case 'driver': return 'Driver';
+      default: return type?.trim() ? type.replace(/_/g, ' ') : '—';
+    }
+  }
+
+  private normalizeDriverType(type: string | null | undefined): string {
+    const normalized = String(type ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!normalized) return 'company';
+    return normalized;
+  }
+
+  private normalizeFormDriverType(type: string | null | undefined): string {
+    const normalized = this.normalizeDriverType(type);
+    const allowed = new Set(['company', 'owner_operator', 'lease', 'team', 'driver']);
+    return allowed.has(normalized) ? normalized : 'company';
   }
 
   getStatusClass(status: string): string {
