@@ -117,16 +117,52 @@ public class DispatchersController : ControllerBase
             })
             .ToListAsync();
 
+        if (isCurrentUserDispatcherRole && !canBypassOrgFilter)
+        {
+            var dispatcherIdsForCurrentUser = activeDispatchers
+                .Where(d => d.Id > 0 && (
+                    (currentUserId > 0 && d.Id == currentUserId) ||
+                    (!string.IsNullOrWhiteSpace(currentUserEmail) &&
+                     string.Equals((d.Email ?? string.Empty).Trim(), currentUserEmail, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(currentUserName) &&
+                     string.Equals(NormalizePersonName(d.Name), NormalizePersonName(currentUserName), StringComparison.Ordinal))))
+                .Select(d => d.Id)
+                .Distinct()
+                .ToArray();
+
+            if (dispatcherIdsForCurrentUser.Length > 0)
+            {
+                drivers = await MergeDriversAssignedToDispatchersAsync(
+                    drivers,
+                    dispatcherIdsForCurrentUser,
+                    activeDispatchers);
+            }
+        }
+
         var dbAssignmentMap = await TryGetDriverDispatchAssignmentMapAsync(drivers.Select(d => d.Id));
+
+        var fleetLookupOrgIds = new HashSet<int>(allowedOrgIds);
+        if (isCurrentUserDispatcherRole && !canBypassOrgFilter)
+        {
+            var driverOrgIds = await _context.Drivers
+                .AsNoTracking()
+                .Where(d => drivers.Select(x => x.Id).Contains(d.Id))
+                .Select(d => d.OrganizationId)
+                .ToListAsync();
+            foreach (var orgId in driverOrgIds)
+            {
+                if (orgId > 0) fleetLookupOrgIds.Add(orgId);
+            }
+        }
 
         var fleetQuery = _context.Fleets.AsNoTracking().AsQueryable();
         if (!canBypassOrgFilter)
-            fleetQuery = fleetQuery.Where(f => allowedOrgIds.Contains(f.OrganizationId));
+            fleetQuery = fleetQuery.Where(f => fleetLookupOrgIds.Contains(f.OrganizationId));
         var fleetNameById = await fleetQuery.ToDictionaryAsync(f => f.Id, f => f.Name);
 
         var fleetDriverQuery = _context.FleetDrivers.AsNoTracking().AsQueryable();
         if (!canBypassOrgFilter)
-            fleetDriverQuery = fleetDriverQuery.Where(fd => allowedOrgIds.Contains(fd.Fleet!.OrganizationId));
+            fleetDriverQuery = fleetDriverQuery.Where(fd => fleetLookupOrgIds.Contains(fd.Fleet!.OrganizationId));
         var fleetDriverRows = await fleetDriverQuery
             .Select(fd => new { fd.DriverId, fd.FleetId })
             .ToListAsync();
@@ -303,6 +339,115 @@ public class DispatchersController : ControllerBase
                 drivers = "default_db"
             }
         });
+    }
+
+    private async Task<List<DriverWire>> MergeDriversAssignedToDispatchersAsync(
+        List<DriverWire> existingDrivers,
+        IReadOnlyCollection<int> dispatcherIds,
+        IReadOnlyCollection<DispatchUserWire> activeDispatchers)
+    {
+        if (dispatcherIds.Count == 0) return existingDrivers;
+
+        var dispatcherIdSet = dispatcherIds.ToHashSet();
+        var existingIds = existingDrivers.Select(d => d.Id).ToHashSet();
+
+        var noteCandidates = await _context.Drivers
+            .AsNoTracking()
+            .Where(d => !d.IsDeleted && d.Notes != null && d.Notes.Contains("[dispatch-assignee-id:"))
+            .Select(d => new DriverWire
+            {
+                Id = d.Id,
+                Name = d.Name,
+                Email = d.Email,
+                Phone = d.Phone,
+                Status = d.Status,
+                FleetId = d.FleetId,
+                Notes = d.Notes,
+                HireDate = d.HireDate
+            })
+            .ToListAsync();
+
+        var assignedIds = new HashSet<int>();
+        foreach (var candidate in noteCandidates)
+        {
+            var dispatchMeta = ResolveDispatchMetadataFromNotes(candidate.Notes);
+            if (dispatchMeta.DispatchUserId.HasValue && dispatcherIdSet.Contains(dispatchMeta.DispatchUserId.Value))
+            {
+                assignedIds.Add(candidate.Id);
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(dispatchMeta.DispatcherName))
+            {
+                var normalizedName = NormalizePersonName(dispatchMeta.DispatcherName);
+                if (activeDispatchers.Any(d =>
+                        dispatcherIdSet.Contains(d.Id) &&
+                        string.Equals(NormalizePersonName(d.Name), normalizedName, StringComparison.Ordinal)))
+                {
+                    assignedIds.Add(candidate.Id);
+                }
+            }
+        }
+
+        var dbAssignmentMap = await TryGetDriverDispatchAssignmentMapAsync(noteCandidates.Select(d => d.Id));
+        foreach (var kvp in dbAssignmentMap)
+        {
+            if (existingIds.Contains(kvp.Key) || assignedIds.Contains(kvp.Key)) continue;
+
+            if (kvp.Value.DispatchUserId.HasValue && dispatcherIdSet.Contains(kvp.Value.DispatchUserId.Value))
+            {
+                assignedIds.Add(kvp.Key);
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(kvp.Value.DispatcherEmail))
+            {
+                var emailKey = kvp.Value.DispatcherEmail.Trim().ToLowerInvariant();
+                if (activeDispatchers.Any(d =>
+                        dispatcherIdSet.Contains(d.Id) &&
+                        string.Equals((d.Email ?? string.Empty).Trim().ToLowerInvariant(), emailKey, StringComparison.Ordinal)))
+                {
+                    assignedIds.Add(kvp.Key);
+                    continue;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(kvp.Value.DispatcherName))
+            {
+                var normalizedName = NormalizePersonName(kvp.Value.DispatcherName);
+                if (activeDispatchers.Any(d =>
+                        dispatcherIdSet.Contains(d.Id) &&
+                        string.Equals(NormalizePersonName(d.Name), normalizedName, StringComparison.Ordinal)))
+                {
+                    assignedIds.Add(kvp.Key);
+                }
+            }
+        }
+
+        assignedIds.ExceptWith(existingIds);
+        if (assignedIds.Count == 0) return existingDrivers;
+
+        var extraDrivers = await _context.Drivers
+            .AsNoTracking()
+            .Where(d => assignedIds.Contains(d.Id) && !d.IsDeleted)
+            .Select(d => new DriverWire
+            {
+                Id = d.Id,
+                Name = d.Name,
+                Email = d.Email,
+                Phone = d.Phone,
+                Status = d.Status,
+                FleetId = d.FleetId,
+                Notes = d.Notes,
+                HireDate = d.HireDate
+            })
+            .ToListAsync();
+
+        if (extraDrivers.Count == 0) return existingDrivers;
+
+        var merged = existingDrivers.ToList();
+        merged.AddRange(extraDrivers);
+        return merged;
     }
 
     private async Task<Dictionary<int, DriverDispatchAssignmentWire>> TryGetDriverDispatchAssignmentMapAsync(IEnumerable<int> driverIds)
