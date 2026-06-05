@@ -72,7 +72,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   navSections: NavSection[] = [
     {
       items: [
-        { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
+        { label: 'HR Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
         { label: 'Fleet Dashboard', icon: 'bx bx-tachometer', route: '/fleet/dashboard' },
       ]
     },
