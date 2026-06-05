@@ -73,10 +73,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     {
       items: [
         { label: 'Dashboard', icon: 'bx bx-grid-alt', route: '/dashboard' },
-        { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
         { label: 'Applicants', icon: 'bx bx-user-plus', route: '/hr/applicants' },
         { label: 'Fleet Dashboard', icon: 'bx bx-tachometer', route: '/fleet/dashboard' },
-        { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
         { label: 'Dispatchers', icon: 'bx bx-user-voice', route: '/dispatchers' },
         { label: 'Carriers', icon: 'bx bxs-truck', route: '/carriers' },
         { label: 'MOTIV', icon: 'bx bxs-truck', route: '/motiv' },
@@ -85,6 +83,13 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Payroll', icon: 'bx bx-dollar-circle', route: '/hr/payroll' },
         { label: 'Benefits', icon: 'bx bx-star', route: '/hr/benefits' },
         { label: 'Performance Reviews', icon: 'bx bx-bar-chart-alt-2', route: '/hr/performance-reviews' },
+      ]
+    },
+    {
+      label: 'HR',
+      items: [
+        { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
+        { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
       ]
     },
     {
