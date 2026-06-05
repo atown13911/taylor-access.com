@@ -187,29 +187,7 @@ public class DispatchersController : ControllerBase
         var dispatcherEmailById = activeDispatchers
             .ToDictionary(d => d.Id, d => d.Email ?? string.Empty);
 
-        foreach (var driver in activeLandmarkDrivers)
-        {
-            if (driver.DispatchUserId.HasValue && dispatcherNameById.TryGetValue(driver.DispatchUserId.Value, out var name))
-                driver.DispatcherName = name;
-            if (driver.DispatchUserId.HasValue &&
-                dispatcherEmailById.TryGetValue(driver.DispatchUserId.Value, out var email) &&
-                string.IsNullOrWhiteSpace(driver.DispatcherEmail))
-            {
-                driver.DispatcherEmail = email;
-            }
-        }
-        foreach (var driver in otrDrivers)
-        {
-            if (driver.DispatchUserId.HasValue && dispatcherNameById.TryGetValue(driver.DispatchUserId.Value, out var name))
-                driver.DispatcherName = name;
-            if (driver.DispatchUserId.HasValue &&
-                dispatcherEmailById.TryGetValue(driver.DispatchUserId.Value, out var email) &&
-                string.IsNullOrWhiteSpace(driver.DispatcherEmail))
-            {
-                driver.DispatcherEmail = email;
-            }
-        }
-        foreach (var driver in drayageDrivers)
+        foreach (var driver in driverRows)
         {
             if (driver.DispatchUserId.HasValue && dispatcherNameById.TryGetValue(driver.DispatchUserId.Value, out var name))
                 driver.DispatcherName = name;
@@ -238,17 +216,7 @@ public class DispatchersController : ControllerBase
         var assignedDriversByDispatcher = activeDispatchers
             .ToDictionary(d => d.Id, _ => new List<DispatcherAssignedDriverDto>());
 
-        var assignmentSourceDrivers = activeLandmarkDrivers.Count > 0
-            ? activeLandmarkDrivers
-            : driverRows
-                .Where(d =>
-                    d.DispatchUserId.HasValue ||
-                    !string.IsNullOrWhiteSpace(d.DispatcherName) ||
-                    !string.IsNullOrWhiteSpace(d.DispatcherEmail))
-                .OrderBy(d => d.Name)
-                .ToList();
-
-        foreach (var driver in assignmentSourceDrivers)
+        foreach (var driver in driverRows)
         {
             DispatchUserWire? matchedDispatcher = null;
             if (driver.DispatchUserId.HasValue && dispatchersById.TryGetValue(driver.DispatchUserId.Value, out var byId))
@@ -303,7 +271,7 @@ public class DispatchersController : ControllerBase
             };
         }).OrderBy(d => d.Name).ToList();
 
-        var driversWithDispatcher = assignmentSourceDrivers.Count(d =>
+        var driversWithDispatcher = driverRows.Count(d =>
             d.DispatchUserId.HasValue ||
             !string.IsNullOrWhiteSpace(d.DispatcherName) ||
             !string.IsNullOrWhiteSpace(d.DispatcherEmail));
@@ -312,7 +280,7 @@ public class DispatchersController : ControllerBase
             totalDispatchers = dispatcherRows.Count,
             dispatchersWithAssignedDrivers = dispatcherRows.Count(d => d.AssignedDriverCount > 0),
             driversWithDispatcher,
-            unassignedDrivers = Math.Max(assignmentSourceDrivers.Count - driversWithDispatcher, 0)
+            unassignedDrivers = Math.Max(driverRows.Count - driversWithDispatcher, 0)
         };
 
         return Ok(new
@@ -324,7 +292,8 @@ public class DispatchersController : ControllerBase
                 {
                     otr = otrDrivers,
                     drayage = drayageDrivers,
-                    activeLandmark = activeLandmarkDrivers
+                    activeLandmark = activeLandmarkDrivers,
+                    all = driverRows
                 },
                 summary
             },
