@@ -87,7 +87,6 @@ export class ShellComponent implements OnInit, OnDestroy {
     {
       label: 'HR',
       items: [
-        { label: 'Applicants', icon: 'bx bx-user-plus', route: '/hr/applicants' },
         { label: 'Time Clock', icon: 'bx bx-time-five', route: '/hr/time-clock' },
         { label: 'Time Off', icon: 'bx bx-calendar-event', route: '/hr/time-off' },
         { label: 'Payroll', icon: 'bx bx-dollar-circle', route: '/hr/payroll' },
@@ -95,6 +94,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Performance Reviews', icon: 'bx bx-bar-chart-alt-2', route: '/hr/performance-reviews' },
         { label: 'Employee Roster', icon: 'bx bx-id-card', route: '/hr/roster' },
         { label: 'Drivers', icon: 'bx bx-car', route: '/drivers' },
+      ]
+    },
+    {
+      label: 'Recruiting',
+      items: [
+        { label: 'Applicants', icon: 'bx bx-user-plus', route: '/hr/applicants' },
       ]
     },
     {
