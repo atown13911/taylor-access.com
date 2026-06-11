@@ -231,7 +231,21 @@ export class DriverDatabaseComponent implements OnInit {
       ''
     ).trim().toLowerCase();
 
-    if (!position) return false;
+    // Many hired records arrive without a populated position; keep them visible in onboarding.
+    if (!position) return true;
+
+    const nonDriverIndicators = [
+      'dispatcher',
+      'recruiter',
+      'accounting',
+      'payroll',
+      'hr',
+      'human resources',
+      'admin',
+      'office',
+      'safety manager'
+    ];
+    if (nonDriverIndicators.some((token) => position.includes(token))) return false;
 
     const driverIndicators = [
       'driver',
@@ -847,6 +861,9 @@ export class DriverDatabaseComponent implements OnInit {
   private isOnboardingStatus(status: any): boolean {
     const normalized = this.normalizeStatus(status);
     return normalized === 'onboarding' ||
+      normalized === 'hired' ||
+      normalized === 'new-hire' ||
+      normalized === 'newhire' ||
       normalized === 'pending' ||
       normalized === 'invited' ||
       normalized === 'application' ||
@@ -875,9 +892,6 @@ export class DriverDatabaseComponent implements OnInit {
     const normalized = this.normalizeStatus(status);
     return normalized === 'active' ||
       normalized === 'available' ||
-      normalized === 'hired' ||
-      normalized === 'new-hire' ||
-      normalized === 'newhire' ||
       normalized === 'online' ||
       normalized === 'dispatched' ||
       normalized === 'en-route' ||
