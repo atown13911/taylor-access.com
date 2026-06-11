@@ -1483,8 +1483,23 @@ export class DriverDatabaseComponent implements OnInit {
     if (name && email) keys.push(`name-email:${name}|${email}`);
     // Do not merge by name-only. It can collapse distinct records and hide newly hired drivers.
 
-    const id = String(driver?.id ?? '').trim();
-    if (id) keys.push(`id:${id}`);
+    const aliasIds = new Set<string>(
+      [
+        String(driver?.id ?? '').trim(),
+        String(driver?._linkedDriverId ?? '').trim(),
+        ...(Array.isArray(driver?._aliasDriverIds)
+          ? driver._aliasDriverIds.map((value: any) => String(value ?? '').trim())
+          : [])
+      ].filter((value: string) => !!value)
+    );
+
+    for (const aliasId of aliasIds) {
+      keys.push(`id:${aliasId}`);
+      // Ensure applicant rows linked to numeric driver IDs collapse into one person.
+      if (this.isApiDriverId(aliasId)) {
+        keys.push(`api-id:${aliasId}`);
+      }
+    }
 
     return keys;
   }
