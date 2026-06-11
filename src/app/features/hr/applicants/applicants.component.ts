@@ -755,14 +755,19 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           />
           <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
             <option value="all">All statuses</option>
-            <option value="new">New</option>
-            <option value="screening">Screening</option>
-            <option value="interview">Interview</option>
-            <option value="offer">Offer</option>
-            <option value="hired">Hired</option>
-            <option value="no response">No Response</option>
-            <option value="no show">No Show</option>
-            <option value="rejected">Rejected</option>
+            @if (applicantSectionMode() === 'hiring') {
+              <option value="offer">Offer</option>
+              <option value="hired">Hired</option>
+            } @else {
+              <option value="new">New</option>
+              <option value="screening">Screening</option>
+              <option value="interview">Interview</option>
+              <option value="offer">Offer</option>
+              <option value="hired">Hired</option>
+              <option value="no response">No Response</option>
+              <option value="no show">No Show</option>
+              <option value="rejected">Rejected</option>
+            }
           </select>
         </div>
         @if (applicantsSyncError()) {
@@ -816,14 +821,19 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   <td>{{ row.trainingGroupAssignment || '—' }}</td>
                   <td>
                     <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
-                      <option value="new">New</option>
-                      <option value="screening">Screening</option>
-                      <option value="interview">Interview</option>
-                      <option value="offer">Offer</option>
-                      <option value="hired">Hired</option>
-                      <option value="no response">No Response</option>
-                      <option value="no show">No Show</option>
-                      <option value="rejected">Rejected</option>
+                      @if (applicantSectionMode() === 'hiring') {
+                        <option value="offer">Offer</option>
+                        <option value="hired">Hired</option>
+                      } @else {
+                        <option value="new">New</option>
+                        <option value="screening">Screening</option>
+                        <option value="interview">Interview</option>
+                        <option value="offer">Offer</option>
+                        <option value="hired">Hired</option>
+                        <option value="no response">No Response</option>
+                        <option value="no show">No Show</option>
+                        <option value="rejected">Rejected</option>
+                      }
                     </select>
                   </td>
                   <td>{{ row.appliedDate || '—' }}</td>
@@ -2220,6 +2230,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   setApplicantSectionMode(mode: 'application' | 'hiring'): void {
     this.applicantSectionMode.set(mode);
+    if (mode === 'hiring' && !this.isSelectedForHiringStatus(this.statusFilter() as ApplicantStatus)) {
+      this.statusFilter.set('all');
+    }
     this.selectedApplicantId.set(null);
     this.showHiredDetails.set(false);
   }
