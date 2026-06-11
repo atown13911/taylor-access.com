@@ -756,7 +756,9 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
             <option value="all">All statuses</option>
             @if (applicantSectionMode() === 'hiring') {
-              <option value="offer">Offer</option>
+              @if (positionGroupFilter() !== 'fleet') {
+                <option value="offer">Offer</option>
+              }
               <option value="hired">Hired</option>
             } @else {
               <option value="new">New</option>
@@ -822,7 +824,9 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   <td>
                     <select [ngModel]="row.status" (click)="$event.stopPropagation()" (ngModelChange)="setStatus(row.id, $event)">
                       @if (applicantSectionMode() === 'hiring') {
-                        <option value="offer">Offer</option>
+                        @if (positionGroupFilter() !== 'fleet') {
+                          <option value="offer">Offer</option>
+                        }
                         <option value="hired">Hired</option>
                       } @else {
                         <option value="new">New</option>
@@ -2110,6 +2114,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   setPositionGroupFilter(mode: 'office' | 'fleet'): void {
     this.positionGroupFilter.set(mode);
     this.selectedPosition.set('all');
+    if (this.applicantSectionMode() === 'hiring' && !this.isSelectedForHiringStatus(this.statusFilter() as ApplicantStatus)) {
+      this.statusFilter.set('all');
+    }
   }
 
   addApplicantGoal(): void {
@@ -2785,7 +2792,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   private isSelectedForHiringStatus(status: ApplicantStatus): boolean {
-    return status === 'offer' || status === 'hired';
+    if (status === 'hired') return true;
+    if (status === 'offer') return this.positionGroupFilter() !== 'fleet';
+    return false;
   }
 
   private isFleetPositionName(value: unknown): boolean {
