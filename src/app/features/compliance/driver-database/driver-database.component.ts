@@ -62,7 +62,7 @@ export class DriverDatabaseComponent implements OnInit {
     let list = this.drivers();
     const tab = this.activeStatusTab();
     if (tab === 'current') list = list.filter((d: any) => this.isCurrentStatus(d.status));
-    else if (tab === 'onboarding') list = list.filter((d: any) => this.isOnboardingStatus(d.status));
+    else if (tab === 'onboarding') list = list.filter((d: any) => this.isApplicantRow(d) && this.isOnboardingStatus(d.status));
     else if (tab === 'closeout') list = list.filter((d: any) => this.isCloseoutStatus(d.status));
     else if (tab === 'archived') list = list.filter((d: any) => this.isArchivedStatus(d.status));
 
@@ -106,7 +106,7 @@ export class DriverDatabaseComponent implements OnInit {
     const all = this.drivers();
     return {
       current: all.filter((d: any) => this.isCurrentStatus(d.status)).length,
-      onboarding: all.filter((d: any) => this.isOnboardingStatus(d.status)).length,
+      onboarding: all.filter((d: any) => this.isApplicantRow(d) && this.isOnboardingStatus(d.status)).length,
       closeout: all.filter((d: any) => this.isCloseoutStatus(d.status)).length,
       archived: all.filter((d: any) => this.isArchivedStatus(d.status)).length
     };
@@ -193,20 +193,49 @@ export class DriverDatabaseComponent implements OnInit {
 
   private async loadHiredApplicants(): Promise<any[]> {
     try {
-      const response: any = await this.http.get(
-        `${environment.apiUrl}/api/v1/applicants/records?includeCv=true`
-      ).toPromise();
-      const rows = Array.isArray(response?.data) ? response.data : [];
+      const [recordsResponse, positionsResponse] = await Promise.all([
+        this.http.get(`${environment.apiUrl}/api/v1/applicants/records?includeCv=true`).toPromise(),
+        this.http.get(`${environment.apiUrl}/api/v1/applicants/positions`).toPromise()
+      ]);
+
+      const rows = Array.isArray((recordsResponse as any)?.data) ? (recordsResponse as any).data : [];
+      const positions = Array.isArray((positionsResponse as any)?.data) ? (positionsResponse as any).data : [];
+      const fleetActivePositionKeys = new Set<string>(
+        positions
+          .filter((p: any) => String(p?.group ?? '').trim().toLowerCase() === 'fleet' && p?.isActive !== false)
+          .map((p: any) => String(p?.name ?? '').trim().toLowerCase())
+          .filter((value: string) => !!value)
+      );
+
       return rows
         .filter((row: any) =>
           this.isApplicantHired(row?.status ?? row?.Status ?? row?.applicationStatus ?? row?.ApplicationStatus) &&
           !this.isApplicantHistorical(row) &&
-          this.isDriverApplicant(row)
+          this.isFleetHiringApplicant(row, fleetActivePositionKeys)
         )
         .map((row: any) => this.mapApplicantToComplianceDriver(row));
     } catch {
       return [];
     }
+  }
+
+  private isFleetHiringApplicant(row: any, fleetActivePositionKeys: Set<string>): boolean {
+    const positionKey = String(
+      row?.position ??
+      row?.Position ??
+      row?.positionName ??
+      row?.jobTitle ??
+      row?.role ??
+      row?.appliedFor ??
+      ''
+    ).trim().toLowerCase();
+
+    if (fleetActivePositionKeys.size > 0) {
+      return !!positionKey && fleetActivePositionKeys.has(positionKey);
+    }
+
+    // Fallback to legacy heuristics if positions endpoint is unavailable.
+    return this.isDriverApplicant(row);
   }
 
   private isApplicantHired(status: unknown): boolean {
@@ -255,7 +284,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   private mapApplicantToComplianceDriver(applicant: any): any {
-    const id = String(applicant?.id ?? '').trim();
+    const id = String(applicant?.id ?? applicant?.Id ?? '').trim();
     const firstName = String(applicant?.firstName ?? applicant?.FirstName ?? applicant?.first_name ?? '').trim();
     const lastName = String(applicant?.lastName ?? applicant?.LastName ?? applicant?.last_name ?? '').trim();
     const fullName = `${firstName} ${lastName}`.trim();
