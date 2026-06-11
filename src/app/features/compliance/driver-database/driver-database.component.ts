@@ -194,12 +194,12 @@ export class DriverDatabaseComponent implements OnInit {
   private async loadHiredApplicants(): Promise<any[]> {
     try {
       const response: any = await this.http.get(
-        `${environment.apiUrl}/api/v1/applicants/records?includeCv=false`
+        `${environment.apiUrl}/api/v1/applicants/records?includeCv=true`
       ).toPromise();
       const rows = Array.isArray(response?.data) ? response.data : [];
       return rows
         .filter((row: any) =>
-          this.isApplicantHired(row?.status) &&
+          this.isApplicantHired(row?.status ?? row?.Status ?? row?.applicationStatus ?? row?.ApplicationStatus) &&
           !this.isApplicantHistorical(row) &&
           this.isDriverApplicant(row)
         )
@@ -210,11 +210,12 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   private isApplicantHired(status: unknown): boolean {
-    return String(status ?? '').trim().toLowerCase() === 'hired';
+    const normalized = String(status ?? '').trim().toLowerCase().replace(/[_\s-]+/g, ' ');
+    return normalized === 'hired' || normalized.startsWith('hired ');
   }
 
   private isApplicantHistorical(row: any): boolean {
-    const historicalFlag = row?.isHistorical ?? row?.is_historical ?? row?.historical;
+    const historicalFlag = row?.isHistorical ?? row?.IsHistorical ?? row?.is_historical ?? row?.historical;
     if (historicalFlag === true) return true;
     if (historicalFlag === false || historicalFlag == null) return false;
     const text = String(historicalFlag).trim().toLowerCase();
@@ -224,6 +225,7 @@ export class DriverDatabaseComponent implements OnInit {
   private isDriverApplicant(row: any): boolean {
     const position = String(
       row?.position ??
+      row?.Position ??
       row?.positionName ??
       row?.jobTitle ??
       row?.role ??
@@ -247,38 +249,30 @@ export class DriverDatabaseComponent implements OnInit {
     ];
     if (nonDriverIndicators.some((token) => position.includes(token))) return false;
 
-    const driverIndicators = [
-      'driver',
-      'otr',
-      'cdl',
-      'truck',
-      'tractor',
-      'owner operator',
-      'owner-operator'
-    ];
-
-    return driverIndicators.some((token) => position.includes(token));
+    // For hired onboarding visibility, treat unknown/misc position text as eligible.
+    // We only exclude explicit non-driver role titles above.
+    return true;
   }
 
   private mapApplicantToComplianceDriver(applicant: any): any {
     const id = String(applicant?.id ?? '').trim();
-    const firstName = String(applicant?.firstName ?? applicant?.first_name ?? '').trim();
-    const lastName = String(applicant?.lastName ?? applicant?.last_name ?? '').trim();
+    const firstName = String(applicant?.firstName ?? applicant?.FirstName ?? applicant?.first_name ?? '').trim();
+    const lastName = String(applicant?.lastName ?? applicant?.LastName ?? applicant?.last_name ?? '').trim();
     const fullName = `${firstName} ${lastName}`.trim();
     const name = fullName
-      || String(applicant?.name ?? applicant?.applicantName ?? applicant?.fullName ?? 'Applicant').trim();
+      || String(applicant?.name ?? applicant?.Name ?? applicant?.applicantName ?? applicant?.fullName ?? applicant?.FullName ?? 'Applicant').trim();
 
     return {
       id: id ? `applicant-${id}` : `applicant-${Math.random().toString(36).slice(2, 10)}`,
       _source: 'applicant',
       name,
-      email: String(applicant?.email ?? '').trim(),
-      phone: String(applicant?.phone ?? applicant?.phoneNumber ?? '').trim(),
-      licenseNumber: String(applicant?.licenseNumber ?? applicant?.cdlNumber ?? '').trim(),
-      licenseExpiry: String(applicant?.licenseExpiry ?? applicant?.cdlExpiry ?? '').trim(),
+      email: String(applicant?.email ?? applicant?.Email ?? '').trim(),
+      phone: String(applicant?.phone ?? applicant?.Phone ?? applicant?.phoneNumber ?? applicant?.PhoneNumber ?? '').trim(),
+      licenseNumber: String(applicant?.licenseNumber ?? applicant?.LicenseNumber ?? applicant?.cdlNumber ?? applicant?.CdlNumber ?? '').trim(),
+      licenseExpiry: String(applicant?.licenseExpiry ?? applicant?.LicenseExpiry ?? applicant?.cdlExpiry ?? applicant?.CdlExpiry ?? '').trim(),
       status: 'onboarding',
-      createdAt: applicant?.createdAt ?? applicant?.appliedDate ?? applicant?.appliedAt ?? null,
-      updatedAt: applicant?.updatedAt ?? applicant?.modifiedAt ?? null
+      createdAt: applicant?.createdAt ?? applicant?.CreatedAt ?? applicant?.appliedDate ?? applicant?.AppliedDate ?? applicant?.appliedAt ?? null,
+      updatedAt: applicant?.updatedAt ?? applicant?.UpdatedAt ?? applicant?.modifiedAt ?? applicant?.ModifiedAt ?? null
     };
   }
 
