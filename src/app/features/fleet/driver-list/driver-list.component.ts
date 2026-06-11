@@ -1255,7 +1255,7 @@ export class DriverListComponent implements OnInit {
       hireDate: form.hireDate || null,
       payRate: form.payRate,
       payType: form.payType,
-      driverType: form.driverType,
+      driverType: this.normalizeFormDriverType(form.driverType),
       notes: this.composeDriverNotesWithDispatch(
         this.originalDriverNotes(),
         form.dispatchUserId

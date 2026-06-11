@@ -199,7 +199,7 @@ public class DriversController : ControllerBase
                 DateOfBirth = request.DateOfBirth,
                 // Status
                 Status = request.Status ?? "available",
-                DriverType = request.DriverType,
+                DriverType = NormalizeDriverType(request.DriverType),
                 // Emergency Contact
                 EmergencyContactName = request.EmergencyContactName ?? request.EmergencyContact,
                 EmergencyContactPhone = request.EmergencyContactPhone ?? request.EmergencyPhone,
@@ -276,7 +276,7 @@ public class DriversController : ControllerBase
         // Status
         if (!string.IsNullOrEmpty(request.Status)) driver.Status = request.Status;
         if (request.IsOnline.HasValue) driver.IsOnline = request.IsOnline.Value;
-        if (!string.IsNullOrWhiteSpace(request.DriverType)) driver.DriverType = request.DriverType.Trim();
+        if (!string.IsNullOrWhiteSpace(request.DriverType)) driver.DriverType = NormalizeDriverType(request.DriverType);
         if (request.Ssn != null) driver.Ssn = request.Ssn;
         if (request.TruckNumber != null) driver.TruckNumber = request.TruckNumber;
         if (request.TruckMake != null) driver.TruckMake = request.TruckMake;
@@ -489,7 +489,7 @@ public class DriversController : ControllerBase
                     Status = mappedStatus,
                     IsOnline = false,
                     FleetId = PickInt(src, "fleetId"),
-                    DriverType = PickString(src, "driverType", "type"),
+                    DriverType = NormalizeDriverType(PickString(src, "driverType", "type")),
                     Ssn = PickString(src, "ssn"),
                     TruckNumber = PickString(src, "truckNumber", "unit", "unitNumber"),
                     TruckMake = PickString(src, "truckMake", "vehicleMake"),
@@ -820,6 +820,21 @@ public class DriversController : ControllerBase
         if (DateOnly.TryParse(input, out var d)) return d;
         if (DateTime.TryParse(input, out var dt)) return DateOnly.FromDateTime(dt);
         return null;
+    }
+
+    private static string? NormalizeDriverType(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        var normalized = input.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+        return normalized switch
+        {
+            "owneroperator" => "owner_operator",
+            "owner_operator" => "owner_operator",
+            "owner_op" => "owner_operator",
+            _ => normalized
+        };
     }
 
     private static string MergeNotes(string? current, string? extra)

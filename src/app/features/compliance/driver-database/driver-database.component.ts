@@ -170,7 +170,7 @@ export class DriverDatabaseComponent implements OnInit {
     this.loading.set(true);
     try {
       const [driversRes, applicantsRes] = await Promise.allSettled([
-        this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=1000`).toPromise(),
+        this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=5000`).toPromise(),
         this.loadHiredApplicants()
       ]);
 
@@ -875,6 +875,9 @@ export class DriverDatabaseComponent implements OnInit {
     const normalized = this.normalizeStatus(status);
     return normalized === 'active' ||
       normalized === 'available' ||
+      normalized === 'hired' ||
+      normalized === 'new-hire' ||
+      normalized === 'newhire' ||
       normalized === 'online' ||
       normalized === 'dispatched' ||
       normalized === 'en-route' ||
@@ -1470,8 +1473,7 @@ export class DriverDatabaseComponent implements OnInit {
     if (name && phoneDigits) keys.push(`name-phone:${name}|${phoneDigits}`);
     if (name && phoneLast7) keys.push(`name-phone-last7:${name}|${phoneLast7}`);
     if (name && email) keys.push(`name-email:${name}|${email}`);
-    // Include name-only as a final fallback to collapse obvious visual duplicates.
-    if (name) keys.push(`name-only:${name}`);
+    // Do not merge by name-only. It can collapse distinct records and hide newly hired drivers.
 
     const id = String(driver?.id ?? '').trim();
     if (id) keys.push(`id:${id}`);
