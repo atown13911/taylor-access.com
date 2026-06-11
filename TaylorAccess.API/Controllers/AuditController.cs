@@ -32,6 +32,13 @@ public class AuditController : ControllerBase
         string? Source
     );
 
+    public record ClientActivityRequest(
+        string Action,
+        string? EntityType,
+        string? Description,
+        string? Endpoint
+    );
+
     [HttpGet]
     public async Task<ActionResult<object>> GetLogs(
         [FromQuery] string? entityType,
@@ -148,6 +155,38 @@ public class AuditController : ControllerBase
             dataSource = sqlFallbackUsed ? "postgres" : "mongo",
             warning
         });
+    }
+
+    [HttpPost("activity")]
+    public async Task<ActionResult<object>> LogClientActivity([FromBody] ClientActivityRequest request)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not found" });
+
+        if (string.IsNullOrWhiteSpace(request.Action))
+            return BadRequest(new { error = "Action is required" });
+
+        var details = request.Description ?? request.Action;
+        if (!string.IsNullOrWhiteSpace(request.Endpoint))
+            details = $"{details} @ {request.Endpoint}";
+
+        await _auditService.LogAsync(new AuditLog
+        {
+            OrganizationId = user.OrganizationId,
+            UserId = user.Id > 0 ? user.Id : null,
+            UserName = user.Name,
+            UserEmail = user.Email,
+            Action = request.Action,
+            EntityType = request.EntityType ?? "user_activity",
+            Description = details,
+            Endpoint = request.Endpoint,
+            HttpMethod = "CLIENT",
+            Module = "Taylor Access",
+            Severity = "info",
+            Timestamp = DateTime.UtcNow
+        });
+
+        return Ok(new { logged = true });
     }
 
     [HttpPost("navigation-click")]

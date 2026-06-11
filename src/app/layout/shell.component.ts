@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../core/services/auth.service';
 import { InactivityService } from '../core/services/inactivity.service';
 import { EventTrackingService } from '../core/services/event-tracking.service';
+import { EchoActivityService } from '../core/services/echo-activity.service';
 import { environment } from '../../environments/environment';
 
 interface NavSection {
@@ -22,6 +23,7 @@ interface NavSection {
 export class ShellComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
   inactivity = inject(InactivityService);
+  private echoActivity = inject(EchoActivityService);
   private router = inject(Router);
   private http = inject(HttpClient);
   private tracking = inject(EventTrackingService);
@@ -131,6 +133,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       return;
     }
     this.inactivity.start();
+    this.echoActivity.start();
     this.clockInterval = setInterval(() => this.currentTime = new Date(), 1000);
     this.restoreSavedStyles();
     this.startTimeclock();
