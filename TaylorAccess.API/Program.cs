@@ -698,6 +698,8 @@ using (var scope = app.Services.CreateScope())
             new[] { "https://taylorcommlink.com", "https://taylorcommlink.com/callback", "http://localhost:3002", "http://localhost:3002/callback" }),
         ("ta_taylor_legal", "taylor-legal-sso-secret-2026", "Taylor Legal", "Contract Management & Analysis", "https://taylor-legal.net",
             new[] { "https://taylor-legal.net", "https://taylor-legal.net/callback", "http://localhost:3000", "http://localhost:3000/callback" }),
+        ("ta_draytac", "draytac-sso-secret-2026", "DrayTac", "Drayage Management System", "https://draytac.com",
+            new[] { "https://draytac.com", "https://draytac.com/callback", "http://localhost:4200", "http://localhost:4200/callback" }),
     };
 
     foreach (var (clientId, secret, name, desc, homepage, uris) in allClients)
