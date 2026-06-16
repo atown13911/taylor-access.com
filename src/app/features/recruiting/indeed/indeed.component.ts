@@ -19,6 +19,16 @@ interface IndeedSettings {
   webhookSecret: string;
 }
 
+interface ConnectedApiRow {
+  name: string;
+  baseUrl: string;
+  auth: string;
+  configured: boolean;
+  status: 'ok' | 'warning' | 'idle' | 'error';
+  statusLabel: string;
+  lastChecked: string;
+}
+
 @Component({
   selector: 'app-indeed',
   standalone: true,
@@ -111,6 +121,46 @@ interface IndeedSettings {
         </div>
       </section>
 
+      <section class="card">
+        <div class="card-head">
+          <h2>Connected APIs</h2>
+        </div>
+        <div class="api-table-wrap">
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>API</th>
+                <th>Base URL</th>
+                <th>Auth</th>
+                <th>Configured</th>
+                <th>Status</th>
+                <th>Last Checked</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of connectedApiRows(); track row.name) {
+                <tr>
+                  <td>{{ row.name }}</td>
+                  <td class="mono">{{ row.baseUrl }}</td>
+                  <td>{{ row.auth }}</td>
+                  <td>
+                    <span class="cfg-badge" [class.on]="row.configured" [class.off]="!row.configured">
+                      {{ row.configured ? 'Yes' : 'No' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="status-chip" [class.ok]="row.status === 'ok'" [class.warn]="row.status === 'warning'" [class.idle]="row.status === 'idle'" [class.err]="row.status === 'error'">
+                      {{ row.statusLabel }}
+                    </span>
+                  </td>
+                  <td>{{ row.lastChecked }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       @if (statusMessage()) {
         <section class="status" [class.error]="statusType() === 'error'" [class.success]="statusType() === 'success'">
           {{ statusMessage() }}
@@ -149,6 +199,19 @@ interface IndeedSettings {
     .status { border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; color: #cbd5e1; background: rgba(15, 23, 42, 0.7); }
     .status.success { border-color: #166534; color: #86efac; background: rgba(20, 83, 45, 0.2); }
     .status.error { border-color: #7f1d1d; color: #fecaca; background: rgba(127, 29, 29, 0.2); }
+    .api-table-wrap { overflow-x: auto; }
+    .api-table { width: 100%; border-collapse: collapse; min-width: 860px; }
+    .api-table th, .api-table td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #243447; color: #dbe7f3; font-size: 0.9rem; }
+    .api-table th { color: #9fb3c8; font-weight: 600; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; color: #93c5fd; }
+    .cfg-badge { display: inline-flex; border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; border: 1px solid transparent; }
+    .cfg-badge.on { background: rgba(22, 101, 52, 0.22); border-color: #166534; color: #86efac; }
+    .cfg-badge.off { background: rgba(51, 65, 85, 0.32); border-color: #334155; color: #94a3b8; }
+    .status-chip { display: inline-flex; border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; border: 1px solid transparent; }
+    .status-chip.ok { background: rgba(20, 83, 45, 0.2); border-color: #166534; color: #86efac; }
+    .status-chip.warn { background: rgba(120, 53, 15, 0.2); border-color: #92400e; color: #fcd34d; }
+    .status-chip.idle { background: rgba(51, 65, 85, 0.28); border-color: #334155; color: #cbd5e1; }
+    .status-chip.err { background: rgba(127, 29, 29, 0.2); border-color: #7f1d1d; color: #fecaca; }
   `]
 })
 export class IndeedComponent implements OnInit {
@@ -160,6 +223,8 @@ export class IndeedComponent implements OnInit {
   loading = signal(false);
   statusMessage = signal('');
   statusType = signal<'idle' | 'success' | 'error'>('idle');
+  lastTestStatus = signal<'idle' | 'success' | 'error'>('idle');
+  lastTestAt = signal<string>('');
 
   form: IndeedSettings = this.defaultForm();
 
@@ -216,19 +281,76 @@ export class IndeedComponent implements OnInit {
       const typeName = String(res?.typeName ?? '').trim();
       const statusCode = Number(res?.statusCode ?? 0);
       if (typeName || (statusCode >= 200 && statusCode < 300)) {
+        this.lastTestStatus.set('success');
+        this.lastTestAt.set(this.nowLabel());
         this.statusType.set('success');
         this.statusMessage.set(`Indeed connection OK${typeName ? `. Response type: ${typeName}` : ''}.`);
       } else {
+        this.lastTestStatus.set('error');
+        this.lastTestAt.set(this.nowLabel());
         this.statusType.set('error');
         this.statusMessage.set('Connection test responded without expected GraphQL data.');
       }
     } catch (err: any) {
       const details = String(err?.error?.message || err?.message || 'Request failed');
+      this.lastTestStatus.set('error');
+      this.lastTestAt.set(this.nowLabel());
       this.statusType.set('error');
       this.statusMessage.set(`Connection test failed: ${details}`);
     } finally {
       this.loading.set(false);
     }
+  }
+
+  connectedApiRows(): ConnectedApiRow[] {
+    const hasIndeedCredential =
+      (this.form.authMode === 'bearer' && !!String(this.form.bearerToken || '').trim()) ||
+      (this.form.authMode === 'apiKey' && !!String(this.form.apiKey || '').trim());
+
+    const indeedState = this.lastTestStatus();
+    const indeedStatusLabel =
+      indeedState === 'success' ? 'Connected' :
+      indeedState === 'error' ? 'Failed test' :
+      this.form.enabled ? 'Not tested' : 'Disabled';
+    const indeedStatus: ConnectedApiRow['status'] =
+      indeedState === 'success' ? 'ok' :
+      indeedState === 'error' ? 'error' :
+      this.form.enabled ? 'warning' : 'idle';
+    const checked = this.lastTestAt() || '—';
+
+    return [
+      {
+        name: 'Indeed Partner API',
+        baseUrl: this.form.apiBaseUrl || 'https://apis.indeed.com/graphql',
+        auth: this.form.authMode === 'apiKey' ? 'x-api-key' : 'Bearer token',
+        configured: this.form.enabled && hasIndeedCredential,
+        status: indeedStatus,
+        statusLabel: indeedStatusLabel,
+        lastChecked: checked
+      },
+      {
+        name: 'Indeed Proxy (TaylorAccess.API)',
+        baseUrl: `${this.apiUrl}/api/v1/integrations/indeed/test`,
+        auth: 'Taylor Access JWT',
+        configured: true,
+        status: indeedState === 'error' ? 'warning' : 'ok',
+        statusLabel: indeedState === 'error' ? 'Reachable, upstream failed' : 'Ready',
+        lastChecked: checked
+      },
+      {
+        name: 'User Settings API',
+        baseUrl: `${this.apiUrl}/api/v1/user-settings`,
+        auth: 'Taylor Access JWT',
+        configured: true,
+        status: 'ok',
+        statusLabel: 'Ready',
+        lastChecked: '—'
+      }
+    ];
+  }
+
+  private nowLabel(): string {
+    return new Date().toLocaleString();
   }
 
   private defaultForm(): IndeedSettings {
