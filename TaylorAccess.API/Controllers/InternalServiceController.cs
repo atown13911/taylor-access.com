@@ -85,6 +85,15 @@ public class InternalServiceController : ControllerBase
                 (d.Phone ?? "").ToLower().Contains(normalizedSearch));
         }
 
+        var fleetMembershipLookup = await _db.FleetDrivers
+            .AsNoTracking()
+            .Include(fd => fd.Fleet)
+            .ToDictionaryAsync(fd => fd.DriverId, fd => fd.Fleet!.Name);
+
+        var fleetNameById = await _db.Fleets
+            .AsNoTracking()
+            .ToDictionaryAsync(f => f.Id, f => f.Name);
+
         var total = await query.CountAsync();
         var drivers = await query
             .OrderBy(d => d.Name)
@@ -97,6 +106,7 @@ public class InternalServiceController : ControllerBase
                 d.Phone,
                 d.Status,
                 d.TruckNumber,
+                d.FleetId,
                 d.LicenseNumber,
                 d.LicenseState,
                 d.LicenseExpiry,
@@ -108,7 +118,49 @@ public class InternalServiceController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { data = drivers, total });
+        var data = drivers.Select(d => new
+        {
+            d.Id,
+            d.Name,
+            d.Email,
+            d.Phone,
+            d.Status,
+            d.TruckNumber,
+            d.FleetId,
+            fleetName = ResolveFleetName(d.Id, d.FleetId, fleetMembershipLookup, fleetNameById),
+            d.LicenseNumber,
+            d.LicenseState,
+            d.LicenseExpiry,
+            d.HireDate,
+            d.DriverType,
+            d.OrganizationId,
+            d.CreatedAt,
+            d.UpdatedAt
+        }).ToList();
+
+        return Ok(new { data, total });
+    }
+
+    private static string? ResolveFleetName(
+        int driverId,
+        int? fleetId,
+        IReadOnlyDictionary<int, string> fleetMembershipLookup,
+        IReadOnlyDictionary<int, string> fleetNameById)
+    {
+        if (fleetMembershipLookup.TryGetValue(driverId, out var membershipName)
+            && !string.IsNullOrWhiteSpace(membershipName))
+        {
+            return membershipName.Trim();
+        }
+
+        if (fleetId.HasValue
+            && fleetNameById.TryGetValue(fleetId.Value, out var fleetName)
+            && !string.IsNullOrWhiteSpace(fleetName))
+        {
+            return fleetName.Trim();
+        }
+
+        return null;
     }
 
     /// <summary>Get employees/users for internal service consumers.</summary>
