@@ -96,6 +96,7 @@ public class InternalServiceController : ControllerBase
                 d.Email,
                 d.Phone,
                 d.Status,
+                d.TruckNumber,
                 d.LicenseNumber,
                 d.LicenseState,
                 d.LicenseExpiry,
