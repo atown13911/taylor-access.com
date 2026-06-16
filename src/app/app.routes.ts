@@ -38,6 +38,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/hr/applicants/applicants.component').then(m => m.ApplicantsComponent)
       },
       {
+        path: 'recruiting/indeed',
+        loadComponent: () => import('./features/recruiting/indeed/indeed.component').then(m => m.IndeedComponent)
+      },
+      {
         path: 'applicants',
         loadComponent: () => import('./features/hr/applicants/applicants.component').then(m => m.ApplicantsComponent)
       },
