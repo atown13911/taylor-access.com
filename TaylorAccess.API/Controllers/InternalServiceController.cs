@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TaylorAccess.API.Data;
 
 namespace TaylorAccess.API.Controllers;
@@ -55,6 +56,199 @@ public class InternalServiceController : ControllerBase
             return ValidateServiceKey();
 
         return false;
+    }
+
+    /// <summary>Motiv fuel purchases for payroll and internal service consumers.</summary>
+    [HttpGet("fuel-purchases")]
+    public async Task<ActionResult> GetFuelPurchases(
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int limit = 10000)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var cappedLimit = Math.Clamp(limit, 1, 25000);
+        var query = _db.MotivFuelPurchases.AsNoTracking().AsQueryable();
+
+        if (fromDate.HasValue)
+        {
+            var from = fromDate.Value.Date;
+            query = query.Where(x =>
+                (x.TransactionTime ?? x.PostedAt ?? x.CreatedAt).Date >= from);
+        }
+
+        if (toDate.HasValue)
+        {
+            var to = toDate.Value.Date;
+            query = query.Where(x =>
+                (x.TransactionTime ?? x.PostedAt ?? x.CreatedAt).Date <= to);
+        }
+
+        var profiles = await _db.MotivDriverProfiles
+            .AsNoTracking()
+            .Include(p => p.Driver)
+            .ToListAsync();
+
+        var profileByMotivUserId = profiles
+            .Where(p => !string.IsNullOrWhiteSpace(p.MotivUserId))
+            .GroupBy(p => p.MotivUserId!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var profileByMotivVehicleId = profiles
+            .Where(p => !string.IsNullOrWhiteSpace(p.MotivVehicleId))
+            .GroupBy(p => p.MotivVehicleId!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var purchases = await query
+            .OrderByDescending(x => x.TransactionTime ?? x.PostedAt ?? x.UpdatedAt)
+            .Take(cappedLimit)
+            .ToListAsync();
+
+        var data = purchases.Select(p =>
+        {
+            TaylorAccess.API.Models.MotivDriverProfile? profile = null;
+            if (p.DriverId is > 0
+                && profileByMotivUserId.TryGetValue(p.DriverId.Value.ToString(), out var byDriver))
+            {
+                profile = byDriver;
+            }
+            else if (p.VehicleId is > 0
+                && profileByMotivVehicleId.TryGetValue(p.VehicleId.Value.ToString(), out var byVehicle))
+            {
+                profile = byVehicle;
+            }
+
+            var rawVehicleNumber = ExtractFuelPurchaseVehicleNumber(p.RawJson);
+            var rawDriverName = ExtractFuelPurchaseDriverName(p.RawJson);
+            var truckNumber = profile?.Driver?.TruckNumber ?? profile?.VehicleNumber ?? rawVehicleNumber;
+            var driverName = profile?.Driver?.Name ?? rawDriverName;
+
+            return new
+            {
+                id = p.ExternalId,
+                transaction_id = p.ExternalId,
+                transaction_time = p.TransactionTime?.ToUniversalTime().ToString("O"),
+                posted_at = p.PostedAt?.ToUniversalTime().ToString("O"),
+                amount = p.Amount,
+                total_amount = p.Amount,
+                total_cost = p.Amount,
+                driver_id = p.DriverId,
+                vehicle_id = p.VehicleId,
+                vehicle_number = truckNumber,
+                truck_number = truckNumber,
+                unit = truckNumber,
+                driver_name = driverName,
+                taylor_access_driver_id = profile?.DriverId,
+                merchant_name = p.MerchantName,
+                status = p.Status,
+                source = "access-db"
+            };
+        }).ToList();
+
+        return Ok(new { data, total = data.Count, source = "taylor-access-motiv-fuel" });
+    }
+
+    private static string? ExtractFuelPurchaseVehicleNumber(string? rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+            var payload = TryGetObject(root, "fuel_purchase")
+                ?? TryGetObject(root, "transaction")
+                ?? TryGetObject(root, "card_transaction")
+                ?? root;
+            var vehicle = TryGetObject(payload, "vehicle") ?? TryGetObject(root, "vehicle");
+            if (vehicle.HasValue)
+            {
+                return FirstNonEmpty(
+                    TryGetString(vehicle.Value, "number"),
+                    TryGetString(vehicle.Value, "unit_number"),
+                    TryGetString(vehicle.Value, "fleet_number"),
+                    TryGetString(vehicle.Value, "name"));
+            }
+
+            return FirstNonEmpty(
+                TryGetString(payload, "vehicle_number"),
+                TryGetString(root, "vehicle_number"));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ExtractFuelPurchaseDriverName(string? rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+            var payload = TryGetObject(root, "fuel_purchase")
+                ?? TryGetObject(root, "transaction")
+                ?? TryGetObject(root, "card_transaction")
+                ?? root;
+            var driver = TryGetObject(payload, "driver") ?? TryGetObject(root, "driver");
+            if (driver.HasValue)
+            {
+                var first = TryGetString(driver.Value, "first_name", "firstName");
+                var last = TryGetString(driver.Value, "last_name", "lastName");
+                var combined = string.Join(' ', new[] { first, last }.Where(v => !string.IsNullOrWhiteSpace(v)));
+                return FirstNonEmpty(
+                    TryGetString(driver.Value, "name"),
+                    string.IsNullOrWhiteSpace(combined) ? null : combined);
+            }
+
+            return TryGetString(payload, "driver_name") ?? TryGetString(root, "driver_name");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static JsonElement? TryGetObject(JsonElement element, string name)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (property.Value.ValueKind == JsonValueKind.Object) return property.Value;
+        }
+
+        return null;
+    }
+
+    private static string? TryGetString(JsonElement element, params string[] names)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in names)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    var value = property.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value)) return value.Trim();
+        }
+
+        return null;
     }
 
     /// <summary>Get drivers for internal service consumers.</summary>
