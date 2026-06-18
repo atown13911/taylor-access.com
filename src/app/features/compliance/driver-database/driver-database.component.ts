@@ -749,21 +749,21 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   suspendDriver(driver: any) {
-    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { ...driver, status: 'suspended' }).subscribe({
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { status: 'suspended' }).subscribe({
       next: () => { driver.status = 'suspended'; this.drivers.set([...this.drivers()]); },
       error: () => {}
     });
   }
 
   reactivateDriver(driver: any) {
-    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { ...driver, status: 'active' }).subscribe({
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { status: 'active' }).subscribe({
       next: () => { driver.status = 'active'; this.drivers.set([...this.drivers()]); },
       error: () => {}
     });
   }
 
   archiveDriver(driver: any) {
-    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { ...driver, status: 'archived' }).subscribe({
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${driver.id}`, { status: 'archived' }).subscribe({
       next: () => { driver.status = 'archived'; this.drivers.set([...this.drivers()]); },
       error: () => {}
     });
@@ -840,7 +840,7 @@ export class DriverDatabaseComponent implements OnInit {
       return;
     }
 
-    this.http.put(`${environment.apiUrl}/api/v1/drivers/${apiDriverId}`, { ...driver, status: 'active' }).subscribe({
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${apiDriverId}`, { status: 'active' }).subscribe({
       next: () => {
         this.toast.success(`${driver?.name || 'Driver'} moved to active.`, 'Driver activated');
         this.drivers.update((rows: any[]) =>
