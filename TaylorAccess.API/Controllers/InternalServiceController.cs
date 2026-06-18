@@ -293,6 +293,72 @@ public class InternalServiceController : ControllerBase
         return Ok(new { data, total });
     }
 
+    /// <summary>Create or update a driver's direct-deposit payment method from Taylor Accounting.</summary>
+    [HttpPost("driver-payments/upsert")]
+    public async Task<ActionResult> UpsertDriverPayment([FromBody] UpsertInternalDriverPaymentRequest request)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        if (request.DriverId <= 0)
+            return BadRequest(new { error = "driverId is required" });
+
+        var driver = await _db.Drivers.AsNoTracking().FirstOrDefaultAsync(d => d.Id == request.DriverId);
+        if (driver == null)
+            return BadRequest(new { error = "Driver not found" });
+
+        var accountType = string.IsNullOrWhiteSpace(request.AccountType)
+            ? "checking"
+            : request.AccountType.Trim().ToLowerInvariant();
+
+        var payment = await _db.DriverPayments
+            .Where(p => p.DriverId == request.DriverId
+                && p.PaymentMethod == "direct_deposit"
+                && (p.AccountType ?? "checking") == accountType)
+            .OrderByDescending(p => p.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        if (payment == null)
+        {
+            payment = new TaylorAccess.API.Models.DriverPayment
+            {
+                DriverId = request.DriverId,
+                OrganizationId = request.OrganizationId > 0 ? request.OrganizationId : driver.OrganizationId,
+                PaymentMethod = "direct_deposit",
+                AccountType = accountType,
+                Status = string.IsNullOrWhiteSpace(request.Status) ? "active" : request.Status.Trim().ToLowerInvariant(),
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.DriverPayments.Add(payment);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.BankName)) payment.BankName = request.BankName.Trim();
+        if (!string.IsNullOrWhiteSpace(request.RoutingNumber)) payment.RoutingNumber = request.RoutingNumber.Trim();
+        if (!string.IsNullOrWhiteSpace(request.AccountNumber)) payment.AccountNumber = request.AccountNumber.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Status)) payment.Status = request.Status.Trim().ToLowerInvariant();
+        payment.AccountType = accountType;
+        payment.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                payment.Id,
+                payment.DriverId,
+                payment.OrganizationId,
+                payment.PaymentMethod,
+                payment.BankName,
+                payment.RoutingNumber,
+                payment.AccountNumber,
+                payment.AccountType,
+                payment.Status,
+                payment.UpdatedAt
+            }
+        });
+    }
+
     /// <summary>Get drivers for internal service consumers.</summary>
     [HttpGet("drivers")]
     public async Task<ActionResult> GetDrivers(
@@ -650,3 +716,13 @@ public class InternalServiceController : ControllerBase
         return null;
     }
 }
+
+public record UpsertInternalDriverPaymentRequest(
+    int DriverId,
+    int OrganizationId,
+    string? BankName,
+    string? RoutingNumber,
+    string? AccountNumber,
+    string? AccountType,
+    string? Status
+);
