@@ -490,4 +490,121 @@ public class InternalServiceController : ControllerBase
             utc = DateTime.UtcNow
         });
     }
+
+    /// <summary>Upsert driver pay sheets pushed from Taylor Accounting payroll processing.</summary>
+    [HttpPost("driver-pay-sheets")]
+    public async Task<ActionResult> UpsertDriverPaySheet([FromBody] JsonElement body)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driverId = TryGetInt(body, "driverId", "driver_id");
+        if (driverId <= 0)
+            return BadRequest(new { error = "driverId is required" });
+
+        var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.Id == driverId);
+        if (driver == null)
+            return BadRequest(new { error = "Driver not found" });
+
+        var paySheetNumber = TryGetString(body, "paySheetNumber", "pay_sheet_number", "paystubId", "paystub_id");
+        if (string.IsNullOrWhiteSpace(paySheetNumber))
+            paySheetNumber = TaylorAccess.API.Models.DriverPaySheet.GenerateNumber();
+
+        var periodStart = TryGetDate(body, "periodStart", "period_start") ?? DateTime.UtcNow.Date.AddDays(-7);
+        var periodEnd = TryGetDate(body, "periodEnd", "period_end") ?? DateTime.UtcNow.Date;
+
+        var existing = await _db.DriverPaySheets
+            .FirstOrDefaultAsync(p => p.PaySheetNumber == paySheetNumber);
+
+        TaylorAccess.API.Models.DriverPaySheet paySheet;
+        if (existing != null)
+        {
+            paySheet = existing;
+        }
+        else
+        {
+            paySheet = new TaylorAccess.API.Models.DriverPaySheet
+            {
+                OrganizationId = driver.OrganizationId,
+                DriverId = driverId,
+                PaySheetNumber = paySheetNumber,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.DriverPaySheets.Add(paySheet);
+        }
+
+        paySheet.PeriodStart = periodStart;
+        paySheet.PeriodEnd = periodEnd;
+        paySheet.TotalMiles = TryGetDecimal(body, "totalMiles", "total_miles");
+        paySheet.PercentageLoads = TryGetDecimal(body, "percentageLoads", "percentage_loads");
+        paySheet.GrossPay = TryGetDecimal(body, "grossPay", "gross_pay");
+        paySheet.TotalDeductions = TryGetDecimal(body, "totalDeductions", "total_deductions");
+        paySheet.NetPay = TryGetDecimal(body, "netPay", "net_pay");
+        paySheet.Notes = TryGetString(body, "notes");
+        paySheet.Status = TryGetString(body, "status") ?? "approved";
+        paySheet.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation(
+            "Upserted driver pay sheet {PaySheetNumber} for driver {DriverId} from Taylor Accounting",
+            paySheet.PaySheetNumber,
+            driverId);
+
+        return Ok(new { data = paySheet, paystubId = paySheet.PaySheetNumber });
+    }
+
+    private static int TryGetInt(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.ValueKind != JsonValueKind.Object) continue;
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var n))
+                    return n;
+                if (property.Value.ValueKind == JsonValueKind.String
+                    && int.TryParse(property.Value.GetString(), out var parsed))
+                    return parsed;
+            }
+        }
+
+        return 0;
+    }
+
+    private static decimal TryGetDecimal(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.ValueKind != JsonValueKind.Object) continue;
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDecimal(out var n))
+                    return n;
+                if (property.Value.ValueKind == JsonValueKind.String
+                    && decimal.TryParse(property.Value.GetString(), out var parsed))
+                    return parsed;
+            }
+        }
+
+        return 0m;
+    }
+
+    private static DateTime? TryGetDate(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.ValueKind != JsonValueKind.Object) continue;
+            foreach (var property in element.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (property.Value.ValueKind == JsonValueKind.String
+                    && DateTime.TryParse(property.Value.GetString(), out var parsed))
+                    return parsed.Date;
+            }
+        }
+
+        return null;
+    }
 }
