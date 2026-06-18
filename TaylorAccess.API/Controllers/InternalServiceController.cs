@@ -251,6 +251,48 @@ public class InternalServiceController : ControllerBase
         return null;
     }
 
+    /// <summary>Get driver payment methods for internal service consumers.</summary>
+    [HttpGet("driver-payments")]
+    public async Task<ActionResult> GetDriverPayments(
+        [FromQuery] int? driverId = null,
+        [FromQuery] int limit = 500)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var cappedLimit = Math.Clamp(limit, 1, 5000);
+        var query = _db.DriverPayments.AsNoTracking().AsQueryable();
+
+        if (driverId is > 0)
+            query = query.Where(p => p.DriverId == driverId.Value);
+
+        var total = await query.CountAsync();
+        var data = await query
+            .OrderByDescending(p => p.UpdatedAt)
+            .Take(cappedLimit)
+            .Select(p => new
+            {
+                p.Id,
+                p.DriverId,
+                p.OrganizationId,
+                p.PaymentMethod,
+                p.BankName,
+                p.RoutingNumber,
+                p.AccountNumber,
+                p.AccountType,
+                p.CardType,
+                p.CardLastFour,
+                p.CardHolderName,
+                p.MailingAddress,
+                p.Status,
+                p.CreatedAt,
+                p.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { data, total });
+    }
+
     /// <summary>Get drivers for internal service consumers.</summary>
     [HttpGet("drivers")]
     public async Task<ActionResult> GetDrivers(
