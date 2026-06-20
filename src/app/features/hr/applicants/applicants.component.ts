@@ -1638,7 +1638,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       scopedRows = scopedRows.filter((row) => String(row.position || '').trim().toLowerCase() === position.toLowerCase());
     }
 
-    if (this.applicantSectionMode() === 'hiring') {
+    const inReportView = this.positionStateFilter() === 'report'
+      || (this.positionStateFilter() === 'historical' && this.historicalViewMode() === 'report');
+    if (this.applicantSectionMode() === 'hiring' && !inReportView) {
       scopedRows = scopedRows.filter((row) => this.isSelectedForHiringStatus(row.status));
     }
 
