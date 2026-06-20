@@ -139,6 +139,46 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           }
         </div>
       </header>
+      @if (
+        positionStateFilter() === 'active'
+        || positionStateFilter() === 'inactive'
+        || (positionStateFilter() === 'historical' && historicalViewMode() === 'applicants')
+      ) {
+        <div class="pipeline-tiles dashboard-tiles">
+          <article class="pipeline-tile total">
+            <div class="pipeline-tile-head">
+              <span>Total</span>
+              <i class='bx bx-group'></i>
+            </div>
+            <strong>{{ tableTotalCount() }}</strong>
+            <small>All visible applicants</small>
+          </article>
+          <article class="pipeline-tile working">
+            <div class="pipeline-tile-head">
+              <span>Working</span>
+              <i class='bx bx-loader-circle'></i>
+            </div>
+            <strong>{{ tableWorkingCount() }}</strong>
+            <small>Active pipeline</small>
+          </article>
+          <article class="pipeline-tile rejected">
+            <div class="pipeline-tile-head">
+              <span>Rejected</span>
+              <i class='bx bx-x-circle'></i>
+            </div>
+            <strong>{{ tableRejectedCount() }}</strong>
+            <small>Closed out</small>
+          </article>
+          <article class="pipeline-tile hired">
+            <div class="pipeline-tile-head">
+              <span>Hired</span>
+              <i class='bx bx-check-shield'></i>
+            </div>
+            <strong>{{ tableHiredCount() }}</strong>
+            <small>Successfully onboarded</small>
+          </article>
+        </div>
+      }
 
       <div class="position-state-tabs">
         @if (positionStateFilter() === 'historical') {
@@ -738,25 +778,14 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           </div>
         }
 
-        <div class="filters">
-          <div class="pipeline-tiles">
-            <article class="pipeline-tile">
-              <span>Total</span>
-              <strong>{{ tableTotalCount() }}</strong>
-            </article>
-            <article class="pipeline-tile">
-              <span>Working</span>
-              <strong>{{ tableWorkingCount() }}</strong>
-            </article>
-            <article class="pipeline-tile">
-              <span>Rejected</span>
-              <strong>{{ tableRejectedCount() }}</strong>
-            </article>
-            <article class="pipeline-tile">
-              <span>Hired</span>
-              <strong>{{ tableHiredCount() }}</strong>
-            </article>
+        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
+          <div class="table-top-actions">
+            <button class="btn-primary" (click)="openCreate()">
+              <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
+            </button>
           </div>
+        }
+        <div class="filters">
           @if (applicantSectionMode() === 'application') {
             <div class="pipeline-tabs">
               <button
@@ -810,14 +839,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         @if (applicantsSyncError()) {
           <div class="sync-error">{{ applicantsSyncError() }}</div>
         }
-        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
-          <div class="table-top-actions">
-            <button class="btn-primary" (click)="openCreate()">
-              <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
-            </button>
-          </div>
-        }
-
         <div class="table-wrap">
           <table>
             <thead>
@@ -1353,9 +1374,19 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
     .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 2px; }
-    .pipeline-tile { border: 1px solid #2a2a4e; border-radius: 10px; padding: 8px 10px; background: #10192c; display: flex; justify-content: space-between; align-items: baseline; }
-    .pipeline-tile span { color: #8aa0b8; font-size: 0.78rem; }
-    .pipeline-tile strong { color: #e0f2fe; font-size: 1rem; }
+    .dashboard-tiles { margin: 0 0 10px; }
+    .pipeline-tile { border: 1px solid #2a2a4e; border-radius: 12px; padding: 10px 12px; background: linear-gradient(180deg, #111b2f 0%, #0f172a 100%); display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 8px 20px rgba(2, 6, 23, 0.25); }
+    .pipeline-tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .pipeline-tile span { color: #9fb2c8; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+    .pipeline-tile i { font-size: 1rem; color: #7dd3fc; opacity: 0.9; }
+    .pipeline-tile strong { color: #f0f9ff; font-size: 1.34rem; line-height: 1.1; }
+    .pipeline-tile small { color: #7f94ad; font-size: 0.74rem; }
+    .pipeline-tile.total { border-color: rgba(56, 189, 248, 0.35); }
+    .pipeline-tile.working { border-color: rgba(14, 165, 233, 0.38); }
+    .pipeline-tile.rejected { border-color: rgba(244, 63, 94, 0.35); }
+    .pipeline-tile.rejected i { color: #fb7185; }
+    .pipeline-tile.hired { border-color: rgba(34, 197, 94, 0.35); }
+    .pipeline-tile.hired i { color: #4ade80; }
     .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
