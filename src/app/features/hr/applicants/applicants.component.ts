@@ -672,34 +672,58 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           </div>
         }
         @if (positionStateFilter() !== 'historical') {
-          <div class="position-tabs-wrap">
-            <div class="position-tabs">
-              @for (position of positionTabs(); track position) {
-                <button
-                  class="position-tab"
-                  [class.position-colored]="position !== 'all' && !!getPositionColor(position)"
-                  [class.active]="selectedPosition() === position"
-                  [style.--position-color]="position !== 'all' ? getPositionColor(position) : null"
-                  [style.--position-color-soft]="position !== 'all' ? getPositionSoftColor(position) : null"
-                  (click)="selectPosition(position)"
-                >
-                  @if (position !== 'all' && getPositionColor(position)) {
-                    <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
-                  }
-                  <span>{{ position === 'all' ? 'All Positions' : position }}</span>
-                  @if (position !== 'all') {
-                    <i
-                      class="bx bx-cog position-settings-icon"
-                      (click)="openPositionSettings(position, $event)"
-                      title="Position settings"
-                    ></i>
-                  }
-                </button>
-              }
+          <div class="position-filter-table-wrap">
+            <div class="position-filter-table-head">
+              <h4>Position Filters</h4>
+              <button class="btn-secondary add-position-btn" (click)="openAddPosition()">
+                <i class='bx bx-plus'></i> Position
+              </button>
             </div>
-            <button class="btn-secondary add-position-btn" (click)="openAddPosition()">
-              <i class='bx bx-plus'></i> Position
-            </button>
+            <table class="position-filter-table">
+              <thead>
+                <tr>
+                  <th>Position</th>
+                  <th>Color</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (position of positionTabs(); track position) {
+                  <tr [class.active]="selectedPosition() === position">
+                    <td>
+                      <span class="position-name">{{ position === 'all' ? 'All Positions' : position }}</span>
+                    </td>
+                    <td>
+                      @if (position !== 'all' && getPositionColor(position)) {
+                        <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
+                      } @else {
+                        <span class="position-color-none">—</span>
+                      }
+                    </td>
+                    <td>
+                      @if (position === 'all') {
+                        <span class="position-state all">All</span>
+                      } @else {
+                        <span class="position-state" [class.active]="isPositionActive(position)" [class.inactive]="!isPositionActive(position)">
+                          {{ isPositionActive(position) ? 'Active' : 'Inactive' }}
+                        </span>
+                      }
+                    </td>
+                    <td class="position-actions">
+                      <button class="btn-secondary position-select-btn" [class.selected]="selectedPosition() === position" (click)="selectPosition(position)">
+                        {{ selectedPosition() === position ? 'Selected' : 'Select' }}
+                      </button>
+                      @if (position !== 'all') {
+                        <button class="icon-btn" title="Position settings" (click)="openPositionSettings(position, $event)">
+                          <i class='bx bx-cog'></i>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
         }
 
@@ -1269,15 +1293,23 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .goal-progress-track { width: 100%; height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; margin-bottom: 4px; }
     .goal-progress-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #22d3ee); border-radius: 999px; min-width: 2px; }
     .goal-progress-label { color: #8aa0b8; font-size: 0.7rem; }
-    .position-tabs-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-    .position-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-    .position-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 0.84rem; display: inline-flex; align-items: center; gap: 6px; }
-    .position-tab.position-colored { border-color: var(--position-color, #2a2a4e); }
-    .position-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
-    .position-tab.position-colored.active { border-color: var(--position-color, #00d4ff); background: var(--position-color-soft, rgba(56, 189, 248, 0.2)); color: #f8fafc; }
-    .position-color-dot { width: 8px; height: 8px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); }
-    .position-settings-icon { font-size: 0.9rem; color: #8aa0b8; border-radius: 999px; padding: 1px; }
-    .position-settings-icon:hover { color: #d9f6ff; background: rgba(255,255,255,0.08); }
+    .position-filter-table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; margin-bottom: 10px; background: #10192c; }
+    .position-filter-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #2a2a4e; }
+    .position-filter-table-head h4 { margin: 0; color: #dbeafe; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .position-filter-table { width: 100%; border-collapse: collapse; }
+    .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
+    .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
+    .position-filter-table tr.active td { background: rgba(0, 212, 255, 0.08); }
+    .position-name { color: #e2e8f0; font-weight: 600; }
+    .position-color-dot { width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: inline-block; }
+    .position-color-none { color: #64748b; }
+    .position-state { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; border: 1px solid transparent; }
+    .position-state.active { color: #86efac; border-color: #166534; background: rgba(22, 101, 52, 0.22); }
+    .position-state.inactive { color: #fda4af; border-color: #7f1d1d; background: rgba(127, 29, 29, 0.22); }
+    .position-state.all { color: #cbd5e1; border-color: #334155; background: rgba(51, 65, 85, 0.25); }
+    .position-actions { display: inline-flex; align-items: center; gap: 6px; }
+    .position-select-btn { padding: 5px 9px; font-size: 0.74rem; }
+    .position-select-btn.selected { background: rgba(0, 212, 255, 0.15); border: 1px solid #00d4ff; color: #d9f6ff; }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
     .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 2px; }
@@ -2103,6 +2135,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   selectPosition(position: string): void {
     this.selectedPosition.set(position);
+  }
+
+  isPositionActive(position: string): boolean {
+    if (String(position || '').trim().toLowerCase() === 'all') return true;
+    const normalized = String(position || '').trim().toLowerCase();
+    const match = this.allPositions().find((p) => String(p?.name || '').trim().toLowerCase() === normalized);
+    return !!(match?.isActive ?? false);
   }
 
   setPositionStateFilter(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals'): void {
