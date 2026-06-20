@@ -62,6 +62,13 @@ interface GoalComparisonItem {
   progress: number;
   color: string;
 }
+interface PositionTableMetric {
+  count: number;
+  avgPerDay: string;
+  avgAge: string;
+  maleCount: number;
+  femaleCount: number;
+}
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
 type ChartPoint = { name: string; value: number };
@@ -684,7 +691,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 <tr>
                   <th class="col-position">Position</th>
                   <th class="col-status">Status</th>
-                  <th class="col-data">Data</th>
+                  <th class="col-count">Applicants</th>
+                  <th class="col-avg-day">Avg/Day</th>
+                  <th class="col-avg-age">Avg Age</th>
+                  <th class="col-male">Male</th>
+                  <th class="col-female">Female</th>
                 </tr>
               </thead>
               <tbody>
@@ -714,9 +725,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                         </span>
                       }
                     </td>
-                    <td class="col-data">
-                      <span class="position-color-none">—</span>
-                    </td>
+                    <td class="col-count">{{ positionMetric(position).count }}</td>
+                    <td class="col-avg-day">{{ positionMetric(position).avgPerDay }}</td>
+                    <td class="col-avg-age">{{ positionMetric(position).avgAge }}</td>
+                    <td class="col-male">{{ positionMetric(position).maleCount }}</td>
+                    <td class="col-female">{{ positionMetric(position).femaleCount }}</td>
                   </tr>
                 }
               </tbody>
@@ -1297,7 +1310,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
     .position-filter-table .col-status,
-    .position-filter-table .col-data { text-align: center; white-space: nowrap; }
+    .position-filter-table .col-count,
+    .position-filter-table .col-avg-day,
+    .position-filter-table .col-avg-age,
+    .position-filter-table .col-male,
+    .position-filter-table .col-female { text-align: center; white-space: nowrap; }
     .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
     .position-option-row:focus-visible { outline: none; }
     .position-option-row:focus-visible td { box-shadow: inset 0 0 0 1px #22d3ee; }
@@ -1740,6 +1757,35 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       return true;
     });
   });
+  positionMetricsScopeRows = computed(() => {
+    const sectionMode = this.applicantSectionMode();
+    const mode = this.positionStateFilter();
+    return this.rows().filter((r) => {
+      if (mode === 'historical' && !this.isHistoricalApplicantRow(r)) return false;
+      if ((mode === 'active' || mode === 'inactive') && this.isHistoricalApplicantRow(r)) return false;
+      if (mode === 'active' || mode === 'inactive') {
+        const isFleet = this.isFleetPosition(r.position);
+        if (this.positionGroupFilter() === 'fleet' && !isFleet) return false;
+        if (this.positionGroupFilter() === 'office' && isFleet) return false;
+      }
+      if (sectionMode === 'hiring') return this.isSelectedForHiringStatus(r.status);
+      return true;
+    });
+  });
+  positionMetricsByKey = computed(() => {
+    const map = new Map<string, PositionTableMetric>();
+    const allRows = this.positionMetricsScopeRows();
+    map.set('all', this.buildPositionMetric(allRows));
+
+    for (const position of this.positionTabs()) {
+      const key = this.normalizeSourceKey(position);
+      if (key === 'all') continue;
+      const rows = allRows.filter((row) => this.normalizeSourceKey(row.position) === key);
+      map.set(key, this.buildPositionMetric(rows));
+    }
+
+    return map;
+  });
 
   tableTotalCount = computed(() => this.tableScopeRows().length);
   tableWorkingCount = computed(() => this.tableScopeRows().filter((r) => r.status !== 'rejected').length);
@@ -2138,6 +2184,11 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   selectPosition(position: string): void {
     this.selectedPosition.set(position);
+  }
+
+  positionMetric(position: string): PositionTableMetric {
+    const key = this.normalizeSourceKey(position);
+    return this.positionMetricsByKey().get(key) ?? this.buildPositionMetric([]);
   }
 
   isPositionActive(position: string): boolean {
@@ -3072,6 +3123,39 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     const rounded = Math.round(n);
     if (rounded < 16 || rounded > 100) return null;
     return rounded;
+  }
+
+  private buildPositionMetric(rows: ApplicantRow[]): PositionTableMetric {
+    const count = rows.length;
+    if (!count) {
+      return { count: 0, avgPerDay: '0.0', avgAge: '—', maleCount: 0, femaleCount: 0 };
+    }
+
+    const timestamps = rows
+      .map((row) => this.parseDateOnly(row.appliedDate)?.getTime() ?? 0)
+      .filter((value) => value > 0)
+      .sort((a, b) => a - b);
+    const daySpan = timestamps.length
+      ? Math.max(1, Math.floor((timestamps[timestamps.length - 1] - timestamps[0]) / 86400000) + 1)
+      : 1;
+
+    const ages = rows
+      .map((row) => row.age)
+      .filter((age): age is number => typeof age === 'number' && Number.isFinite(age));
+    const avgAge = ages.length
+      ? (ages.reduce((sum, age) => sum + age, 0) / ages.length).toFixed(1)
+      : '—';
+
+    const maleCount = rows.filter((row) => this.normalizeGenderBucket(row.gender) === 'male').length;
+    const femaleCount = rows.filter((row) => this.normalizeGenderBucket(row.gender) === 'female').length;
+
+    return {
+      count,
+      avgPerDay: (count / daySpan).toFixed(1),
+      avgAge,
+      maleCount,
+      femaleCount
+    };
   }
 
   private normalizeStatus(value: unknown): ApplicantStatus {
