@@ -103,6 +103,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       items: [
         { label: 'Applicants', icon: 'bx bx-user-plus', route: '/hr/applicants' },
         { label: 'Indeed', icon: 'bx bx-link-external', route: '/recruiting/indeed' },
+        { label: 'BLS Labor Data', icon: 'bx bx-line-chart', route: '/recruiting/bls' },
       ]
     },
     {
