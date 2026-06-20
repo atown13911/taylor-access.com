@@ -82,18 +82,24 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
   imports: [CommonModule, FormsModule, NgxChartsModule],
   template: `
     <div class="applicants-page">
-      @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
+      @if (
+        positionStateFilter() === 'active'
+        || positionStateFilter() === 'inactive'
+        || positionStateFilter() === 'historical'
+        || positionStateFilter() === 'report'
+        || positionStateFilter() === 'goals'
+      ) {
         <div class="applicant-mode-tabs-header">
           <button
             class="applicant-mode-tab"
-            [class.active]="positionStateFilter() !== 'historical' && applicantSectionMode() === 'application'"
+            [class.active]="(positionStateFilter() === 'active' || positionStateFilter() === 'inactive') && applicantSectionMode() === 'application'"
             (click)="selectApplicantsTopMode('application')"
           >
             Application
           </button>
           <button
             class="applicant-mode-tab"
-            [class.active]="positionStateFilter() !== 'historical' && applicantSectionMode() === 'hiring'"
+            [class.active]="(positionStateFilter() === 'active' || positionStateFilter() === 'inactive') && applicantSectionMode() === 'hiring'"
             (click)="selectApplicantsTopMode('hiring')"
           >
             Hiring
@@ -104,6 +110,20 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             (click)="setPositionStateFilter('historical')"
           >
             Historical
+          </button>
+          <button
+            class="applicant-mode-tab"
+            [class.active]="positionStateFilter() === 'report'"
+            (click)="setPositionStateFilter('report')"
+          >
+            Report
+          </button>
+          <button
+            class="applicant-mode-tab"
+            [class.active]="positionStateFilter() === 'goals'"
+            (click)="setPositionStateFilter('goals')"
+          >
+            Goals
           </button>
         </div>
       }
@@ -180,53 +200,41 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         </div>
       }
 
-      <div class="position-state-tabs">
-        @if (positionStateFilter() === 'historical') {
-          <button
-            class="state-tab"
-            [class.active]="historicalViewMode() === 'applicants'"
-            (click)="historicalViewMode.set('applicants')"
-          >
-            Applicants
-          </button>
-          <button
-            class="state-tab"
-            [class.active]="historicalViewMode() === 'report'"
-            (click)="historicalViewMode.set('report')"
-          >
-            Report
-          </button>
-        } @else {
-          <button
-            class="state-tab"
-            [class.active]="positionStateFilter() === 'active'"
-            (click)="setPositionStateFilter('active')"
-          >
-            Active
-          </button>
-          <button
-            class="state-tab"
-            [class.active]="positionStateFilter() === 'inactive'"
-            (click)="setPositionStateFilter('inactive')"
-          >
-            Inactive
-          </button>
-          <button
-            class="state-tab"
-            [class.active]="positionStateFilter() === 'report'"
-            (click)="setPositionStateFilter('report')"
-          >
-            Report
-          </button>
-          <button
-            class="state-tab"
-            [class.active]="positionStateFilter() === 'goals'"
-            (click)="setPositionStateFilter('goals')"
-          >
-            Goals
-          </button>
-        }
-      </div>
+      @if (positionStateFilter() !== 'goals') {
+        <div class="position-state-tabs">
+          @if (positionStateFilter() === 'historical') {
+            <button
+              class="state-tab"
+              [class.active]="historicalViewMode() === 'applicants'"
+              (click)="historicalViewMode.set('applicants')"
+            >
+              Applicants
+            </button>
+            <button
+              class="state-tab"
+              [class.active]="historicalViewMode() === 'report'"
+              (click)="historicalViewMode.set('report')"
+            >
+              Report
+            </button>
+          } @else {
+            <button
+              class="state-tab"
+              [class.active]="positionStateFilter() === 'active'"
+              (click)="setPositionStateFilter('active')"
+            >
+              Active
+            </button>
+            <button
+              class="state-tab"
+              [class.active]="positionStateFilter() === 'inactive'"
+              (click)="setPositionStateFilter('inactive')"
+            >
+              Inactive
+            </button>
+          }
+        </div>
+      }
       @if (positionStateFilter() === 'report' || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')) {
         <section class="report-view">
           <div class="report-toolbar">
@@ -1411,7 +1419,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
-    .table-top-actions { display: flex; justify-content: flex-end; margin: 0 0 16px; }
+    .table-top-actions { display: flex; justify-content: flex-end; margin: 14px 0 18px; }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-view { margin-top: 6px; }
     .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -1482,7 +1490,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly apiUrl = environment.apiUrl;
   rows = signal<ApplicantRow[]>([]);
   customPositions = signal<ApplicantPosition[]>([]);
-  selectedPosition = signal<string>('all');
+  selectedPosition = signal<string>('');
   positionStateFilter = signal<'active' | 'inactive' | 'historical' | 'report' | 'goals'>('active');
   historicalViewMode = signal<'applicants' | 'report'>('applicants');
   positionGroupFilter = signal<'office' | 'fleet'>('office');
@@ -2272,13 +2280,13 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   setPositionStateFilter(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals'): void {
     this.positionStateFilter.set(mode);
-    this.selectedPosition.set('all');
+    this.selectedPosition.set(this.getDefaultPositionSelection(mode));
     if (mode === 'historical') this.historicalViewMode.set('applicants');
   }
 
   setPositionGroupFilter(mode: 'office' | 'fleet'): void {
     this.positionGroupFilter.set(mode);
-    this.selectedPosition.set('all');
+    this.selectedPosition.set(this.getDefaultPositionSelection());
     if (this.applicantSectionMode() === 'hiring' && !this.isSelectedForHiringStatus(this.statusFilter() as ApplicantStatus)) {
       this.statusFilter.set('all');
     }
@@ -2410,7 +2418,7 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   }
 
   selectApplicantsTopMode(mode: 'application' | 'hiring'): void {
-    if (this.positionStateFilter() === 'historical') {
+    if (this.positionStateFilter() !== 'active' && this.positionStateFilter() !== 'inactive') {
       this.setPositionStateFilter('active');
     }
     this.setApplicantSectionMode(mode);
@@ -3135,9 +3143,19 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
 
   private ensureSelectedPositionValid(): void {
     const selected = this.selectedPosition();
+    if (!selected) {
+      this.selectedPosition.set(this.getDefaultPositionSelection());
+      return;
+    }
     if (selected === 'all') return;
     const valid = this.positionTabs().some((tab) => tab.toLowerCase() === selected.toLowerCase());
-    if (!valid) this.selectedPosition.set('all');
+    if (!valid) this.selectedPosition.set(this.getDefaultPositionSelection());
+  }
+
+  private getDefaultPositionSelection(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals' = this.positionStateFilter()): string {
+    if (mode === 'historical' || mode === 'report' || mode === 'goals') return 'all';
+    const firstRealPosition = this.positionTabs().find((tab) => tab.toLowerCase() !== 'all');
+    return firstRealPosition || 'all';
   }
 
   private ensureSelectedApplicantValid(): void {
