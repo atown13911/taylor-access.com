@@ -690,12 +690,12 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <thead>
                 <tr>
                   <th class="col-position">Position</th>
-                  <th class="col-status">Status</th>
                   <th class="col-count">Applicants</th>
                   <th class="col-avg-day">Avg/Day</th>
                   <th class="col-avg-age">Avg Age</th>
                   <th class="col-male">Male</th>
                   <th class="col-female">Female</th>
+                  <th class="col-status">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -716,6 +716,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                         <span class="position-selected-pill">Selected</span>
                       }
                     </td>
+                    <td class="col-count">{{ positionMetric(position).count }}</td>
+                    <td class="col-avg-day">{{ positionMetric(position).avgPerDay }}</td>
+                    <td class="col-avg-age">{{ positionMetric(position).avgAge }}</td>
+                    <td class="col-male">{{ positionMetric(position).maleCount }}</td>
+                    <td class="col-female">{{ positionMetric(position).femaleCount }}</td>
                     <td class="col-status">
                       @if (position === 'all') {
                         <span class="position-state all">All</span>
@@ -725,11 +730,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                         </span>
                       }
                     </td>
-                    <td class="col-count">{{ positionMetric(position).count }}</td>
-                    <td class="col-avg-day">{{ positionMetric(position).avgPerDay }}</td>
-                    <td class="col-avg-age">{{ positionMetric(position).avgAge }}</td>
-                    <td class="col-male">{{ positionMetric(position).maleCount }}</td>
-                    <td class="col-female">{{ positionMetric(position).femaleCount }}</td>
                   </tr>
                 }
               </tbody>
