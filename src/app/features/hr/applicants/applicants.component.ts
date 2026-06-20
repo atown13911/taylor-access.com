@@ -112,11 +112,37 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           <h1><i class='bx bx-user-plus'></i> Applicants</h1>
           <p>Track Taylor Access candidate pipeline</p>
         </div>
-        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
-          <button class="btn-primary" (click)="openCreate()">
-            <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
-          </button>
-        }
+        <div class="page-header-actions">
+          @if (
+            positionStateFilter() === 'active'
+            || positionStateFilter() === 'inactive'
+            || positionStateFilter() === 'report'
+            || positionStateFilter() === 'goals'
+            || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')
+          ) {
+            <div class="position-group-tabs position-group-tabs-header">
+              <button
+                class="group-tab"
+                [class.active]="positionGroupFilter() === 'office'"
+                (click)="setPositionGroupFilter('office')"
+              >
+                <i class='bx bx-briefcase-alt-2'></i> Office
+              </button>
+              <button
+                class="group-tab"
+                [class.active]="positionGroupFilter() === 'fleet'"
+                (click)="setPositionGroupFilter('fleet')"
+              >
+                <i class='bx bx-car'></i> Fleet
+              </button>
+            </div>
+          }
+          @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
+            <button class="btn-primary" (click)="openCreate()">
+              <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
+            </button>
+          }
+        </div>
       </header>
 
       <div class="position-state-tabs">
@@ -166,31 +192,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           </button>
         }
       </div>
-      @if (
-        positionStateFilter() === 'active'
-        || positionStateFilter() === 'inactive'
-        || positionStateFilter() === 'report'
-        || positionStateFilter() === 'goals'
-        || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')
-      ) {
-        <div class="position-group-tabs">
-          <button
-            class="group-tab"
-            [class.active]="positionGroupFilter() === 'office'"
-            (click)="setPositionGroupFilter('office')"
-          >
-            <i class='bx bx-briefcase-alt-2'></i> Office
-          </button>
-          <button
-            class="group-tab"
-            [class.active]="positionGroupFilter() === 'fleet'"
-            (click)="setPositionGroupFilter('fleet')"
-          >
-            <i class='bx bx-car'></i> Fleet
-          </button>
-        </div>
-      }
-
       @if (positionStateFilter() === 'report' || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')) {
         <section class="report-view">
           <div class="report-toolbar">
@@ -1229,7 +1230,8 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
       transition: all 0.15s ease;
     }
     .applicant-mode-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.14); box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.25) inset; }
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; } } p { margin: 4px 0 0; color: #8aa0b8; } }
+    .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; } } p { margin: 4px 0 0; color: #8aa0b8; } }
+    .page-header-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); border: none; color: #0a0a14; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
     .btn-secondary { background: #253049; border: none; color: #dbeafe; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
     .btn-danger { background: #3b1118; border: 1px solid #7f1d1d; color: #fecaca; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; margin-right: auto; }
@@ -1237,9 +1239,11 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
     .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .historical-banner { margin-bottom: 10px; border: 1px solid #2a2a4e; background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(16, 25, 44, 0.9)); border-radius: 10px; padding: 10px 12px; color: #b9d5f6; font-size: 0.85rem; }
-    .position-group-tabs { display: inline-flex; gap: 8px; margin: -2px 0 10px; }
-    .group-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; }
-    .group-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .position-group-tabs { display: inline-flex; gap: 8px; }
+    .position-group-tabs-header { margin: 0; padding: 4px; border: 1px solid #27344f; border-radius: 999px; background: rgba(15, 23, 42, 0.75); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
+    .group-tab { background: transparent; color: #9fb2c8; border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; transition: all 120ms ease; }
+    .group-tab:hover { color: #d0e7ff; background: rgba(148, 163, 184, 0.1); }
+    .group-tab.active { border-color: rgba(0, 212, 255, 0.45); color: #d9f6ff; background: rgba(0, 212, 255, 0.18); }
     .goals-view { display: flex; flex-direction: column; gap: 10px; }
     .goals-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .goals-toolbar h3 { margin: 0; color: #e2e8f0; font-size: 0.98rem; }
