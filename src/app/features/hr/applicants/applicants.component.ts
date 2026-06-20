@@ -136,20 +136,20 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           @if (
             positionStateFilter() === 'active'
             || positionStateFilter() === 'inactive'
+            || positionStateFilter() === 'historical'
             || positionStateFilter() === 'report'
             || positionStateFilter() === 'goals'
-            || (positionStateFilter() === 'historical' && historicalViewMode() === 'report')
           ) {
             <div class="position-group-tabs position-group-tabs-header">
               <button
-                class="group-tab"
+                class="group-tab office-tab"
                 [class.active]="positionGroupFilter() === 'office'"
                 (click)="setPositionGroupFilter('office')"
               >
                 <i class='bx bx-briefcase-alt-2'></i> Office
               </button>
               <button
-                class="group-tab"
+                class="group-tab fleet-tab"
                 [class.active]="positionGroupFilter() === 'fleet'"
                 (click)="setPositionGroupFilter('fleet')"
               >
@@ -1283,8 +1283,17 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-group-tabs { display: inline-flex; gap: 8px; }
     .position-group-tabs-header { margin: 0; padding: 4px; border: 1px solid #27344f; border-radius: 999px; background: rgba(15, 23, 42, 0.75); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
     .group-tab { background: transparent; color: #9fb2c8; border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; transition: all 120ms ease; }
+    .group-tab i { font-size: 0.95rem; }
+    .office-tab i { color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.35); }
+    .fleet-tab i { color: #38bdf8; text-shadow: 0 0 8px rgba(56, 189, 248, 0.35); }
     .group-tab:hover { color: #d0e7ff; background: rgba(148, 163, 184, 0.1); }
+    .office-tab:hover i { color: #fcd34d; text-shadow: 0 0 12px rgba(252, 211, 77, 0.55); }
+    .fleet-tab:hover i { color: #67e8f9; text-shadow: 0 0 12px rgba(103, 232, 249, 0.55); }
     .group-tab.active { border-color: rgba(0, 212, 255, 0.45); color: #d9f6ff; background: rgba(0, 212, 255, 0.18); }
+    .office-tab.active { border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.16); box-shadow: 0 0 14px rgba(251, 191, 36, 0.22); }
+    .office-tab.active i { color: #facc15; text-shadow: 0 0 14px rgba(250, 204, 21, 0.7); }
+    .fleet-tab.active { border-color: rgba(56, 189, 248, 0.5); background: rgba(56, 189, 248, 0.16); box-shadow: 0 0 14px rgba(56, 189, 248, 0.22); }
+    .fleet-tab.active i { color: #22d3ee; text-shadow: 0 0 14px rgba(34, 211, 238, 0.7); }
     .goals-view { display: flex; flex-direction: column; gap: 10px; }
     .goals-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     .goals-toolbar h3 { margin: 0; color: #e2e8f0; font-size: 0.98rem; }
