@@ -1315,7 +1315,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
     .position-filter-table .col-position { width: 34%; }
-    .position-filter-table .col-count { width: 9%; border-left: 1px solid #1f2a44; }
+    .position-filter-table .col-count { width: 9%; }
     .position-filter-table .col-avg-day { width: 9%; }
     .position-filter-table .col-avg-age { width: 9%; }
     .position-filter-table .col-male { width: 7%; }
