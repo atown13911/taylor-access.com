@@ -682,10 +682,10 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             <table class="position-filter-table">
               <thead>
                 <tr>
-                  <th>Position</th>
-                  <th>Color</th>
-                  <th>Status</th>
-                  <th>Settings</th>
+                  <th class="col-position">Position</th>
+                  <th class="col-color">Color</th>
+                  <th class="col-status">Status</th>
+                  <th class="col-settings">Settings</th>
                 </tr>
               </thead>
               <tbody>
@@ -700,20 +700,20 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                     [attr.aria-label]="'Select position ' + (position === 'all' ? 'all positions' : position)"
                     tabindex="0"
                   >
-                    <td class="position-selection-cell">
+                    <td class="position-selection-cell col-position">
                       <span class="position-name">{{ position === 'all' ? 'All Positions' : position }}</span>
                       @if (selectedPosition() === position && position !== 'all') {
                         <span class="position-selected-pill">Selected</span>
                       }
                     </td>
-                    <td>
+                    <td class="col-color">
                       @if (position !== 'all' && getPositionColor(position)) {
                         <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
                       } @else {
                         <span class="position-color-none">—</span>
                       }
                     </td>
-                    <td>
+                    <td class="col-status">
                       @if (position === 'all') {
                         <span class="position-state all">All</span>
                       } @else {
@@ -722,7 +722,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                         </span>
                       }
                     </td>
-                    <td class="position-actions">
+                    <td class="position-actions col-settings">
                       @if (position !== 'all') {
                         <button class="icon-btn" title="Position settings" (click)="openPositionSettings(position, $event)">
                           <i class='bx bx-cog'></i>
@@ -1307,12 +1307,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; margin-bottom: 10px; background: #10192c; }
     .position-filter-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #2a2a4e; }
     .position-filter-table-head h4 { margin: 0; color: #dbeafe; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    .position-filter-table { width: 100%; border-collapse: collapse; }
+    .position-filter-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
-    .position-filter-table th:nth-child(2), .position-filter-table td:nth-child(2),
-    .position-filter-table th:nth-child(3), .position-filter-table td:nth-child(3),
-    .position-filter-table th:nth-child(4), .position-filter-table td:nth-child(4) { text-align: center; white-space: nowrap; }
+    .position-filter-table .col-position { width: 54%; }
+    .position-filter-table .col-color { width: 12%; white-space: nowrap; }
+    .position-filter-table .col-status { width: 18%; white-space: nowrap; }
+    .position-filter-table .col-settings { width: 16%; text-align: center; white-space: nowrap; }
     .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
     .position-option-row:focus-visible { outline: none; }
     .position-option-row:focus-visible td { box-shadow: inset 0 0 0 1px #22d3ee; }
