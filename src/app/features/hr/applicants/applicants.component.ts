@@ -702,7 +702,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   >
                     <td class="position-selection-cell">
                       <span class="position-name">{{ position === 'all' ? 'All Positions' : position }}</span>
-                      @if (selectedPosition() === position) {
+                      @if (selectedPosition() === position && position !== 'all') {
                         <span class="position-selected-pill">Selected</span>
                       }
                     </td>
@@ -1307,24 +1307,28 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; margin-bottom: 10px; background: #10192c; }
     .position-filter-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #2a2a4e; }
     .position-filter-table-head h4 { margin: 0; color: #dbeafe; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    .position-filter-table { width: 100%; border-collapse: collapse; }
+    .position-filter-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
+    .position-filter-table th:nth-child(1), .position-filter-table td:nth-child(1) { width: 58%; }
+    .position-filter-table th:nth-child(2), .position-filter-table td:nth-child(2) { width: 10%; text-align: center; }
+    .position-filter-table th:nth-child(3), .position-filter-table td:nth-child(3) { width: 16%; text-align: center; }
+    .position-filter-table th:nth-child(4), .position-filter-table td:nth-child(4) { width: 16%; text-align: center; }
     .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
     .position-option-row:focus-visible { outline: none; }
     .position-option-row:focus-visible td { box-shadow: inset 0 0 0 1px #22d3ee; }
-    .position-option-row:hover td { background: rgba(56, 189, 248, 0.08); }
-    .position-filter-table tr.active td { background: rgba(0, 212, 255, 0.08); }
-    .position-selection-cell { display: flex; align-items: center; gap: 8px; }
+    .position-option-row:hover td { background: rgba(56, 189, 248, 0.1); }
+    .position-filter-table tr.active td { background: rgba(0, 212, 255, 0.12); }
+    .position-selection-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .position-selected-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #d9f6ff; border: 1px solid rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.2); }
-    .position-name { color: #e2e8f0; font-weight: 600; }
-    .position-color-dot { width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: inline-block; }
+    .position-name { color: #e2e8f0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .position-color-dot { width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: inline-block; vertical-align: middle; }
     .position-color-none { color: #64748b; }
     .position-state { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; border: 1px solid transparent; }
     .position-state.active { color: #86efac; border-color: #166534; background: rgba(22, 101, 52, 0.22); }
     .position-state.inactive { color: #fda4af; border-color: #7f1d1d; background: rgba(127, 29, 29, 0.22); }
     .position-state.all { color: #cbd5e1; border-color: #334155; background: rgba(51, 65, 85, 0.25); }
-    .position-actions { display: inline-flex; align-items: center; gap: 6px; }
+    .position-actions { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
     .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 2px; }
