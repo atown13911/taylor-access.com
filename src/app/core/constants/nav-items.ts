@@ -86,6 +86,8 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   { label: 'Recruiting Platform', icon: 'bx-user-plus', route: '/recruiting', section: 'Recruiting' },
   { label: 'Job Postings', icon: 'bx-briefcase-alt-2', route: '/recruiting/job-postings' },
   { label: 'Applications', icon: 'bx-file', route: '/recruiting/applications' },
+  { label: 'Indeed Integration', icon: 'bx-link', route: '/recruiting/indeed' },
+  { label: 'BLS Labor Data', icon: 'bx-line-chart', route: '/recruiting/bls' },
   // System
   { label: 'Order Configs', icon: 'bx-customize', route: '/order-configs', section: 'System' },
   { label: 'Service Rates', icon: 'bx-dollar', route: '/service-rates' },
