@@ -685,14 +685,26 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   <th>Position</th>
                   <th>Color</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th>Settings</th>
                 </tr>
               </thead>
               <tbody>
                 @for (position of positionTabs(); track position) {
-                  <tr [class.active]="selectedPosition() === position">
-                    <td>
+                  <tr
+                    class="position-option-row"
+                    [class.active]="selectedPosition() === position"
+                    (click)="selectPosition(position)"
+                    (keydown.enter)="selectPosition(position); $event.preventDefault()"
+                    (keydown.space)="selectPosition(position); $event.preventDefault()"
+                    role="button"
+                    [attr.aria-label]="'Select position ' + (position === 'all' ? 'all positions' : position)"
+                    tabindex="0"
+                  >
+                    <td class="position-selection-cell">
                       <span class="position-name">{{ position === 'all' ? 'All Positions' : position }}</span>
+                      @if (selectedPosition() === position) {
+                        <span class="position-selected-pill">Selected</span>
+                      }
                     </td>
                     <td>
                       @if (position !== 'all' && getPositionColor(position)) {
@@ -711,13 +723,12 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                       }
                     </td>
                     <td class="position-actions">
-                      <button class="btn-secondary position-select-btn" [class.selected]="selectedPosition() === position" (click)="selectPosition(position)">
-                        {{ selectedPosition() === position ? 'Selected' : 'Select' }}
-                      </button>
                       @if (position !== 'all') {
                         <button class="icon-btn" title="Position settings" (click)="openPositionSettings(position, $event)">
                           <i class='bx bx-cog'></i>
                         </button>
+                      } @else {
+                        <span class="position-color-none">—</span>
                       }
                     </td>
                   </tr>
@@ -1299,7 +1310,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table { width: 100%; border-collapse: collapse; }
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
+    .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
+    .position-option-row:focus-visible { outline: none; }
+    .position-option-row:focus-visible td { box-shadow: inset 0 0 0 1px #22d3ee; }
+    .position-option-row:hover td { background: rgba(56, 189, 248, 0.08); }
     .position-filter-table tr.active td { background: rgba(0, 212, 255, 0.08); }
+    .position-selection-cell { display: flex; align-items: center; gap: 8px; }
+    .position-selected-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #d9f6ff; border: 1px solid rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.2); }
     .position-name { color: #e2e8f0; font-weight: 600; }
     .position-color-dot { width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: inline-block; }
     .position-color-none { color: #64748b; }
@@ -1308,8 +1325,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-state.inactive { color: #fda4af; border-color: #7f1d1d; background: rgba(127, 29, 29, 0.22); }
     .position-state.all { color: #cbd5e1; border-color: #334155; background: rgba(51, 65, 85, 0.25); }
     .position-actions { display: inline-flex; align-items: center; gap: 6px; }
-    .position-select-btn { padding: 5px 9px; font-size: 0.74rem; }
-    .position-select-btn.selected { background: rgba(0, 212, 255, 0.15); border: 1px solid #00d4ff; color: #d9f6ff; }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
     .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 2px; }
