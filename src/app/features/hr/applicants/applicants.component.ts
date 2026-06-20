@@ -692,7 +692,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 @for (position of positionTabs(); track position) {
                   <tr
                     class="position-option-row"
-                    [class.active]="selectedPosition() === position"
+                    [class.active]="selectedPosition() === position && position !== 'all'"
                     (click)="selectPosition(position)"
                     (keydown.enter)="selectPosition(position); $event.preventDefault()"
                     (keydown.space)="selectPosition(position); $event.preventDefault()"
@@ -1307,13 +1307,12 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; margin-bottom: 10px; background: #10192c; }
     .position-filter-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #2a2a4e; }
     .position-filter-table-head h4 { margin: 0; color: #dbeafe; font-size: 0.84rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    .position-filter-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .position-filter-table { width: 100%; border-collapse: collapse; }
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
-    .position-filter-table th:nth-child(1), .position-filter-table td:nth-child(1) { width: 58%; }
-    .position-filter-table th:nth-child(2), .position-filter-table td:nth-child(2) { width: 10%; text-align: center; }
-    .position-filter-table th:nth-child(3), .position-filter-table td:nth-child(3) { width: 16%; text-align: center; }
-    .position-filter-table th:nth-child(4), .position-filter-table td:nth-child(4) { width: 16%; text-align: center; }
+    .position-filter-table th:nth-child(2), .position-filter-table td:nth-child(2),
+    .position-filter-table th:nth-child(3), .position-filter-table td:nth-child(3),
+    .position-filter-table th:nth-child(4), .position-filter-table td:nth-child(4) { text-align: center; white-space: nowrap; }
     .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
     .position-option-row:focus-visible { outline: none; }
     .position-option-row:focus-visible td { box-shadow: inset 0 0 0 1px #22d3ee; }
@@ -1321,7 +1320,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table tr.active td { background: rgba(0, 212, 255, 0.12); }
     .position-selection-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .position-selected-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #d9f6ff; border: 1px solid rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.2); }
-    .position-name { color: #e2e8f0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .position-name { color: #e2e8f0; font-weight: 600; }
     .position-color-dot { width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: inline-block; vertical-align: middle; }
     .position-color-none { color: #64748b; }
     .position-state { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; border: 1px solid transparent; }
