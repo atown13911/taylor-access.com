@@ -734,6 +734,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                   <th class="col-female">Female</th>
                   <th class="col-most-recent">Most Recent Entry</th>
                   <th class="col-status">Status</th>
+                  <th class="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -769,6 +770,15 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                         <span class="position-state" [class.active]="isPositionActive(position)" [class.inactive]="!isPositionActive(position)">
                           {{ isPositionActive(position) ? 'Active' : 'Inactive' }}
                         </span>
+                      }
+                    </td>
+                    <td class="col-actions">
+                      @if (position !== 'all') {
+                        <button class="icon-btn" title="Position settings" (click)="openPositionSettings(position, $event)">
+                          <i class='bx bx-cog'></i>
+                        </button>
+                      } @else {
+                        <span class="position-color-none">—</span>
                       }
                     </td>
                   </tr>
@@ -1348,14 +1358,16 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table .col-male { width: 7%; }
     .position-filter-table .col-female { width: 7%; }
     .position-filter-table .col-most-recent { width: 13%; }
-    .position-filter-table .col-status { width: 12%; }
+    .position-filter-table .col-status { width: 9%; }
+    .position-filter-table .col-actions { width: 6%; text-align: center; }
     .position-filter-table .col-status,
     .position-filter-table .col-count,
     .position-filter-table .col-avg-day,
     .position-filter-table .col-avg-age,
     .position-filter-table .col-male,
     .position-filter-table .col-female,
-    .position-filter-table .col-most-recent { text-align: center; white-space: nowrap; }
+    .position-filter-table .col-most-recent,
+    .position-filter-table .col-actions { text-align: center; white-space: nowrap; }
     .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
     .position-option-row:focus-visible { outline: none; }
     .position-option-row:focus-visible td { box-shadow: inset 0 0 0 1px #22d3ee; }
@@ -1373,25 +1385,33 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-state.all { color: #cbd5e1; border-color: #334155; background: rgba(51, 65, 85, 0.25); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
-    .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 2px; }
+    .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 2px; }
     .dashboard-tiles { margin: 0 0 10px; }
-    .pipeline-tile { border: 1px solid #2a2a4e; border-radius: 12px; padding: 10px 12px; background: linear-gradient(180deg, #111b2f 0%, #0f172a 100%); display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 8px 20px rgba(2, 6, 23, 0.25); }
+    .pipeline-tile { position: relative; border: 1px solid #2a2a4e; border-radius: 12px; padding: 11px 12px 10px; background: linear-gradient(180deg, #111b2f 0%, #0f172a 100%); display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 24px rgba(2, 6, 23, 0.3); overflow: hidden; transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease; }
+    .pipeline-tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, rgba(125, 211, 252, 0.95), rgba(45, 212, 191, 0.85)); opacity: 0.9; }
+    .pipeline-tile:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 28px rgba(2, 6, 23, 0.34); }
     .pipeline-tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .pipeline-tile span { color: #9fb2c8; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
-    .pipeline-tile i { font-size: 1rem; color: #7dd3fc; opacity: 0.9; }
-    .pipeline-tile strong { color: #f0f9ff; font-size: 1.34rem; line-height: 1.1; }
+    .pipeline-tile i { font-size: 0.95rem; color: #7dd3fc; opacity: 0.96; width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(125, 211, 252, 0.14); border: 1px solid rgba(125, 211, 252, 0.28); }
+    .pipeline-tile strong { color: #f0f9ff; font-size: 1.45rem; line-height: 1.05; letter-spacing: 0.01em; }
     .pipeline-tile small { color: #7f94ad; font-size: 0.74rem; }
     .pipeline-tile.total { border-color: rgba(56, 189, 248, 0.35); }
+    .pipeline-tile.total::before { background: linear-gradient(90deg, #38bdf8, #22d3ee); }
     .pipeline-tile.working { border-color: rgba(14, 165, 233, 0.38); }
+    .pipeline-tile.working::before { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
     .pipeline-tile.rejected { border-color: rgba(244, 63, 94, 0.35); }
-    .pipeline-tile.rejected i { color: #fb7185; }
+    .pipeline-tile.rejected::before { background: linear-gradient(90deg, #fb7185, #f43f5e); }
+    .pipeline-tile.rejected i { color: #fb7185; background: rgba(251, 113, 133, 0.12); border-color: rgba(251, 113, 133, 0.26); }
     .pipeline-tile.hired { border-color: rgba(34, 197, 94, 0.35); }
-    .pipeline-tile.hired i { color: #4ade80; }
+    .pipeline-tile.hired::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .pipeline-tile.hired i { color: #4ade80; background: rgba(74, 222, 128, 0.12); border-color: rgba(74, 222, 128, 0.26); }
+    @media (max-width: 1180px) { .pipeline-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 680px) { .pipeline-tiles { grid-template-columns: 1fr; } }
     .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
-    .table-top-actions { display: flex; justify-content: flex-end; margin: 0 0 10px; }
+    .table-top-actions { display: flex; justify-content: flex-end; margin: 0 0 16px; }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-view { margin-top: 6px; }
     .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
