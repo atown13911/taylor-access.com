@@ -683,7 +683,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <thead>
                 <tr>
                   <th class="col-position">Position</th>
-                  <th class="col-color">Color</th>
                   <th class="col-status">Status</th>
                   <th class="col-data">Data</th>
                 </tr>
@@ -704,13 +703,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                       <span class="position-name">{{ position === 'all' ? 'All Positions' : position }}</span>
                       @if (selectedPosition() === position && position !== 'all') {
                         <span class="position-selected-pill">Selected</span>
-                      }
-                    </td>
-                    <td class="col-color">
-                      @if (position !== 'all' && getPositionColor(position)) {
-                        <span class="position-color-dot" [style.background]="getPositionColor(position)"></span>
-                      } @else {
-                        <span class="position-color-none">—</span>
                       }
                     </td>
                     <td class="col-status">
@@ -1304,7 +1296,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-filter-table { width: 100%; border-collapse: collapse; table-layout: auto; }
     .position-filter-table th, .position-filter-table td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; text-align: left; font-size: 0.8rem; }
     .position-filter-table th { color: #8aa0b8; font-weight: 600; background: #0f172a; }
-    .position-filter-table .col-color,
     .position-filter-table .col-status,
     .position-filter-table .col-data { text-align: center; white-space: nowrap; }
     .position-option-row { cursor: pointer; transition: background 120ms ease, box-shadow 120ms ease; }
@@ -1317,7 +1308,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-selection-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .position-selected-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #d9f6ff; border: 1px solid rgba(34, 211, 238, 0.5); background: rgba(34, 211, 238, 0.2); }
     .position-name { color: #e2e8f0; font-weight: 600; }
-    .position-color-dot { width: 10px; height: 10px; border-radius: 999px; box-shadow: 0 0 0 1px rgba(255,255,255,0.25); display: inline-block; vertical-align: middle; }
     .position-color-none { color: #64748b; }
     .position-state { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; border: 1px solid transparent; }
     .position-state.active { color: #86efac; border-color: #166534; background: rgba(22, 101, 52, 0.22); }
