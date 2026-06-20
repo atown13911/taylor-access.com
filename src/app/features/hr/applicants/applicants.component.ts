@@ -137,11 +137,6 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               </button>
             </div>
           }
-          @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
-            <button class="btn-primary" (click)="openCreate()">
-              <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
-            </button>
-          }
         </div>
       </header>
 
@@ -815,6 +810,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         @if (applicantsSyncError()) {
           <div class="sync-error">{{ applicantsSyncError() }}</div>
         }
+        @if (positionStateFilter() === 'active' || positionStateFilter() === 'inactive' || positionStateFilter() === 'historical') {
+          <div class="table-top-actions">
+            <button class="btn-primary" (click)="openCreate()">
+              <i class='bx bx-plus'></i> {{ positionStateFilter() === 'historical' ? 'Add Historical Applicant' : 'Add Applicant' }}
+            </button>
+          </div>
+        }
 
         <div class="table-wrap">
           <table>
@@ -1358,6 +1360,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .pipeline-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; }
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
+    .table-top-actions { display: flex; justify-content: flex-end; margin: 0 0 10px; }
     .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
     .report-view { margin-top: 6px; }
     .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
