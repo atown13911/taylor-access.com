@@ -62,6 +62,105 @@
 
   <!-- CALENDAR TAB -->
   @if (activeTab() === 'calendar') {
+    <div class="team-calendar-dashboard">
+      <div class="team-dashboard-header">
+        <div>
+          <h3><i class="bx bx-calendar-check"></i> Team Calendar Dashboard</h3>
+          <p>Daily workforce view for approved time out and pending requests</p>
+        </div>
+        <label class="month-filter">
+          <span>Month</span>
+          <select [ngModel]="selectedMonthFilter()" (ngModelChange)="setMonthFilter($event)">
+            @for (option of monthFilterOptions(); track option.value) {
+              <option [ngValue]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="team-dashboard-stats">
+        <div class="team-stat out">
+          <span class="label">Total Out Days</span>
+          <strong>{{ teamMonthlySummary().totalOut }}</strong>
+        </div>
+        <div class="team-stat requesting">
+          <span class="label">Total Requesting Days</span>
+          <strong>{{ teamMonthlySummary().totalRequesting }}</strong>
+        </div>
+        <div class="team-stat peak-out">
+          <span class="label">Peak Out (Single Day)</span>
+          <strong>{{ teamMonthlySummary().peakOut }}</strong>
+        </div>
+        <div class="team-stat peak-pending">
+          <span class="label">Peak Requesting (Single Day)</span>
+          <strong>{{ teamMonthlySummary().peakPending }}</strong>
+        </div>
+      </div>
+
+      <div class="team-calendar-grid">
+        <div class="team-weekday">Sun</div>
+        <div class="team-weekday">Mon</div>
+        <div class="team-weekday">Tue</div>
+        <div class="team-weekday">Wed</div>
+        <div class="team-weekday">Thu</div>
+        <div class="team-weekday">Fri</div>
+        <div class="team-weekday">Sat</div>
+        @for (day of teamCalendarDays(); track $index) {
+          <div class="team-day"
+               [class.other-month]="!day.isCurrentMonth"
+               [class.today]="day.isToday"
+               [class.weekend]="day.isWeekend"
+               [class.selected]="selectedTeamDay() && selectedTeamDay()!.toDateString() === day.date.toDateString()"
+               (click)="selectTeamDay(day)">
+            <span class="team-day-num">{{ day.day }}</span>
+            <span class="team-day-metric out">Out: {{ day.workersOutCount }}</span>
+            <span class="team-day-metric requesting">Req: {{ day.requestingCount }}</span>
+          </div>
+        }
+      </div>
+
+      @if (selectedTeamDayDetail(); as detail) {
+        <div class="team-day-detail">
+          <div class="team-day-detail-header">
+            <h4><i class="bx bx-calendar"></i> {{ formatDate(detail.date.toISOString()) }}</h4>
+            <span class="team-day-detail-sub">Workforce detail for selected date</span>
+          </div>
+          <div class="team-day-detail-grid">
+            <div class="team-day-list out">
+              <h5>Workers Out ({{ detail.out.length }})</h5>
+              @if (detail.out.length === 0) {
+                <p class="empty">No approved time out</p>
+              } @else {
+                <div class="person-list">
+                  @for (person of detail.out; track person.id) {
+                    <button type="button" class="person-row" (click)="focusEmployeeFromTeamDay(person.id)">
+                      <span class="person-name">{{ person.name }}</span>
+                      <span class="person-type">{{ getTypeLabel(person.type) }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+            <div class="team-day-list requesting">
+              <h5>Workers Requesting ({{ detail.requesting.length }})</h5>
+              @if (detail.requesting.length === 0) {
+                <p class="empty">No pending requests</p>
+              } @else {
+                <div class="person-list">
+                  @for (person of detail.requesting; track person.id) {
+                    <button type="button" class="person-row" (click)="focusEmployeeFromTeamDay(person.id)">
+                      <span class="person-name">{{ person.name }}</span>
+                      <span class="person-type">{{ getTypeLabel(person.type) }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
     <div class="calendar-layout">
       <!-- Left: Employee Roster -->
       <div class="roster-panel">

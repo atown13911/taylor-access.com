@@ -51,6 +51,16 @@ interface CalendarDay {
   requests: TimeOffRequest[];
 }
 
+interface TeamCalendarDay {
+  date: Date;
+  day: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isWeekend: boolean;
+  workersOutCount: number;
+  requestingCount: number;
+}
+
 @Component({
   selector: 'app-time-off',
   standalone: true,
@@ -77,6 +87,8 @@ export class TimeOffComponent implements OnInit {
   employeeSearch = signal('');
   calendarMonth = signal(new Date().getMonth());
   calendarYear = signal(new Date().getFullYear());
+  selectedMonthFilter = signal(this.toYearMonth(new Date()));
+  selectedTeamDay = signal<Date | null>(null);
   selectedEmployeeRequests = signal<TimeOffRequest[]>([]);
   selectedEmployeeBalance = signal<TimeOffBalance | null>(null);
 
@@ -103,6 +115,73 @@ export class TimeOffComponent implements OnInit {
   calendarMonthLabel = computed(() => {
     const date = new Date(this.calendarYear(), this.calendarMonth(), 1);
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  });
+
+  monthFilterOptions = computed(() => {
+    const current = new Date();
+    current.setDate(1);
+    const options: { value: string; label: string }[] = [];
+    for (let offset = -12; offset <= 12; offset++) {
+      const d = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+      options.push({
+        value: this.toYearMonth(d),
+        label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      });
+    }
+    return options;
+  });
+
+  teamCalendarDays = computed(() => {
+    const month = this.calendarMonth();
+    const year = this.calendarYear();
+    const requests = this.allRequests();
+    return this.buildTeamCalendar(year, month, requests);
+  });
+
+  teamMonthlySummary = computed(() => {
+    const rows = this.teamCalendarDays().filter(r => r.isCurrentMonth);
+    const totalOut = rows.reduce((sum, r) => sum + r.workersOutCount, 0);
+    const totalRequesting = rows.reduce((sum, r) => sum + r.requestingCount, 0);
+    const peakOut = rows.reduce((max, r) => Math.max(max, r.workersOutCount), 0);
+    const peakPending = rows.reduce((max, r) => Math.max(max, r.requestingCount), 0);
+    return { totalOut, totalRequesting, peakOut, peakPending };
+  });
+
+  selectedTeamDayDetail = computed(() => {
+    const selected = this.selectedTeamDay();
+    if (!selected) return null;
+    const dateStr = this.toDateStr(selected);
+    const active = this.allRequests().filter(r => {
+      if (r.status !== 'approved' && r.status !== 'pending') return false;
+      const start = this.toDateStr(new Date(r.startDate));
+      const end = this.toDateStr(new Date(r.endDate));
+      return dateStr >= start && dateStr <= end;
+    });
+
+    const seenOut = new Set<number>();
+    const seenRequesting = new Set<number>();
+    const out: { id: number; name: string; type: string }[] = [];
+    const requesting: { id: number; name: string; type: string }[] = [];
+
+    for (const req of active) {
+      const name = this.resolveEmployeeName(req.employeeId, req.employeeName);
+      if (req.status === 'approved' && !seenOut.has(req.employeeId)) {
+        seenOut.add(req.employeeId);
+        out.push({ id: req.employeeId, name, type: req.type });
+      } else if (req.status === 'pending' && !seenRequesting.has(req.employeeId)) {
+        seenRequesting.add(req.employeeId);
+        requesting.push({ id: req.employeeId, name, type: req.type });
+      }
+    }
+
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    requesting.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      date: selected,
+      out,
+      requesting
+    };
   });
 
   upcomingRequests = computed(() => {
@@ -250,6 +329,7 @@ export class TimeOffComponent implements OnInit {
     if (m === 0) { m = 11; y--; } else { m--; }
     this.calendarMonth.set(m);
     this.calendarYear.set(y);
+    this.syncMonthFilterFromCalendar();
   }
 
   nextMonth(): void {
@@ -258,11 +338,40 @@ export class TimeOffComponent implements OnInit {
     if (m === 11) { m = 0; y++; } else { m++; }
     this.calendarMonth.set(m);
     this.calendarYear.set(y);
+    this.syncMonthFilterFromCalendar();
   }
 
   goToday(): void {
     this.calendarMonth.set(new Date().getMonth());
     this.calendarYear.set(new Date().getFullYear());
+    this.syncMonthFilterFromCalendar();
+  }
+
+  setMonthFilter(value: string): void {
+    this.selectedMonthFilter.set(value);
+    const [yearRaw, monthRaw] = value.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return;
+    this.calendarYear.set(year);
+    this.calendarMonth.set(month - 1);
+    this.selectedTeamDay.set(null);
+  }
+
+  selectTeamDay(day: TeamCalendarDay): void {
+    this.selectedTeamDay.set(new Date(day.date));
+  }
+
+  focusEmployeeFromTeamDay(employeeId: number): void {
+    const emp = this.employees().find(e => e.id === employeeId);
+    if (!emp) {
+      this.toast.warning(`Employee #${employeeId} not found in active roster`);
+      return;
+    }
+
+    this.employeeSearch.set('');
+    this.selectEmployee(emp);
+    this.activeTab.set('calendar');
   }
 
   buildCalendar(year: number, month: number, requests: TimeOffRequest[]): CalendarDay[] {
@@ -311,8 +420,76 @@ export class TimeOffComponent implements OnInit {
     };
   }
 
+  private buildTeamCalendar(year: number, month: number, requests: TimeOffRequest[]): TeamCalendarDay[] {
+    const days: TeamCalendarDay[] = [];
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startDow = firstDay.getDay();
+    for (let i = startDow - 1; i >= 0; i--) {
+      const d = new Date(year, month, -i);
+      days.push(this.makeTeamCalDay(d, false, today, requests));
+    }
+
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      const date = new Date(year, month, d);
+      days.push(this.makeTeamCalDay(date, true, today, requests));
+    }
+
+    while (days.length < 42) {
+      const d = new Date(year, month + 1, days.length - lastDay.getDate() - startDow + 1);
+      days.push(this.makeTeamCalDay(d, false, today, requests));
+    }
+
+    return days;
+  }
+
+  private makeTeamCalDay(date: Date, isCurrentMonth: boolean, today: Date, requests: TimeOffRequest[]): TeamCalendarDay {
+    const dateStr = this.toDateStr(date);
+    const activeRequests = requests.filter(r => {
+      if (r.status !== 'approved' && r.status !== 'pending') return false;
+      const start = this.toDateStr(new Date(r.startDate));
+      const end = this.toDateStr(new Date(r.endDate));
+      return dateStr >= start && dateStr <= end;
+    });
+
+    const workersOut = new Set<number>();
+    const workersRequesting = new Set<number>();
+    for (const req of activeRequests) {
+      if (req.status === 'approved') workersOut.add(req.employeeId);
+      if (req.status === 'pending') workersRequesting.add(req.employeeId);
+    }
+
+    return {
+      date,
+      day: date.getDate(),
+      isCurrentMonth,
+      isToday: date.getTime() === today.getTime(),
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+      workersOutCount: workersOut.size,
+      requestingCount: workersRequesting.size
+    };
+  }
+
   private toDateStr(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  private toYearMonth(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  private syncMonthFilterFromCalendar(): void {
+    this.selectedMonthFilter.set(`${this.calendarYear()}-${String(this.calendarMonth() + 1).padStart(2, '0')}`);
+    this.selectedTeamDay.set(null);
+  }
+
+  private resolveEmployeeName(employeeId: number, fallback?: string): string {
+    if (fallback && fallback.trim()) return fallback.trim();
+    const emp = this.employees().find(e => e.id === employeeId);
+    return emp?.name || emp?.email || `Employee #${employeeId}`;
   }
 
   getRequestTypeColor(type: string): string {
