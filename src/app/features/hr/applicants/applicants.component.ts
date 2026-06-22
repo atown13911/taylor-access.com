@@ -4,6 +4,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { FormsModule } from '@angular/forms';
 import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { Observable, firstValueFrom } from 'rxjs';
+import { UserSettingsService } from '../../../core/services/user-settings.service';
 import { environment } from '../../../../environments/environment';
 
 type ApplicantStatus = 'new' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'no response' | 'no show';
@@ -62,6 +63,45 @@ interface GoalComparisonItem {
   progress: number;
   color: string;
 }
+interface SuggestedGoalPack {
+  period: GoalPeriod;
+  applicants: number;
+  interviews: number;
+  hires: number;
+  confidence: 'high' | 'medium' | 'low';
+  rationale: string;
+}
+type SuggestedGoalMode = 'aggressive' | 'balanced' | 'conservative';
+type MarketPresentationMode = 'neon' | 'executive';
+interface OfficeRegionInsightRow {
+  region: string;
+  applicants: number;
+  sharePct: number;
+  monthlyApplicantsTarget: number;
+  monthlyInterviewsTarget: number;
+  monthlyHiresTarget: number;
+  posture: 'expand' | 'hold' | 'optimize';
+}
+interface FleetOtrPayTargetRow {
+  tier: 'entry' | 'standard' | 'premium';
+  label: string;
+  hourly: number;
+  weeklyGross: number;
+  annualGross: number;
+  cpm: number;
+}
+interface MarketAuditRow {
+  savedAt: string;
+  presetKey: string;
+  positionGroup: PositionGroup;
+  suggestedMode: SuggestedGoalMode;
+  pipelineCount: number;
+  driverPay: number | null;
+  laborDemand: number | null;
+  laborTightness: number | null;
+  inflation: number | null;
+  insuranceCost: number | null;
+}
 interface PositionTableMetric {
   count: number;
   avgPerDay: string;
@@ -69,6 +109,23 @@ interface PositionTableMetric {
   maleCount: number;
   femaleCount: number;
   mostRecentEntry: string;
+}
+
+type BlsMarketKey = 'driverPay' | 'laborTightness' | 'laborDemand' | 'inflation' | 'insuranceCost';
+interface BlsMarketSnapshot {
+  key: BlsMarketKey;
+  label: string;
+  seriesId: string;
+  latestValue: number | null;
+  latestLabel: string;
+  priorValue: number | null;
+  changePct: number | null;
+  points: ChartPoint[];
+}
+interface MarketPresetOption {
+  key: string;
+  label: string;
+  seriesDraft: Record<BlsMarketKey, string>;
 }
 
 type ApplicantDraft = Omit<ApplicantRow, 'id' | 'status'> & { status?: ApplicantStatus };
@@ -88,6 +145,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         || positionStateFilter() === 'historical'
         || positionStateFilter() === 'report'
         || positionStateFilter() === 'goals'
+        || positionStateFilter() === 'market'
       ) {
         <div class="applicant-mode-tabs-header">
           <button
@@ -125,6 +183,13 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
           >
             Goals
           </button>
+          <button
+            class="applicant-mode-tab"
+            [class.active]="positionStateFilter() === 'market'"
+            (click)="setPositionStateFilter('market')"
+          >
+            Market
+          </button>
         </div>
       }
       <header class="page-header">
@@ -139,6 +204,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
             || positionStateFilter() === 'historical'
             || positionStateFilter() === 'report'
             || positionStateFilter() === 'goals'
+            || positionStateFilter() === 'market'
           ) {
             <div class="position-group-tabs position-group-tabs-header">
               <button
@@ -200,7 +266,7 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         </div>
       }
 
-      @if (positionStateFilter() !== 'goals') {
+      @if (positionStateFilter() !== 'goals' && positionStateFilter() !== 'market') {
         <div class="position-state-tabs">
           @if (positionStateFilter() === 'historical') {
             <button
@@ -451,6 +517,38 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
               <i class='bx' [class.bx-plus]="applicantGoals().length === 0" [class.bx-edit-alt]="applicantGoals().length > 0"></i>
               {{ applicantGoals().length === 0 ? 'Add Goal' : 'Edit Goal' }}
             </button>
+          </div>
+          <div class="suggested-goals-wrap">
+            <div class="suggested-goals-head">
+              <h4>System Suggested Goals (Trucking Market)</h4>
+              <small>Uses BLS pay, labor-demand, and labor-tightness signals + your last 90-day conversion baseline.</small>
+              <div class="suggested-mode-toggle">
+                <button class="state-tab" [class.active]="suggestedGoalMode() === 'aggressive'" (click)="setSuggestedGoalMode('aggressive')">Aggressive</button>
+                <button class="state-tab" [class.active]="suggestedGoalMode() === 'balanced'" (click)="setSuggestedGoalMode('balanced')">Balanced</button>
+                <button class="state-tab" [class.active]="suggestedGoalMode() === 'conservative'" (click)="setSuggestedGoalMode('conservative')">Conservative</button>
+              </div>
+            </div>
+            <div class="suggested-goals-grid">
+              @for (suggestion of suggestedGoalPacks(); track suggestion.period) {
+                <article class="suggested-goal-card">
+                  <div class="suggested-goal-top">
+                    <strong>{{ suggestion.period | titlecase }}</strong>
+                    <span class="suggested-confidence" [class.high]="suggestion.confidence === 'high'" [class.medium]="suggestion.confidence === 'medium'" [class.low]="suggestion.confidence === 'low'">
+                      {{ confidenceLabel(suggestion.confidence) }}
+                    </span>
+                  </div>
+                  <div class="suggested-metrics">
+                    <span>Applicants <b>{{ suggestion.applicants }}</b></span>
+                    <span>Interviews <b>{{ suggestion.interviews }}</b></span>
+                    <span>Hires <b>{{ suggestion.hires }}</b></span>
+                  </div>
+                  <p>{{ suggestion.rationale }}</p>
+                  <button class="btn-secondary" (click)="applySuggestedGoal(suggestion.period)">
+                    <i class='bx bx-target-lock'></i> Apply {{ suggestion.period | titlecase }} Suggestion
+                  </button>
+                </article>
+              }
+            </div>
           </div>
           <div class="goals-summary">
             <article class="pipeline-tile">
@@ -711,6 +809,416 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
                 } @empty {
                   <tr>
                     <td colspan="15" class="empty">No goals yet. Click "Add Goal" to begin.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      } @else if (positionStateFilter() === 'market') {
+        <section class="market-view" [class.market-theme-executive]="marketPresentationMode() === 'executive'" [class.market-theme-neon]="marketPresentationMode() === 'neon'">
+          <div class="market-toolbar">
+            <div>
+              <h3>BLS Market Intelligence</h3>
+              <p>Benchmark driver pay, labor tightness, and macro demand against your applicant pipeline.</p>
+              @if (marketLastUpdated()) {
+                <small class="hint">Last refreshed: {{ marketLastUpdated() | date:'short' }}</small>
+              }
+            </div>
+            <div class="market-toolbar-actions">
+              <div class="market-theme-toggle">
+                <button class="state-tab" [class.active]="marketPresentationMode() === 'neon'" (click)="setMarketPresentationMode('neon')">Neon</button>
+                <button class="state-tab" [class.active]="marketPresentationMode() === 'executive'" (click)="setMarketPresentationMode('executive')">Executive</button>
+              </div>
+              <button class="btn-secondary" (click)="loadMarketIntelligence()" [disabled]="marketLoading()">
+                <i class='bx bx-refresh'></i> Refresh Market Data
+              </button>
+            </div>
+          </div>
+
+          <div class="market-series-grid">
+            <label class="market-preset-field">
+              Dataset Preset
+              <select [ngModel]="marketPresetKey()" (ngModelChange)="applyMarketPreset($event)">
+                @for (preset of marketPresetOptions; track preset.key) {
+                  <option [value]="preset.key">{{ preset.label }}</option>
+                }
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>
+              Driver Pay Series ID
+              <input type="text" [ngModel]="marketSeriesDraft.driverPay" (ngModelChange)="setMarketSeriesId('driverPay', $event)" />
+            </label>
+            <label>
+              Labor Tightness Series ID
+              <input type="text" [ngModel]="marketSeriesDraft.laborTightness" (ngModelChange)="setMarketSeriesId('laborTightness', $event)" />
+            </label>
+            <label>
+              Labor Demand Series ID
+              <input type="text" [ngModel]="marketSeriesDraft.laborDemand" (ngModelChange)="setMarketSeriesId('laborDemand', $event)" />
+            </label>
+            <label>
+              Inflation Series ID
+              <input type="text" [ngModel]="marketSeriesDraft.inflation" (ngModelChange)="setMarketSeriesId('inflation', $event)" />
+            </label>
+            <label>
+              Insurance Cost Pressure Series ID
+              <input type="text" [ngModel]="marketSeriesDraft.insuranceCost" (ngModelChange)="setMarketSeriesId('insuranceCost', $event)" />
+            </label>
+            <div class="market-series-actions">
+              <button class="btn-secondary" (click)="saveMarketSeriesDraft()">
+                <i class='bx bx-save'></i> Save Series IDs
+              </button>
+            </div>
+          </div>
+
+          @if (marketError()) {
+            <div class="sync-error">{{ marketError() }}</div>
+          }
+
+          <div class="market-cards market-cards-bold">
+            <article class="report-card">
+              <span>Current Pipeline</span>
+              <strong>{{ marketPipelineCount() }}</strong>
+              <small>{{ positionGroupFilter() | titlecase }} applicants in scope</small>
+            </article>
+            <article class="report-card">
+              <span>Driver Pay Benchmark</span>
+              <strong>{{ marketSnapshotValue('driverPay') }}</strong>
+              <small>{{ marketSnapshotDelta('driverPay') }}</small>
+            </article>
+            <article class="report-card">
+              <span>Labor Tightness</span>
+              <strong>{{ marketSnapshotValue('laborTightness') }}</strong>
+              <small>{{ marketSnapshotDelta('laborTightness') }}</small>
+            </article>
+            <article class="report-card">
+              <span>Macro Labor Demand</span>
+              <strong>{{ marketSnapshotValue('laborDemand') }}</strong>
+              <small>{{ marketSnapshotDelta('laborDemand') }}</small>
+            </article>
+            <article class="report-card">
+              <span>Inflation Context</span>
+              <strong>{{ marketSnapshotValue('inflation') }}</strong>
+              <small>{{ marketSnapshotDelta('inflation') }}</small>
+            </article>
+            <article class="report-card">
+              <span>Insurance Cost Pressure</span>
+              <strong>{{ marketSnapshotValue('insuranceCost') }}</strong>
+              <small>{{ marketSnapshotDelta('insuranceCost') }}</small>
+            </article>
+            <article class="report-card">
+              <span>Pipeline vs Demand</span>
+              <strong>{{ marketPipelineVsDemandLabel() }}</strong>
+              <small>Applicants per labor-demand index point</small>
+            </article>
+          </div>
+
+          <div class="report-grid">
+            <article class="report-panel report-panel-wide">
+              <h3>BLS Trend Benchmarks</h3>
+              @if (marketMacroTrendSeries().length > 0) {
+                <ngx-charts-line-chart
+                  [results]="marketMacroTrendSeries()"
+                  [view]="reportWideChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [autoScale]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [animations]="true">
+                </ngx-charts-line-chart>
+              } @else {
+                <div class="chart-empty">No BLS trend data yet. Click refresh to load benchmark series.</div>
+              }
+            </article>
+
+            <article class="report-panel report-panel-wide">
+              <h3>Applicants vs Macro Labor Demand</h3>
+              @if (marketPipelineVsDemandSeries().length > 0) {
+                <ngx-charts-line-chart
+                  [results]="marketPipelineVsDemandSeries()"
+                  [view]="reportWideChartView()"
+                  [scheme]="chartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [autoScale]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [animations]="true">
+                </ngx-charts-line-chart>
+              } @else {
+                <div class="chart-empty">No overlapping applicant + demand timeline yet.</div>
+              }
+            </article>
+          </div>
+
+          <div class="report-grid">
+            <article class="report-panel">
+              <h3>Market Momentum (Change %)</h3>
+              @if (marketMomentumChartData().length > 0) {
+                <ngx-charts-bar-vertical
+                  [results]="marketMomentumChartData()"
+                  [view]="reportChartView()"
+                  [scheme]="marketBoldScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showDataLabel]="true"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-vertical>
+              } @else {
+                <div class="chart-empty">No market momentum data yet.</div>
+              }
+            </article>
+
+            <article class="report-panel">
+              <h3>Indicator Influence Mix</h3>
+              @if (marketIndicatorMixChartData().length > 0) {
+                <ngx-charts-pie-chart
+                  [results]="marketIndicatorMixChartData()"
+                  [view]="reportChartView()"
+                  [scheme]="marketPieBoldScheme"
+                  [labels]="true"
+                  [doughnut]="true"
+                  [animations]="true">
+                </ngx-charts-pie-chart>
+              } @else {
+                <div class="chart-empty">No indicator mix data yet.</div>
+              }
+            </article>
+          </div>
+
+          <div class="report-grid">
+            <article class="report-panel report-panel-wide">
+              <h3>Audit Trend (Pipeline vs Driver Pay)</h3>
+              @if (marketAuditTrendSeries().length > 0) {
+                <ngx-charts-line-chart
+                  [results]="marketAuditTrendSeries()"
+                  [view]="reportWideChartView()"
+                  [scheme]="marketBoldScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [autoScale]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [animations]="true">
+                </ngx-charts-line-chart>
+              } @else {
+                <div class="chart-empty">No audit history chart data yet.</div>
+              }
+            </article>
+          </div>
+
+          @if (positionGroupFilter() === 'office') {
+            <div class="report-grid">
+              <article class="report-panel">
+                <h3>Office Regional Pipeline Mix</h3>
+                @if (officeRegionChartData().length > 0) {
+                  <ngx-charts-bar-horizontal
+                    [results]="officeRegionChartData()"
+                    [view]="reportChartView()"
+                    [scheme]="chartScheme"
+                    [xAxis]="true"
+                    [yAxis]="true"
+                    [showDataLabel]="true"
+                    [animations]="true"
+                    [gradient]="true">
+                  </ngx-charts-bar-horizontal>
+                } @else {
+                  <div class="chart-empty">No office applicant state data yet.</div>
+                }
+              </article>
+              <article class="report-panel">
+                <h3>Office Market Goal Posture</h3>
+                <div class="goal-comparison-list">
+                  @for (row of officeRegionInsights(); track row.region) {
+                    <div class="goal-comparison-row">
+                      <div class="goal-comparison-head">
+                        <span>{{ row.region }}</span>
+                        <small>{{ row.applicants }} applicants ({{ row.sharePct | number:'1.0-1' }}%)</small>
+                      </div>
+                      <div class="goal-comparison-track">
+                        <div
+                          class="goal-comparison-fill"
+                          [style.width.%]="row.sharePct"
+                          [style.background]="row.posture === 'expand'
+                            ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                            : row.posture === 'hold'
+                              ? 'linear-gradient(90deg, #38bdf8, #0ea5e9)'
+                              : 'linear-gradient(90deg, #f59e0b, #d97706)'">
+                        </div>
+                      </div>
+                      <strong>{{ row.posture | titlecase }}</strong>
+                    </div>
+                  } @empty {
+                    <div class="chart-empty">No office region posture available yet.</div>
+                  }
+                </div>
+              </article>
+            </div>
+          }
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Series ID</th>
+                  <th>Latest</th>
+                  <th>Previous</th>
+                  <th>Change %</th>
+                  <th>As Of</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of marketSnapshots(); track item.key) {
+                  <tr>
+                    <td>{{ item.label }}</td>
+                    <td>{{ item.seriesId }}</td>
+                    <td>{{ formatMarketNumber(item.latestValue) }}</td>
+                    <td>{{ formatMarketNumber(item.priorValue) }}</td>
+                    <td>{{ formatMarketChange(item.changePct) }}</td>
+                    <td>{{ item.latestLabel }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="6" class="empty">No market series loaded yet.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          @if (positionGroupFilter() === 'office') {
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Region</th>
+                    <th>Applicants</th>
+                    <th>Share</th>
+                    <th>Suggested Monthly Applicants</th>
+                    <th>Suggested Monthly Interviews</th>
+                    <th>Suggested Monthly Hires</th>
+                    <th>Posture</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of officeRegionInsights(); track row.region) {
+                    <tr>
+                      <td>{{ row.region }}</td>
+                      <td>{{ row.applicants }}</td>
+                      <td>{{ row.sharePct | number:'1.0-1' }}%</td>
+                      <td>{{ row.monthlyApplicantsTarget }}</td>
+                      <td>{{ row.monthlyInterviewsTarget }}</td>
+                      <td>{{ row.monthlyHiresTarget }}</td>
+                      <td>{{ row.posture | titlecase }}</td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="7" class="empty">No office-region records yet.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+
+          @if (positionGroupFilter() === 'fleet') {
+            <section class="fleet-otr-pay-section">
+              <div class="fleet-otr-pay-head">
+                <div>
+                  <h3>OTR Driver Target Pay (Fleet)</h3>
+                  <p>Market-benchmarked OTR targets using current driver pay trend and your operating assumptions.</p>
+                </div>
+              </div>
+              <div class="fleet-otr-inputs">
+                <label>
+                  Weekly Miles (OTR)
+                  <input type="number" min="500" [ngModel]="fleetOtrWeeklyMiles()" (ngModelChange)="setFleetOtrWeeklyMiles($event)" />
+                </label>
+                <label>
+                  Weekly Hours
+                  <input type="number" min="20" [ngModel]="fleetOtrHoursPerWeek()" (ngModelChange)="setFleetOtrHoursPerWeek($event)" />
+                </label>
+                <label>
+                  Benefits / Burden %
+                  <input type="number" min="0" [ngModel]="fleetOtrBenefitsLoadPct()" (ngModelChange)="setFleetOtrBenefitsLoadPct($event)" />
+                </label>
+              </div>
+              <div class="market-cards fleet-otr-summary-cards">
+                <article class="report-card">
+                  <span>Market Driver Pay (Hourly)</span>
+                  <strong>{{ formatCurrency(fleetDriverMarketHourly()) }}</strong>
+                </article>
+                <article class="report-card">
+                  <span>Standard OTR Weekly (Loaded)</span>
+                  <strong>{{ formatCurrency(fleetOtrFullyLoadedWeekly()) }}</strong>
+                </article>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tier</th>
+                      <th>Target Hourly</th>
+                      <th>Target Weekly Gross</th>
+                      <th>Target Annual Gross</th>
+                      <th>Target CPM</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of fleetOtrPayTargets(); track row.tier) {
+                      <tr>
+                        <td>{{ row.label }}</td>
+                        <td>{{ formatCurrency(row.hourly) }}</td>
+                        <td>{{ formatCurrency(row.weeklyGross) }}</td>
+                        <td>{{ formatCurrency(row.annualGross) }}</td>
+                        <td>{{ formatCpm(row.cpm) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          }
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Saved At</th>
+                  <th>Preset</th>
+                  <th>Group</th>
+                  <th>Goal Mode</th>
+                  <th>Pipeline</th>
+                  <th>Driver Pay</th>
+                  <th>Labor Demand</th>
+                  <th>Labor Tightness</th>
+                  <th>Inflation</th>
+                  <th>Insurance Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of marketAuditRows(); track row.savedAt) {
+                  <tr>
+                    <td>{{ row.savedAt | date:'short' }}</td>
+                    <td>{{ row.presetKey }}</td>
+                    <td>{{ row.positionGroup | titlecase }}</td>
+                    <td>{{ row.suggestedMode | titlecase }}</td>
+                    <td>{{ row.pipelineCount }}</td>
+                    <td>{{ formatCurrency(row.driverPay) }}</td>
+                    <td>{{ formatMarketNumber(row.laborDemand) }}</td>
+                    <td>{{ formatMarketNumber(row.laborTightness) }}</td>
+                    <td>{{ formatMarketNumber(row.inflation) }}</td>
+                    <td>{{ formatMarketNumber(row.insuranceCost) }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="10" class="empty">No market audit records yet.</td>
                   </tr>
                 }
               </tbody>
@@ -1488,6 +1996,56 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .hint { color: #8aa0b8; font-size: 0.78rem; }
     .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+    .market-view { display: grid; gap: 14px; }
+    .market-toolbar-actions { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .market-theme-toggle { display: inline-flex; gap: 6px; }
+    .market-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid #334155; border-radius: 12px; padding: 12px; background: linear-gradient(135deg, rgba(6, 20, 42, 0.95), rgba(17, 24, 39, 0.95)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 24px rgba(2, 6, 23, 0.35); }
+    .market-toolbar h3 { margin: 0 0 4px; color: #e2e8f0; font-size: 1rem; }
+    .market-toolbar p { margin: 0; color: #8aa0b8; font-size: 0.84rem; }
+    .market-series-grid { border: 1px solid #334155; border-radius: 12px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(10, 16, 31, 0.96)); padding: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .market-series-grid label { display: flex; flex-direction: column; gap: 6px; color: #9fb2c8; font-size: 0.78rem; }
+    .market-series-grid input, .market-series-grid select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; text-transform: uppercase; }
+    .market-preset-field { grid-column: 1 / -1; }
+    .market-series-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+    .market-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .market-cards .report-card { min-height: 88px; display: flex; flex-direction: column; justify-content: center; }
+    .market-cards-bold .report-card { border-color: rgba(0, 229, 255, 0.28); background: linear-gradient(145deg, rgba(4, 24, 43, 0.95), rgba(17, 24, 39, 0.95)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 30px rgba(2, 6, 23, 0.35); }
+    .market-cards-bold .report-card strong { color: #f0fdff; text-shadow: 0 0 12px rgba(0, 229, 255, 0.22); }
+    .market-cards-bold .report-card:nth-child(2n) { border-color: rgba(124, 77, 255, 0.3); }
+    .market-cards-bold .report-card:nth-child(3n) { border-color: rgba(255, 77, 141, 0.28); }
+    .market-theme-executive .market-toolbar { background: linear-gradient(135deg, #101827, #1f2937); border-color: #475569; box-shadow: none; }
+    .market-theme-executive .market-series-grid { background: linear-gradient(135deg, #0f172a, #1e293b); border-color: #475569; }
+    .market-theme-executive .market-cards-bold .report-card { background: linear-gradient(145deg, #111827, #1f2937); border-color: #475569; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22); }
+    .market-theme-executive .market-cards-bold .report-card strong { text-shadow: none; color: #f8fafc; }
+    .market-theme-executive .market-cards-bold .report-card:nth-child(2n),
+    .market-theme-executive .market-cards-bold .report-card:nth-child(3n) { border-color: #64748b; }
+    .market-theme-executive .report-panel { background: linear-gradient(180deg, #0f172a, #1e293b); border-color: #475569; }
+    .market-theme-neon .state-tab.active { box-shadow: 0 0 16px rgba(0, 212, 255, 0.28); }
+    @media (max-width: 1160px) { .market-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 780px) { .market-series-grid, .market-cards { grid-template-columns: 1fr; } .market-series-actions { justify-content: flex-start; } }
+    .suggested-goals-wrap { border: 1px solid #2a2a4e; border-radius: 12px; padding: 12px; background: linear-gradient(180deg, rgba(12, 20, 38, 0.94), rgba(10, 17, 32, 0.9)); display: grid; gap: 10px; }
+    .suggested-goals-head h4 { margin: 0; color: #e2e8f0; }
+    .suggested-goals-head small { color: #8aa0b8; }
+    .suggested-mode-toggle { margin-top: 8px; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+    .suggested-goals-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .suggested-goal-card { border: 1px solid #334155; border-radius: 10px; background: rgba(15, 23, 42, 0.72); padding: 10px; display: grid; gap: 8px; }
+    .suggested-goal-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .suggested-confidence { border-radius: 999px; border: 1px solid transparent; padding: 2px 8px; font-size: 0.72rem; }
+    .suggested-confidence.high { color: #86efac; border-color: #166534; background: rgba(22, 101, 52, 0.2); }
+    .suggested-confidence.medium { color: #fcd34d; border-color: #92400e; background: rgba(120, 53, 15, 0.2); }
+    .suggested-confidence.low { color: #fecaca; border-color: #7f1d1d; background: rgba(127, 29, 29, 0.2); }
+    .suggested-metrics { display: flex; flex-wrap: wrap; gap: 8px; color: #cbd5e1; font-size: 0.82rem; }
+    .suggested-metrics b { color: #f8fafc; margin-left: 4px; }
+    .suggested-goal-card p { margin: 0; color: #94a3b8; font-size: 0.76rem; line-height: 1.35; min-height: 36px; }
+    @media (max-width: 1200px) { .suggested-goals-grid { grid-template-columns: 1fr; } }
+    .fleet-otr-pay-section { border: 1px solid #2a2a4e; border-radius: 12px; padding: 12px; background: linear-gradient(180deg, rgba(12, 20, 38, 0.94), rgba(10, 17, 32, 0.9)); display: grid; gap: 10px; }
+    .fleet-otr-pay-head h3 { margin: 0 0 4px; color: #e2e8f0; font-size: 1rem; }
+    .fleet-otr-pay-head p { margin: 0; color: #8aa0b8; font-size: 0.82rem; }
+    .fleet-otr-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .fleet-otr-inputs label { display: flex; flex-direction: column; gap: 6px; color: #9fb2c8; font-size: 0.78rem; }
+    .fleet-otr-inputs input { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; }
+    .fleet-otr-summary-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (max-width: 960px) { .fleet-otr-inputs, .fleet-otr-summary-cards { grid-template-columns: 1fr; } }
   `]
 })
 export class ApplicantsComponent implements OnInit, OnDestroy {
@@ -1496,11 +2054,27 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   private readonly legacyImportDoneStorageKey = 'ta.hr.applicants.legacyImportDone';
   private readonly localFallbackPositionsStorageKey = 'ta.hr.applicant-positions.v1';
   private readonly localApplicantGoalsStorageKey = 'ta.hr.applicant-goals.v1';
+  private readonly localMarketSeriesStorageKey = 'ta.hr.applicants.market-series.v1';
+  private readonly localMarketPresetStorageKey = 'ta.hr.applicants.market-preset.v1';
+  private readonly localMarketControlsStorageKey = 'ta.hr.applicants.market-controls.v1';
+  private readonly dbMarketSeriesSettingsKey = 'ta.hr.applicants.market-series.v1';
+  private readonly dbMarketSnapshotSettingsKey = 'ta.hr.applicants.market-snapshots.v1';
+  private readonly dbMarketControlsSettingsKey = 'ta.hr.applicants.market-controls.v1';
+  private readonly dbMarketAuditSettingsKey = 'ta.hr.applicants.market-audit.v1';
+  private readonly dbApplicantGoalsSettingsKey = 'ta.hr.applicant-goals.v1';
+  private readonly marketSeriesFallback: Record<BlsMarketKey, string> = {
+    driverPay: 'CEU4348400003',
+    laborTightness: 'LNS14000000',
+    laborDemand: 'JTS000000000000000JOL',
+    inflation: 'CUUR0000SA0',
+    insuranceCost: 'CUUR0000SETA02'
+  };
   private readonly apiUrl = environment.apiUrl;
+  private readonly userSettings = inject(UserSettingsService);
   rows = signal<ApplicantRow[]>([]);
   customPositions = signal<ApplicantPosition[]>([]);
   selectedPosition = signal<string>('');
-  positionStateFilter = signal<'active' | 'inactive' | 'historical' | 'report' | 'goals'>('active');
+  positionStateFilter = signal<'active' | 'inactive' | 'historical' | 'report' | 'goals' | 'market'>('active');
   historicalViewMode = signal<'applicants' | 'report'>('applicants');
   positionGroupFilter = signal<'office' | 'fleet'>('office');
   applicantGoals = signal<ApplicantGoal[]>([]);
@@ -1531,6 +2105,21 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   positionSettingsTargetGroup = signal<PositionGroup>('office');
   selectedApplicantId = signal<number | null>(null);
   applicantsSyncError = signal('');
+  marketLoading = signal(false);
+  marketError = signal('');
+  marketLastUpdated = signal('');
+  marketSnapshots = signal<BlsMarketSnapshot[]>([]);
+  marketAuditRows = signal<MarketAuditRow[]>([]);
+  marketPresentationMode = signal<MarketPresentationMode>('neon');
+  fleetOtrWeeklyMiles = signal(2800);
+  fleetOtrHoursPerWeek = signal(60);
+  fleetOtrBenefitsLoadPct = signal(18);
+  suggestedGoalMode = signal<SuggestedGoalMode>('balanced');
+  marketPresetKey = signal<string>('US');
+  marketSeriesDraft: Record<BlsMarketKey, string> = {
+    ...this.marketSeriesFallback
+  };
+  marketPresetOptions: MarketPresetOption[] = this.buildMarketPresets();
   private positionsRefreshTimer: any;
   private applicantsRefreshTimer: any;
   private attemptedLegacyImport = false;
@@ -1829,6 +2418,18 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     group: ScaleType.Ordinal,
     domain: ['#00d4ff', '#22c55e', '#a855f7', '#f59e0b', '#64748b']
   };
+  marketBoldScheme: Color = {
+    name: 'market-bold',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#00E5FF', '#00FFA3', '#7C4DFF', '#FF4D8D', '#FFC94D', '#00B8FF']
+  };
+  marketPieBoldScheme: Color = {
+    name: 'market-pie-bold',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#00E5FF', '#00FFA3', '#FF4D8D', '#FFC94D']
+  };
 
   tableScopeRows = computed(() => {
     const selectedPosition = this.selectedPosition();
@@ -1966,6 +2567,73 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
         : 0
     };
   });
+  marketPressureScore = computed(() => {
+    const demand = this.marketSnapshots().find((item) => item.key === 'laborDemand')?.changePct ?? 0;
+    const tightness = this.marketSnapshots().find((item) => item.key === 'laborTightness')?.changePct ?? 0;
+    const pay = this.marketSnapshots().find((item) => item.key === 'driverPay')?.changePct ?? 0;
+    // Positive values mean harder market -> increase top-of-funnel goals.
+    return (Number(demand) * 0.5) + (Number(tightness) * 0.35) + (Number(pay) * 0.15);
+  });
+  suggestedGoalPacks = computed<SuggestedGoalPack[]>(() => {
+    const rows = this.goalGroupRows().filter((row) => !this.isHistoricalApplicantRow(row));
+    const now = new Date();
+    const last90 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89);
+    const recent = rows.filter((row) => {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      return !!parsed && parsed >= last90 && parsed <= now;
+    });
+
+    const hires90 = recent.filter((row) => row.status === 'hired').length;
+    const interviews90 = recent.filter((row) => row.status === 'interview' || row.status === 'offer' || row.status === 'hired').length;
+    const applicants90 = recent.length;
+
+    const hiresMonthlyBaseline = Math.max(1, Math.round((hires90 / 90) * 30));
+    const pressureFactor = Math.max(0.75, Math.min(1.45, 1 + (this.marketPressureScore() / 100)));
+    const mode = this.suggestedGoalMode();
+    const modeFactor = mode === 'aggressive' ? 1.2 : mode === 'conservative' ? 0.85 : 1;
+    const hiresMonthly = Math.max(1, Math.round(hiresMonthlyBaseline * pressureFactor * modeFactor));
+
+    const baseInterviewRatio = applicants90 > 0 ? (interviews90 / applicants90) : 0.35;
+    const baseHireRatio = interviews90 > 0 ? (hires90 / interviews90) : 0.28;
+    const interviewRatio = Math.max(0.18, Math.min(0.55, baseInterviewRatio * (1 - (this.marketPressureScore() / 220))));
+    const hireRatio = Math.max(0.1, Math.min(0.45, baseHireRatio * (1 - (this.marketPressureScore() / 260))));
+
+    const interviewsMonthly = Math.max(1, Math.round(hiresMonthly / hireRatio));
+    const applicantsMonthly = Math.max(1, Math.round(interviewsMonthly / interviewRatio));
+
+    const confidence: 'high' | 'medium' | 'low' =
+      applicants90 >= 120 ? 'high'
+      : applicants90 >= 45 ? 'medium'
+      : 'low';
+    const rationale = `Based on last 90 days (${applicants90} applicants, ${interviews90} interviews, ${hires90} hires), trucking market pressure score ${this.marketPressureScore().toFixed(1)}, and ${mode} planning mode.`;
+
+    return [
+      {
+        period: 'weekly',
+        applicants: Math.max(1, Math.round(applicantsMonthly / 4)),
+        interviews: Math.max(1, Math.round(interviewsMonthly / 4)),
+        hires: Math.max(1, Math.round(hiresMonthly / 4)),
+        confidence,
+        rationale
+      },
+      {
+        period: 'monthly',
+        applicants: applicantsMonthly,
+        interviews: interviewsMonthly,
+        hires: hiresMonthly,
+        confidence,
+        rationale
+      },
+      {
+        period: 'yearly',
+        applicants: applicantsMonthly * 12,
+        interviews: interviewsMonthly * 12,
+        hires: hiresMonthly * 12,
+        confidence,
+        rationale
+      }
+    ];
+  });
   applicantGoalProgressRows = computed<ApplicantGoalProgressRow[]>(() => {
     const rows = this.goalGroupRows();
     return this.applicantGoals().map((goal) => {
@@ -2036,6 +2704,173 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     return `conic-gradient(#22c55e 0deg ${angle}deg, rgba(148,163,184,0.25) ${angle}deg 360deg)`;
   });
 
+  marketPipelineRows = computed(() => {
+    const targetGroup = this.positionGroupFilter();
+    return this.rows().filter((row) => {
+      if (this.isHistoricalApplicantRow(row)) return false;
+      const isFleet = this.isFleetPosition(row.position);
+      return targetGroup === 'fleet' ? isFleet : !isFleet;
+    });
+  });
+  marketPipelineCount = computed(() => this.marketPipelineRows().length);
+  marketMacroTrendSeries = computed<ChartSeries[]>(() =>
+    this.marketSnapshots()
+      .filter((item) => item.points.length > 0)
+      .map((item) => ({ name: item.label, series: item.points }))
+  );
+  marketPipelineVsDemandSeries = computed<ChartSeries[]>(() => {
+    const demand = this.marketSnapshots().find((item) => item.key === 'laborDemand');
+    if (!demand || demand.points.length === 0) return [];
+
+    const pipelineMonthMap = new Map<string, number>();
+    const pipelineQuarterMap = new Map<string, number>();
+    const pipelineYearMap = new Map<string, number>();
+    for (const row of this.marketPipelineRows()) {
+      const parsed = this.parseDateOnly(row.appliedDate);
+      if (!parsed) continue;
+      const year = parsed.getFullYear();
+      const month = parsed.getMonth() + 1;
+      const quarter = Math.floor((month - 1) / 3) + 1;
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+      const quarterKey = `${year}-Q${quarter}`;
+      const yearKey = `${year}`;
+      pipelineMonthMap.set(monthKey, (pipelineMonthMap.get(monthKey) ?? 0) + 1);
+      pipelineQuarterMap.set(quarterKey, (pipelineQuarterMap.get(quarterKey) ?? 0) + 1);
+      pipelineYearMap.set(yearKey, (pipelineYearMap.get(yearKey) ?? 0) + 1);
+    }
+
+    const demandSeries = demand.points.map((point) => ({
+      name: point.name,
+      value: point.value
+    }));
+    const pipelineSeries = demand.points.map((point) => ({
+      name: point.name,
+      value: this.resolvePipelineValueForDemandBucket(point.name, pipelineMonthMap, pipelineQuarterMap, pipelineYearMap)
+    }));
+
+    return [
+      { name: 'Applicant pipeline (monthly)', series: pipelineSeries },
+      { name: 'Labor demand (BLS)', series: demandSeries }
+    ];
+  });
+  marketPipelineVsDemandLabel = computed(() => {
+    const demand = this.marketSnapshots().find((item) => item.key === 'laborDemand');
+    const latestDemand = Number(demand?.latestValue ?? 0);
+    if (!latestDemand || latestDemand <= 0) return '—';
+    return (this.marketPipelineCount() / latestDemand).toFixed(2);
+  });
+  officeRegionInsights = computed<OfficeRegionInsightRow[]>(() => {
+    if (this.positionGroupFilter() !== 'office') return [];
+    const rows = this.marketPipelineRows();
+    if (!rows.length) return [];
+    const monthlySuggestion = this.suggestedGoalPacks().find((item) => item.period === 'monthly');
+    const baselineApplicants = Math.max(1, Number(monthlySuggestion?.applicants ?? 1));
+    const baselineInterviews = Math.max(1, Number(monthlySuggestion?.interviews ?? 1));
+    const baselineHires = Math.max(1, Number(monthlySuggestion?.hires ?? 1));
+    const pressure = this.marketPressureScore();
+    const regionCounts = new Map<string, number>();
+    for (const row of rows) {
+      const region = this.regionForState(row.state);
+      regionCounts.set(region, (regionCounts.get(region) ?? 0) + 1);
+    }
+    const total = rows.length;
+    return Array.from(regionCounts.entries())
+      .map(([region, applicants]) => {
+        const sharePct = total > 0 ? (applicants / total) * 100 : 0;
+        const scale = sharePct / 100;
+        const marketScale = Math.max(0.8, Math.min(1.4, 1 + pressure / 160));
+        const monthlyApplicantsTarget = Math.max(1, Math.round(baselineApplicants * scale * marketScale));
+        const monthlyInterviewsTarget = Math.max(1, Math.round(baselineInterviews * scale * marketScale));
+        const monthlyHiresTarget = Math.max(1, Math.round(baselineHires * scale * marketScale));
+        const posture: OfficeRegionInsightRow['posture'] =
+          sharePct >= 28 ? 'optimize'
+          : pressure >= 4 ? 'expand'
+          : 'hold';
+        return {
+          region,
+          applicants,
+          sharePct,
+          monthlyApplicantsTarget,
+          monthlyInterviewsTarget,
+          monthlyHiresTarget,
+          posture
+        };
+      })
+      .sort((a, b) => b.applicants - a.applicants || a.region.localeCompare(b.region));
+  });
+  officeRegionChartData = computed<ChartPoint[]>(() =>
+    this.officeRegionInsights().map((row) => ({ name: row.region, value: row.applicants }))
+  );
+  fleetDriverMarketHourly = computed(() => {
+    const value = this.marketSnapshots().find((item) => item.key === 'driverPay')?.latestValue;
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+    return 33.5;
+  });
+  fleetOtrPayTargets = computed<FleetOtrPayTargetRow[]>(() => {
+    const baseHourly = this.fleetDriverMarketHourly();
+    const weeklyMiles = Math.max(500, Number(this.fleetOtrWeeklyMiles() || 0));
+    const weeklyHours = Math.max(20, Number(this.fleetOtrHoursPerWeek() || 0));
+    const tiers: Array<{ tier: FleetOtrPayTargetRow['tier']; label: string; factor: number }> = [
+      { tier: 'entry', label: 'Entry OTR', factor: 0.92 },
+      { tier: 'standard', label: 'Standard OTR', factor: 1.0 },
+      { tier: 'premium', label: 'Premium OTR', factor: 1.14 }
+    ];
+    return tiers.map((item) => {
+      const hourly = baseHourly * item.factor;
+      const weeklyGross = hourly * weeklyHours;
+      const annualGross = weeklyGross * 52;
+      const cpm = weeklyGross / weeklyMiles;
+      return {
+        tier: item.tier,
+        label: item.label,
+        hourly,
+        weeklyGross,
+        annualGross,
+        cpm
+      };
+    });
+  });
+  fleetOtrFullyLoadedWeekly = computed(() => {
+    const standard = this.fleetOtrPayTargets().find((row) => row.tier === 'standard');
+    const benefitsLoad = Math.max(0, Number(this.fleetOtrBenefitsLoadPct() || 0));
+    if (!standard) return 0;
+    return standard.weeklyGross * (1 + benefitsLoad / 100);
+  });
+  marketMomentumChartData = computed<ChartPoint[]>(() => {
+    const order: BlsMarketKey[] = ['driverPay', 'laborDemand', 'laborTightness', 'inflation', 'insuranceCost'];
+    return order.map((key) => {
+      const row = this.marketSnapshots().find((item) => item.key === key);
+      const pct = Number(row?.changePct ?? 0);
+      const name = row?.label || key;
+      return { name, value: Number.isFinite(pct) ? Number(pct.toFixed(2)) : 0 };
+    });
+  });
+  marketIndicatorMixChartData = computed<ChartPoint[]>(() => {
+    const rows = this.marketSnapshots()
+      .map((row) => ({ name: row.label, value: Math.abs(Number(row.changePct ?? 0)) }))
+      .filter((row) => Number.isFinite(row.value) && row.value > 0);
+    if (!rows.length) return [];
+    const total = rows.reduce((sum, row) => sum + row.value, 0) || 1;
+    return rows.map((row) => ({ name: row.name, value: Number(((row.value / total) * 100).toFixed(1)) }));
+  });
+  marketAuditTrendSeries = computed<ChartSeries[]>(() => {
+    const records = [...this.marketAuditRows()]
+      .filter((row) => !!row.savedAt)
+      .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
+      .slice(-16);
+    if (!records.length) return [];
+    return [
+      {
+        name: 'Pipeline',
+        series: records.map((row) => ({ name: this.shortDateLabel(row.savedAt), value: Number(row.pipelineCount || 0) }))
+      },
+      {
+        name: 'Driver Pay',
+        series: records.map((row) => ({ name: this.shortDateLabel(row.savedAt), value: Number(row.driverPay || 0) }))
+      }
+    ];
+  });
+
   filteredRows = computed(() => {
     const term = this.search().trim().toLowerCase();
     const status = this.statusFilter();
@@ -2095,6 +2930,9 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       // no-op
     }
     this.restoreApplicantGoals();
+    this.restoreMarketSeriesDraft();
+    this.restoreMarketControlsFromLocal();
+    void this.restoreMarketStateFromDatabase();
 
     if (this.isLegacyImportDone()) {
       this.attemptedLegacyImport = true;
@@ -2289,10 +3127,165 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     return !!(match?.isActive ?? false);
   }
 
-  setPositionStateFilter(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals'): void {
+  setPositionStateFilter(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals' | 'market'): void {
     this.positionStateFilter.set(mode);
     this.selectedPosition.set(this.getDefaultPositionSelection(mode));
     if (mode === 'historical') this.historicalViewMode.set('applicants');
+    if (mode === 'market') void this.loadMarketIntelligence();
+  }
+
+  setMarketSeriesId(key: BlsMarketKey, value: string): void {
+    this.marketPresetKey.set('custom');
+    this.marketSeriesDraft = { ...this.marketSeriesDraft, [key]: String(value || '').trim().toUpperCase() };
+  }
+
+  async applyMarketPreset(presetKey: string): Promise<void> {
+    const key = String(presetKey || '').trim();
+    if (!key || key === 'custom') {
+      this.marketPresetKey.set('custom');
+      return;
+    }
+    const preset = this.marketPresetOptions.find((item) => item.key === key);
+    if (!preset) {
+      this.marketPresetKey.set('custom');
+      return;
+    }
+    this.marketPresetKey.set(preset.key);
+    this.marketSeriesDraft = { ...preset.seriesDraft };
+    await this.saveMarketSeriesDraft();
+  }
+
+  setSuggestedGoalMode(mode: SuggestedGoalMode): void {
+    this.suggestedGoalMode.set(mode);
+    void this.persistMarketControlsToStorageAndDatabase();
+  }
+
+  setFleetOtrWeeklyMiles(value: unknown): void {
+    const numeric = Number(value);
+    this.fleetOtrWeeklyMiles.set(Number.isFinite(numeric) && numeric > 0 ? numeric : 2800);
+    void this.persistMarketControlsToStorageAndDatabase();
+  }
+
+  setFleetOtrHoursPerWeek(value: unknown): void {
+    const numeric = Number(value);
+    this.fleetOtrHoursPerWeek.set(Number.isFinite(numeric) && numeric > 0 ? numeric : 60);
+    void this.persistMarketControlsToStorageAndDatabase();
+  }
+
+  setFleetOtrBenefitsLoadPct(value: unknown): void {
+    const numeric = Number(value);
+    this.fleetOtrBenefitsLoadPct.set(Number.isFinite(numeric) && numeric >= 0 ? numeric : 18);
+    void this.persistMarketControlsToStorageAndDatabase();
+  }
+
+  setMarketPresentationMode(mode: MarketPresentationMode): void {
+    this.marketPresentationMode.set(mode === 'executive' ? 'executive' : 'neon');
+    void this.persistMarketControlsToStorageAndDatabase();
+  }
+
+  async saveMarketSeriesDraft(): Promise<void> {
+    try {
+      localStorage.setItem(this.localMarketSeriesStorageKey, JSON.stringify(this.marketSeriesDraft));
+      localStorage.setItem(this.localMarketPresetStorageKey, this.marketPresetKey());
+      await firstValueFrom(this.userSettings.set(this.dbMarketSeriesSettingsKey, {
+        presetKey: this.marketPresetKey(),
+        seriesDraft: this.marketSeriesDraft
+      }));
+      await this.persistMarketControlsToStorageAndDatabase();
+      this.marketError.set('');
+      if (this.positionStateFilter() === 'market') {
+        void this.loadMarketIntelligence();
+      }
+    } catch {
+      this.marketError.set('Unable to save market series IDs locally.');
+    }
+  }
+
+  async loadMarketIntelligence(): Promise<void> {
+    const ids = Array.from(
+      new Set(
+        ([...Object.values(this.marketSeriesDraft), ...Object.values(this.marketSeriesFallback)] as string[])
+          .map((value) => String(value || '').trim())
+          .filter((value) => !!value)
+      )
+    );
+    if (!ids.length) {
+      this.marketError.set('Add at least one BLS series ID to load market intelligence.');
+      return;
+    }
+
+    const nowYear = new Date().getFullYear();
+    this.marketLoading.set(true);
+    this.marketError.set('');
+    try {
+      const response = await firstValueFrom(
+        this.http.post<{ ok?: boolean; message?: string; series?: unknown }>(`${this.apiUrl}/api/v1/integrations/bls/series`, {
+          seriesIds: ids,
+          startYear: String(nowYear - 5),
+          endYear: String(nowYear)
+        })
+      );
+
+      if (!response?.ok) {
+        this.marketSnapshots.set([]);
+        this.marketError.set(response?.message || 'Unable to load BLS series data.');
+        return;
+      }
+
+      const snapshots = this.buildMarketSnapshots(response?.series);
+      this.marketSnapshots.set(snapshots);
+      this.marketLastUpdated.set(new Date().toISOString());
+      await this.persistMarketSnapshotsToDatabase();
+      await this.appendMarketAuditEntryAndPersist();
+    } catch (err) {
+      const details = err instanceof HttpErrorResponse
+        ? String(err.error?.message || err.message || 'Request failed')
+        : 'Request failed';
+      this.marketError.set(`Unable to load BLS market data: ${details}`);
+      this.marketSnapshots.set([]);
+    } finally {
+      this.marketLoading.set(false);
+    }
+  }
+
+  marketSnapshotValue(key: BlsMarketKey): string {
+    const snapshot = this.marketSnapshots().find((item) => item.key === key);
+    return this.formatMarketNumber(snapshot?.latestValue ?? null);
+  }
+
+  marketSnapshotDelta(key: BlsMarketKey): string {
+    const snapshot = this.marketSnapshots().find((item) => item.key === key);
+    if (!snapshot) return 'No data';
+    if (snapshot.changePct === null || !Number.isFinite(snapshot.changePct)) return 'Insufficient history';
+    const trend = snapshot.changePct >= 0 ? 'up' : 'down';
+    return `${this.formatMarketChange(snapshot.changePct)} vs prior (${trend})`;
+  }
+
+  formatMarketNumber(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) return '—';
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  formatMarketChange(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) return '—';
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${value.toFixed(1)}%`;
+  }
+
+  formatCurrency(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) return '—';
+    return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+  }
+
+  formatCpm(value: number | null): string {
+    if (value === null || !Number.isFinite(value)) return '—';
+    return `${this.formatCurrency(value)}/mi`;
+  }
+
+  private shortDateLabel(iso: string): string {
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return iso;
+    return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
   }
 
   setPositionGroupFilter(mode: 'office' | 'fleet'): void {
@@ -2326,6 +3319,39 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     ]);
     this.editingGoalIds.update((ids) => (ids.includes(nextId) ? ids : [nextId, ...ids]));
     this.persistApplicantGoals();
+  }
+
+  applySuggestedGoal(period: GoalPeriod): void {
+    const suggestion = this.suggestedGoalPacks().find((item) => item.period === period);
+    if (!suggestion) return;
+    if (this.applicantGoals().length === 0) {
+      this.addApplicantGoal();
+    }
+    const targetId = this.applicantGoals()[0]?.id;
+    if (!targetId) return;
+
+    this.applicantGoals.update((list) =>
+      list.map((goal) =>
+        goal.id !== targetId
+          ? goal
+          : {
+              ...goal,
+              period,
+              targetApplicants: suggestion.applicants,
+              targetInterviews: suggestion.interviews,
+              targetHires: suggestion.hires,
+              notes: `System suggested from trucking market data. ${suggestion.rationale}`.trim(),
+              updatedAt: new Date().toISOString()
+            }
+      )
+    );
+    this.persistApplicantGoals();
+  }
+
+  confidenceLabel(confidence: 'high' | 'medium' | 'low'): string {
+    if (confidence === 'high') return 'High confidence';
+    if (confidence === 'medium') return 'Medium confidence';
+    return 'Low confidence';
   }
 
   updateApplicantGoal(id: number, field: keyof ApplicantGoal, value: unknown): void {
@@ -2950,6 +3976,18 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     } catch {
       // no-op
     }
+    void this.persistApplicantGoalsToDatabase();
+  }
+
+  private async persistApplicantGoalsToDatabase(): Promise<void> {
+    try {
+      await firstValueFrom(this.userSettings.set(this.dbApplicantGoalsSettingsKey, {
+        goals: this.applicantGoals(),
+        savedAt: new Date().toISOString()
+      }));
+    } catch {
+      // no-op
+    }
   }
 
   private percentProgress(actual: number, target: number): number {
@@ -3163,10 +4201,402 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
     if (!valid) this.selectedPosition.set(this.getDefaultPositionSelection());
   }
 
-  private getDefaultPositionSelection(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals' = this.positionStateFilter()): string {
-    if (mode === 'historical' || mode === 'report' || mode === 'goals') return 'all';
+  private getDefaultPositionSelection(mode: 'active' | 'inactive' | 'historical' | 'report' | 'goals' | 'market' = this.positionStateFilter()): string {
+    if (mode === 'historical' || mode === 'report' || mode === 'goals' || mode === 'market') return 'all';
     const firstRealPosition = this.positionTabs().find((tab) => tab.toLowerCase() !== 'all');
     return firstRealPosition || 'all';
+  }
+
+  private restoreMarketSeriesDraft(): void {
+    try {
+      const raw = localStorage.getItem(this.localMarketSeriesStorageKey);
+      const parsed = raw ? JSON.parse(raw) as Partial<Record<BlsMarketKey, string>> : {};
+      const localPreset = String(localStorage.getItem(this.localMarketPresetStorageKey) || '').trim();
+      const next: Record<BlsMarketKey, string> = {
+        driverPay: String(parsed?.driverPay || this.marketSeriesFallback.driverPay).trim().toUpperCase(),
+        laborTightness: String(parsed?.laborTightness || this.marketSeriesFallback.laborTightness).trim().toUpperCase(),
+        laborDemand: String(parsed?.laborDemand || this.marketSeriesFallback.laborDemand).trim().toUpperCase(),
+        inflation: String(parsed?.inflation || this.marketSeriesFallback.inflation).trim().toUpperCase(),
+        insuranceCost: String(parsed?.insuranceCost || this.marketSeriesFallback.insuranceCost).trim().toUpperCase()
+      };
+      if (next.driverPay === 'OEUN0000000533032') next.driverPay = this.marketSeriesFallback.driverPay;
+      if (next.laborDemand === 'JTU48009900JOR') next.laborDemand = this.marketSeriesFallback.laborDemand;
+      this.marketSeriesDraft = next;
+      localStorage.setItem(this.localMarketSeriesStorageKey, JSON.stringify(this.marketSeriesDraft));
+      if (localPreset) this.marketPresetKey.set(localPreset);
+    } catch {
+      this.marketSeriesDraft = { ...this.marketSeriesFallback };
+      this.marketPresetKey.set('US');
+    }
+  }
+
+  private restoreMarketControlsFromLocal(): void {
+    try {
+      const raw = localStorage.getItem(this.localMarketControlsStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        suggestedGoalMode?: SuggestedGoalMode;
+        marketPresentationMode?: MarketPresentationMode;
+        fleetOtrWeeklyMiles?: number;
+        fleetOtrHoursPerWeek?: number;
+        fleetOtrBenefitsLoadPct?: number;
+      };
+      if (parsed?.suggestedGoalMode === 'aggressive' || parsed?.suggestedGoalMode === 'balanced' || parsed?.suggestedGoalMode === 'conservative') {
+        this.suggestedGoalMode.set(parsed.suggestedGoalMode);
+      }
+      if (parsed?.marketPresentationMode === 'executive' || parsed?.marketPresentationMode === 'neon') {
+        this.marketPresentationMode.set(parsed.marketPresentationMode);
+      }
+      if (Number.isFinite(Number(parsed?.fleetOtrWeeklyMiles))) this.fleetOtrWeeklyMiles.set(Number(parsed?.fleetOtrWeeklyMiles));
+      if (Number.isFinite(Number(parsed?.fleetOtrHoursPerWeek))) this.fleetOtrHoursPerWeek.set(Number(parsed?.fleetOtrHoursPerWeek));
+      if (Number.isFinite(Number(parsed?.fleetOtrBenefitsLoadPct))) this.fleetOtrBenefitsLoadPct.set(Number(parsed?.fleetOtrBenefitsLoadPct));
+    } catch {
+      // no-op
+    }
+  }
+
+  private async restoreMarketStateFromDatabase(): Promise<void> {
+    try {
+      const savedSeries = await firstValueFrom(this.userSettings.get(this.dbMarketSeriesSettingsKey));
+      if (savedSeries && typeof savedSeries === 'object') {
+        const envelope = savedSeries as { presetKey?: string; seriesDraft?: Partial<Record<BlsMarketKey, string>> };
+        const parsed = (envelope?.seriesDraft && typeof envelope.seriesDraft === 'object'
+          ? envelope.seriesDraft
+          : savedSeries) as Partial<Record<BlsMarketKey, string>>;
+        this.marketSeriesDraft = {
+          driverPay: String(parsed.driverPay || this.marketSeriesDraft.driverPay).trim().toUpperCase(),
+          laborTightness: String(parsed.laborTightness || this.marketSeriesDraft.laborTightness).trim().toUpperCase(),
+          laborDemand: String(parsed.laborDemand || this.marketSeriesDraft.laborDemand).trim().toUpperCase(),
+          inflation: String(parsed.inflation || this.marketSeriesDraft.inflation).trim().toUpperCase(),
+          insuranceCost: String(parsed.insuranceCost || this.marketSeriesDraft.insuranceCost).trim().toUpperCase()
+        };
+        const presetKey = String(envelope?.presetKey || '').trim();
+        if (presetKey) this.marketPresetKey.set(presetKey);
+        localStorage.setItem(this.localMarketSeriesStorageKey, JSON.stringify(this.marketSeriesDraft));
+        localStorage.setItem(this.localMarketPresetStorageKey, this.marketPresetKey());
+      }
+    } catch {
+      // no-op
+    }
+
+    try {
+      const savedSnapshot = await firstValueFrom(this.userSettings.get(this.dbMarketSnapshotSettingsKey));
+      const snapshotRows = Array.isArray(savedSnapshot?.snapshots) ? savedSnapshot.snapshots as BlsMarketSnapshot[] : [];
+      if (snapshotRows.length > 0) {
+        this.marketSnapshots.set(snapshotRows);
+      }
+      const savedAt = String(savedSnapshot?.savedAt || '').trim();
+      if (savedAt) {
+        this.marketLastUpdated.set(savedAt);
+      }
+    } catch {
+      // no-op
+    }
+
+    try {
+      const savedControls = await firstValueFrom(this.userSettings.get(this.dbMarketControlsSettingsKey));
+      if (savedControls && typeof savedControls === 'object') {
+        const controls = savedControls as {
+          suggestedGoalMode?: SuggestedGoalMode;
+          marketPresentationMode?: MarketPresentationMode;
+          fleetOtrWeeklyMiles?: number;
+          fleetOtrHoursPerWeek?: number;
+          fleetOtrBenefitsLoadPct?: number;
+        };
+        if (controls.suggestedGoalMode === 'aggressive' || controls.suggestedGoalMode === 'balanced' || controls.suggestedGoalMode === 'conservative') {
+          this.suggestedGoalMode.set(controls.suggestedGoalMode);
+        }
+        if (controls.marketPresentationMode === 'executive' || controls.marketPresentationMode === 'neon') {
+          this.marketPresentationMode.set(controls.marketPresentationMode);
+        }
+        if (Number.isFinite(Number(controls.fleetOtrWeeklyMiles))) this.fleetOtrWeeklyMiles.set(Number(controls.fleetOtrWeeklyMiles));
+        if (Number.isFinite(Number(controls.fleetOtrHoursPerWeek))) this.fleetOtrHoursPerWeek.set(Number(controls.fleetOtrHoursPerWeek));
+        if (Number.isFinite(Number(controls.fleetOtrBenefitsLoadPct))) this.fleetOtrBenefitsLoadPct.set(Number(controls.fleetOtrBenefitsLoadPct));
+        localStorage.setItem(this.localMarketControlsStorageKey, JSON.stringify({
+          suggestedGoalMode: this.suggestedGoalMode(),
+          marketPresentationMode: this.marketPresentationMode(),
+          fleetOtrWeeklyMiles: this.fleetOtrWeeklyMiles(),
+          fleetOtrHoursPerWeek: this.fleetOtrHoursPerWeek(),
+          fleetOtrBenefitsLoadPct: this.fleetOtrBenefitsLoadPct()
+        }));
+      }
+    } catch {
+      // no-op
+    }
+
+    try {
+      const savedGoals = await firstValueFrom(this.userSettings.get(this.dbApplicantGoalsSettingsKey));
+      const rows = Array.isArray(savedGoals) ? savedGoals : Array.isArray(savedGoals?.goals) ? savedGoals.goals : [];
+      if (rows.length > 0) {
+        this.applicantGoals.set(rows.slice(0, 1));
+      }
+    } catch {
+      // no-op
+    }
+
+    try {
+      const savedAudit = await firstValueFrom(this.userSettings.get(this.dbMarketAuditSettingsKey));
+      const rows = Array.isArray(savedAudit?.records) ? savedAudit.records : Array.isArray(savedAudit) ? savedAudit : [];
+      if (rows.length > 0) {
+        this.marketAuditRows.set(
+          rows
+            .map((item: any) => ({
+              savedAt: String(item?.savedAt || ''),
+              presetKey: String(item?.presetKey || ''),
+              positionGroup: item?.positionGroup === 'fleet' ? 'fleet' : 'office',
+              suggestedMode: item?.suggestedMode === 'aggressive' || item?.suggestedMode === 'conservative' ? item.suggestedMode : 'balanced',
+              pipelineCount: Number(item?.pipelineCount || 0),
+              driverPay: this.toBlsNumber(item?.driverPay),
+              laborDemand: this.toBlsNumber(item?.laborDemand),
+              laborTightness: this.toBlsNumber(item?.laborTightness),
+              inflation: this.toBlsNumber(item?.inflation),
+              insuranceCost: this.toBlsNumber(item?.insuranceCost)
+            }))
+            .filter((item: MarketAuditRow) => !!item.savedAt)
+            .sort((a: MarketAuditRow, b: MarketAuditRow) => b.savedAt.localeCompare(a.savedAt))
+            .slice(0, 200)
+        );
+      }
+    } catch {
+      // no-op
+    }
+  }
+
+  private async persistMarketSnapshotsToDatabase(): Promise<void> {
+    try {
+      await firstValueFrom(this.userSettings.set(this.dbMarketSnapshotSettingsKey, {
+        savedAt: new Date().toISOString(),
+        snapshots: this.marketSnapshots(),
+        seriesDraft: this.marketSeriesDraft
+      }));
+    } catch {
+      // no-op
+    }
+  }
+
+  private async persistMarketControlsToStorageAndDatabase(): Promise<void> {
+    const payload = {
+      suggestedGoalMode: this.suggestedGoalMode(),
+      marketPresentationMode: this.marketPresentationMode(),
+      fleetOtrWeeklyMiles: this.fleetOtrWeeklyMiles(),
+      fleetOtrHoursPerWeek: this.fleetOtrHoursPerWeek(),
+      fleetOtrBenefitsLoadPct: this.fleetOtrBenefitsLoadPct()
+    };
+    try {
+      localStorage.setItem(this.localMarketControlsStorageKey, JSON.stringify(payload));
+    } catch {
+      // no-op
+    }
+    try {
+      await firstValueFrom(this.userSettings.set(this.dbMarketControlsSettingsKey, payload));
+    } catch {
+      // no-op
+    }
+  }
+
+  private async appendMarketAuditEntryAndPersist(): Promise<void> {
+    const lookup = (key: BlsMarketKey) => this.marketSnapshots().find((item) => item.key === key)?.latestValue ?? null;
+    const entry: MarketAuditRow = {
+      savedAt: new Date().toISOString(),
+      presetKey: this.marketPresetKey(),
+      positionGroup: this.positionGroupFilter(),
+      suggestedMode: this.suggestedGoalMode(),
+      pipelineCount: this.marketPipelineCount(),
+      driverPay: lookup('driverPay'),
+      laborDemand: lookup('laborDemand'),
+      laborTightness: lookup('laborTightness'),
+      inflation: lookup('inflation'),
+      insuranceCost: lookup('insuranceCost')
+    };
+    const next = [entry, ...this.marketAuditRows()].slice(0, 200);
+    this.marketAuditRows.set(next);
+    try {
+      await firstValueFrom(this.userSettings.set(this.dbMarketAuditSettingsKey, {
+        savedAt: new Date().toISOString(),
+        records: next
+      }));
+    } catch {
+      // no-op
+    }
+  }
+
+  private buildMarketSnapshots(rawSeries: unknown): BlsMarketSnapshot[] {
+    const list = Array.isArray(rawSeries) ? rawSeries : [];
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const item of list) {
+      const row = item as Record<string, unknown>;
+      const id = String(row['seriesID'] ?? row['seriesId'] ?? '').trim();
+      if (!id) continue;
+      byId.set(id.toUpperCase(), row);
+    }
+
+    const defs: Array<{ key: BlsMarketKey; label: string }> = [
+      { key: 'driverPay', label: 'Driver Pay Benchmark' },
+      { key: 'laborTightness', label: 'Labor Tightness' },
+      { key: 'laborDemand', label: 'Macro Labor Demand' },
+      { key: 'inflation', label: 'Inflation Context' },
+      { key: 'insuranceCost', label: 'Insurance Cost Pressure' }
+    ];
+
+    return defs.map((def) => {
+      const requestedId = String(this.marketSeriesDraft[def.key] || '').trim().toUpperCase();
+      const fallbackId = String(this.marketSeriesFallback[def.key] || '').trim().toUpperCase();
+      const requestedSource = byId.get(requestedId);
+      const fallbackSource = byId.get(fallbackId);
+      let normalized = this.normalizeSeriesPoints(requestedSource);
+      let sourceId = requestedId;
+      if (normalized.length === 0 && fallbackId && fallbackId !== requestedId) {
+        const fallbackNormalized = this.normalizeSeriesPoints(fallbackSource);
+        if (fallbackNormalized.length > 0) {
+          normalized = fallbackNormalized;
+          sourceId = fallbackId;
+        }
+      }
+
+      const latest = normalized[0] ?? null;
+      const prior = normalized[1] ?? null;
+      const changePct = latest && prior && prior.value !== 0
+        ? ((latest.value - prior.value) / Math.abs(prior.value)) * 100
+        : null;
+
+      const points = normalized
+        .slice(0, 60)
+        .reverse()
+        .map((entry) => ({
+          name: entry.bucket,
+          value: entry.value
+        }));
+
+      return {
+        key: def.key,
+        label: def.label,
+        seriesId: sourceId,
+        latestValue: latest?.value ?? null,
+        latestLabel: latest?.label ?? '—',
+        priorValue: prior?.value ?? null,
+        changePct,
+        points
+      };
+    });
+  }
+
+  private toBlsNumber(value: unknown): number | null {
+    const parsed = Number(String(value ?? '').replace(/,/g, '').trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private buildMarketPresets(): MarketPresetOption[] {
+    const base = this.marketSeriesFallback;
+    const states: Array<{ code: string; name: string; fips: string }> = [
+      { code: 'AL', name: 'Alabama', fips: '01' }, { code: 'AK', name: 'Alaska', fips: '02' },
+      { code: 'AZ', name: 'Arizona', fips: '04' }, { code: 'AR', name: 'Arkansas', fips: '05' },
+      { code: 'CA', name: 'California', fips: '06' }, { code: 'CO', name: 'Colorado', fips: '08' },
+      { code: 'CT', name: 'Connecticut', fips: '09' }, { code: 'DE', name: 'Delaware', fips: '10' },
+      { code: 'DC', name: 'District of Columbia', fips: '11' }, { code: 'FL', name: 'Florida', fips: '12' },
+      { code: 'GA', name: 'Georgia', fips: '13' }, { code: 'HI', name: 'Hawaii', fips: '15' },
+      { code: 'ID', name: 'Idaho', fips: '16' }, { code: 'IL', name: 'Illinois', fips: '17' },
+      { code: 'IN', name: 'Indiana', fips: '18' }, { code: 'IA', name: 'Iowa', fips: '19' },
+      { code: 'KS', name: 'Kansas', fips: '20' }, { code: 'KY', name: 'Kentucky', fips: '21' },
+      { code: 'LA', name: 'Louisiana', fips: '22' }, { code: 'ME', name: 'Maine', fips: '23' },
+      { code: 'MD', name: 'Maryland', fips: '24' }, { code: 'MA', name: 'Massachusetts', fips: '25' },
+      { code: 'MI', name: 'Michigan', fips: '26' }, { code: 'MN', name: 'Minnesota', fips: '27' },
+      { code: 'MS', name: 'Mississippi', fips: '28' }, { code: 'MO', name: 'Missouri', fips: '29' },
+      { code: 'MT', name: 'Montana', fips: '30' }, { code: 'NE', name: 'Nebraska', fips: '31' },
+      { code: 'NV', name: 'Nevada', fips: '32' }, { code: 'NH', name: 'New Hampshire', fips: '33' },
+      { code: 'NJ', name: 'New Jersey', fips: '34' }, { code: 'NM', name: 'New Mexico', fips: '35' },
+      { code: 'NY', name: 'New York', fips: '36' }, { code: 'NC', name: 'North Carolina', fips: '37' },
+      { code: 'ND', name: 'North Dakota', fips: '38' }, { code: 'OH', name: 'Ohio', fips: '39' },
+      { code: 'OK', name: 'Oklahoma', fips: '40' }, { code: 'OR', name: 'Oregon', fips: '41' },
+      { code: 'PA', name: 'Pennsylvania', fips: '42' }, { code: 'RI', name: 'Rhode Island', fips: '44' },
+      { code: 'SC', name: 'South Carolina', fips: '45' }, { code: 'SD', name: 'South Dakota', fips: '46' },
+      { code: 'TN', name: 'Tennessee', fips: '47' }, { code: 'TX', name: 'Texas', fips: '48' },
+      { code: 'UT', name: 'Utah', fips: '49' }, { code: 'VT', name: 'Vermont', fips: '50' },
+      { code: 'VA', name: 'Virginia', fips: '51' }, { code: 'WA', name: 'Washington', fips: '53' },
+      { code: 'WV', name: 'West Virginia', fips: '54' }, { code: 'WI', name: 'Wisconsin', fips: '55' },
+      { code: 'WY', name: 'Wyoming', fips: '56' }
+    ];
+
+    const national: MarketPresetOption = {
+      key: 'US',
+      label: 'United States (National)',
+      seriesDraft: { ...base }
+    };
+    const allStatesNational: MarketPresetOption = {
+      key: 'ALL_STATES',
+      label: 'All States (National Benchmarks)',
+      seriesDraft: { ...base }
+    };
+
+    const statePresets = states.map((state) => ({
+      key: `STATE_${state.code}`,
+      label: `${state.name} (${state.code})`,
+      seriesDraft: {
+        ...base,
+        laborTightness: `LAUST${state.fips}000000000003`
+      }
+    }));
+
+    return [national, allStatesNational, ...statePresets];
+  }
+
+  private resolvePipelineValueForDemandBucket(
+    bucket: string,
+    monthly: Map<string, number>,
+    quarterly: Map<string, number>,
+    yearly: Map<string, number>
+  ): number {
+    const key = String(bucket || '').trim();
+    if (/^\d{4}-\d{2}$/.test(key)) return monthly.get(key) ?? 0;
+    if (/^\d{4}-Q[1-4]$/i.test(key)) return quarterly.get(key.toUpperCase()) ?? 0;
+    if (/^\d{4}$/.test(key)) return yearly.get(key) ?? 0;
+    return monthly.get(key) ?? quarterly.get(key.toUpperCase()) ?? yearly.get(key) ?? 0;
+  }
+
+  private toPeriodSortValue(year: number, period: string): number {
+    const monthMatch = /^M(\d{2})$/i.exec(period);
+    if (monthMatch) {
+      const month = Number(monthMatch[1]);
+      if (month >= 1 && month <= 12) return Date.UTC(year, month - 1, 1);
+      if (month === 13) return Date.UTC(year, 11, 31);
+    }
+    const quarterMatch = /^Q([1-4])$/i.exec(period);
+    if (quarterMatch) {
+      const q = Number(quarterMatch[1]);
+      return Date.UTC(year, (q - 1) * 3, 1);
+    }
+    return Date.UTC(year, 0, 1);
+  }
+
+  private toPeriodBucket(year: number, period: string): string {
+    const monthMatch = /^M(\d{2})$/i.exec(period);
+    if (monthMatch) {
+      const month = Number(monthMatch[1]);
+      if (month >= 1 && month <= 12) return `${year}-${String(month).padStart(2, '0')}`;
+      if (month === 13) return `${year}`;
+    }
+    const quarterMatch = /^Q([1-4])$/i.exec(period);
+    if (quarterMatch) return `${year}-Q${quarterMatch[1]}`;
+    return `${year}`;
+  }
+
+  private normalizeSeriesPoints(source: Record<string, unknown> | undefined): Array<{ value: number; label: string; bucket: string; sortValue: number }> {
+    const rows = Array.isArray(source?.['data']) ? source['data'] as Array<Record<string, unknown>> : [];
+    return rows
+      .map((entry) => {
+        const value = this.toBlsNumber(entry['value']);
+        const year = Number(String(entry['year'] ?? '').trim());
+        const period = String(entry['period'] ?? '').trim().toUpperCase();
+        const periodName = String(entry['periodName'] ?? period).trim();
+        if (value === null || !Number.isFinite(year)) return null;
+        return {
+          value,
+          label: `${periodName} ${year}`,
+          bucket: this.toPeriodBucket(year, period),
+          sortValue: this.toPeriodSortValue(year, period)
+        };
+      })
+      .filter((entry): entry is { value: number; label: string; bucket: string; sortValue: number } => !!entry)
+      .sort((a, b) => b.sortValue - a.sortValue);
   }
 
   private ensureSelectedApplicantValid(): void {
@@ -3186,6 +4616,20 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
       return '';
     }
     return String(value ?? '').trim();
+  }
+
+  private regionForState(stateRaw: unknown): string {
+    const state = String(stateRaw ?? '').trim().toUpperCase();
+    if (!state) return 'Unknown';
+    const northeast = new Set(['CT', 'ME', 'MA', 'NH', 'RI', 'VT', 'NJ', 'NY', 'PA']);
+    const midwest = new Set(['IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD']);
+    const south = new Set(['DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'DC', 'WV', 'AL', 'KY', 'MS', 'TN', 'AR', 'LA', 'OK', 'TX']);
+    const west = new Set(['AZ', 'CO', 'ID', 'MT', 'NV', 'NM', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA']);
+    if (northeast.has(state)) return 'Northeast';
+    if (midwest.has(state)) return 'Midwest';
+    if (south.has(state)) return 'South';
+    if (west.has(state)) return 'West';
+    return 'Unknown';
   }
 
   getPositionColor(positionName: unknown): string | null {

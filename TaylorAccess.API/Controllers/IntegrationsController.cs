@@ -13,6 +13,8 @@ public class IntegrationsController : ControllerBase
 {
     private const string DefaultIndeedGraphQlUrl = "https://apis.indeed.com/graphql";
     private const string DefaultIndeedTokenUrl = "https://apis.indeed.com/oauth/v2/tokens";
+    private const string DefaultBlsApiUrl = "https://api.bls.gov/publicAPI/v2/timeseries/data/";
+    private const string DefaultBlsTruckDriverSeriesId = "OEUN0000000533032";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<IntegrationsController> _logger;
@@ -170,6 +172,47 @@ public class IntegrationsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("bls/test")]
+    public async Task<IActionResult> TestBlsConnection([FromBody] BlsTestRequest request)
+    {
+        var now = DateTime.UtcNow;
+        var year = now.Year.ToString();
+        var seriesId = string.IsNullOrWhiteSpace(request.SeriesId) ? DefaultBlsTruckDriverSeriesId : request.SeriesId.Trim();
+        var seriesRequest = new BlsSeriesRequest(
+            request.ApiBaseUrl,
+            request.ApiKey,
+            new[] { seriesId },
+            year,
+            year,
+            false,
+            false,
+            false);
+        var result = await ExecuteBlsRequestAsync(seriesRequest, "bls-test");
+        return Ok(result);
+    }
+
+    [HttpPost("bls/series")]
+    public async Task<IActionResult> QueryBlsSeries([FromBody] BlsSeriesRequest request)
+    {
+        if (request.SeriesIds is null || request.SeriesIds.Length == 0)
+            return BadRequest(new { error = "Provide at least one BLS series ID." });
+
+        var cleanSeriesIds = request.SeriesIds
+            .Select(v => (v ?? string.Empty).Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (cleanSeriesIds.Length == 0)
+            return BadRequest(new { error = "Provide at least one valid BLS series ID." });
+
+        var normalized = request with
+        {
+            SeriesIds = cleanSeriesIds
+        };
+        var result = await ExecuteBlsRequestAsync(normalized, "bls-series");
+        return Ok(result);
+    }
+
     private async Task<IActionResult> ExecuteJobMutationAsync(
         IndeedJobMutationRequest request,
         string operationName,
@@ -302,6 +345,126 @@ public class IntegrationsController : ControllerBase
         }
     }
 
+    private async Task<object> ExecuteBlsRequestAsync(BlsSeriesRequest request, string operationName)
+    {
+        var apiBaseUrl = string.IsNullOrWhiteSpace(request.ApiBaseUrl)
+            ? DefaultBlsApiUrl
+            : request.ApiBaseUrl.Trim();
+
+        if (!Uri.TryCreate(apiBaseUrl, UriKind.Absolute, out var targetUri) || targetUri.Scheme != Uri.UriSchemeHttps)
+            return new { ok = false, statusCode = 0, operation = operationName, message = "Invalid BLS API URL. HTTPS is required." };
+
+        var startYear = NormalizeYear(request.StartYear, DateTime.UtcNow.Year - 1);
+        var endYear = NormalizeYear(request.EndYear, DateTime.UtcNow.Year);
+        if (endYear < startYear)
+            (startYear, endYear) = (endYear, startYear);
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["seriesid"] = request.SeriesIds,
+            ["startyear"] = startYear.ToString(),
+            ["endyear"] = endYear.ToString(),
+            ["catalog"] = request.Catalog ?? false,
+            ["calculations"] = request.Calculations ?? false,
+            ["annualaverage"] = request.AnnualAverage ?? false
+        };
+        if (!string.IsNullOrWhiteSpace(request.ApiKey))
+            payload["registrationkey"] = request.ApiKey.Trim();
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(25);
+
+        using var outgoing = new HttpRequestMessage(HttpMethod.Post, targetUri);
+        outgoing.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        outgoing.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        try
+        {
+            using var response = await client.SendAsync(outgoing);
+            var body = await response.Content.ReadAsStringAsync();
+            var statusCode = (int)response.StatusCode;
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+
+            object? results = null;
+            object? series = null;
+            object? messages = null;
+            string? upstreamStatus = null;
+            int seriesCount = 0;
+            bool blsSuccess = false;
+            string? message = null;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("status", out var statusNode))
+                {
+                    upstreamStatus = statusNode.GetString();
+                    blsSuccess = string.Equals(upstreamStatus, "REQUEST_SUCCEEDED", StringComparison.OrdinalIgnoreCase);
+                }
+                if (root.TryGetProperty("message", out var msgNode))
+                {
+                    messages = JsonElementToObject(msgNode);
+                    if (msgNode.ValueKind == JsonValueKind.Array && msgNode.GetArrayLength() > 0)
+                        message = msgNode[0].GetString();
+                }
+                if (root.TryGetProperty("Results", out var resultsNode))
+                {
+                    results = JsonElementToObject(resultsNode);
+                    if (resultsNode.ValueKind == JsonValueKind.Object && resultsNode.TryGetProperty("series", out var seriesNode))
+                    {
+                        series = JsonElementToObject(seriesNode);
+                        if (seriesNode.ValueKind == JsonValueKind.Array)
+                            seriesCount = seriesNode.GetArrayLength();
+                    }
+                }
+            }
+            catch
+            {
+                message = string.IsNullOrWhiteSpace(body) ? "Non-JSON response from BLS endpoint." : body[..Math.Min(body.Length, 400)];
+            }
+
+            return new
+            {
+                ok = response.IsSuccessStatusCode && blsSuccess,
+                statusCode,
+                operation = operationName,
+                message,
+                contentType,
+                upstreamStatus,
+                seriesCount,
+                startYear,
+                endYear,
+                results,
+                series,
+                messages
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "BLS operation {Operation} failed for {Target}", operationName, targetUri.Host);
+            return new
+            {
+                ok = false,
+                statusCode = 502,
+                operation = operationName,
+                message = "Unable to reach BLS API endpoint.",
+                detail = ex.Message
+            };
+        }
+    }
+
+    private static int NormalizeYear(string? raw, int fallback)
+    {
+        if (int.TryParse((raw ?? string.Empty).Trim(), out var parsed))
+        {
+            if (parsed < 1900) return 1900;
+            if (parsed > 2100) return 2100;
+            return parsed;
+        }
+        return fallback;
+    }
+
     private static Dictionary<string, object?> JsonElementToDictionary(JsonElement element)
     {
         var parsed = JsonElementToObject(element);
@@ -400,4 +563,21 @@ public record IndeedJobLookupRequest(
     public IndeedGraphQlRequest ToGraphQlRequest(string query, object variables) =>
         new(ApiBaseUrl, AuthMode, BearerToken, ApiKey, PartnerId, ClientId, query, variables);
 }
+
+public record BlsTestRequest(
+    string? ApiBaseUrl,
+    string? ApiKey,
+    string? SeriesId
+);
+
+public record BlsSeriesRequest(
+    string? ApiBaseUrl,
+    string? ApiKey,
+    string[] SeriesIds,
+    string? StartYear,
+    string? EndYear,
+    bool? Catalog,
+    bool? Calculations,
+    bool? AnnualAverage
+);
 
