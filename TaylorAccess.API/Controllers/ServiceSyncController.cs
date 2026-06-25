@@ -85,8 +85,7 @@ public class ServiceSyncController : ControllerBase
             {
                 u.Id, u.Name, u.Alias, u.Email, u.Phone, u.Role, u.Status,
                 u.Avatar, u.JobTitle, u.OrganizationId, u.DepartmentId,
-                u.City, u.Country, u.LastLoginAt, u.CreatedAt,
-                u.PasswordHash
+                u.City, u.Country, u.LastLoginAt, u.CreatedAt
             })
             .ToListAsync();
 
