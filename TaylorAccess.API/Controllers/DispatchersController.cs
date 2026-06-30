@@ -62,7 +62,9 @@ public class DispatchersController : ControllerBase
                 allowedOrgIds.Add(user.OrganizationId.Value);
 
             if (allowedOrgIds.Count == 0)
-                return BadRequest(new { error = "User must belong to an organization" });
+            {
+                // Cross-app users (e.g. accounting SSO) may lack org membership but still need dispatch roster.
+            }
         }
 
         var (dispatchers, dispatcherSource) = await GetDispatchersByRoleIdAsync(4);
@@ -96,12 +98,10 @@ public class DispatchersController : ControllerBase
             });
         }
 
+        // Dispatch section-data is shared read-only: Landmark roster is not scoped by org membership.
         var driverQuery = _context.Drivers
             .AsNoTracking()
             .Where(d => !d.IsDeleted);
-
-        if (!canBypassOrgFilter)
-            driverQuery = driverQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
 
         var drivers = await driverQuery
             .Select(d => new DriverWire
@@ -142,7 +142,7 @@ public class DispatchersController : ControllerBase
         var dbAssignmentMap = await TryGetDriverDispatchAssignmentMapAsync(drivers.Select(d => d.Id));
 
         var fleetLookupOrgIds = new HashSet<int>(allowedOrgIds);
-        if (isCurrentUserDispatcherRole && !canBypassOrgFilter)
+        if (isCurrentUserDispatcherRole && !canBypassOrgFilter && allowedOrgIds.Count > 0)
         {
             var driverOrgIds = await _context.Drivers
                 .AsNoTracking()
@@ -156,12 +156,12 @@ public class DispatchersController : ControllerBase
         }
 
         var fleetQuery = _context.Fleets.AsNoTracking().AsQueryable();
-        if (!canBypassOrgFilter)
+        if (!canBypassOrgFilter && allowedOrgIds.Count > 0)
             fleetQuery = fleetQuery.Where(f => fleetLookupOrgIds.Contains(f.OrganizationId));
         var fleetNameById = await fleetQuery.ToDictionaryAsync(f => f.Id, f => f.Name);
 
         var fleetDriverQuery = _context.FleetDrivers.AsNoTracking().AsQueryable();
-        if (!canBypassOrgFilter)
+        if (!canBypassOrgFilter && allowedOrgIds.Count > 0)
             fleetDriverQuery = fleetDriverQuery.Where(fd => fleetLookupOrgIds.Contains(fd.Fleet!.OrganizationId));
         var fleetDriverRows = await fleetDriverQuery
             .Select(fd => new { fd.DriverId, fd.FleetId })
