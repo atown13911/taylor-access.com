@@ -202,6 +202,7 @@
         <thead>
           <tr>
             <th>Trailer #</th>
+            <th>Photos</th>
             <th>Type</th>
             <th>Vendor</th>
             <th>State</th>
@@ -219,6 +220,24 @@
           @for (p of filteredTrailerPermits(); track $index) {
             <tr class="tp-row-clickable" (click)="openTrailerDrawer(p)">
               <td class="tp-mono">{{ p.permitNumber }}</td>
+              <td class="tp-trailer-photo-cell">
+                <div class="tp-trailer-photo-stack">
+                  @if (getTrailerPhotoThumb(p)) {
+                    <img [src]="getTrailerPhotoThumb(p)!" alt="Trailer photo" class="tp-trailer-photo-thumb">
+                  } @else if (getTrailerPhotoCount(p) > 0) {
+                    <span class="tp-trailer-photo-thumb tp-trailer-photo-thumb-loading">
+                      <i class="bx bx-loader-alt bx-spin"></i>
+                    </span>
+                  } @else {
+                    <span class="tp-trailer-photo-thumb tp-trailer-photo-thumb-empty">
+                      <i class="bx bx-image"></i>
+                    </span>
+                  }
+                  <span class="tp-trailer-photo-count" [class.has-photos]="getTrailerPhotoCount(p) > 0">
+                    {{ getTrailerPhotoCount(p) }}
+                  </span>
+                </div>
+              </td>
               <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
               <td>{{ getTrailerVendorLabel(p.vendor) }}</td>
               <td>{{ p.state || '—' }}</td>
@@ -271,7 +290,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="12" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
+            <tr><td colspan="13" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
           }
         </tbody>
       </table>

@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -13,7 +13,7 @@ import { ToastService } from '../../../core/services/toast.service';
   templateUrl: './tags-permits.component.html',
   styleUrls: ['./tags-permits.component.scss']
 })
-export class TagsPermitsComponent implements OnInit {
+export class TagsPermitsComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
@@ -57,6 +57,11 @@ export class TagsPermitsComponent implements OnInit {
   trailerDrawerPhotoPreviewUrl = signal<string | null>(null);
   trailerPhotoHistory = signal<any[]>([]);
   trailerPhotoHistoryLoading = signal(false);
+  private trailerPhotoMeta = signal<Record<string, {
+    count: number;
+    previewUrl: string | null;
+    thumbBlobUrl: string | null;
+  }>>({});
   private trailerPhotoFile: File | null = null;
   private trailerStatusOverrides = signal<Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>>({});
   private trailerFieldOverrides = signal<Record<string, Partial<{
@@ -330,6 +335,27 @@ export class TagsPermitsComponent implements OnInit {
     this.loadTrailerFieldOverrides();
     this.loadFuelCardAssignmentOverrides();
     this.loadData();
+  }
+
+  ngOnDestroy(): void {
+    this.revokeTrailerThumbBlobs();
+    this.setTrailerDrawerPhotoPreview(null);
+    this.setTrailerPhotoPreview(null);
+  }
+
+  getTrailerPhotoCount(row: any): number {
+    const id = this.resolveTrailerPhotoMetaId(row);
+    return id ? (this.trailerPhotoMeta()[id]?.count ?? 0) : 0;
+  }
+
+  getTrailerPhotoThumb(row: any): string | null {
+    const id = this.resolveTrailerPhotoMetaId(row);
+    if (!id) return null;
+    return this.trailerPhotoMeta()[id]?.thumbBlobUrl ?? null;
+  }
+
+  private resolveTrailerPhotoMetaId(row: any): string {
+    return String(this.resolveTrailerId(row) ?? row?.id ?? '').trim();
   }
 
   loadData() {
@@ -1084,6 +1110,7 @@ export class TagsPermitsComponent implements OnInit {
       this.trailerPhotoFileName.set('');
       this.toast.success('Trailer photo uploaded', 'Success');
       await this.loadTrailerPhotoHistory(trailerId);
+      await this.syncTrailerPhotoOverrides();
       this.loadData();
     } catch (err: any) {
       this.toast.error(this.extractErrorMessage(err, 'Failed to upload trailer photo'), 'Photo upload');
@@ -2052,24 +2079,82 @@ export class TagsPermitsComponent implements OnInit {
         this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos?trailerIds=${query}`)
       );
       const photos = Array.isArray(res?.data) ? res.data : [];
-      if (!photos.length) return;
+      const uniqueIds = Array.from(new Set(trailerIds));
 
-      const next = { ...this.trailerFieldOverrides() };
-      let changed = false;
+      const previousMeta = this.trailerPhotoMeta();
+      const nextMeta: Record<string, { count: number; previewUrl: string | null; thumbBlobUrl: string | null }> = {};
+      for (const trailerId of uniqueIds) {
+        nextMeta[trailerId] = { count: 0, previewUrl: null, thumbBlobUrl: null };
+      }
+      const nextOverrides = { ...this.trailerFieldOverrides() };
+      let overridesChanged = false;
+
       for (const row of photos) {
         const trailerId = String(row?.trailerId ?? '').trim();
+        if (!trailerId) continue;
+
+        const count = Math.max(0, Number(row?.photoCount ?? 1));
         const photoUrl = this.normalizeTrailerPhotoUrl(row?.photoUrl, trailerId) || this.buildTrailerPhotoViewUrl(trailerId);
-        if (!trailerId || !photoUrl) continue;
-        next[trailerId] = { ...(next[trailerId] || {}), photoUrl };
-        changed = true;
+        const previous = previousMeta[trailerId];
+        const reuseThumb = previous?.previewUrl === photoUrl ? previous.thumbBlobUrl : null;
+
+        nextMeta[trailerId] = {
+          count,
+          previewUrl: photoUrl,
+          thumbBlobUrl: reuseThumb
+        };
+
+        if (photoUrl) {
+          nextOverrides[trailerId] = { ...(nextOverrides[trailerId] || {}), photoUrl };
+          overridesChanged = true;
+        }
       }
 
-      if (changed) {
-        this.trailerFieldOverrides.set(next);
-        this.persistTrailerFieldOverrides(next);
+      for (const [trailerId, info] of Object.entries(previousMeta)) {
+        if (nextMeta[trailerId] || !info.thumbBlobUrl?.startsWith('blob:')) continue;
+        URL.revokeObjectURL(info.thumbBlobUrl);
       }
+
+      this.trailerPhotoMeta.set(nextMeta);
+      if (overridesChanged) {
+        this.trailerFieldOverrides.set(nextOverrides);
+        this.persistTrailerFieldOverrides(nextOverrides);
+      }
+
+      await this.loadTrailerTableThumbnails();
     } catch {
       // Ignore photo override sync failures.
+    }
+  }
+
+  private async loadTrailerTableThumbnails(): Promise<void> {
+    const pending = Object.entries(this.trailerPhotoMeta())
+      .filter(([, info]) => info.count > 0 && !!info.previewUrl && !info.thumbBlobUrl);
+    if (!pending.length) return;
+
+    const updated = { ...this.trailerPhotoMeta() };
+    await Promise.all(pending.map(async ([trailerId, info]) => {
+      try {
+        const blob = await firstValueFrom(this.http.get(info.previewUrl!, { responseType: 'blob' }));
+        if (!blob || blob.size <= 0) return;
+        updated[trailerId] = {
+          ...info,
+          thumbBlobUrl: URL.createObjectURL(blob)
+        };
+      } catch {
+        // Ignore thumbnail load failures for individual trailers.
+      }
+    }));
+
+    this.trailerPhotoMeta.set(updated);
+  }
+
+  private revokeTrailerThumbBlobs(meta?: Record<string, { count: number; previewUrl: string | null; thumbBlobUrl: string | null }>): void {
+    const source = meta ?? this.trailerPhotoMeta();
+    for (const info of Object.values(source)) {
+      if (info.thumbBlobUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(info.thumbBlobUrl);
+      }
     }
   }
 

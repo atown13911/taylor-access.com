@@ -56,20 +56,28 @@ public class TrailerPhotosController : ControllerBase
         var photos = await query
             .Where(p => idList.Contains(p.TrailerId))
             .OrderByDescending(p => p.UpdatedAt)
+            .ThenByDescending(p => p.Id)
             .Select(p => new
             {
                 p.TrailerId,
+                p.Id,
                 p.UpdatedAt
             })
             .ToListAsync();
 
         var result = photos
             .GroupBy(p => p.TrailerId, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new
+            .Select(g =>
             {
-                trailerId = g.Key,
-                photoUrl = BuildViewUrl(g.Key),
-                updatedAt = g.First().UpdatedAt
+                var latest = g.First();
+                return new
+                {
+                    trailerId = g.Key,
+                    photoCount = g.Count(),
+                    latestPhotoId = latest.Id,
+                    photoUrl = BuildPhotoViewUrl(latest.Id),
+                    updatedAt = latest.UpdatedAt
+                };
             })
             .ToList();
 

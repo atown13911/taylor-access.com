@@ -381,6 +381,48 @@
   }
 }
 
+.tp-trailer-photo-cell {
+  width: 88px;
+}
+
+.tp-trailer-photo-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tp-trailer-photo-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 212, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  flex-shrink: 0;
+}
+
+.tp-trailer-photo-thumb-empty,
+.tp-trailer-photo-thumb-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 1rem;
+}
+
+.tp-trailer-photo-count {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+
+  &.has-photos {
+    color: var(--cyan);
+  }
+}
+
 .tp-trailer-drawer-photo {
   border: 1px dashed rgba(0, 212, 255, 0.25);
   border-radius: 12px;
