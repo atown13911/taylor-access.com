@@ -2088,7 +2088,16 @@ export class TagsPermitsComponent implements OnInit {
       );
       const rows = Array.isArray(res?.data) ? res.data : [];
       this.trailerPhotoHistory.set(rows);
-      await this.loadTrailerDrawerPreview(id);
+      if (rows.length > 0) {
+        const latestUrl = this.normalizeTrailerPhotoUrl(rows[0]?.photoUrl, id);
+        if (latestUrl) {
+          await this.loadTrailerDrawerPreviewFromUrl(latestUrl);
+        } else {
+          await this.loadTrailerDrawerPreview(id);
+        }
+      } else {
+        this.setTrailerDrawerPhotoPreview(null);
+      }
     } catch {
       this.trailerPhotoHistory.set([]);
       this.setTrailerDrawerPhotoPreview(null);
@@ -2103,9 +2112,18 @@ export class TagsPermitsComponent implements OnInit {
       this.setTrailerDrawerPhotoPreview(null);
       return;
     }
+    await this.loadTrailerDrawerPreviewFromUrl(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/view`);
+  }
+
+  private async loadTrailerDrawerPreviewFromUrl(url: string): Promise<void> {
+    const target = String(url || '').trim();
+    if (!target) {
+      this.setTrailerDrawerPhotoPreview(null);
+      return;
+    }
     try {
       const blob = await firstValueFrom(
-        this.http.get(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/view`, { responseType: 'blob' })
+        this.http.get(target, { responseType: 'blob' })
       );
       if (!blob || blob.size <= 0) {
         this.setTrailerDrawerPhotoPreview(null);

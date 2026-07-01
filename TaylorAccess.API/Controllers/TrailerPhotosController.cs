@@ -21,6 +21,20 @@ public class TrailerPhotosController : ControllerBase
         _currentUserService = currentUserService;
     }
 
+    private IQueryable<TrailerPhoto> FilterPhotosByUser(IQueryable<TrailerPhoto> query, Models.User user, bool hasUnrestrictedAccess)
+    {
+        if (hasUnrestrictedAccess)
+            return query;
+
+        if (user.OrganizationId is > 0 orgId)
+            return query.Where(p => p.OrganizationId == orgId || p.OrganizationId == 0);
+
+        return query.Where(p => p.OrganizationId == 0);
+    }
+
+    private IQueryable<TrailerPhoto> BuildPhotoQuery(Models.User user, bool hasUnrestrictedAccess) =>
+        FilterPhotosByUser(_context.TrailerPhotos.AsNoTracking().AsQueryable(), user, hasUnrestrictedAccess);
+
     [HttpGet]
     public async Task<ActionResult<object>> GetTrailerPhotos([FromQuery] string? trailerIds)
     {
@@ -28,8 +42,6 @@ public class TrailerPhotosController : ControllerBase
         if (user == null) return Unauthorized(new { message = "User not authenticated" });
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
-        if (!hasUnrestrictedAccess && user.OrganizationId == null)
-            return Unauthorized(new { message = "User must belong to an organization" });
 
         var idList = (trailerIds ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -39,9 +51,7 @@ public class TrailerPhotosController : ControllerBase
 
         if (idList.Length == 0) return Ok(new { data = Array.Empty<object>() });
 
-        var query = _context.TrailerPhotos.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess)
-            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+        var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
         var photos = await query
             .Where(p => idList.Contains(p.TrailerId))
@@ -82,7 +92,7 @@ public class TrailerPhotosController : ControllerBase
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
         var organizationId = user.OrganizationId ?? 0;
         if (!hasUnrestrictedAccess && organizationId <= 0)
-            return Unauthorized(new { message = "User must belong to an organization" });
+            organizationId = 0;
 
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream);
@@ -121,16 +131,12 @@ public class TrailerPhotosController : ControllerBase
         if (user == null) return Unauthorized(new { message = "User not authenticated" });
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
-        if (!hasUnrestrictedAccess && user.OrganizationId == null)
-            return Unauthorized(new { message = "User must belong to an organization" });
 
         var normalizedTrailerId = NormalizeTrailerId(trailerId);
         if (string.IsNullOrWhiteSpace(normalizedTrailerId))
             return BadRequest(new { error = "Trailer id is required" });
 
-        var query = _context.TrailerPhotos.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess)
-            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+        var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
         var photos = await query
             .Where(p => p.TrailerId == normalizedTrailerId)
@@ -160,13 +166,12 @@ public class TrailerPhotosController : ControllerBase
         if (user == null) return Unauthorized(new { message = "User not authenticated" });
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
-        if (!hasUnrestrictedAccess && user.OrganizationId == null)
-            return Unauthorized(new { message = "User must belong to an organization" });
 
         var normalizedTrailerId = NormalizeTrailerId(trailerId);
-        var query = _context.TrailerPhotos.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess)
-            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+        if (string.IsNullOrWhiteSpace(normalizedTrailerId))
+            return BadRequest(new { error = "Trailer id is required" });
+
+        var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
         var photo = await query
             .Where(p => p.TrailerId == normalizedTrailerId)
@@ -190,12 +195,8 @@ public class TrailerPhotosController : ControllerBase
         if (user == null) return Unauthorized(new { message = "User not authenticated" });
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
-        if (!hasUnrestrictedAccess && user.OrganizationId == null)
-            return Unauthorized(new { message = "User must belong to an organization" });
 
-        var query = _context.TrailerPhotos.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess)
-            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+        var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
         var photo = await query.FirstOrDefaultAsync(p => p.Id == photoId);
         if (photo == null || string.IsNullOrWhiteSpace(photo.FileContent))
@@ -215,12 +216,8 @@ public class TrailerPhotosController : ControllerBase
         if (user == null) return Unauthorized(new { message = "User not authenticated" });
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
-        if (!hasUnrestrictedAccess && user.OrganizationId == null)
-            return Unauthorized(new { message = "User must belong to an organization" });
 
-        var query = _context.TrailerPhotos.AsQueryable();
-        if (!hasUnrestrictedAccess)
-            query = query.Where(p => p.OrganizationId == user.OrganizationId!.Value);
+        var query = FilterPhotosByUser(_context.TrailerPhotos.AsQueryable(), user, hasUnrestrictedAccess);
 
         var photo = await query.FirstOrDefaultAsync(p => p.Id == photoId);
         if (photo == null)
