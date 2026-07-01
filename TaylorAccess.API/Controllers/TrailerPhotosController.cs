@@ -26,7 +26,7 @@ public class TrailerPhotosController : ControllerBase
         if (hasUnrestrictedAccess)
             return query;
 
-        if (user.OrganizationId is > 0 orgId)
+        if (user.OrganizationId is int orgId && orgId > 0)
             return query.Where(p => p.OrganizationId == orgId || p.OrganizationId == 0);
 
         return query.Where(p => p.OrganizationId == 0);
