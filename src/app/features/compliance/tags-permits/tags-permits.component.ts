@@ -1968,13 +1968,14 @@ export class TagsPermitsComponent implements OnInit {
       await this.syncTrailerPhotoOverrides();
       return;
     } catch (err: any) {
+      const status = Number(err?.status || 0);
       // If proxy endpoint exists but upstream failed, avoid browser-side direct fallback
       // that triggers CORS errors and noisy console logs.
-      if (Number(err?.status || 0) !== 404) {
+      if (status !== 404 && status !== 401 && status !== 403) {
         this.trailers.set([]);
         return;
       }
-      // Proxy not deployed yet (404): use legacy direct/gateway fallback.
+      // Proxy unavailable or upstream auth mismatch (401/403): use legacy direct/gateway fallback.
     }
 
     try {

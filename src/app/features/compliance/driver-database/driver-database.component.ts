@@ -371,13 +371,14 @@ export class DriverDatabaseComponent implements OnInit {
       this.driverTrailers.set(assigned);
       return;
     } catch (err: any) {
+      const status = Number(err?.status || 0);
       // If proxy exists but upstream failed, avoid browser-side direct fallback
       // that triggers CORS errors and noisy console logs.
-      if (Number(err?.status || 0) !== 404) {
+      if (status !== 404 && status !== 401 && status !== 403) {
         this.driverTrailers.set([]);
         return;
       }
-      // Proxy not deployed yet (404): continue with legacy fallback.
+      // Proxy unavailable or upstream auth mismatch (401/403): continue with legacy fallback.
     }
     try {
       const response: any = await this.http.get(`${this.trailerApiUrl}/equipment?equipmentType=trailer&limit=1000`).toPromise();

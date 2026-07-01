@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TaylorAccess.API.Services;
 
 namespace TaylorAccess.API.Controllers;
 
@@ -9,15 +10,25 @@ namespace TaylorAccess.API.Controllers;
 [Authorize]
 public class AssetsProxyController : ControllerBase
 {
-    private static readonly int[] RetryableGetStatuses = { 400, 404, 502, 503 };
-    private static readonly int[] RetryableWriteStatuses = { 400, 404, 405, 415, 502, 503 };
+    // Portal SSO tokens are accepted by Taylor Access but rejected by Taylor Assets upstream.
+    // Treat auth failures as retryable so we can fall through candidate bases / empty payload.
+    private static readonly int[] RetryableGetStatuses = { 400, 401, 403, 404, 502, 503 };
+    private static readonly int[] RetryableWriteStatuses = { 400, 401, 403, 404, 405, 415, 502, 503 };
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AssetsProxyController> _logger;
+    private readonly CurrentUserService _currentUserService;
+    private readonly IJwtService _jwtService;
 
-    public AssetsProxyController(IHttpClientFactory httpClientFactory, ILogger<AssetsProxyController> logger)
+    public AssetsProxyController(
+        IHttpClientFactory httpClientFactory,
+        ILogger<AssetsProxyController> logger,
+        CurrentUserService currentUserService,
+        IJwtService jwtService)
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _currentUserService = currentUserService;
+        _jwtService = jwtService;
     }
 
     [HttpGet("trailers")]
@@ -26,9 +37,7 @@ public class AssetsProxyController : ControllerBase
         limit = Math.Clamp(limit, 1, 5000);
         equipmentType = string.IsNullOrWhiteSpace(equipmentType) ? "trailer" : equipmentType.Trim();
         var client = _httpClientFactory.CreateClient();
-        var authHeader = Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrWhiteSpace(authHeader) && AuthenticationHeaderValue.TryParse(authHeader, out var auth))
-            client.DefaultRequestHeaders.Authorization = auth;
+        await ConfigureUpstreamClientAsync(client);
 
         var attempts = BuildCandidateUrls(limit, equipmentType).ToList();
         var errors = new List<object>();
@@ -94,9 +103,7 @@ public class AssetsProxyController : ControllerBase
             return BadRequest(new { error = "Proxy path is required" });
 
         var client = _httpClientFactory.CreateClient();
-        var authHeader = Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrWhiteSpace(authHeader) && AuthenticationHeaderValue.TryParse(authHeader, out var auth))
-            client.DefaultRequestHeaders.Authorization = auth;
+        await ConfigureUpstreamClientAsync(client);
 
         var attempts = BuildCandidateUrlsForPath(relativePath, Request.QueryString.Value ?? string.Empty).ToList();
         var bodyBytes = await ReadIncomingBodyAsync();
@@ -142,6 +149,28 @@ public class AssetsProxyController : ControllerBase
 
         _logger.LogWarning("Assets proxy failed for {Method} {Path}: {@Errors}", method.Method, relativePath, errors);
         return StatusCode(502, new { error = "Assets proxy upstream failure", method = method.Method, path = relativePath, attempts = errors });
+    }
+
+    private async Task ConfigureUpstreamClientAsync(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Remove("Authorization");
+        client.DefaultRequestHeaders.Remove("X-Service-Key");
+
+        var user = await _currentUserService.GetUserAsync();
+        if (user != null)
+        {
+            var serviceToken = _jwtService.GenerateToken(user);
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
+        }
+        else if (AuthenticationHeaderValue.TryParse(Request.Headers.Authorization.ToString(), out var incomingAuth))
+        {
+            client.DefaultRequestHeaders.Authorization = incomingAuth;
+        }
+
+        var serviceKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+        if (!string.IsNullOrWhiteSpace(serviceKey))
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", serviceKey.Trim());
     }
 
     private async Task<byte[]?> ReadIncomingBodyAsync()
