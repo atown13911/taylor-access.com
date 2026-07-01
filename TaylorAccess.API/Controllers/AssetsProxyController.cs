@@ -256,15 +256,15 @@ public class AssetsProxyController : ControllerBase
         var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
         var bases = new[]
         {
+            railwayServiceBase,
+            gatewayConfiguredBase,
+            configuredBase,
+            "https://taylor-assets-production.up.railway.app",
             gatewayInternalOpenBase,
             gatewayPublicOpenBase,
             portalDerivedOpenBase,
             accessDerivedOpenBase,
-            configuredBase,
-            gatewayConfiguredBase,
-            railwayServiceBase,
-            "https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-assets",
-            "https://taylor-assets-production.up.railway.app"
+            "https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-assets"
         }
         .Where(v => !string.IsNullOrWhiteSpace(v))
         .Select(v => v!.Trim().TrimEnd('/'))
@@ -275,8 +275,9 @@ public class AssetsProxyController : ControllerBase
         var query = string.IsNullOrWhiteSpace(queryString) ? string.Empty : queryString;
         foreach (var b in bases)
         {
+            yield return $"{b}/internal/{safePath}{query}";
             yield return $"{b}/api/v1/{safePath}{query}";
-            if (b.Contains("/open/"))
+            if (b.Contains("/open/", StringComparison.OrdinalIgnoreCase))
                 yield return $"{b}/{safePath}{query}";
         }
     }

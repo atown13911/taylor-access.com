@@ -459,6 +459,20 @@ export class TagsPermitsComponent implements OnInit {
     this.persistTrailerStatusOverrides(next);
   }
 
+  private applyTrailerAssignmentLocalState(
+    trailerId: string,
+    status: 'active' | 'inactive' | 'returned' | 'closed_out',
+    assignedDriverId: any,
+    assignedDriverName: string
+  ): void {
+    this.setTrailerStatusOverride(trailerId, status);
+    this.setTrailerFieldOverride(trailerId, {
+      trailerStatus: status,
+      assignedDriverId,
+      assignedDriverName
+    });
+  }
+
   private loadTrailerStatusOverrides(): void {
     try {
       const raw = localStorage.getItem(this.trailerStatusOverridesKey);
@@ -1727,16 +1741,13 @@ export class TagsPermitsComponent implements OnInit {
     }
 
     if (!success) {
-      this.toast.error('Failed to move trailer to inactive', 'Status update');
+      this.applyTrailerAssignmentLocalState(trailerId, inactiveTrailerStatus, null, '');
+      this.loadData();
+      this.toast.warning('Trailer marked inactive in Taylor Access; Taylor Assets sync is pending.', 'Status update');
       return;
     }
 
-    this.setTrailerStatusOverride(trailerId, inactiveTrailerStatus);
-    this.setTrailerFieldOverride(trailerId, {
-      trailerStatus: inactiveTrailerStatus,
-      assignedDriverId: null,
-      assignedDriverName: ''
-    });
+    this.applyTrailerAssignmentLocalState(trailerId, inactiveTrailerStatus, null, '');
     this.loadData();
     this.toast.success('Trailer moved to inactive', 'Status updated');
   }
@@ -1789,16 +1800,13 @@ export class TagsPermitsComponent implements OnInit {
     }
 
     if (!success) {
-      this.toast.error('Failed to reactivate trailer', 'Status update');
+      this.applyTrailerAssignmentLocalState(trailerId, activeTrailerStatus, persistedDriverId, persistedDriverName || '');
+      this.loadData();
+      this.toast.warning('Trailer reactivated in Taylor Access; Taylor Assets sync is pending.', 'Status update');
       return;
     }
 
-    this.setTrailerStatusOverride(trailerId, activeTrailerStatus);
-    this.setTrailerFieldOverride(trailerId, {
-      trailerStatus: activeTrailerStatus,
-      assignedDriverId: persistedDriverId,
-      assignedDriverName: persistedDriverName || ''
-    });
+    this.applyTrailerAssignmentLocalState(trailerId, activeTrailerStatus, persistedDriverId, persistedDriverName || '');
     this.loadData();
     this.toast.success('Trailer reactivated', 'Status updated');
   }
