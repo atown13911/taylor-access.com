@@ -6,6 +6,24 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 
+type TrailerAssignmentRecord = {
+  permitNumber?: string;
+  permitType?: string;
+  state?: string;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  cost?: number | null;
+  vendor?: string;
+  chargeFrequency?: string;
+  trailerStatus?: 'active' | 'inactive' | 'returned' | 'closed_out';
+  assignedDriverId?: any;
+  assignedDriverName?: string;
+  assignedTruckNumber?: string;
+  notes?: string;
+  fileName?: string | null;
+  hasFile?: boolean;
+};
+
 @Component({
   selector: 'app-tags-permits',
   standalone: true,
@@ -20,8 +38,9 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   private assetsGatewayUrl = environment.apiUrl.replace(/\/open\/taylor-access\/?$/i, '/open/taylor-assets');
   private trailerApiUrl = `${this.apiUrl}/api/v1/assets-proxy`;
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
-  private readonly trailerStatusOverridesKey = 'ta_trailer_status_overrides';
-  private readonly trailerFieldOverridesKey = 'ta_trailer_field_overrides';
+  private readonly trailerAssignmentsMigratedKey = 'ta_trailer_assignments_migrated_v1';
+  private readonly legacyTrailerStatusOverridesKey = 'ta_trailer_status_overrides';
+  private readonly legacyTrailerFieldOverridesKey = 'ta_trailer_field_overrides';
   private readonly fuelCardAssignmentOverridesKey = 'ta_fuel_card_assignment_overrides_v1';
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'>('permits');
@@ -63,23 +82,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     thumbBlobUrl: string | null;
   }>>({});
   private trailerPhotoFile: File | null = null;
-  private trailerStatusOverrides = signal<Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>>({});
-  private trailerFieldOverrides = signal<Record<string, Partial<{
-    permitNumber: string;
-    permitType: string;
-    state: string;
-    issueDate: string | null;
-    expiryDate: string | null;
-    cost: number | null;
-    vendor: 'ryder' | 'metro' | 'taylor_leasing' | 'other';
-    chargeFrequency: string;
-    trailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out';
-    assignedDriverId: any;
-    assignedDriverName: string;
-    assignedTruckNumber: string;
-    notes: string;
-    photoUrl: string | null;
-  }>>>({});
+  private trailerAssignments = signal<Record<string, TrailerAssignmentRecord>>({});
   private fuelCardAssignmentOverrides = signal<Record<string, {
     driverId: string;
     driverName?: string;
@@ -331,8 +334,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
-    this.loadTrailerStatusOverrides();
-    this.loadTrailerFieldOverrides();
+    void this.migrateLocalTrailerOverridesIfNeeded();
     this.loadFuelCardAssignmentOverrides();
     this.loadData();
   }
@@ -471,123 +473,188 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return status;
   }
 
-  private getTrailerStatusOverride(trailerId: unknown): 'active' | 'inactive' | 'returned' | 'closed_out' | null {
+  private getTrailerAssignment(trailerId: unknown): TrailerAssignmentRecord | null {
     const key = String(trailerId ?? '').trim();
     if (!key) return null;
-    return this.trailerStatusOverrides()[key] ?? null;
+    return this.trailerAssignments()[key] ?? null;
   }
 
-  private setTrailerStatusOverride(trailerId: unknown, status: 'active' | 'inactive' | 'returned' | 'closed_out'): void {
+  private mapApiTrailerAssignment(row: any): TrailerAssignmentRecord {
+    return {
+      permitNumber: row?.permitNumber ?? '',
+      permitType: row?.permitType ?? '',
+      state: row?.state ?? '',
+      issueDate: row?.issueDate ?? null,
+      expiryDate: row?.expiryDate ?? null,
+      cost: row?.cost ?? null,
+      vendor: row?.vendor ?? '',
+      chargeFrequency: row?.chargeFrequency ?? 'monthly',
+      trailerStatus: this.normalizeTrailerStatus(row?.trailerStatus),
+      assignedDriverId: row?.assignedDriverId ?? null,
+      assignedDriverName: row?.assignedDriverName ?? '',
+      assignedTruckNumber: row?.assignedTruckNumber ?? '',
+      notes: row?.notes ?? '',
+      fileName: row?.fileName ?? null,
+      hasFile: !!row?.hasFile
+    };
+  }
+
+  private async loadTrailerAssignmentsFromApi(trailerIds?: string[]): Promise<void> {
+    try {
+      const ids = (trailerIds ?? this.trailers()
+        .map((t: any) => String(this.resolveTrailerId(t) ?? '').trim())
+        .filter((id: string) => !!id));
+      const uniqueIds = Array.from(new Set(ids));
+      const query = uniqueIds.length
+        ? `?trailerIds=${encodeURIComponent(uniqueIds.join(','))}`
+        : '';
+      const res: any = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/api/v1/trailer-assignments${query}`)
+      );
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      const next: Record<string, TrailerAssignmentRecord> = { ...this.trailerAssignments() };
+      for (const row of rows) {
+        const trailerId = String(row?.trailerId ?? '').trim();
+        if (!trailerId) continue;
+        next[trailerId] = this.mapApiTrailerAssignment(row);
+      }
+      this.trailerAssignments.set(next);
+    } catch {
+      // Keep current in-memory assignments if API is unavailable.
+    }
+  }
+
+  private async migrateLocalTrailerOverridesIfNeeded(): Promise<void> {
+    if (localStorage.getItem(this.trailerAssignmentsMigratedKey) === '1') return;
+
+    let statuses: Record<string, any> = {};
+    let fields: Record<string, any> = {};
+    try {
+      const statusRaw = localStorage.getItem(this.legacyTrailerStatusOverridesKey);
+      const fieldRaw = localStorage.getItem(this.legacyTrailerFieldOverridesKey);
+      statuses = statusRaw ? JSON.parse(statusRaw) : {};
+      fields = fieldRaw ? JSON.parse(fieldRaw) : {};
+    } catch {
+      localStorage.setItem(this.trailerAssignmentsMigratedKey, '1');
+      return;
+    }
+
+    const trailerIds = new Set([
+      ...Object.keys(statuses || {}),
+      ...Object.keys(fields || {})
+    ]);
+    if (!trailerIds.size) {
+      localStorage.setItem(this.trailerAssignmentsMigratedKey, '1');
+      return;
+    }
+
+    const items = Array.from(trailerIds).map((trailerId) => {
+      const field = fields?.[trailerId] || {};
+      const status = statuses?.[trailerId] ?? field?.trailerStatus ?? 'active';
+      return {
+        trailerId,
+        permitNumber: field?.permitNumber ?? null,
+        permitType: field?.permitType ?? null,
+        state: field?.state ?? null,
+        issueDate: field?.issueDate ?? null,
+        expiryDate: field?.expiryDate ?? null,
+        cost: field?.cost ?? null,
+        vendor: field?.vendor ?? null,
+        chargeFrequency: field?.chargeFrequency ?? null,
+        trailerStatus: this.normalizeTrailerStatus(status),
+        assignedDriverId: field?.assignedDriverId ?? null,
+        assignedDriverName: field?.assignedDriverName ?? null,
+        assignedTruckNumber: field?.assignedTruckNumber ?? null,
+        notes: field?.notes ?? null,
+        clearAssignedDriver: status === 'inactive'
+      };
+    });
+
+    try {
+      await firstValueFrom(
+        this.http.post<any>(`${this.apiUrl}/api/v1/trailer-assignments/bulk-upsert`, { items })
+      );
+      localStorage.removeItem(this.legacyTrailerStatusOverridesKey);
+      localStorage.removeItem(this.legacyTrailerFieldOverridesKey);
+    } catch {
+      // Keep legacy local values until migration succeeds.
+      return;
+    }
+
+    localStorage.setItem(this.trailerAssignmentsMigratedKey, '1');
+  }
+
+  private buildTrailerAssignmentPayload(
+    values: TrailerAssignmentRecord,
+    options?: { clearAssignedDriver?: boolean }
+  ): Record<string, any> {
+    const payload: Record<string, any> = {
+      permitNumber: values.permitNumber ?? null,
+      permitType: values.permitType ?? null,
+      state: values.state ?? null,
+      issueDate: values.issueDate ? new Date(values.issueDate).toISOString() : null,
+      expiryDate: values.expiryDate ? new Date(values.expiryDate).toISOString() : null,
+      cost: values.cost ?? null,
+      vendor: values.vendor ?? null,
+      chargeFrequency: values.chargeFrequency ?? null,
+      trailerStatus: values.trailerStatus ?? null,
+      assignedDriverId: values.assignedDriverId ?? null,
+      assignedDriverName: values.assignedDriverName ?? null,
+      assignedTruckNumber: values.assignedTruckNumber ?? null,
+      notes: values.notes ?? null
+    };
+    if (options?.clearAssignedDriver) {
+      payload['clearAssignedDriver'] = true;
+    }
+    return payload;
+  }
+
+  private async persistTrailerAssignment(
+    trailerId: unknown,
+    values: Partial<TrailerAssignmentRecord>,
+    options?: { clearAssignedDriver?: boolean }
+  ): Promise<void> {
     const key = String(trailerId ?? '').trim();
     if (!key) return;
-    const next = { ...this.trailerStatusOverrides(), [key]: status };
-    this.trailerStatusOverrides.set(next);
-    this.persistTrailerStatusOverrides(next);
+
+    const current = this.getTrailerAssignment(key) || {};
+    const merged = { ...current, ...values };
+    this.trailerAssignments.set({
+      ...this.trailerAssignments(),
+      [key]: merged
+    });
+
+    try {
+      await firstValueFrom(
+        this.http.put<any>(
+          `${this.apiUrl}/api/v1/trailer-assignments/${encodeURIComponent(key)}`,
+          this.buildTrailerAssignmentPayload(merged, options)
+        )
+      );
+    } catch {
+      this.toast.warning('Trailer assignment saved locally but database sync failed.', 'Save');
+    }
   }
 
-  private applyTrailerAssignmentLocalState(
+  private async applyTrailerAssignmentState(
     trailerId: string,
     status: 'active' | 'inactive' | 'returned' | 'closed_out',
     assignedDriverId: any,
     assignedDriverName: string
-  ): void {
-    this.setTrailerStatusOverride(trailerId, status);
-    this.setTrailerFieldOverride(trailerId, {
+  ): Promise<void> {
+    await this.persistTrailerAssignment(trailerId, {
       trailerStatus: status,
       assignedDriverId,
       assignedDriverName
-    });
+    }, { clearAssignedDriver: !assignedDriverId });
   }
 
-  private loadTrailerStatusOverrides(): void {
-    try {
-      const raw = localStorage.getItem(this.trailerStatusOverridesKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return;
-      const next: Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'> = {};
-      for (const [id, value] of Object.entries(parsed)) {
-        next[String(id)] = this.normalizeTrailerStatus(value);
-      }
-      this.trailerStatusOverrides.set(next);
-    } catch {
-      // Ignore malformed local values.
+  private resolvePermitDocBase(p: any): string {
+    if (this.activeTab() === 'trailer') {
+      const trailerId = encodeURIComponent(String(this.resolveTrailerId(p) ?? p?.id ?? '').trim());
+      return `${this.apiUrl}/api/v1/trailer-assignments/${trailerId}`;
     }
-  }
-
-  private persistTrailerStatusOverrides(overrides: Record<string, 'active' | 'inactive' | 'returned' | 'closed_out'>): void {
-    try {
-      localStorage.setItem(this.trailerStatusOverridesKey, JSON.stringify(overrides));
-    } catch {
-      // Ignore storage issues.
-    }
-  }
-
-  private getTrailerFieldOverride(trailerId: unknown): Partial<{
-    permitNumber: string;
-    permitType: string;
-    state: string;
-    issueDate: string | null;
-    expiryDate: string | null;
-    cost: number | null;
-    vendor: 'ryder' | 'metro' | 'taylor_leasing' | 'other';
-    chargeFrequency: string;
-    trailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out';
-    assignedDriverId: any;
-    assignedDriverName: string;
-    assignedTruckNumber: string;
-    notes: string;
-    photoUrl: string | null;
-  }> | null {
-    const key = String(trailerId ?? '').trim();
-    if (!key) return null;
-    return this.trailerFieldOverrides()[key] ?? null;
-  }
-
-  private setTrailerFieldOverride(
-    trailerId: unknown,
-    values: Partial<{
-      permitNumber: string;
-      permitType: string;
-      state: string;
-      issueDate: string | null;
-      expiryDate: string | null;
-      cost: number | null;
-      vendor: 'ryder' | 'metro' | 'taylor_leasing' | 'other';
-      chargeFrequency: string;
-      trailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out';
-      assignedDriverId: any;
-      assignedDriverName: string;
-      assignedTruckNumber: string;
-      notes: string;
-      photoUrl: string | null;
-    }>
-  ): void {
-    const key = String(trailerId ?? '').trim();
-    if (!key) return;
-    const next = { ...this.trailerFieldOverrides(), [key]: { ...(this.trailerFieldOverrides()[key] || {}), ...values } };
-    this.trailerFieldOverrides.set(next);
-    this.persistTrailerFieldOverrides(next);
-  }
-
-  private loadTrailerFieldOverrides(): void {
-    try {
-      const raw = localStorage.getItem(this.trailerFieldOverridesKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return;
-      this.trailerFieldOverrides.set(parsed);
-    } catch {
-      // Ignore malformed local values.
-    }
-  }
-
-  private persistTrailerFieldOverrides(overrides: Record<string, any>): void {
-    try {
-      localStorage.setItem(this.trailerFieldOverridesKey, JSON.stringify(overrides));
-    } catch {
-      // Ignore storage issues.
-    }
+    return `${this.apiUrl}/api/v1/company-permits/${p.id}`;
   }
 
   selectMainTab(tab: 'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'): void {
@@ -1032,13 +1099,17 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const fd = new FormData();
     fd.append('file', file);
 
-    this.http.post(`${this.apiUrl}/api/v1/company-permits/${p.id}/upload`, fd).subscribe({
-      next: () => {
-        this.toast.success(`Document uploaded for permit #${p.permitNumber}`, 'Uploaded');
+    this.http.post(`${this.resolvePermitDocBase(p)}/upload`, fd).subscribe({
+      next: async () => {
+        this.toast.success(`Document uploaded for ${this.activeTab() === 'trailer' ? 'trailer' : 'permit'} #${p.permitNumber}`, 'Uploaded');
         this.uploadingDoc.set(false);
         this.uploadTarget.set(null);
         this.permitDocFile = null;
-        this.loadData(); // refresh so hasFile updates
+        if (this.activeTab() === 'trailer') {
+          const trailerId = this.resolveTrailerId(p);
+          await this.loadTrailerAssignmentsFromApi([String(trailerId ?? '').trim()]);
+        }
+        this.loadData();
       },
       error: () => {
         this.toast.error('Failed to upload document', 'Error');
@@ -1104,7 +1175,6 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       if (url) {
         this.permitForm = { ...this.permitForm, photoUrl: url };
         this.setTrailerPhotoPreview(url);
-        this.setTrailerFieldOverride(trailerId, { photoUrl: url });
       }
       this.trailerPhotoFile = null;
       this.trailerPhotoFileName.set('');
@@ -1177,7 +1247,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   viewPermitDoc(p: any): void {
-    this.http.get(`${this.apiUrl}/api/v1/company-permits/${p.id}/document`,
+    this.http.get(`${this.resolvePermitDocBase(p)}/document`,
       { responseType: 'blob' }
     ).subscribe({
       next: (blob) => window.open(URL.createObjectURL(blob), '_blank'),
@@ -1186,7 +1256,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   downloadPermitDoc(p: any): void {
-    this.http.get(`${this.apiUrl}/api/v1/company-permits/${p.id}/download`,
+    this.http.get(`${this.resolvePermitDocBase(p)}/download`,
       { responseType: 'blob' }
     ).subscribe({
       next: (blob) => {
@@ -1200,9 +1270,17 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   deletePermitDoc(p: any): void {
-    if (!confirm(`Remove document from permit #${p.permitNumber}?`)) return;
-    this.http.delete(`${this.apiUrl}/api/v1/company-permits/${p.id}/document`).subscribe({
-      next: () => { this.toast.success('Document removed', 'Removed'); this.loadData(); },
+    const label = this.activeTab() === 'trailer' ? 'trailer' : 'permit';
+    if (!confirm(`Remove document from ${label} #${p.permitNumber}?`)) return;
+    this.http.delete(`${this.resolvePermitDocBase(p)}/document`).subscribe({
+      next: async () => {
+        this.toast.success('Document removed', 'Removed');
+        if (this.activeTab() === 'trailer') {
+          const trailerId = this.resolveTrailerId(p);
+          await this.loadTrailerAssignmentsFromApi([String(trailerId ?? '').trim()]);
+        }
+        this.loadData();
+      },
       error: () => this.toast.error('Failed to remove document', 'Error')
     });
   }
@@ -1538,35 +1616,36 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const assignedDriverId = rawAssignedDriverId ?? this.findDriverIdByName(assignedDriverName);
     const trailerId = this.resolveTrailerId(t);
     const backendStatus = this.getTrailerAssignmentStatus(t);
-    const overrideStatus = this.getTrailerStatusOverride(trailerId);
-    const fieldOverride = this.getTrailerFieldOverride(trailerId) || {};
-    const resolvedTrailerStatus = overrideStatus ?? backendStatus;
+    const assignment = this.getTrailerAssignment(trailerId) || {};
+    const resolvedTrailerStatus = assignment.trailerStatus
+      ? this.normalizeTrailerStatus(assignment.trailerStatus)
+      : backendStatus;
 
-    const resolvedPhotoUrl = this.normalizeTrailerPhotoUrl(
-      fieldOverride.photoUrl ?? (t?.photoUrl || t?.imageUrl || t?.trailerPhotoUrl || t?.avatarUrl || null),
-      trailerId
-    );
+    const photoMeta = this.trailerPhotoMeta()[String(trailerId ?? '').trim()];
+    const resolvedPhotoUrl = (photoMeta?.count ?? 0) > 0
+      ? this.buildTrailerPhotoViewUrl(trailerId)
+      : null;
 
     return {
       id: trailerId,
-      permitNumber: fieldOverride.permitNumber || t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
-      permitType: fieldOverride.permitType || t?.type || t?.subtype || 'standard_equipment',
-      state: fieldOverride.state || t?.state || t?.currentLocation || '',
-      issueDate: fieldOverride.issueDate ?? (t?.issueDate || t?.registrationStartDate || t?.createdAt || null),
-      expiryDate: fieldOverride.expiryDate ?? (t?.expiryDate || t?.registrationExpiry || null),
-      cost: fieldOverride.cost ?? t?.cost ?? t?.purchasePrice ?? null,
-      vendor: this.normalizeTrailerVendor(fieldOverride.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
-      vendorLabel: this.getTrailerVendorLabel(fieldOverride.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
-      chargeFrequency: fieldOverride.chargeFrequency || t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
+      permitNumber: assignment.permitNumber || t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || '',
+      permitType: assignment.permitType || t?.type || t?.subtype || 'standard_equipment',
+      state: assignment.state || t?.state || t?.currentLocation || '',
+      issueDate: assignment.issueDate ?? (t?.issueDate || t?.registrationStartDate || t?.createdAt || null),
+      expiryDate: assignment.expiryDate ?? (t?.expiryDate || t?.registrationExpiry || null),
+      cost: assignment.cost ?? t?.cost ?? t?.purchasePrice ?? null,
+      vendor: this.normalizeTrailerVendor(assignment.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
+      vendorLabel: this.getTrailerVendorLabel(assignment.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
+      chargeFrequency: assignment.chargeFrequency || t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       trailerStatus: resolvedTrailerStatus,
-      assignedDriverId: fieldOverride.assignedDriverId ?? assignedDriverId,
-      assignedDriverName: fieldOverride.assignedDriverName || assignedDriverName || '',
-      assignedTruckNumber: fieldOverride.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
+      assignedDriverId: assignment.assignedDriverId ?? assignedDriverId,
+      assignedDriverName: assignment.assignedDriverName || assignedDriverName || '',
+      assignedTruckNumber: assignment.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
-      notes: fieldOverride.notes || t?.notes || '',
+      notes: assignment.notes || t?.notes || '',
       photoUrl: resolvedPhotoUrl,
-      hasFile: false,
-      fileName: null
+      hasFile: !!assignment.hasFile,
+      fileName: assignment.fileName ?? null
     };
   }
 
@@ -1654,8 +1733,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
         await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId, assignedDriverName);
       }
       if (trailerId) {
-        this.setTrailerStatusOverride(trailerId, selectedTrailerStatus);
-        this.setTrailerFieldOverride(trailerId, {
+        await this.persistTrailerAssignment(trailerId, {
           permitNumber: trailerBody.permitNumber || '',
           permitType: trailerBody.type || 'standard_equipment',
           state: trailerBody.state || '',
@@ -1668,9 +1746,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           assignedDriverId: persistedDriverId,
           assignedDriverName: persistedDriverName || '',
           assignedTruckNumber: trailerBody.number || '',
-          notes: trailerBody.notes || '',
-          photoUrl: trailerBody.photoUrl || null
-        });
+          notes: trailerBody.notes || ''
+        }, { clearAssignedDriver: !persistedDriverId });
       }
 
       this.saving.set(false);
@@ -1768,13 +1845,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     }
 
     if (!success) {
-      this.applyTrailerAssignmentLocalState(trailerId, inactiveTrailerStatus, null, '');
+      await this.applyTrailerAssignmentState(trailerId, inactiveTrailerStatus, null, '');
       this.loadData();
       this.toast.warning('Trailer marked inactive in Taylor Access; Taylor Assets sync is pending.', 'Status update');
       return;
     }
 
-    this.applyTrailerAssignmentLocalState(trailerId, inactiveTrailerStatus, null, '');
+    await this.applyTrailerAssignmentState(trailerId, inactiveTrailerStatus, null, '');
     this.loadData();
     this.toast.success('Trailer moved to inactive', 'Status updated');
   }
@@ -1827,13 +1904,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     }
 
     if (!success) {
-      this.applyTrailerAssignmentLocalState(trailerId, activeTrailerStatus, persistedDriverId, persistedDriverName || '');
+      await this.applyTrailerAssignmentState(trailerId, activeTrailerStatus, persistedDriverId, persistedDriverName || '');
       this.loadData();
       this.toast.warning('Trailer reactivated in Taylor Access; Taylor Assets sync is pending.', 'Status update');
       return;
     }
 
-    this.applyTrailerAssignmentLocalState(trailerId, activeTrailerStatus, persistedDriverId, persistedDriverName || '');
+    await this.applyTrailerAssignmentState(trailerId, activeTrailerStatus, persistedDriverId, persistedDriverName || '');
     this.loadData();
     this.toast.success('Trailer reactivated', 'Status updated');
   }
@@ -1999,6 +2076,11 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return await firstValueFrom(this.http.get<any>(this.trailerPath(path)));
   }
 
+  private async afterTrailersLoaded(): Promise<void> {
+    await this.loadTrailerAssignmentsFromApi();
+    await this.syncTrailerPhotoOverrides();
+  }
+
   private async loadTrailersWithFallback(): Promise<void> {
     try {
       const proxyRes: any = await firstValueFrom(
@@ -2007,7 +2089,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       const proxyData = Array.isArray(proxyRes?.data) ? proxyRes.data : [];
       if (proxyData.length > 0) {
         this.trailers.set(proxyData);
-        await this.syncTrailerPhotoOverrides();
+        await this.afterTrailersLoaded();
         return;
       }
       if (!proxyRes?.warning) {
@@ -2035,7 +2117,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
         const data = Array.isArray(res?.data) ? res.data : [];
         if (data.length > 0) {
           this.trailers.set(data);
-          await this.syncTrailerPhotoOverrides();
+          await this.afterTrailersLoaded();
           return;
         }
       } catch {
@@ -2048,7 +2130,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       const data = Array.isArray(res?.data) ? res.data : [];
       if (data.length > 0) {
         this.trailers.set(data);
-        await this.syncTrailerPhotoOverrides();
+        await this.afterTrailersLoaded();
         return;
       }
     } catch (err: any) {
@@ -2061,7 +2143,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     try {
       const res: any = await this.trailerGetWithPathFallback('/trailers?limit=1000');
       this.trailers.set(Array.isArray(res?.data) ? res.data : []);
-      await this.syncTrailerPhotoOverrides();
+      await this.afterTrailersLoaded();
     } catch {
       this.trailers.set([]);
     }
@@ -2086,8 +2168,6 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       for (const trailerId of uniqueIds) {
         nextMeta[trailerId] = { count: 0, previewUrl: null, thumbBlobUrl: null };
       }
-      const nextOverrides = { ...this.trailerFieldOverrides() };
-      let overridesChanged = false;
 
       for (const row of photos) {
         const trailerId = String(row?.trailerId ?? '').trim();
@@ -2103,11 +2183,6 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           previewUrl: photoUrl,
           thumbBlobUrl: reuseThumb
         };
-
-        if (photoUrl) {
-          nextOverrides[trailerId] = { ...(nextOverrides[trailerId] || {}), photoUrl };
-          overridesChanged = true;
-        }
       }
 
       for (const [trailerId, info] of Object.entries(previousMeta)) {
@@ -2116,11 +2191,6 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       }
 
       this.trailerPhotoMeta.set(nextMeta);
-      if (overridesChanged) {
-        this.trailerFieldOverrides.set(nextOverrides);
-        this.persistTrailerFieldOverrides(nextOverrides);
-      }
-
       await this.loadTrailerTableThumbnails();
     } catch {
       // Ignore photo override sync failures.

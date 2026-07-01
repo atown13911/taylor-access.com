@@ -562,6 +562,36 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""TrailerAssignments"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""TrailerId"" VARCHAR(100) NOT NULL,
+            ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+            ""PermitNumber"" VARCHAR(100) NULL,
+            ""PermitType"" VARCHAR(50) NULL,
+            ""State"" VARCHAR(5) NULL,
+            ""IssueDate"" TIMESTAMP NULL,
+            ""ExpiryDate"" TIMESTAMP NULL,
+            ""Cost"" numeric(12,2) NULL,
+            ""Vendor"" VARCHAR(30) NULL,
+            ""ChargeFrequency"" VARCHAR(30) NULL,
+            ""TrailerStatus"" VARCHAR(20) NOT NULL DEFAULT 'active',
+            ""AssignedDriverId"" INTEGER NULL,
+            ""AssignedDriverName"" VARCHAR(150) NULL,
+            ""AssignedTruckNumber"" VARCHAR(50) NULL,
+            ""Notes"" text NULL,
+            ""FileName"" text NULL,
+            ""FileContent"" text NULL,
+            ""ContentType"" text NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_TrailerAssignments_Org_TrailerId""
+            ON ""TrailerAssignments"" (""OrganizationId"", ""TrailerId"");
+        CREATE INDEX IF NOT EXISTS ""IX_TrailerAssignments_TrailerStatus""
+            ON ""TrailerAssignments"" (""TrailerStatus"", ""UpdatedAt"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""PerformanceReviews"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL,
