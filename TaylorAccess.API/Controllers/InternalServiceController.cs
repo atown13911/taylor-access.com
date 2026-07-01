@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TaylorAccess.API.Data;
+using TaylorAccess.API.Services;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TaylorAccess.API.Controllers;
 
@@ -18,12 +20,18 @@ public class InternalServiceController : ControllerBase
     private readonly TaylorAccessDbContext _db;
     private readonly IConfiguration _config;
     private readonly ILogger<InternalServiceController> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public InternalServiceController(TaylorAccessDbContext db, IConfiguration config, ILogger<InternalServiceController> logger)
+    public InternalServiceController(
+        TaylorAccessDbContext db,
+        IConfiguration config,
+        ILogger<InternalServiceController> logger,
+        IServiceScopeFactory scopeFactory)
     {
         _db = db;
         _config = config;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     private bool ValidateServiceKey()
@@ -56,6 +64,135 @@ public class InternalServiceController : ControllerBase
             return ValidateServiceKey();
 
         return false;
+    }
+
+    /// <summary>Cached Motive driver-analysis snapshot (fast DB read for VanTac Analysis tab).</summary>
+    [HttpGet("motiv/driver-analysis")]
+    public async Task<ActionResult> GetCachedDriverAnalysis(
+        [FromQuery] string? startDate = null,
+        [FromQuery] string? endDate = null,
+        [FromQuery] int? organizationId = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var (start, end, startIso, endIso) = MotiveDriverAnalysisHelpers.ParseRange(startDate, endDate);
+        var orgId = organizationId;
+        if (!orgId.HasValue || orgId.Value <= 0)
+        {
+            orgId = await _db.Organizations.AsNoTracking()
+                .OrderBy(o => o.Id)
+                .Select(o => (int?)o.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        var cache = await _db.MotivDriverAnalysisCaches.AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.OrganizationId == orgId
+                && x.StartDate == start
+                && x.EndDate == end);
+
+        if (cache == null)
+        {
+            return Ok(new
+            {
+                source = "cache",
+                endpoint = "driver-analysis",
+                cached = false,
+                connected = false,
+                startDate = startIso,
+                endDate = endIso,
+                drivers = 0,
+                lastRefreshedAt = (DateTime?)null,
+                refreshInProgress = MotiveDriverAnalysisRefreshTracker.IsActive(
+                    MotiveDriverAnalysisHelpers.BuildRefreshKey(orgId, start, end)),
+                data = Array.Empty<object>()
+            });
+        }
+
+        return Ok(new
+        {
+            source = "cache",
+            endpoint = "driver-analysis",
+            cached = true,
+            connected = cache.Connected,
+            startDate = startIso,
+            endDate = endIso,
+            drivers = cache.DriverCount,
+            lastRefreshedAt = cache.RefreshedAt,
+            refreshInProgress = MotiveDriverAnalysisRefreshTracker.IsActive(
+                MotiveDriverAnalysisHelpers.BuildRefreshKey(orgId, start, end)),
+            data = MotiveDriverAnalysisHelpers.DeserializePayload(cache.PayloadJson)
+        });
+    }
+
+    /// <summary>Queue a background Motive refresh for a date range.</summary>
+    [HttpPost("motiv/driver-analysis/refresh")]
+    public async Task<ActionResult> RefreshCachedDriverAnalysis(
+        [FromQuery] string? startDate = null,
+        [FromQuery] string? endDate = null,
+        [FromQuery] int? organizationId = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var (start, end, startIso, endIso) = MotiveDriverAnalysisHelpers.ParseRange(startDate, endDate);
+        var orgId = organizationId;
+        if (!orgId.HasValue || orgId.Value <= 0)
+        {
+            orgId = await _db.Organizations.AsNoTracking()
+                .OrderBy(o => o.Id)
+                .Select(o => (int?)o.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        var orgKey = orgId > 0 ? orgId : null;
+        var refreshKey = MotiveDriverAnalysisHelpers.BuildRefreshKey(orgKey, start, end);
+        if (MotiveDriverAnalysisRefreshTracker.IsActive(refreshKey))
+        {
+            return Accepted(new
+            {
+                status = "in_progress",
+                startDate = startIso,
+                endDate = endIso
+            });
+        }
+
+        if (!MotiveDriverAnalysisRefreshTracker.TryStart(refreshKey))
+        {
+            return Accepted(new
+            {
+                status = "in_progress",
+                startDate = startIso,
+                endDate = endIso
+            });
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var worker = ActivatorUtilities.CreateInstance<MotivController>(scope.ServiceProvider);
+                await worker.ExecuteDriverAnalysisRefreshAsync(orgKey, start, end);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Internal Motive driver-analysis refresh failed for {Start} to {End}", startIso, endIso);
+            }
+            finally
+            {
+                MotiveDriverAnalysisRefreshTracker.Complete(refreshKey);
+            }
+        });
+
+        return Accepted(new
+        {
+            status = "started",
+            startDate = startIso,
+            endDate = endIso,
+            message = "Motive refresh started. Poll GET internal/motiv/driver-analysis for results."
+        });
     }
 
     /// <summary>Motiv fuel purchases for payroll and internal service consumers.</summary>

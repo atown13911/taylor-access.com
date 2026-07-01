@@ -6,6 +6,7 @@ using TaylorAccess.API.Data;
 using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace TaylorAccess.API.Controllers;
 
@@ -19,19 +20,22 @@ public class MotivController : ControllerBase
     private readonly ILogger<MotivController> _logger;
     private readonly TaylorAccessDbContext _db;
     private readonly CurrentUserService _currentUserService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public MotivController(
         IConfiguration config,
         IHttpClientFactory httpClientFactory,
         ILogger<MotivController> logger,
         TaylorAccessDbContext db,
-        CurrentUserService currentUserService)
+        CurrentUserService currentUserService,
+        IServiceScopeFactory scopeFactory)
     {
         _config = config;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _db = db;
         _currentUserService = currentUserService;
+        _scopeFactory = scopeFactory;
     }
 
     [HttpGet("config")]
@@ -395,6 +399,266 @@ public class MotivController : ControllerBase
         }
 
         return StatusCode(500, new { error = "MOTIV safety-events request failed: no valid safety events path configured.", attempted });
+    }
+
+    /// <summary>
+    /// Returns cached Motive driver-analysis telematics for a date range (DB snapshot).
+    /// Use POST driver-analysis/refresh to pull fresh data from Motive.
+    /// </summary>
+    [HttpGet("driver-analysis")]
+    public async Task<IActionResult> GetCachedDriverAnalysis([FromQuery] string? startDate = null, [FromQuery] string? endDate = null)
+    {
+        var orgId = await ResolveOrganizationId();
+        var (start, end, startIso, endIso) = MotiveDriverAnalysisHelpers.ParseRange(startDate, endDate);
+
+        var cache = await _db.MotivDriverAnalysisCaches.AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.OrganizationId == (orgId > 0 ? orgId : null)
+                && x.StartDate == start
+                && x.EndDate == end);
+
+        if (cache == null)
+        {
+            return Ok(new
+            {
+                source = "cache",
+                endpoint = "driver-analysis",
+                cached = false,
+                connected = false,
+                startDate = startIso,
+                endDate = endIso,
+                drivers = 0,
+                lastRefreshedAt = (DateTime?)null,
+                data = Array.Empty<object>()
+            });
+        }
+
+        var data = MotiveDriverAnalysisHelpers.DeserializePayload(cache.PayloadJson);
+        return Ok(new
+        {
+            source = "cache",
+            endpoint = "driver-analysis",
+            cached = true,
+            connected = cache.Connected,
+            startDate = startIso,
+            endDate = endIso,
+            drivers = cache.DriverCount,
+            lastRefreshedAt = cache.RefreshedAt,
+            data
+        });
+    }
+
+    /// <summary>
+    /// Pulls fresh Motive telematics for a date range, saves to DB, and returns the snapshot.
+    /// </summary>
+    [HttpPost("driver-analysis/refresh")]
+    public async Task<IActionResult> RefreshDriverAnalysis([FromQuery] string? startDate = null, [FromQuery] string? endDate = null)
+    {
+        var orgId = await ResolveOrganizationId();
+        var (start, end, startIso, endIso) = MotiveDriverAnalysisHelpers.ParseRange(startDate, endDate);
+        var orgKey = orgId > 0 ? orgId : (int?)null;
+        var refreshKey = MotiveDriverAnalysisHelpers.BuildRefreshKey(orgKey, start, end);
+
+        if (MotiveDriverAnalysisRefreshTracker.IsActive(refreshKey))
+        {
+            return Accepted(new
+            {
+                status = "in_progress",
+                endpoint = "driver-analysis",
+                startDate = startIso,
+                endDate = endIso,
+                message = "A Motive refresh is already running for this date range."
+            });
+        }
+
+        if (!MotiveDriverAnalysisRefreshTracker.TryStart(refreshKey))
+        {
+            return Accepted(new
+            {
+                status = "in_progress",
+                endpoint = "driver-analysis",
+                startDate = startIso,
+                endDate = endIso
+            });
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var worker = ActivatorUtilities.CreateInstance<MotivController>(scope.ServiceProvider);
+                await worker.ExecuteDriverAnalysisRefreshAsync(orgKey, start, end);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Background Motive driver-analysis refresh failed for {Start} to {End}", startIso, endIso);
+            }
+            finally
+            {
+                MotiveDriverAnalysisRefreshTracker.Complete(refreshKey);
+            }
+        });
+
+        return Accepted(new
+        {
+            status = "started",
+            endpoint = "driver-analysis",
+            startDate = startIso,
+            endDate = endIso,
+            message = "Motive refresh started. Cached data will update when complete."
+        });
+    }
+
+    internal async Task ExecuteDriverAnalysisRefreshAsync(int? organizationId, DateTime start, DateTime end)
+    {
+        var live = await BuildLiveDriverAnalysisAsync(start, end);
+        await UpsertDriverAnalysisCacheAsync(organizationId, start, end, live.Connected, live.Data);
+    }
+
+    private async Task<(bool Connected, List<object> Data, List<object> Attempted)> BuildLiveDriverAnalysisAsync(DateTime start, DateTime end)
+    {
+        var startIso = start.ToString("yyyy-MM-dd");
+        var endIso = end.ToString("yyyy-MM-dd");
+        var accumulators = new Dictionary<string, MotiveDriverAnalysisAccumulator>(StringComparer.OrdinalIgnoreCase);
+        var attempted = new List<object>();
+        var anyFetchSuccess = false;
+
+        async Task MergeFetch(string label, string basePath)
+        {
+            var paths = BuildDateRangePaths(basePath, start, end);
+            foreach (var path in paths)
+            {
+                var fetch = await FetchAllMotivRows(path, $"driver-analysis:{label}:{path}", perPage: 100, maxPages: 80);
+                attempted.Add(new { label, path, status = fetch.StatusCode, rows = fetch.Rows.Count, success = fetch.Success });
+                if (!fetch.Success || fetch.Rows.Count == 0)
+                    continue;
+
+                anyFetchSuccess = true;
+
+                foreach (var row in fetch.Rows)
+                {
+                    switch (label)
+                    {
+                        case "scorecard":
+                            MergeScorecardAnalysisRow(accumulators, row);
+                            break;
+                        case "utilization":
+                            MergeUtilizationAnalysisRow(accumulators, row);
+                            break;
+                        case "hos":
+                            MergeHosViolationAnalysisRow(accumulators, row);
+                            break;
+                        case "safety":
+                            MergeSafetyAnalysisRow(accumulators, row);
+                            break;
+                        case "inspection":
+                            MergeInspectionAnalysisRow(accumulators, row);
+                            break;
+                    }
+                }
+            }
+        }
+
+        var motiveIdToName = await BuildMotiveDriverIdNameMap("driver-analysis:users");
+
+        await MergeFetch("scorecard", "/v1/scorecard_summary");
+        await MergeFetch("scorecard", "/v2/scorecard_summary");
+        await MergeFetch("utilization", "/v2/driver_utilization");
+        await MergeFetch("utilization", "/v1/driver_utilization");
+        await MergeFetch("hos", "/v1/hos_violations");
+        await MergeFetch("safety", "/v2/driver_performance_events");
+        await MergeFetch("safety", "/v1/driver_performance_events");
+        await MergeFetch("inspection", "/v2/inspection_reports");
+        await MergeFetch("inspection", "/v1/inspection_reports");
+
+        if (endIso == DateTime.UtcNow.ToString("yyyy-MM-dd"))
+        {
+            var live = await FetchEnrichedDriverRows("driver-analysis:live-drivers");
+            attempted.Add(new { label = "live-drivers", success = live.Success, rows = live.Rows.Count });
+            if (live.Success)
+            {
+                foreach (var row in live.Rows)
+                    MergeLiveDriverAnalysisRow(accumulators, row);
+            }
+        }
+
+        ResolveDriverAnalysisNames(accumulators.Values, motiveIdToName);
+        ConsolidateDriverAnalysisAccumulators(accumulators);
+        FinalizeDriverAnalysisMetrics(accumulators.Values);
+
+        var data = accumulators.Values
+            .OrderBy(x => x.DriverName, StringComparer.OrdinalIgnoreCase)
+            .Select(x => (object)new
+            {
+                driverId = x.MotiveDriverId,
+                driverName = x.DriverName,
+                motiveOnline = x.MotiveOnline,
+                safetyScore = x.SafetyScore,
+                csaScore = x.CsaScore,
+                crashCount = x.CrashCount,
+                crashRate = x.CrashRate,
+                violationCount = x.ViolationCount,
+                violationRate = x.ViolationRate,
+                mpg = x.Mpg,
+                idlePercent = x.IdlePercent,
+                harshEvents = x.HarshEvents,
+                harshEventsPer1kMi = x.HarshEventsPer1kMi,
+                totalMiles = x.TotalMiles,
+                hosViolations = x.HosViolations,
+                inspectionPassPercent = x.InspectionPassPercent,
+                hardAccel = x.HardAccel,
+                hardBrake = x.HardBrake,
+                hardCorner = x.HardCorner,
+            })
+            .ToList();
+
+        var connected = data.Count > 0 || anyFetchSuccess;
+        return (connected, data, attempted);
+    }
+
+    private async Task<DateTime> UpsertDriverAnalysisCacheAsync(
+        int? organizationId,
+        DateTime start,
+        DateTime end,
+        bool connected,
+        List<object> data)
+    {
+        var now = DateTime.UtcNow;
+        var payloadJson = JsonSerializer.Serialize(data);
+        var existing = await _db.MotivDriverAnalysisCaches
+            .FirstOrDefaultAsync(x =>
+                x.OrganizationId == organizationId
+                && x.StartDate == start
+                && x.EndDate == end);
+
+        if (existing == null)
+        {
+            existing = new MotivDriverAnalysisCache
+            {
+                OrganizationId = organizationId,
+                StartDate = start,
+                EndDate = end,
+                Connected = connected,
+                DriverCount = data.Count,
+                PayloadJson = payloadJson,
+                RefreshedAt = now,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            _db.MotivDriverAnalysisCaches.Add(existing);
+        }
+        else
+        {
+            existing.Connected = connected;
+            existing.DriverCount = data.Count;
+            existing.PayloadJson = payloadJson;
+            existing.RefreshedAt = now;
+            existing.UpdatedAt = now;
+        }
+
+        await _db.SaveChangesAsync();
+        return existing.RefreshedAt;
     }
 
     [HttpGet("fuel-purchases")]
@@ -1429,6 +1693,17 @@ public class MotivController : ControllerBase
         {
             "driver_performance_events",
             "driverPerformanceEvents",
+            "driver_performance_rollups",
+            "driverPerformanceRollups",
+            "scorecard_summaries",
+            "scorecardSummaries",
+            "driver_utilization_rollups",
+            "driverUtilizationRollups",
+            "utilization_rollups",
+            "hos_violations",
+            "hosViolations",
+            "inspection_reports",
+            "inspectionReports",
             "safety_events",
             "safetyEvents",
             "events",
@@ -3131,6 +3406,333 @@ public class MotivController : ControllerBase
             .Take(max)
             .Select(p => p.Name)
             .ToList();
+    }
+
+    private static DateTime? ParseDateOnly(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+        if (DateTime.TryParse(input, out var dt)) return dt.Date;
+        return null;
+    }
+
+    private static IEnumerable<string> BuildDateRangePaths(string basePath, DateTime start, DateTime end)
+    {
+        var startDate = start.ToString("yyyy-MM-dd");
+        var endDate = end.ToString("yyyy-MM-dd");
+        var startIso = start.ToString("O");
+        var endIso = end.ToString("O");
+
+        if (start.Date == end.Date)
+            yield return basePath;
+        yield return UpsertQueryParam(UpsertQueryParam(basePath, "start_date", startDate), "end_date", endDate);
+        yield return UpsertQueryParam(UpsertQueryParam(basePath, "from_date", startDate), "to_date", endDate);
+        yield return UpsertQueryParam(UpsertQueryParam(basePath, "start_time", startIso), "end_time", endIso);
+        yield return UpsertQueryParam(UpsertQueryParam(basePath, "from", startIso), "to", endIso);
+    }
+
+    private async Task<Dictionary<string, string>> BuildMotiveDriverIdNameMap(string endpointPrefix)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var enriched = await FetchEnrichedDriverRows(endpointPrefix);
+        if (!enriched.Success)
+            return map;
+
+        foreach (var row in enriched.Rows)
+        {
+            var user = PickNestedObject(row, "user") ?? row;
+            var id = PickString(user, "id", "user_id", "driver_id");
+            var (name, _) = ExtractDriverIdentity(user, row);
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
+                map[id.Trim()] = name.Trim();
+        }
+
+        return map;
+    }
+
+    private static void ResolveDriverAnalysisNames(
+        IEnumerable<MotiveDriverAnalysisAccumulator> rows,
+        IReadOnlyDictionary<string, string> motiveIdToName)
+    {
+        foreach (var acc in rows)
+        {
+            if (!string.IsNullOrWhiteSpace(acc.MotiveDriverId)
+                && motiveIdToName.TryGetValue(acc.MotiveDriverId, out var resolvedName)
+                && !string.IsNullOrWhiteSpace(resolvedName))
+            {
+                if (string.IsNullOrWhiteSpace(acc.DriverName) || acc.DriverName == "Unknown")
+                    acc.DriverName = resolvedName;
+            }
+        }
+    }
+
+    private static string NormalizeDriverNameForMatch(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "";
+        var normalized = Regex.Replace(name.Trim().ToLowerInvariant(), @"\s+", " ");
+        normalized = Regex.Replace(normalized, @"\b(jr|sr|ii|iii|iv)\b\.?", "", RegexOptions.IgnoreCase).Trim();
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+        return normalized;
+    }
+
+    private static string NormalizeDriverAnalysisKey(string? name, string? id)
+    {
+        var normalizedName = NormalizeDriverNameForMatch(name);
+        if (!string.IsNullOrWhiteSpace(normalizedName))
+            return $"name:{normalizedName}";
+        if (!string.IsNullOrWhiteSpace(id))
+            return $"id:{id.Trim()}";
+        return Guid.NewGuid().ToString("N");
+    }
+
+    private static void ConsolidateDriverAnalysisAccumulators(Dictionary<string, MotiveDriverAnalysisAccumulator> map)
+    {
+        var merged = new Dictionary<string, MotiveDriverAnalysisAccumulator>(StringComparer.OrdinalIgnoreCase);
+        foreach (var acc in map.Values)
+        {
+            var key = NormalizeDriverNameForMatch(acc.DriverName);
+            if (string.IsNullOrWhiteSpace(key))
+                key = string.IsNullOrWhiteSpace(acc.MotiveDriverId) ? acc.Key : $"id:{acc.MotiveDriverId}";
+
+            if (!merged.TryGetValue(key, out var target))
+            {
+                merged[key] = acc;
+                continue;
+            }
+
+            target.MotiveDriverId ??= acc.MotiveDriverId;
+            target.MotiveOnline ??= acc.MotiveOnline;
+            target.SafetyScore ??= acc.SafetyScore;
+            target.CsaScore ??= acc.CsaScore;
+            target.Mpg ??= acc.Mpg;
+            target.IdlePercent ??= acc.IdlePercent;
+            target.TotalMiles ??= acc.TotalMiles;
+            target.HarshEventsPer1kMi ??= acc.HarshEventsPer1kMi;
+            target.InspectionPassPercent ??= acc.InspectionPassPercent;
+            target.CrashCount += acc.CrashCount;
+            target.ViolationCount += acc.ViolationCount;
+            target.HarshEvents += acc.HarshEvents;
+            target.HardAccel += acc.HardAccel;
+            target.HardBrake += acc.HardBrake;
+            target.HardCorner += acc.HardCorner;
+            target.HosViolations += acc.HosViolations;
+            target.InspectionTotal += acc.InspectionTotal;
+            target.InspectionPassed += acc.InspectionPassed;
+            if (string.IsNullOrWhiteSpace(target.DriverName) || target.DriverName == "Unknown")
+                target.DriverName = acc.DriverName;
+        }
+
+        map.Clear();
+        foreach (var kv in merged)
+            map[kv.Key] = kv.Value;
+    }
+
+    private static MotiveDriverAnalysisAccumulator GetOrCreateDriverAnalysisAccumulator(
+        Dictionary<string, MotiveDriverAnalysisAccumulator> map,
+        string? name,
+        string? id)
+    {
+        var key = NormalizeDriverAnalysisKey(name, id);
+        if (!map.TryGetValue(key, out var acc))
+        {
+            acc = new MotiveDriverAnalysisAccumulator
+            {
+                Key = key,
+                DriverName = (name ?? id ?? "Unknown").Trim()
+            };
+            map[key] = acc;
+        }
+
+        if (!string.IsNullOrWhiteSpace(name))
+            acc.DriverName = name.Trim();
+        if (!string.IsNullOrWhiteSpace(id))
+            acc.MotiveDriverId ??= id.Trim();
+        return acc;
+    }
+
+    private static (string? Name, string? Id) ExtractDriverIdentity(JsonElement? driverElement, JsonElement fallback)
+    {
+        var driver = driverElement ?? fallback;
+        if (driver.ValueKind != JsonValueKind.Object)
+            driver = fallback;
+
+        var first = PickString(driver, "first_name", "firstName");
+        var last = PickString(driver, "last_name", "lastName");
+        var name = BuildName(first, last, PickString(driver, "name", "full_name", "driver_name"));
+        var id = PickString(driver, "id", "driver_id", "user_id");
+        if (string.IsNullOrWhiteSpace(name))
+            name = PickString(fallback, "driver_name", "name");
+        if (string.IsNullOrWhiteSpace(id))
+            id = PickString(fallback, "driver_id", "id");
+        return (name, id);
+    }
+
+    private static void MergeScorecardAnalysisRow(Dictionary<string, MotiveDriverAnalysisAccumulator> map, JsonElement row)
+    {
+        var scorecard = PickNestedObject(row, "scorecard_summary");
+        var rollup = PickNestedObject(row, "driver_performance_rollup")
+            ?? (scorecard.HasValue ? PickNestedObject(scorecard.Value, "driver_performance_rollup") : null)
+            ?? (scorecard.HasValue ? scorecard : null)
+            ?? row;
+        var driverObj = PickNestedObject(rollup, "driver") ?? PickNestedObject(row, "driver");
+        var (name, id) = ExtractDriverIdentity(driverObj, rollup);
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(id))
+            return;
+
+        var acc = GetOrCreateDriverAnalysisAccumulator(map, name, id);
+        acc.SafetyScore ??= PickDecimal(rollup, "safety_score", "driver_score", "score", "total_score");
+        acc.CsaScore ??= PickDecimal(rollup, "csa_score", "csa", "safety_score", "driver_score", "total_score");
+        acc.HardAccel += PickInt(rollup, "hard_accel", "hard_accelerations", "hard_acceleration_count", "hard_acceleration_events") ?? 0;
+        acc.HardBrake += PickInt(rollup, "hard_brake", "hard_brakes", "hard_braking_count", "hard_braking_events", "hard_brake_events") ?? 0;
+        acc.HardCorner += PickInt(rollup, "hard_corner", "hard_corners", "hard_cornering_count", "hard_cornering_events") ?? 0;
+        acc.HarshEvents += PickInt(rollup, "harsh_events", "total_harsh_events", "harsh_event_count") ?? 0;
+        acc.Mpg ??= PickDecimal(rollup, "mpg", "fuel_economy", "average_mpg", "avg_mpg", "fuel_economy_mpg");
+        acc.IdlePercent ??= PickDecimal(rollup, "idle_percent", "idle_percentage", "idle_time_percent", "idle_time_percentage");
+        acc.TotalMiles ??= PickDecimal(rollup, "total_miles", "miles_driven", "distance_miles", "total_distance", "distance_driven");
+        acc.ViolationCount += PickInt(rollup, "violations", "violation_count", "coached_events", "coaching_events", "total_violations") ?? 0;
+    }
+
+    private static void MergeUtilizationAnalysisRow(Dictionary<string, MotiveDriverAnalysisAccumulator> map, JsonElement row)
+    {
+        var rollup = PickNestedObject(row, "driver_utilization_rollup")
+            ?? PickNestedObject(row, "driver_idle_rollup")
+            ?? PickNestedObject(row, "utilization_rollup")
+            ?? row;
+        var driverObj = PickNestedObject(rollup, "driver") ?? PickNestedObject(row, "driver");
+        var (name, id) = ExtractDriverIdentity(driverObj, rollup);
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(id))
+            return;
+
+        var acc = GetOrCreateDriverAnalysisAccumulator(map, name, id);
+        var idleSeconds = PickDecimal(rollup, "idle_time", "idle_duration", "idle_seconds", "total_idle_time");
+        var driveSeconds = PickDecimal(rollup, "driving_time", "drive_time", "driving_duration", "total_drive_time");
+        acc.Mpg ??= PickDecimal(rollup, "mpg", "fuel_economy", "average_mpg");
+        acc.TotalMiles ??= PickDecimal(rollup, "total_miles", "miles_driven", "distance_miles");
+
+        if (!acc.IdlePercent.HasValue && idleSeconds.HasValue && driveSeconds.HasValue)
+        {
+            var total = idleSeconds.Value + driveSeconds.Value;
+            if (total > 0)
+                acc.IdlePercent = Math.Round(idleSeconds.Value / total * 100m, 1);
+        }
+        else
+        {
+            acc.IdlePercent ??= PickDecimal(rollup, "idle_percent", "idle_percentage");
+        }
+    }
+
+    private static void MergeHosViolationAnalysisRow(Dictionary<string, MotiveDriverAnalysisAccumulator> map, JsonElement row)
+    {
+        var violation = PickNestedObject(row, "hos_violation") ?? row;
+        var driverObj = PickNestedObject(violation, "driver") ?? PickNestedObject(row, "driver");
+        var (name, id) = ExtractDriverIdentity(driverObj, violation);
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(id))
+            return;
+
+        var acc = GetOrCreateDriverAnalysisAccumulator(map, name, id);
+        acc.HosViolations++;
+        acc.ViolationCount++;
+    }
+
+    private static void MergeSafetyAnalysisRow(Dictionary<string, MotiveDriverAnalysisAccumulator> map, JsonElement row)
+    {
+        var evt = PickNestedObject(row, "driver_performance_event") ?? PickNestedObject(row, "event") ?? row;
+        var driverObj = PickNestedObject(evt, "driver") ?? PickNestedObject(row, "driver");
+        var (name, id) = ExtractDriverIdentity(driverObj, evt);
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(id))
+            return;
+
+        var acc = GetOrCreateDriverAnalysisAccumulator(map, name, id);
+        var eventType = (PickString(evt, "event_type", "type", "primary_behavior") ?? "").ToLowerInvariant();
+        acc.HarshEvents++;
+        if (eventType.Contains("crash") || eventType.Contains("collision"))
+            acc.CrashCount++;
+        if (eventType.Contains("violation") || eventType.Contains("speeding") || eventType.Contains("seatbelt"))
+            acc.ViolationCount++;
+
+        if (eventType.Contains("accel"))
+            acc.HardAccel++;
+        else if (eventType.Contains("brak"))
+            acc.HardBrake++;
+        else if (eventType.Contains("corner"))
+            acc.HardCorner++;
+    }
+
+    private static void MergeInspectionAnalysisRow(Dictionary<string, MotiveDriverAnalysisAccumulator> map, JsonElement row)
+    {
+        var report = PickNestedObject(row, "inspection_report") ?? row;
+        var driverObj = PickNestedObject(report, "driver") ?? PickNestedObject(row, "driver");
+        var (name, id) = ExtractDriverIdentity(driverObj, report);
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(id))
+            return;
+
+        var acc = GetOrCreateDriverAnalysisAccumulator(map, name, id);
+        acc.InspectionTotal++;
+        var status = (PickString(report, "status", "result", "inspection_result") ?? "").ToLowerInvariant();
+        if (status.Contains("pass") || status.Contains("satisfactory") || status.Contains("complete"))
+            acc.InspectionPassed++;
+    }
+
+    private static void MergeLiveDriverAnalysisRow(Dictionary<string, MotiveDriverAnalysisAccumulator> map, JsonElement row)
+    {
+        var user = PickNestedObject(row, "user") ?? row;
+        var (name, id) = ExtractDriverIdentity(user, row);
+        if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(id))
+            return;
+
+        var acc = GetOrCreateDriverAnalysisAccumulator(map, name, id);
+        var statusRaw = PickString(row, "status") ?? PickString(user, "status") ?? "";
+        var online = statusRaw.Contains("on", StringComparison.OrdinalIgnoreCase)
+            || statusRaw.Contains("drive", StringComparison.OrdinalIgnoreCase)
+            || statusRaw.Contains("active", StringComparison.OrdinalIgnoreCase);
+        acc.MotiveOnline = online;
+    }
+
+    private static void FinalizeDriverAnalysisMetrics(IEnumerable<MotiveDriverAnalysisAccumulator> rows)
+    {
+        foreach (var acc in rows)
+        {
+            if (acc.HarshEvents <= 0)
+                acc.HarshEvents = acc.HardAccel + acc.HardBrake + acc.HardCorner;
+
+            if (acc.TotalMiles.GetValueOrDefault() > 0 && acc.HarshEvents > 0)
+                acc.HarshEventsPer1kMi = Math.Round(acc.HarshEvents / (acc.TotalMiles!.Value / 1000m), 2);
+            else if (acc.HarshEvents > 0 && !acc.HarshEventsPer1kMi.HasValue)
+                acc.HarshEventsPer1kMi = acc.HarshEvents;
+
+            if (acc.InspectionTotal > 0)
+                acc.InspectionPassPercent = Math.Round(acc.InspectionPassed * 100m / acc.InspectionTotal, 0);
+
+            acc.CrashRate = acc.CrashCount;
+            acc.ViolationRate = acc.ViolationCount;
+            if (!acc.CsaScore.HasValue)
+                acc.CsaScore = acc.SafetyScore;
+        }
+    }
+
+    private sealed class MotiveDriverAnalysisAccumulator
+    {
+        public string Key { get; set; } = "";
+        public string DriverName { get; set; } = "";
+        public string? MotiveDriverId { get; set; }
+        public bool? MotiveOnline { get; set; }
+        public decimal? SafetyScore { get; set; }
+        public decimal? CsaScore { get; set; }
+        public int CrashCount { get; set; }
+        public int ViolationCount { get; set; }
+        public int HarshEvents { get; set; }
+        public int HardAccel { get; set; }
+        public int HardBrake { get; set; }
+        public int HardCorner { get; set; }
+        public decimal? Mpg { get; set; }
+        public decimal? IdlePercent { get; set; }
+        public decimal? TotalMiles { get; set; }
+        public decimal? HarshEventsPer1kMi { get; set; }
+        public int HosViolations { get; set; }
+        public int InspectionTotal { get; set; }
+        public int InspectionPassed { get; set; }
+        public decimal? InspectionPassPercent { get; set; }
+        public decimal? CrashRate { get; set; }
+        public decimal? ViolationRate { get; set; }
     }
 
     private static void AppendDebugLog(string runId, string hypothesisId, string location, string message, object data)

@@ -256,6 +256,7 @@ builder.Services.AddSingleton<MetricCacheService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddMemoryCache();
+builder.Services.AddHostedService<MotiveDriverAnalysisScheduledRefreshService>();
 
 var app = builder.Build();
 
@@ -511,6 +512,23 @@ using (var scope = app.Services.CreateScope())
             ON ""MotivSafetyEvents"" (""ExternalId"");
         CREATE INDEX IF NOT EXISTS ""IX_MotivSafetyEvents_EventAt""
             ON ""MotivSafetyEvents"" (""EventAt"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""MotivDriverAnalysisCaches"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NULL,
+            ""StartDate"" DATE NOT NULL,
+            ""EndDate"" DATE NOT NULL,
+            ""Connected"" BOOLEAN NOT NULL DEFAULT FALSE,
+            ""DriverCount"" INTEGER NOT NULL DEFAULT 0,
+            ""PayloadJson"" text NOT NULL DEFAULT '[]',
+            ""RefreshedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_MotivDriverAnalysisCaches_Org_Range""
+            ON ""MotivDriverAnalysisCaches"" (""OrganizationId"", ""StartDate"", ""EndDate"");
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
