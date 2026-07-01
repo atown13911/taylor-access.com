@@ -37,7 +37,7 @@ public class AssetsProxyController : ControllerBase
         limit = Math.Clamp(limit, 1, 5000);
         equipmentType = string.IsNullOrWhiteSpace(equipmentType) ? "trailer" : equipmentType.Trim();
         var client = _httpClientFactory.CreateClient();
-        await ConfigureUpstreamClientAsync(client);
+        await ConfigureUpstreamClientAsync(client, preferServiceAuth: true);
 
         var attempts = BuildCandidateUrls(limit, equipmentType).ToList();
         var errors = new List<object>();
@@ -103,7 +103,7 @@ public class AssetsProxyController : ControllerBase
             return BadRequest(new { error = "Proxy path is required" });
 
         var client = _httpClientFactory.CreateClient();
-        await ConfigureUpstreamClientAsync(client);
+        await ConfigureUpstreamClientAsync(client, preferServiceAuth: true);
 
         var attempts = BuildCandidateUrlsForPath(relativePath, Request.QueryString.Value ?? string.Empty).ToList();
         var bodyBytes = await ReadIncomingBodyAsync();
@@ -151,10 +151,25 @@ public class AssetsProxyController : ControllerBase
         return StatusCode(502, new { error = "Assets proxy upstream failure", method = method.Method, path = relativePath, attempts = errors });
     }
 
-    private async Task ConfigureUpstreamClientAsync(HttpClient client)
+    private async Task ConfigureUpstreamClientAsync(HttpClient client, bool preferServiceAuth = false)
     {
         client.DefaultRequestHeaders.Remove("Authorization");
         client.DefaultRequestHeaders.Remove("X-Service-Key");
+        client.DefaultRequestHeaders.Remove("X-Internal-Key");
+        client.DefaultRequestHeaders.Remove("X-GW-Internal");
+
+        var serviceKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+        if (!string.IsNullOrWhiteSpace(serviceKey))
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", serviceKey.Trim());
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", serviceKey.Trim());
+        }
+
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-GW-Internal", "1");
+
+        if (preferServiceAuth)
+            return;
 
         var user = await _currentUserService.GetUserAsync();
         if (user != null)
@@ -166,11 +181,6 @@ public class AssetsProxyController : ControllerBase
         {
             client.DefaultRequestHeaders.Authorization = incomingAuth;
         }
-
-        var serviceKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
-            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
-        if (!string.IsNullOrWhiteSpace(serviceKey))
-            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", serviceKey.Trim());
     }
 
     private async Task<byte[]?> ReadIncomingBodyAsync()
@@ -200,15 +210,15 @@ public class AssetsProxyController : ControllerBase
         var railwayServiceBase = Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL");
         var bases = new[]
         {
+            railwayServiceBase,
+            gatewayConfiguredBase,
+            configuredBase,
+            "https://taylor-assets-production.up.railway.app",
             gatewayInternalOpenBase,
             gatewayPublicOpenBase,
             portalDerivedOpenBase,
             accessDerivedOpenBase,
-            configuredBase,
-            gatewayConfiguredBase,
-            railwayServiceBase,
-            "https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-assets",
-            "https://taylor-assets-production.up.railway.app"
+            "https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-assets"
         }
         .Where(v => !string.IsNullOrWhiteSpace(v))
         .Select(v => v!.Trim().TrimEnd('/'))
@@ -218,6 +228,8 @@ public class AssetsProxyController : ControllerBase
         var typeEncoded = Uri.EscapeDataString(equipmentType);
         var suffixes = new[]
         {
+            $"/internal/equipment?equipmentType={typeEncoded}&limit={limit}",
+            $"/internal/trailers?limit={limit}",
             $"/api/v1/equipment?equipmentType={typeEncoded}&limit={limit}",
             $"/equipment?equipmentType={typeEncoded}&limit={limit}",
             $"/api/v1/trailers?limit={limit}",

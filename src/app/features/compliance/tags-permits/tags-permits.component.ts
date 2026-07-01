@@ -17,6 +17,7 @@ export class TagsPermitsComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private apiUrl = environment.apiUrl;
+  private assetsGatewayUrl = environment.apiUrl.replace(/\/open\/taylor-access\/?$/i, '/open/taylor-assets');
   private trailerApiUrl = `${this.apiUrl}/api/v1/assets-proxy`;
   private trailerApiRoot = this.trailerApiUrl.replace(/\/+$/, '');
   private readonly trailerStatusOverridesKey = 'ta_trailer_status_overrides';
@@ -236,13 +237,14 @@ export class TagsPermitsComponent implements OnInit {
     }
 
     if (tab === 'trailer') {
+      const allRows = this.trailers().map((t: any) => this.mapTrailerRow(t));
       const rows = this.filteredTrailerPermits();
-      const assigned = rows.filter((p: any) => String(p?.assignedDriverName || '').trim().length > 0).length;
-      const unassigned = Math.max(rows.length - assigned, 0);
-      const expiring = rows.filter((p: any) => this.getPermitStatus(p) === 'expiring').length;
+      const assigned = allRows.filter((p: any) => String(p?.assignedDriverName || '').trim().length > 0).length;
+      const unassigned = Math.max(allRows.length - assigned, 0);
+      const expiring = allRows.filter((p: any) => this.getPermitStatus(p) === 'expiring').length;
 
       return [
-        { icon: 'bx-package', label: 'Total Trailers', value: rows.length },
+        { icon: 'bx-package', label: 'Total Trailers', value: allRows.length },
         { icon: 'bx-user-check', label: 'Assigned Drivers', value: assigned },
         { icon: 'bx-user-x', label: 'Unassigned Trailers', value: unassigned },
         { icon: 'bx-error', label: 'Expiring Soon', value: expiring }
@@ -1964,36 +1966,66 @@ export class TagsPermitsComponent implements OnInit {
       const proxyRes: any = await firstValueFrom(
         this.http.get<any>(`${this.apiUrl}/api/v1/assets-proxy/trailers?limit=1000`)
       );
-      this.trailers.set(Array.isArray(proxyRes?.data) ? proxyRes.data : []);
-      await this.syncTrailerPhotoOverrides();
-      return;
+      const proxyData = Array.isArray(proxyRes?.data) ? proxyRes.data : [];
+      if (proxyData.length > 0) {
+        this.trailers.set(proxyData);
+        await this.syncTrailerPhotoOverrides();
+        return;
+      }
+      if (!proxyRes?.warning) {
+        this.trailers.set([]);
+        return;
+      }
     } catch (err: any) {
       const status = Number(err?.status || 0);
-      // If proxy endpoint exists but upstream failed, avoid browser-side direct fallback
-      // that triggers CORS errors and noisy console logs.
       if (status !== 404 && status !== 401 && status !== 403) {
         this.trailers.set([]);
         return;
       }
-      // Proxy unavailable or upstream auth mismatch (401/403): use legacy direct/gateway fallback.
+    }
+
+    const directSources = [
+      `${this.assetsGatewayUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`,
+      `${this.assetsGatewayUrl}/api/v1/trailers?limit=1000`,
+      `${environment.assetsApiUrl}/api/v1/equipment?equipmentType=trailer&limit=1000`,
+      `${environment.assetsApiUrl}/api/v1/trailers?limit=1000`
+    ];
+
+    for (const url of directSources) {
+      try {
+        const res: any = await firstValueFrom(this.http.get<any>(url));
+        const data = Array.isArray(res?.data) ? res.data : [];
+        if (data.length > 0) {
+          this.trailers.set(data);
+          await this.syncTrailerPhotoOverrides();
+          return;
+        }
+      } catch {
+        // Try next source.
+      }
     }
 
     try {
       const res: any = await this.trailerGetWithPathFallback('/equipment?equipmentType=trailer&limit=1000');
-      this.trailers.set(Array.isArray(res?.data) ? res.data : []);
-      await this.syncTrailerPhotoOverrides();
+      const data = Array.isArray(res?.data) ? res.data : [];
+      if (data.length > 0) {
+        this.trailers.set(data);
+        await this.syncTrailerPhotoOverrides();
+        return;
+      }
     } catch (err: any) {
       if (!this.shouldFallbackToEquipment(err)) {
         this.trailers.set([]);
         return;
       }
-      try {
-        const res: any = await this.trailerGetWithPathFallback('/trailers?limit=1000');
-        this.trailers.set(Array.isArray(res?.data) ? res.data : []);
-        await this.syncTrailerPhotoOverrides();
-      } catch {
-        this.trailers.set([]);
-      }
+    }
+
+    try {
+      const res: any = await this.trailerGetWithPathFallback('/trailers?limit=1000');
+      this.trailers.set(Array.isArray(res?.data) ? res.data : []);
+      await this.syncTrailerPhotoOverrides();
+    } catch {
+      this.trailers.set([]);
     }
   }
 
