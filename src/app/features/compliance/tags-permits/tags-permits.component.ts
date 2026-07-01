@@ -370,14 +370,6 @@ export class TagsPermitsComponent implements OnInit {
       ?? ''
     ).trim().toLowerCase();
 
-    if (
-      rawStatus === 'inactive'
-      || rawStatus === 'available'
-      || rawStatus === 'unassigned'
-      || rawStatus === 'idle'
-    ) {
-      return 'inactive';
-    }
     if (rawStatus === 'return' || rawStatus === 'returned') {
       return 'returned';
     }
@@ -395,7 +387,18 @@ export class TagsPermitsComponent implements OnInit {
       || rawStatus === 'in-use'
     );
 
-    return isAssigned ? 'active' : 'inactive';
+    if (isAssigned) return 'active';
+
+    if (
+      rawStatus === 'inactive'
+      || rawStatus === 'available'
+      || rawStatus === 'unassigned'
+      || rawStatus === 'idle'
+    ) {
+      return 'inactive';
+    }
+
+    return 'inactive';
   }
 
   getTrailerStatusLabel(p: any): string {

@@ -216,7 +216,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (p of filteredTrailerPermits(); track p.id) {
+          @for (p of filteredTrailerPermits(); track $index) {
             <tr class="tp-row-clickable" (click)="openTrailerDrawer(p)">
               <td class="tp-mono">{{ p.permitNumber }}</td>
               <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
