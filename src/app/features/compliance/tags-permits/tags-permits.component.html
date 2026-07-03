@@ -211,7 +211,7 @@
             <th>Issued</th>
             <th>Expires</th>
             <th>Cost</th>
-            <th>Document</th>
+            <th>Agreement</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -268,21 +268,24 @@
                 }
               </td>
               <td class="tp-mono">{{ p.cost ? '$' + p.cost.toFixed(2) : '—' }}</td>
-              <td class="tp-doc-cell">
-                @if (p.hasFile || p.fileName) {
-                  <button class="tp-icon-btn" title="View document" (click)="$event.stopPropagation(); viewPermitDoc(p)"><i class="bx bx-show"></i></button>
-                  <button class="tp-icon-btn" title="Download" (click)="$event.stopPropagation(); downloadPermitDoc(p)"><i class="bx bx-download"></i></button>
-                  <button class="tp-icon-btn danger" title="Remove document" (click)="$event.stopPropagation(); deletePermitDoc(p)"><i class="bx bx-x"></i></button>
-                } @else {
-                  <button class="tp-icon-btn upload" title="Upload document" (click)="$event.stopPropagation(); openUploadDoc(p)"
-                    [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id">
-                    @if (uploadingDoc() && uploadTarget()?.id === p.id) {
-                      <i class="bx bx-loader-alt bx-spin"></i>
-                    } @else {
-                      <i class="bx bx-upload"></i>
-                    }
-                  </button>
-                }
+              <td class="tp-agreement-cell">
+                <button
+                  type="button"
+                  class="tp-agreement-chip"
+                  [class.uploaded]="hasTrailerAgreement(p)"
+                  [class.missing]="!hasTrailerAgreement(p)"
+                  [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id"
+                  [title]="hasTrailerAgreement(p) ? 'View agreement' : 'Upload agreement'"
+                  (click)="onTrailerAgreementClick(p, $event)">
+                  @if (uploadingDoc() && uploadTarget()?.id === p.id) {
+                    <i class="bx bx-loader-alt bx-spin"></i>
+                  } @else if (hasTrailerAgreement(p)) {
+                    <i class="bx bx-check-circle"></i>
+                  } @else {
+                    <i class="bx bx-upload"></i>
+                  }
+                  {{ getTrailerAgreementLabel(p) }}
+                </button>
               </td>
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
@@ -609,33 +612,6 @@
         <button class="tp-close" (click)="closeTrailerDrawer()">&times;</button>
       </div>
 
-      <div class="tp-trailer-drawer-photo">
-        @if (trailerDrawerPhotoPreviewUrl()) {
-          <img [src]="trailerDrawerPhotoPreviewUrl()!" alt="Trailer photo">
-        } @else {
-          <div class="tp-photo-placeholder">
-            <i class="bx bx-image"></i>
-            <span>No uploaded photo yet</span>
-          </div>
-        }
-      </div>
-
-      <div class="tp-trailer-drawer-actions">
-        <button class="tp-btn primary" (click)="openTrailerEditFromDrawer()">
-          <i class="bx bx-edit"></i> Edit Trailer
-        </button>
-        <button class="tp-btn" (click)="openDrawerTrailerPhotoPicker()" [disabled]="trailerPhotoBatchUploading()">
-          @if (trailerPhotoBatchUploading()) {
-            <i class="bx bx-loader-alt bx-spin"></i> Uploading...
-          } @else {
-            <i class="bx bx-images"></i> Upload Photos
-          }
-        </button>
-        <button class="tp-btn" (click)="openTrailerPhotoFromDrawer()">
-          <i class="bx bx-image-add"></i> Photo Upload Tab
-        </button>
-      </div>
-
       <div class="tp-trailer-drawer-grid">
         <div class="tp-trailer-drawer-item"><span>Type</span><strong>{{ selectedTrailerDrawer()?.permitType || '—' }}</strong></div>
         <div class="tp-trailer-drawer-item"><span>Status</span><strong>{{ getTrailerStatusLabel(selectedTrailerDrawer()) }}</strong></div>
@@ -658,46 +634,133 @@
         <p>{{ selectedTrailerDrawer()?.notes || 'No notes' }}</p>
       </div>
 
-      <div class="tp-trailer-photo-table">
-        <div class="tp-trailer-photo-table-head">
-          <span>Uploaded Photos</span>
-          <strong>{{ trailerPhotoHistory().length }}</strong>
+      <div class="tp-drawer-tabs">
+        <button
+          type="button"
+          class="tp-drawer-tab"
+          [class.active]="trailerDrawerTab() === 'agreement'"
+          (click)="trailerDrawerTab.set('agreement')">
+          <i class="bx bx-file"></i> Agreement
+        </button>
+        <button
+          type="button"
+          class="tp-drawer-tab"
+          [class.active]="trailerDrawerTab() === 'photos'"
+          (click)="trailerDrawerTab.set('photos')">
+          <i class="bx bx-images"></i> Photos
+        </button>
+      </div>
+
+      @if (trailerDrawerTab() === 'agreement') {
+        <div class="tp-drawer-agreement-panel">
+          <button
+            type="button"
+            class="tp-agreement-chip tp-agreement-chip-lg"
+            [class.uploaded]="hasTrailerAgreement(selectedTrailerDrawer())"
+            [class.missing]="!hasTrailerAgreement(selectedTrailerDrawer())"
+            [class.uploading]="uploadingDoc() && uploadTarget()?.id === selectedTrailerDrawer()?.id"
+            (click)="onTrailerAgreementClick(selectedTrailerDrawer())">
+            @if (uploadingDoc() && uploadTarget()?.id === selectedTrailerDrawer()?.id) {
+              <i class="bx bx-loader-alt bx-spin"></i> Uploading...
+            } @else if (hasTrailerAgreement(selectedTrailerDrawer())) {
+              <i class="bx bx-check-circle"></i> Agreement uploaded — click to view
+            } @else {
+              <i class="bx bx-upload"></i> No agreement — click to upload
+            }
+          </button>
+
+          @if (hasTrailerAgreement(selectedTrailerDrawer())) {
+            <div class="tp-drawer-agreement-meta">
+              <span>File</span>
+              <strong>{{ getTrailerAgreementInfo(selectedTrailerDrawer()).fileName || 'Agreement document' }}</strong>
+            </div>
+            <div class="tp-trailer-drawer-actions">
+              <button class="tp-btn primary" (click)="viewPermitDoc(selectedTrailerDrawer())">
+                <i class="bx bx-show"></i> View
+              </button>
+              <button class="tp-btn" (click)="downloadPermitDoc(selectedTrailerDrawer())">
+                <i class="bx bx-download"></i> Download
+              </button>
+              <button class="tp-btn" (click)="openUploadDoc(selectedTrailerDrawer())">
+                <i class="bx bx-revision"></i> Replace
+              </button>
+              <button class="tp-btn danger" (click)="deletePermitDoc(selectedTrailerDrawer())">
+                <i class="bx bx-trash"></i> Remove
+              </button>
+            </div>
+          } @else {
+            <p class="tp-drawer-agreement-help">Upload the leasing or rental agreement for this trailer.</p>
+          }
         </div>
-        @if (trailerPhotoHistoryLoading()) {
-          <div class="tp-trailer-photo-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading photos...</div>
-        } @else if (trailerPhotoHistory().length === 0) {
-          <div class="tp-trailer-photo-empty">No uploaded photos yet.</div>
-        } @else {
-          <table>
-            <thead>
-              <tr>
-                <th>File</th>
-                <th>Size</th>
-                <th>Uploaded</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (photo of trailerPhotoHistory(); track photo.id) {
+      } @else {
+        <div class="tp-trailer-drawer-photo">
+          @if (trailerDrawerPhotoPreviewUrl()) {
+            <img [src]="trailerDrawerPhotoPreviewUrl()!" alt="Trailer photo">
+          } @else {
+            <div class="tp-photo-placeholder">
+              <i class="bx bx-image"></i>
+              <span>No uploaded photo yet</span>
+            </div>
+          }
+        </div>
+
+        <div class="tp-trailer-drawer-actions">
+          <button class="tp-btn" (click)="openDrawerTrailerPhotoPicker()" [disabled]="trailerPhotoBatchUploading()">
+            @if (trailerPhotoBatchUploading()) {
+              <i class="bx bx-loader-alt bx-spin"></i> Uploading...
+            } @else {
+              <i class="bx bx-images"></i> Upload Photos
+            }
+          </button>
+        </div>
+
+        <div class="tp-trailer-photo-table">
+          <div class="tp-trailer-photo-table-head">
+            <span>Uploaded Photos</span>
+            <strong>{{ trailerPhotoHistory().length }}</strong>
+          </div>
+          @if (trailerPhotoHistoryLoading()) {
+            <div class="tp-trailer-photo-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading photos...</div>
+          } @else if (trailerPhotoHistory().length === 0) {
+            <div class="tp-trailer-photo-empty">No uploaded photos yet.</div>
+          } @else {
+            <table>
+              <thead>
                 <tr>
-                  <td class="tp-file-name">{{ photo.fileName || ('Photo #' + photo.id) }}</td>
-                  <td>{{ formatFileSize(photo.fileSize) }}</td>
-                  <td>{{ formatDate(photo.createdAt) }}</td>
-                  <td class="tp-photo-actions-cell">
-                    <button class="tp-icon-btn" title="View photo" (click)="openTrailerPhotoFromHistory(photo)">
-                      <i class="bx bx-show"></i>
-                    </button>
-                    @if (getTrailerAssignmentStatus(selectedTrailerDrawer()) === 'active') {
-                      <button class="tp-icon-btn danger" title="Delete photo" (click)="deleteTrailerPhotoFromHistory(photo)">
-                        <i class="bx bx-trash"></i>
-                      </button>
-                    }
-                  </td>
+                  <th>File</th>
+                  <th>Size</th>
+                  <th>Uploaded</th>
+                  <th></th>
                 </tr>
-              }
-            </tbody>
-          </table>
-        }
+              </thead>
+              <tbody>
+                @for (photo of trailerPhotoHistory(); track photo.id) {
+                  <tr>
+                    <td class="tp-file-name">{{ photo.fileName || ('Photo #' + photo.id) }}</td>
+                    <td>{{ formatFileSize(photo.fileSize) }}</td>
+                    <td>{{ formatDate(photo.createdAt) }}</td>
+                    <td class="tp-photo-actions-cell">
+                      <button class="tp-icon-btn" title="View photo" (click)="openTrailerPhotoFromHistory(photo)">
+                        <i class="bx bx-show"></i>
+                      </button>
+                      @if (getTrailerAssignmentStatus(selectedTrailerDrawer()) === 'active') {
+                        <button class="tp-icon-btn danger" title="Delete photo" (click)="deleteTrailerPhotoFromHistory(photo)">
+                          <i class="bx bx-trash"></i>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      }
+
+      <div class="tp-trailer-drawer-actions tp-trailer-drawer-footer">
+        <button class="tp-btn primary" (click)="openTrailerEditFromDrawer()">
+          <i class="bx bx-edit"></i> Edit Trailer
+        </button>
       </div>
     </aside>
   }

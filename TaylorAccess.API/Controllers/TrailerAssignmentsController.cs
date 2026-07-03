@@ -58,14 +58,25 @@ public class TrailerAssignmentsController : ControllerBase
 
         var rows = entities
             .GroupBy(a => a.TrailerId, StringComparer.OrdinalIgnoreCase)
-            .Select(g => g
-                .OrderByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
-                .ThenByDescending(a => a.DriverOverride)
-                .ThenByDescending(a => a.UpdatedAt)
-                .First())
-            .OrderByDescending(a => a.UpdatedAt)
+            .Select(g =>
+            {
+                var candidates = g.ToList();
+                var primary = candidates
+                    .OrderByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
+                    .ThenByDescending(a => a.DriverOverride)
+                    .ThenByDescending(a => a.UpdatedAt)
+                    .First();
+                var documentSource = candidates
+                    .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.FileContent));
+                return new
+                {
+                    UpdatedAt = primary.UpdatedAt,
+                    Row = MapAssignment(primary, documentSource)
+                };
+            })
+            .OrderByDescending(x => x.UpdatedAt)
             .Take(limit)
-            .Select(a => MapAssignment(a))
+            .Select(x => x.Row)
             .ToList();
 
         return Ok(new { data = rows });
@@ -353,7 +364,20 @@ public class TrailerAssignmentsController : ControllerBase
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
         var query = FilterAssignmentsByUser(_context.TrailerAssignments.AsNoTracking(), user, hasUnrestrictedAccess);
-        return await query.FirstOrDefaultAsync(a => a.TrailerId == normalizedTrailerId);
+        var preferredOrgId = user.OrganizationId ?? 0;
+        var matches = await query
+            .Where(a => a.TrailerId == normalizedTrailerId
+                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId))
+            .ToListAsync();
+
+        if (matches.Count == 0)
+            return null;
+
+        return matches
+            .OrderByDescending(a => !string.IsNullOrWhiteSpace(a.FileContent))
+            .ThenByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
+            .ThenByDescending(a => a.UpdatedAt)
+            .First();
     }
 
     private async Task<TrailerAssignment?> GetOrCreateWritableAssignment(Models.User user, string normalizedTrailerId)
@@ -450,32 +474,39 @@ public class TrailerAssignmentsController : ControllerBase
         });
     }
 
-    private static object MapAssignment(TrailerAssignment a) => new
+    private static object MapAssignment(TrailerAssignment a, TrailerAssignment? documentSource = null)
     {
-        trailerId = a.TrailerId,
-        organizationId = a.OrganizationId,
-        permitNumber = a.PermitNumber,
-        permitType = a.PermitType,
-        state = a.State,
-        issueDate = a.IssueDate,
-        expiryDate = a.ExpiryDate,
-        cost = a.Cost,
-        vendor = a.Vendor,
-        chargeFrequency = a.ChargeFrequency,
-        trailerStatus = a.TrailerStatus,
-        assignedDriverId = a.AssignedDriverId,
-        assignedDriverName = a.AssignedDriverName,
-        driverOverride = a.DriverOverride,
-        lastAssignedDriverId = a.LastAssignedDriverId,
-        lastAssignedDriverName = a.LastAssignedDriverName,
-        inactivatedAt = a.InactivatedAt,
-        assignedTruckNumber = a.AssignedTruckNumber,
-        notes = a.Notes,
-        fileName = a.FileName,
-        hasFile = !string.IsNullOrWhiteSpace(a.FileContent),
-        createdAt = a.CreatedAt,
-        updatedAt = a.UpdatedAt
-    };
+        var doc = documentSource ?? a;
+        var hasFile = !string.IsNullOrWhiteSpace(a.FileContent) || !string.IsNullOrWhiteSpace(doc.FileContent);
+        var fileName = !string.IsNullOrWhiteSpace(a.FileName) ? a.FileName : doc.FileName;
+
+        return new
+        {
+            trailerId = a.TrailerId,
+            organizationId = a.OrganizationId,
+            permitNumber = a.PermitNumber,
+            permitType = a.PermitType,
+            state = a.State,
+            issueDate = a.IssueDate,
+            expiryDate = a.ExpiryDate,
+            cost = a.Cost,
+            vendor = a.Vendor,
+            chargeFrequency = a.ChargeFrequency,
+            trailerStatus = a.TrailerStatus,
+            assignedDriverId = a.AssignedDriverId,
+            assignedDriverName = a.AssignedDriverName,
+            driverOverride = a.DriverOverride,
+            lastAssignedDriverId = a.LastAssignedDriverId,
+            lastAssignedDriverName = a.LastAssignedDriverName,
+            inactivatedAt = a.InactivatedAt,
+            assignedTruckNumber = a.AssignedTruckNumber,
+            notes = a.Notes,
+            fileName,
+            hasFile,
+            createdAt = a.CreatedAt,
+            updatedAt = a.UpdatedAt
+        };
+    }
 
     private static string NormalizeTrailerId(string? trailerId) =>
         (trailerId ?? string.Empty).Trim();

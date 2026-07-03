@@ -61,6 +61,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   showAddModal = signal(false);
   editingPermit = signal<any>(null);
   trailerModalTab = signal<'details' | 'photo'>('details');
+  trailerDrawerTab = signal<'agreement' | 'photos'>('agreement');
   selectedTrailerDrawer = signal<any | null>(null);
   showFuelCardDetailsModal = signal(false);
   showFuelCardAssignModal = signal(false);
@@ -886,12 +887,14 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   openTrailerDrawer(row: any): void {
     if (this.activeTab() !== 'trailer') return;
+    this.trailerDrawerTab.set('agreement');
     this.selectedTrailerDrawer.set(row);
     void this.loadTrailerPhotoHistory(row);
   }
 
   closeTrailerDrawer(): void {
     this.selectedTrailerDrawer.set(null);
+    this.trailerDrawerTab.set('agreement');
     this.setTrailerDrawerPhotoPreview(null);
     this.trailerPhotoHistory.set([]);
     this.trailerPhotoHistoryLoading.set(false);
@@ -906,11 +909,58 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   openTrailerPhotoFromDrawer(): void {
-    const row = this.selectedTrailerDrawer();
-    if (!row) return;
-    this.closeTrailerDrawer();
-    this.editPermit(row);
-    this.trailerModalTab.set('photo');
+    this.trailerDrawerTab.set('photos');
+  }
+
+  hasTrailerAgreement(p: any): boolean {
+    return this.getTrailerAgreementInfo(p).hasFile;
+  }
+
+  getTrailerAgreementLabel(p: any): string {
+    const info = this.getTrailerAgreementInfo(p);
+    if (!info.hasFile) return 'Missing';
+    return info.fileName ? 'Uploaded' : 'Uploaded';
+  }
+
+  onTrailerAgreementClick(p: any, event?: Event): void {
+    event?.stopPropagation();
+    if (this.uploadingDoc() && this.uploadTarget()?.id === p?.id) return;
+    if (this.hasTrailerAgreement(p)) {
+      this.viewPermitDoc(p);
+    } else {
+      this.openUploadDoc(p);
+    }
+  }
+
+  getTrailerAgreementInfo(source: any): { hasFile: boolean; fileName: string | null } {
+    if (source?.hasFile || source?.fileName) {
+      return { hasFile: true, fileName: source.fileName ?? null };
+    }
+
+    const store = this.trailerAssignments();
+    let hasFile = false;
+    let fileName: string | null = null;
+
+    for (const key of this.resolveTrailerAssignmentKeys(source)) {
+      const rec = store[key];
+      if (rec?.hasFile || rec?.fileName) {
+        hasFile = true;
+        fileName = rec.fileName ?? fileName;
+      }
+    }
+
+    const permit = String(source?.permitNumber ?? '').trim();
+    if (permit) {
+      for (const rec of Object.values(store)) {
+        if (String(rec?.permitNumber ?? '').trim() !== permit) continue;
+        if (rec?.hasFile || rec?.fileName) {
+          hasFile = true;
+          fileName = rec.fileName ?? fileName;
+        }
+      }
+    }
+
+    return { hasFile, fileName };
   }
 
   onTrailerSelectionChange(trailerId: any): void {
@@ -1812,6 +1862,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const resolvedPhotoUrl = photoCount > 0
       ? this.buildTrailerPhotoViewUrl(trailerId)
       : null;
+    const agreement = this.getTrailerAgreementInfo({
+      ...t,
+      id: trailerId,
+      permitNumber: assignment.permitNumber || t?.tagNumber,
+      hasFile: assignment.hasFile,
+      fileName: assignment.fileName
+    });
 
     return {
       id: trailerId,
@@ -1834,8 +1891,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       status: t?.status || (resolvedAssignedDriverId ? 'active' : 'expiring'),
       notes: assignment.notes || t?.notes || '',
       photoUrl: resolvedPhotoUrl,
-      hasFile: !!assignment.hasFile,
-      fileName: assignment.fileName ?? null
+      hasFile: agreement.hasFile,
+      fileName: agreement.fileName
     };
   }
 
@@ -1845,6 +1902,12 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const activeDriverName = String(assignment.assignedDriverName ?? '').trim();
     const historicalDriverName = String(assignment.lastAssignedDriverName ?? '').trim();
     const displayDriverName = activeDriverName || (isInactiveStatus ? historicalDriverName : '');
+    const agreement = this.getTrailerAgreementInfo({
+      id: key,
+      permitNumber: assignment.permitNumber || key,
+      hasFile: assignment.hasFile,
+      fileName: assignment.fileName
+    });
 
     return {
       id: key,
@@ -1867,8 +1930,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       status: 'expiring',
       notes: assignment.notes || '',
       photoUrl: null,
-      hasFile: !!assignment.hasFile,
-      fileName: assignment.fileName ?? null
+      hasFile: agreement.hasFile,
+      fileName: agreement.fileName
     };
   }
 
