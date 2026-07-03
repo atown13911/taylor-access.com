@@ -1,3 +1,6 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,11 +17,19 @@ public class TrailerAssignmentsController : ControllerBase
 {
     private readonly TaylorAccessDbContext _context;
     private readonly CurrentUserService _currentUserService;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<TrailerAssignmentsController> _logger;
 
-    public TrailerAssignmentsController(TaylorAccessDbContext context, CurrentUserService currentUserService)
+    public TrailerAssignmentsController(
+        TaylorAccessDbContext context,
+        CurrentUserService currentUserService,
+        IHttpClientFactory httpClientFactory,
+        ILogger<TrailerAssignmentsController> logger)
     {
         _context = context;
         _currentUserService = currentUserService;
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -82,6 +93,51 @@ public class TrailerAssignmentsController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok(new { data = MapAssignment(assignment) });
+    }
+
+    [HttpPost("{trailerId}/unassign-driver")]
+    public async Task<ActionResult<object>> UnassignDriver([FromRoute] string trailerId)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var normalizedTrailerId = NormalizeTrailerId(trailerId);
+        if (string.IsNullOrWhiteSpace(normalizedTrailerId))
+            return BadRequest(new { error = "Trailer id is required" });
+
+        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        var organizationId = user.OrganizationId ?? 0;
+        if (!hasUnrestrictedAccess && organizationId <= 0)
+            organizationId = 0;
+
+        var assignment = await _context.TrailerAssignments
+            .FirstOrDefaultAsync(a => a.TrailerId == normalizedTrailerId && a.OrganizationId == organizationId);
+
+        if (assignment == null)
+        {
+            assignment = new TrailerAssignment
+            {
+                TrailerId = normalizedTrailerId,
+                OrganizationId = organizationId,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.TrailerAssignments.Add(assignment);
+        }
+
+        assignment.AssignedDriverId = null;
+        assignment.AssignedDriverName = null;
+        assignment.DriverOverride = true;
+        assignment.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        var assetsSynced = await TryClearAssetsDriverAssignmentAsync(normalizedTrailerId);
+
+        return Ok(new
+        {
+            data = MapAssignment(assignment),
+            assetsSynced
+        });
     }
 
     [HttpPost("bulk-upsert")]
@@ -330,6 +386,84 @@ public class TrailerAssignmentsController : ControllerBase
 
     private static string NormalizeTrailerId(string? trailerId) =>
         (trailerId ?? string.Empty).Trim();
+
+    private async Task<bool> TryClearAssetsDriverAssignmentAsync(string trailerId)
+    {
+        if (!int.TryParse(trailerId, out var numericId) || numericId <= 0)
+            return false;
+
+        var clearPayload = JsonSerializer.Serialize(new
+        {
+            assignedDriverId = (int?)null,
+            driverId = (int?)null,
+            assignedDriverName = (string?)null,
+            ownerName = (string?)null,
+            status = "available"
+        });
+
+        var client = _httpClientFactory.CreateClient();
+        ConfigureAssetsClient(client);
+
+        foreach (var url in BuildAssetsClearUrls(numericId))
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(new HttpMethod("PATCH"), url)
+                {
+                    Content = new StringContent(clearPayload, Encoding.UTF8, "application/json")
+                };
+                using var response = await client.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                    return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Assets unassign attempt failed for {Url}", url);
+            }
+        }
+
+        return false;
+    }
+
+    private static void ConfigureAssetsClient(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Remove("X-Service-Key");
+        client.DefaultRequestHeaders.Remove("X-Internal-Key");
+        client.DefaultRequestHeaders.Remove("X-GW-Internal");
+
+        var serviceKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+        if (!string.IsNullOrWhiteSpace(serviceKey))
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", serviceKey.Trim());
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", serviceKey.Trim());
+        }
+
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-GW-Internal", "1");
+    }
+
+    private static IEnumerable<string> BuildAssetsClearUrls(int trailerId)
+    {
+        var bases = new[]
+        {
+            Environment.GetEnvironmentVariable("RAILWAY_SERVICE_TAYLOR_ASSETS_URL"),
+            Environment.GetEnvironmentVariable("TTAC_TAYLOR_ASSETS_BACKEND_URL"),
+            Environment.GetEnvironmentVariable("TAYLOR_ASSETS_API_URL"),
+            "https://taylor-assets-production.up.railway.app",
+            "https://ttac-gateway-production.up.railway.app/api/v1/open/taylor-assets"
+        }
+        .Where(v => !string.IsNullOrWhiteSpace(v))
+        .Select(v => v!.Trim().TrimEnd('/'))
+        .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var b in bases)
+        {
+            yield return $"{b}/internal/trailers/{trailerId}";
+            yield return $"{b}/internal/equipment/{trailerId}";
+            yield return $"{b}/api/v1/trailers/{trailerId}";
+            yield return $"{b}/api/v1/equipment/{trailerId}";
+        }
+    }
 }
 
 public class TrailerAssignmentUpsertRequest

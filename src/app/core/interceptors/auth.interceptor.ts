@@ -70,7 +70,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       
       // Handle 500 Server Error
       if (error.status >= 500 && !isSilentTelemetryCall) {
-        console.error('Server error:', error.message);
+        const isOptionalAssetsProxyWrite =
+          req.method !== 'GET' &&
+          req.url.includes('/api/v1/assets-proxy/');
+        if (!isOptionalAssetsProxyWrite) {
+          console.error('Server error:', error.message);
+        }
       }
       
       return throwError(() => error);
