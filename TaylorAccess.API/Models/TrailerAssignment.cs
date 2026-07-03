@@ -48,6 +48,13 @@ public class TrailerAssignment
     /// </summary>
     public bool DriverOverride { get; set; }
 
+    public int? LastAssignedDriverId { get; set; }
+
+    [MaxLength(150)]
+    public string? LastAssignedDriverName { get; set; }
+
+    public DateTime? InactivatedAt { get; set; }
+
     [MaxLength(50)]
     public string? AssignedTruckNumber { get; set; }
 

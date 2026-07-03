@@ -159,6 +159,59 @@ public class TrailerAssignmentsController : ControllerBase
         });
     }
 
+    [HttpPost("{trailerId}/deactivate")]
+    public async Task<ActionResult<object>> DeactivateTrailer([FromRoute] string trailerId)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var normalizedTrailerId = NormalizeTrailerId(trailerId);
+        if (string.IsNullOrWhiteSpace(normalizedTrailerId))
+            return BadRequest(new { error = "Trailer id is required" });
+
+        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        var organizationId = user.OrganizationId ?? 0;
+        if (!hasUnrestrictedAccess && organizationId <= 0)
+            organizationId = 0;
+
+        var targets = await FindWritableAssignmentsAsync(normalizedTrailerId, hasUnrestrictedAccess, organizationId);
+        if (targets.Count == 0)
+        {
+            targets.Add(new TrailerAssignment
+            {
+                TrailerId = normalizedTrailerId,
+                OrganizationId = organizationId,
+                CreatedAt = DateTime.UtcNow
+            });
+            _context.TrailerAssignments.Add(targets[0]);
+        }
+
+        foreach (var assignment in targets)
+        {
+            if (assignment.AssignedDriverId.HasValue || !string.IsNullOrWhiteSpace(assignment.AssignedDriverName))
+            {
+                assignment.LastAssignedDriverId = assignment.AssignedDriverId;
+                assignment.LastAssignedDriverName = assignment.AssignedDriverName;
+            }
+
+            assignment.AssignedDriverId = null;
+            assignment.AssignedDriverName = null;
+            assignment.TrailerStatus = "inactive";
+            assignment.DriverOverride = true;
+            assignment.InactivatedAt = DateTime.UtcNow;
+            assignment.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        var primary = targets
+            .OrderByDescending(a => organizationId > 0 && a.OrganizationId == organizationId)
+            .ThenByDescending(a => a.UpdatedAt)
+            .First();
+
+        return Ok(new { data = MapAssignment(primary) });
+    }
+
     private async Task<List<TrailerAssignment>> FindWritableAssignmentsAsync(
         string normalizedTrailerId,
         bool hasUnrestrictedAccess,
@@ -371,6 +424,9 @@ public class TrailerAssignmentsController : ControllerBase
         }
         if (request.AssignedTruckNumber != null) assignment.AssignedTruckNumber = request.AssignedTruckNumber;
         if (request.Notes != null) assignment.Notes = request.Notes;
+        if (request.LastAssignedDriverId.HasValue) assignment.LastAssignedDriverId = request.LastAssignedDriverId;
+        if (request.LastAssignedDriverName != null) assignment.LastAssignedDriverName = request.LastAssignedDriverName;
+        if (request.InactivatedAt.HasValue) assignment.InactivatedAt = request.InactivatedAt;
     }
 
     private static void ApplyUpsert(TrailerAssignment assignment, TrailerAssignmentBulkItem item)
@@ -410,6 +466,9 @@ public class TrailerAssignmentsController : ControllerBase
         assignedDriverId = a.AssignedDriverId,
         assignedDriverName = a.AssignedDriverName,
         driverOverride = a.DriverOverride,
+        lastAssignedDriverId = a.LastAssignedDriverId,
+        lastAssignedDriverName = a.LastAssignedDriverName,
+        inactivatedAt = a.InactivatedAt,
         assignedTruckNumber = a.AssignedTruckNumber,
         notes = a.Notes,
         fileName = a.FileName,
@@ -517,6 +576,9 @@ public class TrailerAssignmentUpsertRequest
     public string? Notes { get; set; }
     public bool? ClearAssignedDriver { get; set; }
     public bool? DriverOverride { get; set; }
+    public int? LastAssignedDriverId { get; set; }
+    public string? LastAssignedDriverName { get; set; }
+    public DateTime? InactivatedAt { get; set; }
 }
 
 public class TrailerAssignmentBulkUpsertRequest

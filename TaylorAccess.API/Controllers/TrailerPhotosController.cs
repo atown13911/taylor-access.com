@@ -53,8 +53,22 @@ public class TrailerPhotosController : ControllerBase
 
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
+        var relatedAssignmentIds = await _context.TrailerAssignments
+            .AsNoTracking()
+            .Where(a =>
+                idList.Contains(a.TrailerId)
+                || (a.PermitNumber != null && idList.Contains(a.PermitNumber)))
+            .Select(a => new AssignmentIdAlias(a.TrailerId, a.PermitNumber))
+            .ToListAsync();
+
+        var expandedIds = idList
+            .Concat(relatedAssignmentIds.Select(a => a.TrailerId))
+            .Concat(relatedAssignmentIds.Select(a => a.PermitNumber).Where(v => !string.IsNullOrWhiteSpace(v))!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         var photos = await query
-            .Where(p => idList.Contains(p.TrailerId))
+            .Where(p => expandedIds.Contains(p.TrailerId))
             .OrderByDescending(p => p.UpdatedAt)
             .ThenByDescending(p => p.Id)
             .Select(p => new
@@ -70,18 +84,58 @@ public class TrailerPhotosController : ControllerBase
             .Select(g =>
             {
                 var latest = g.First();
+                var canonicalTrailerId = ResolveCanonicalTrailerId(g.Key, idList, relatedAssignmentIds);
                 return new
                 {
-                    trailerId = g.Key,
+                    trailerId = canonicalTrailerId,
+                    sourceTrailerId = g.Key,
                     photoCount = g.Count(),
                     latestPhotoId = latest.Id,
                     photoUrl = BuildPhotoViewUrl(latest.Id),
                     updatedAt = latest.UpdatedAt
                 };
             })
+            .GroupBy(p => p.trailerId, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var best = g.OrderByDescending(x => x.updatedAt).First();
+                return new
+                {
+                    best.trailerId,
+                    photoCount = g.Sum(x => x.photoCount),
+                    latestPhotoId = best.latestPhotoId,
+                    photoUrl = best.photoUrl,
+                    updatedAt = best.updatedAt
+                };
+            })
             .ToList();
 
         return Ok(new { data = result });
+    }
+
+    private static string ResolveCanonicalTrailerId(
+        string photoTrailerId,
+        string[] requestedIds,
+        IReadOnlyList<AssignmentIdAlias> relatedAssignments)
+    {
+        if (requestedIds.Contains(photoTrailerId, StringComparer.OrdinalIgnoreCase))
+            return photoTrailerId;
+
+        foreach (var assignment in relatedAssignments)
+        {
+            if (string.Equals(photoTrailerId, assignment.TrailerId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(photoTrailerId, assignment.PermitNumber, StringComparison.OrdinalIgnoreCase))
+            {
+                if (requestedIds.Contains(assignment.TrailerId, StringComparer.OrdinalIgnoreCase))
+                    return assignment.TrailerId;
+                if (!string.IsNullOrWhiteSpace(assignment.PermitNumber)
+                    && requestedIds.Contains(assignment.PermitNumber, StringComparer.OrdinalIgnoreCase))
+                    return assignment.PermitNumber;
+                return assignment.TrailerId;
+            }
+        }
+
+        return photoTrailerId;
     }
 
     [HttpPost("{trailerId}/upload")]
@@ -146,8 +200,23 @@ public class TrailerPhotosController : ControllerBase
 
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
+        var relatedAssignmentIds = await _context.TrailerAssignments
+            .AsNoTracking()
+            .Where(a =>
+                a.TrailerId == normalizedTrailerId
+                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId))
+            .Select(a => new AssignmentIdAlias(a.TrailerId, a.PermitNumber))
+            .ToListAsync();
+
+        var expandedIds = relatedAssignmentIds
+            .SelectMany(a => new[] { a.TrailerId, a.PermitNumber })
+            .Append(normalizedTrailerId)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         var photos = await query
-            .Where(p => p.TrailerId == normalizedTrailerId)
+            .Where(p => expandedIds.Contains(p.TrailerId))
             .OrderByDescending(p => p.CreatedAt)
             .ThenByDescending(p => p.Id)
             .Select(p => new
@@ -181,8 +250,23 @@ public class TrailerPhotosController : ControllerBase
 
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
+        var relatedAssignmentIds = await _context.TrailerAssignments
+            .AsNoTracking()
+            .Where(a =>
+                a.TrailerId == normalizedTrailerId
+                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId))
+            .Select(a => new AssignmentIdAlias(a.TrailerId, a.PermitNumber))
+            .ToListAsync();
+
+        var expandedIds = relatedAssignmentIds
+            .SelectMany(a => new[] { a.TrailerId, a.PermitNumber })
+            .Append(normalizedTrailerId)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         var photo = await query
-            .Where(p => p.TrailerId == normalizedTrailerId)
+            .Where(p => expandedIds.Contains(p.TrailerId))
             .OrderByDescending(p => p.UpdatedAt)
             .FirstOrDefaultAsync();
 
@@ -248,3 +332,5 @@ public class TrailerPhotosController : ControllerBase
     private static string BuildPhotoViewUrl(int photoId) =>
         $"/api/v1/trailer-photos/photo/{photoId}/view";
 }
+
+internal sealed record AssignmentIdAlias(string TrailerId, string? PermitNumber);

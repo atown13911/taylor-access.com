@@ -19,6 +19,9 @@ type TrailerAssignmentRecord = {
   assignedDriverId?: any;
   assignedDriverName?: string;
   driverOverride?: boolean;
+  lastAssignedDriverId?: any;
+  lastAssignedDriverName?: string;
+  inactivatedAt?: string | null;
   assignedTruckNumber?: string;
   notes?: string;
   fileName?: string | null;
@@ -149,6 +152,18 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   filteredTrailerPermits = computed(() => {
     let list = this.trailers().map((t: any) => this.mapTrailerRow(t));
+    const assetKeys = new Set(
+      list.flatMap((row: any) => this.resolveTrailerAssignmentKeys(row))
+    );
+
+    for (const [key, assignment] of Object.entries(this.trailerAssignments())) {
+      const status = this.normalizeTrailerStatus(assignment.trailerStatus);
+      if (status !== 'inactive' && status !== 'returned' && status !== 'closed_out') continue;
+      if (assetKeys.has(key)) continue;
+      if (assignment.permitNumber && assetKeys.has(String(assignment.permitNumber))) continue;
+      list.push(this.mapAssignmentOnlyTrailerRow(key, assignment));
+    }
+
     const search = this.searchTerm().toLowerCase();
     const status = this.statusFilter();
     const type = this.typeFilter();
@@ -347,14 +362,25 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   getTrailerPhotoCount(row: any): number {
-    const id = this.resolveTrailerPhotoMetaId(row);
-    return id ? (this.trailerPhotoMeta()[id]?.count ?? 0) : 0;
+    for (const key of this.resolveTrailerAssignmentKeys(row)) {
+      const count = this.trailerPhotoMeta()[key]?.count ?? 0;
+      if (count > 0) return count;
+    }
+    return 0;
   }
 
   getTrailerPhotoThumb(row: any): string | null {
-    const id = this.resolveTrailerPhotoMetaId(row);
-    if (!id) return null;
-    return this.trailerPhotoMeta()[id]?.thumbBlobUrl ?? null;
+    for (const key of this.resolveTrailerAssignmentKeys(row)) {
+      const thumb = this.trailerPhotoMeta()[key]?.thumbBlobUrl ?? null;
+      if (thumb) return thumb;
+    }
+    return null;
+  }
+
+  getTrailerDisplayDriver(row: any): { name: string; historical: boolean } {
+    const name = String(row?.assignedDriverName || '').trim();
+    if (name) return { name, historical: !!row?.historicalDriver };
+    return { name: '', historical: false };
   }
 
   private resolveTrailerPhotoMetaId(row: any): string {
@@ -546,6 +572,9 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       assignedDriverId: row?.assignedDriverId ?? null,
       assignedDriverName: row?.assignedDriverName ?? '',
       driverOverride: !!row?.driverOverride,
+      lastAssignedDriverId: row?.lastAssignedDriverId ?? null,
+      lastAssignedDriverName: row?.lastAssignedDriverName ?? '',
+      inactivatedAt: row?.inactivatedAt ?? null,
       assignedTruckNumber: row?.assignedTruckNumber ?? '',
       notes: row?.notes ?? '',
       fileName: row?.fileName ?? null,
@@ -555,12 +584,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   private async loadTrailerAssignmentsFromApi(trailerIds?: string[]): Promise<void> {
     try {
-      const ids = (trailerIds ?? this.trailers()
-        .map((t: any) => String(this.resolveTrailerId(t) ?? '').trim())
-        .filter((id: string) => !!id));
-      const uniqueIds = Array.from(new Set(ids));
-      const query = uniqueIds.length
-        ? `?trailerIds=${encodeURIComponent(uniqueIds.join(','))}`
+      const query = trailerIds?.length
+        ? `?trailerIds=${encodeURIComponent(Array.from(new Set(trailerIds.map((id) => String(id).trim()).filter(Boolean))).join(','))}`
         : '';
       const res: any = await firstValueFrom(
         this.http.get<any>(`${this.apiUrl}/api/v1/trailer-assignments${query}`)
@@ -1696,9 +1721,20 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const resolvedTrailerStatus = assignment.trailerStatus
       ? this.normalizeTrailerStatus(assignment.trailerStatus)
       : backendStatus;
+    const isInactiveStatus = resolvedTrailerStatus === 'inactive'
+      || resolvedTrailerStatus === 'returned'
+      || resolvedTrailerStatus === 'closed_out';
+    const historicalDriverName = isInactiveStatus && !resolvedAssignedDriverName
+      ? String(assignment.lastAssignedDriverName ?? '').trim()
+      : '';
+    const displayDriverName = resolvedAssignedDriverName || historicalDriverName;
 
-    const photoMeta = this.trailerPhotoMeta()[String(trailerId ?? '').trim()];
-    const resolvedPhotoUrl = (photoMeta?.count ?? 0) > 0
+    const photoMetaKeys = this.resolveTrailerAssignmentKeys({ ...t, id: trailerId, permitNumber: assignment.permitNumber || t?.tagNumber });
+    let photoCount = 0;
+    for (const key of photoMetaKeys) {
+      photoCount = Math.max(photoCount, this.trailerPhotoMeta()[key]?.count ?? 0);
+    }
+    const resolvedPhotoUrl = photoCount > 0
       ? this.buildTrailerPhotoViewUrl(trailerId)
       : null;
 
@@ -1715,11 +1751,47 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       chargeFrequency: assignment.chargeFrequency || t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       trailerStatus: resolvedTrailerStatus,
       assignedDriverId: resolvedAssignedDriverId,
-      assignedDriverName: resolvedAssignedDriverName,
+      assignedDriverName: displayDriverName,
+      historicalDriver: isInactiveStatus && !resolvedAssignedDriverName && !!historicalDriverName,
+      lastAssignedDriverName: assignment.lastAssignedDriverName ?? '',
+      inactivatedAt: assignment.inactivatedAt ?? null,
       assignedTruckNumber: assignment.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: t?.status || (resolvedAssignedDriverId ? 'active' : 'expiring'),
       notes: assignment.notes || t?.notes || '',
       photoUrl: resolvedPhotoUrl,
+      hasFile: !!assignment.hasFile,
+      fileName: assignment.fileName ?? null
+    };
+  }
+
+  private mapAssignmentOnlyTrailerRow(key: string, assignment: TrailerAssignmentRecord): any {
+    const status = this.normalizeTrailerStatus(assignment.trailerStatus);
+    const isInactiveStatus = status === 'inactive' || status === 'returned' || status === 'closed_out';
+    const activeDriverName = String(assignment.assignedDriverName ?? '').trim();
+    const historicalDriverName = String(assignment.lastAssignedDriverName ?? '').trim();
+    const displayDriverName = activeDriverName || (isInactiveStatus ? historicalDriverName : '');
+
+    return {
+      id: key,
+      permitNumber: assignment.permitNumber || key,
+      permitType: assignment.permitType || 'standard_equipment',
+      state: assignment.state || '',
+      issueDate: assignment.issueDate ?? null,
+      expiryDate: assignment.expiryDate ?? null,
+      cost: assignment.cost ?? null,
+      vendor: this.normalizeTrailerVendor(assignment.vendor),
+      vendorLabel: this.getTrailerVendorLabel(assignment.vendor),
+      chargeFrequency: assignment.chargeFrequency || 'monthly',
+      trailerStatus: status,
+      assignedDriverId: assignment.assignedDriverId ?? null,
+      assignedDriverName: displayDriverName,
+      historicalDriver: isInactiveStatus && !activeDriverName && !!historicalDriverName,
+      lastAssignedDriverName: assignment.lastAssignedDriverName ?? '',
+      inactivatedAt: assignment.inactivatedAt ?? null,
+      assignedTruckNumber: assignment.assignedTruckNumber || assignment.permitNumber || key,
+      status: 'expiring',
+      notes: assignment.notes || '',
+      photoUrl: null,
       hasFile: !!assignment.hasFile,
       fileName: assignment.fileName ?? null
     };
@@ -1913,60 +1985,29 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   async moveTrailerToInactive(row: any): Promise<void> {
-    const trailerId = String(this.resolveTrailerId(row) ?? '').trim();
+    const keys = this.resolveTrailerAssignmentKeys(row);
+    const trailerId = keys[0] || '';
     if (!trailerId) {
       this.toast.error('Invalid trailer id', 'Status update');
       return;
     }
-    if (!confirm(`Move trailer ${row?.permitNumber || row?.assignedTruckNumber || trailerId} to inactive?`)) return;
+    if (!confirm(`Move trailer ${row?.permitNumber || row?.assignedTruckNumber || trailerId} to inactive? Photos and assignment history will be preserved.`)) return;
 
-    const inactiveTrailerStatus: 'active' | 'inactive' | 'returned' | 'closed_out' = 'inactive';
-    const trailerPayload = {
-      status: this.mapTrailerBackendStatus(inactiveTrailerStatus),
-      assignmentStatus: inactiveTrailerStatus,
-      trailerStatus: inactiveTrailerStatus,
-      assignedDriverId: null,
-      driverId: null,
-      assignedDriverName: null,
-      ownerName: null
-    };
-    const equipmentPayload = {
-      status: this.mapEquipmentBackendStatus(inactiveTrailerStatus),
-      assignmentStatus: inactiveTrailerStatus,
-      trailerStatus: inactiveTrailerStatus,
-      assignedDriverId: null,
-      driverId: null,
-      ownerName: null
-    };
-
-    const requests = [
-      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${trailerId}`), equipmentPayload)),
-      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${trailerId}`), equipmentPayload)),
-      () => firstValueFrom(this.http.patch(this.trailerPath(`/trailers/${trailerId}`), trailerPayload)),
-      () => firstValueFrom(this.http.put(this.trailerPath(`/trailers/${trailerId}`), trailerPayload))
-    ];
-
-    let success = false;
-    for (const request of requests) {
-      try {
-        await request();
-        success = true;
-        break;
-      } catch {
-        // Try next status update strategy.
+    try {
+      const encodedId = encodeURIComponent(trailerId);
+      const res: any = await firstValueFrom(
+        this.http.post(`${this.apiUrl}/api/v1/trailer-assignments/${encodedId}/deactivate`, {})
+      );
+      const mapped = this.mapApiTrailerAssignment(res?.data ?? {});
+      for (const key of keys) {
+        this.storeTrailerAssignmentRecord(key, mapped);
       }
+      await this.loadTrailerAssignmentsFromApi(keys);
+      await this.syncTrailerPhotoOverrides();
+      this.toast.success('Trailer moved to inactive. Photos and assignment history preserved.', 'Status updated');
+    } catch {
+      this.toast.error('Failed to move trailer to inactive', 'Status update');
     }
-
-    if (!success) {
-      await this.applyTrailerAssignmentState(trailerId, inactiveTrailerStatus, null, '');
-      this.loadData();
-      this.toast.warning('Trailer marked inactive in Taylor Access; Taylor Assets sync is pending.', 'Status update');
-      return;
-    }
-
-    await this.applyTrailerAssignmentState(trailerId, inactiveTrailerStatus, null, '');
-    this.loadData();
-    this.toast.success('Trailer moved to inactive', 'Status updated');
   }
 
   async reactivateTrailer(row: any): Promise<void> {
@@ -2263,22 +2304,29 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   private async syncTrailerPhotoOverrides(): Promise<void> {
-    const trailerIds = this.trailers()
-      .map((t: any) => String(this.resolveTrailerId(t) ?? '').trim())
-      .filter((id: string) => !!id);
-    if (!trailerIds.length) return;
+    const trailerIds = new Set<string>();
+    for (const t of this.trailers()) {
+      for (const key of this.resolveTrailerAssignmentKeys(t)) {
+        if (key) trailerIds.add(key);
+      }
+    }
+    for (const [key, assignment] of Object.entries(this.trailerAssignments())) {
+      if (key) trailerIds.add(key);
+      const permit = String(assignment.permitNumber ?? '').trim();
+      if (permit) trailerIds.add(permit);
+    }
+    if (!trailerIds.size) return;
 
     try {
-      const query = encodeURIComponent(Array.from(new Set(trailerIds)).join(','));
+      const query = encodeURIComponent(Array.from(trailerIds).join(','));
       const res: any = await firstValueFrom(
         this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos?trailerIds=${query}`)
       );
       const photos = Array.isArray(res?.data) ? res.data : [];
-      const uniqueIds = Array.from(new Set(trailerIds));
 
       const previousMeta = this.trailerPhotoMeta();
       const nextMeta: Record<string, { count: number; previewUrl: string | null; thumbBlobUrl: string | null }> = {};
-      for (const trailerId of uniqueIds) {
+      for (const trailerId of trailerIds) {
         nextMeta[trailerId] = { count: 0, previewUrl: null, thumbBlobUrl: null };
       }
 
@@ -2296,6 +2344,31 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           previewUrl: photoUrl,
           thumbBlobUrl: reuseThumb
         };
+      }
+
+      const aliasMetaToKeys = (keys: string[]) => {
+        let best: { count: number; previewUrl: string | null; thumbBlobUrl: string | null } | null = null;
+        for (const key of keys) {
+          const meta = nextMeta[key];
+          if (meta && meta.count > 0) {
+            best = meta;
+            break;
+          }
+        }
+        if (!best) return;
+        for (const key of keys) {
+          if (!nextMeta[key] || nextMeta[key].count === 0) {
+            nextMeta[key] = { ...best };
+          }
+        }
+      };
+
+      for (const t of this.trailers()) {
+        aliasMetaToKeys(this.resolveTrailerAssignmentKeys(t));
+      }
+      for (const [key, assignment] of Object.entries(this.trailerAssignments())) {
+        const keys = [key, String(assignment.permitNumber ?? '').trim()].filter(Boolean);
+        aliasMetaToKeys(keys);
       }
 
       for (const [trailerId, info] of Object.entries(previousMeta)) {

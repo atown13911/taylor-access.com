@@ -177,6 +177,16 @@
   cursor: pointer;
   &:hover { text-decoration: underline; }
 }
+.tp-driver-historical {
+  color: #c9b896;
+  font-weight: 500;
+  font-style: italic;
+}
+.tp-driver-historical-note {
+  color: var(--text-muted, #888);
+  font-weight: 400;
+  font-size: 0.85em;
+}
 .tp-actions { display: flex; gap: 4px; }
 .tp-doc-cell { display: flex; gap: 3px; align-items: center; }
 .tp-row-clickable { cursor: pointer; }

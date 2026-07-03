@@ -242,14 +242,18 @@
               <td>{{ getTrailerVendorLabel(p.vendor) }}</td>
               <td>{{ p.state || '—' }}</td>
               <td>
-                @if (p.assignedDriverName) {
-                  <button
-                    type="button"
-                    class="tp-driver-link"
-                    title="Unassign driver"
-                    (click)="$event.stopPropagation(); unassignTrailerDriver(p)">
-                    {{ p.assignedDriverName }}
-                  </button>
+                @if (getTrailerDisplayDriver(p).name) {
+                  @if (getTrailerDisplayDriver(p).historical) {
+                    <span class="tp-driver-historical" title="Last assigned driver (preserved for disputes)">{{ getTrailerDisplayDriver(p).name }}</span>
+                  } @else {
+                    <button
+                      type="button"
+                      class="tp-driver-link"
+                      title="Unassign driver"
+                      (click)="$event.stopPropagation(); unassignTrailerDriver(p)">
+                      {{ getTrailerDisplayDriver(p).name }}
+                    </button>
+                  }
                 } @else {
                   <span class="tp-muted">Unassigned</span>
                 }
@@ -282,7 +286,7 @@
               </td>
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
-                @if (p.assignedDriverName) {
+                @if (getTrailerDisplayDriver(p).name && !getTrailerDisplayDriver(p).historical) {
                   <button class="tp-icon-btn" title="Unassign driver" (click)="$event.stopPropagation(); unassignTrailerDriver(p)">
                     <i class="bx bx-user-x"></i>
                   </button>
@@ -297,7 +301,6 @@
                   </button>
                 }
                 <button class="tp-icon-btn" title="Edit" (click)="$event.stopPropagation(); editPermit(p)"><i class="bx bx-edit"></i></button>
-                <button class="tp-icon-btn danger" title="Delete" (click)="$event.stopPropagation(); deletePermit(p)"><i class="bx bx-trash"></i></button>
               </td>
             </tr>
           } @empty {
@@ -638,7 +641,15 @@
         <div class="tp-trailer-drawer-item"><span>Status</span><strong>{{ getTrailerStatusLabel(selectedTrailerDrawer()) }}</strong></div>
         <div class="tp-trailer-drawer-item"><span>Vendor</span><strong>{{ getTrailerVendorLabel(selectedTrailerDrawer()?.vendor) }}</strong></div>
         <div class="tp-trailer-drawer-item"><span>Frequency</span><strong>{{ selectedTrailerDrawer()?.chargeFrequency || '—' }}</strong></div>
-        <div class="tp-trailer-drawer-item"><span>Driver</span><strong>{{ selectedTrailerDrawer()?.assignedDriverName || 'Unassigned' }}</strong></div>
+        <div class="tp-trailer-drawer-item">
+          <span>Driver</span>
+          <strong>
+            {{ getTrailerDisplayDriver(selectedTrailerDrawer()).name || 'Unassigned' }}
+            @if (getTrailerDisplayDriver(selectedTrailerDrawer()).historical) {
+              <span class="tp-driver-historical-note"> (last assigned)</span>
+            }
+          </strong>
+        </div>
         <div class="tp-trailer-drawer-item"><span>Truck #</span><strong>{{ selectedTrailerDrawer()?.assignedTruckNumber || '—' }}</strong></div>
       </div>
 
@@ -676,9 +687,11 @@
                     <button class="tp-icon-btn" title="View photo" (click)="openTrailerPhotoFromHistory(photo)">
                       <i class="bx bx-show"></i>
                     </button>
-                    <button class="tp-icon-btn danger" title="Delete photo" (click)="deleteTrailerPhotoFromHistory(photo)">
-                      <i class="bx bx-trash"></i>
-                    </button>
+                    @if (getTrailerAssignmentStatus(selectedTrailerDrawer()) === 'active') {
+                      <button class="tp-icon-btn danger" title="Delete photo" (click)="deleteTrailerPhotoFromHistory(photo)">
+                        <i class="bx bx-trash"></i>
+                      </button>
+                    }
                   </td>
                 </tr>
               }
