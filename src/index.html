@@ -10,11 +10,13 @@
   <script>
     (function () {
       var RELOAD_GUARD_KEY = 'ta_bootstrap_chunk_reload_once';
+      var MAX_RELOAD_ATTEMPTS = 3;
 
       function reloadWithCacheBuster() {
         try {
-          if (sessionStorage.getItem(RELOAD_GUARD_KEY) === '1') return;
-          sessionStorage.setItem(RELOAD_GUARD_KEY, '1');
+          var attempt = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) || '0');
+          if (attempt >= MAX_RELOAD_ATTEMPTS) return;
+          sessionStorage.setItem(RELOAD_GUARD_KEY, String(attempt + 1));
           var nextUrl = new URL(window.location.href);
           nextUrl.searchParams.set('v', Date.now().toString());
           window.location.replace(nextUrl.toString());
@@ -22,6 +24,16 @@
           // Ignore storage/URL errors.
         }
       }
+
+      window.addEventListener('load', function () {
+        window.setTimeout(function () {
+          try {
+            sessionStorage.removeItem(RELOAD_GUARD_KEY);
+          } catch (_) {
+            // Ignore storage errors.
+          }
+        }, 8000);
+      });
 
       function looksLikeModuleMimeFailure(message) {
         var text = String(message || '').toLowerCase();

@@ -7,6 +7,8 @@
     "start": "ng serve",
     "build": "ng build",
     "build:ci": "npm run build",
+    "pages:deploy": "wrangler pages deploy dist/taylor-access/browser --project-name taylor-access-com --branch main",
+    "deploy:cloudflare": "npm run build && npm run pages:deploy",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
