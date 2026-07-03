@@ -480,6 +480,58 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return this.trailerAssignments()[key] ?? null;
   }
 
+  private resolveTrailerAssignmentKeys(source: any): string[] {
+    const keys = new Set<string>();
+    const id = String(this.resolveTrailerId(source) ?? '').trim();
+    if (id) keys.add(id);
+    for (const candidate of [
+      source?.permitNumber,
+      source?.number,
+      source?.trailerNumber,
+      source?.unitNumber,
+      source?.tagNumber,
+      source?.assignedTruckNumber
+    ]) {
+      const key = String(candidate ?? '').trim();
+      if (key) keys.add(key);
+    }
+    return Array.from(keys);
+  }
+
+  private getTrailerAssignmentForAsset(source: any): TrailerAssignmentRecord | null {
+    const store = this.trailerAssignments();
+    const keys = this.resolveTrailerAssignmentKeys(source);
+    let best: TrailerAssignmentRecord | null = null;
+
+    for (const key of keys) {
+      const hit = store[key];
+      if (!hit) continue;
+      if (!best || (!!hit.driverOverride && !best.driverOverride)) {
+        best = hit;
+      }
+    }
+
+    if (!best?.driverOverride) {
+      const unitNumber = String(source?.number ?? source?.trailerNumber ?? source?.unitNumber ?? '').trim();
+      for (const rec of Object.values(store)) {
+        if (!rec?.driverOverride) continue;
+        const permit = String(rec.permitNumber ?? '').trim();
+        if (unitNumber && permit === unitNumber) return rec;
+      }
+    }
+
+    return best;
+  }
+
+  private storeTrailerAssignmentRecord(trailerId: string, record: TrailerAssignmentRecord): void {
+    const next = { ...this.trailerAssignments() };
+    const idKey = String(trailerId ?? '').trim();
+    if (idKey) next[idKey] = record;
+    const permitKey = String(record.permitNumber ?? '').trim();
+    if (permitKey && permitKey !== idKey) next[permitKey] = record;
+    this.trailerAssignments.set(next);
+  }
+
   private mapApiTrailerAssignment(row: any): TrailerAssignmentRecord {
     return {
       permitNumber: row?.permitNumber ?? '',
@@ -518,7 +570,18 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       for (const row of rows) {
         const trailerId = String(row?.trailerId ?? '').trim();
         if (!trailerId) continue;
-        next[trailerId] = this.mapApiTrailerAssignment(row);
+        const incoming = this.mapApiTrailerAssignment(row);
+        const existing = next[trailerId];
+        const shouldReplace =
+          !existing
+          || incoming.driverOverride
+          || !existing.driverOverride;
+        if (!shouldReplace) continue;
+        next[trailerId] = incoming;
+        const permitKey = String(incoming.permitNumber ?? row?.permitNumber ?? '').trim();
+        if (permitKey && permitKey !== trailerId) {
+          next[permitKey] = incoming;
+        }
       }
       this.trailerAssignments.set(next);
     } catch {
@@ -1622,7 +1685,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const assignedDriverId = rawAssignedDriverId ?? this.findDriverIdByName(assignedDriverName);
     const trailerId = this.resolveTrailerId(t);
     const backendStatus = this.getTrailerAssignmentStatus(t);
-    const assignment = this.getTrailerAssignment(trailerId) || {};
+    const assignment = this.getTrailerAssignmentForAsset(t) || {};
     const useAssignmentDriver = !!assignment.driverOverride;
     const resolvedAssignedDriverId = useAssignmentDriver
       ? (assignment.assignedDriverId ?? null)
@@ -1809,12 +1872,19 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           {}
         )
       );
-      const mapped = this.mapApiTrailerAssignment({ trailerId, ...(res?.data ?? {}) });
-      this.trailerAssignments.set({
-        ...this.trailerAssignments(),
-        [trailerId]: mapped
+      const mapped = this.mapApiTrailerAssignment({
+        trailerId,
+        permitNumber: row?.permitNumber || row?.assignedTruckNumber || '',
+        ...(res?.data ?? {})
       });
-      this.loadData();
+      mapped.driverOverride = true;
+      mapped.assignedDriverId = null;
+      mapped.assignedDriverName = '';
+      this.storeTrailerAssignmentRecord(trailerId, mapped);
+      if (row?.permitNumber) {
+        this.storeTrailerAssignmentRecord(String(row.permitNumber), mapped);
+      }
+      await this.loadTrailerAssignmentsFromApi(this.resolveTrailerAssignmentKeys(row));
       if (res?.assetsSynced === false) {
         this.toast.success('Driver unassigned in Taylor Access', 'Unassigned');
       } else {

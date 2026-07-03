@@ -48,13 +48,25 @@ public class TrailerAssignmentsController : ControllerBase
             .ToArray();
 
         if (idList.Length > 0)
-            query = query.Where(a => idList.Contains(a.TrailerId));
+            query = query.Where(a => idList.Contains(a.TrailerId) || (a.PermitNumber != null && idList.Contains(a.PermitNumber)));
 
-        var rows = await query
+        var preferredOrgId = user.OrganizationId ?? 0;
+        var entities = await query
+            .OrderByDescending(a => a.UpdatedAt)
+            .Take(Math.Clamp(limit * 2, limit, 5000))
+            .ToListAsync();
+
+        var rows = entities
+            .GroupBy(a => a.TrailerId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g
+                .OrderByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
+                .ThenByDescending(a => a.DriverOverride)
+                .ThenByDescending(a => a.UpdatedAt)
+                .First())
             .OrderByDescending(a => a.UpdatedAt)
             .Take(limit)
             .Select(a => MapAssignment(a))
-            .ToListAsync();
+            .ToList();
 
         return Ok(new { data = rows });
     }
@@ -110,34 +122,56 @@ public class TrailerAssignmentsController : ControllerBase
         if (!hasUnrestrictedAccess && organizationId <= 0)
             organizationId = 0;
 
-        var assignment = await _context.TrailerAssignments
-            .FirstOrDefaultAsync(a => a.TrailerId == normalizedTrailerId && a.OrganizationId == organizationId);
-
-        if (assignment == null)
+        var targets = await FindWritableAssignmentsAsync(normalizedTrailerId, hasUnrestrictedAccess, organizationId);
+        if (targets.Count == 0)
         {
-            assignment = new TrailerAssignment
+            targets.Add(new TrailerAssignment
             {
                 TrailerId = normalizedTrailerId,
                 OrganizationId = organizationId,
                 CreatedAt = DateTime.UtcNow
-            };
-            _context.TrailerAssignments.Add(assignment);
+            });
+            _context.TrailerAssignments.Add(targets[0]);
         }
 
-        assignment.AssignedDriverId = null;
-        assignment.AssignedDriverName = null;
-        assignment.DriverOverride = true;
-        assignment.UpdatedAt = DateTime.UtcNow;
+        foreach (var assignment in targets)
+        {
+            assignment.AssignedDriverId = null;
+            assignment.AssignedDriverName = null;
+            assignment.DriverOverride = true;
+            assignment.UpdatedAt = DateTime.UtcNow;
+        }
 
         await _context.SaveChangesAsync();
 
         var assetsSynced = await TryClearAssetsDriverAssignmentAsync(normalizedTrailerId);
 
+        var primary = targets
+            .OrderByDescending(a => organizationId > 0 && a.OrganizationId == organizationId)
+            .ThenByDescending(a => a.UpdatedAt)
+            .First();
+
         return Ok(new
         {
-            data = MapAssignment(assignment),
-            assetsSynced
+            data = MapAssignment(primary),
+            assetsSynced,
+            cleared = targets.Count
         });
+    }
+
+    private async Task<List<TrailerAssignment>> FindWritableAssignmentsAsync(
+        string normalizedTrailerId,
+        bool hasUnrestrictedAccess,
+        int organizationId)
+    {
+        var query = _context.TrailerAssignments.AsQueryable();
+        if (!hasUnrestrictedAccess)
+            query = query.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
+
+        return await query
+            .Where(a => a.TrailerId == normalizedTrailerId
+                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId))
+            .ToListAsync();
     }
 
     [HttpPost("bulk-upsert")]
