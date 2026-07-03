@@ -42,6 +42,7 @@ public class TrailerPhotosController : ControllerBase
         if (user == null) return Unauthorized(new { message = "User not authenticated" });
 
         var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        var organizationId = user.OrganizationId ?? 0;
 
         var idList = (trailerIds ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -49,26 +50,16 @@ public class TrailerPhotosController : ControllerBase
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        if (idList.Length == 0) return Ok(new { data = Array.Empty<object>() });
-
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
-        var relatedAssignmentIds = await _context.TrailerAssignments
-            .AsNoTracking()
-            .Where(a =>
-                idList.Contains(a.TrailerId)
-                || (a.PermitNumber != null && idList.Contains(a.PermitNumber)))
-            .Select(a => new AssignmentIdAlias(a.TrailerId, a.PermitNumber))
-            .ToListAsync();
+        var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess && organizationId > 0)
+            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
 
-        var expandedIds = idList
-            .Concat(relatedAssignmentIds.Select(a => a.TrailerId))
-            .Concat(relatedAssignmentIds.Select(a => a.PermitNumber).Where(v => !string.IsNullOrWhiteSpace(v))!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var assignments = await assignmentQuery.ToListAsync();
+        var expandedIds = ExpandTrailerIdAliases(idList, assignments);
 
-        var photos = await query
-            .Where(p => expandedIds.Contains(p.TrailerId))
+        var allPhotos = await query
             .OrderByDescending(p => p.UpdatedAt)
             .ThenByDescending(p => p.Id)
             .Select(p => new
@@ -79,12 +70,16 @@ public class TrailerPhotosController : ControllerBase
             })
             .ToListAsync();
 
+        var photos = idList.Length == 0
+            ? allPhotos
+            : allPhotos.Where(p => expandedIds.Contains(p.TrailerId)).ToList();
+
         var result = photos
             .GroupBy(p => p.TrailerId, StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
                 var latest = g.First();
-                var canonicalTrailerId = ResolveCanonicalTrailerId(g.Key, idList, relatedAssignmentIds);
+                var canonicalTrailerId = ResolveCanonicalTrailerId(g.Key, idList, assignments);
                 return new
                 {
                     trailerId = canonicalTrailerId,
@@ -113,30 +108,82 @@ public class TrailerPhotosController : ControllerBase
         return Ok(new { data = result });
     }
 
+    private static HashSet<string> ExpandTrailerIdAliases(
+        IEnumerable<string> seedIds,
+        IReadOnlyList<TrailerAssignment> assignments)
+    {
+        var expanded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var seed in seedIds)
+        {
+            var normalizedSeed = NormalizeTrailerId(seed);
+            if (string.IsNullOrWhiteSpace(normalizedSeed)) continue;
+            expanded.Add(normalizedSeed);
+        }
+
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var assignment in assignments)
+            {
+                var aliases = new[]
+                {
+                    assignment.TrailerId,
+                    assignment.PermitNumber,
+                    assignment.AssignedTruckNumber
+                };
+
+                var touches = aliases.Any(alias =>
+                    !string.IsNullOrWhiteSpace(alias) && expanded.Contains(alias.Trim()));
+
+                if (!touches) continue;
+
+                foreach (var alias in aliases)
+                {
+                    var normalized = NormalizeTrailerId(alias);
+                    if (string.IsNullOrWhiteSpace(normalized)) continue;
+                    if (expanded.Add(normalized))
+                        changed = true;
+                }
+            }
+        }
+
+        return expanded;
+    }
+
     private static string ResolveCanonicalTrailerId(
         string photoTrailerId,
         string[] requestedIds,
-        IReadOnlyList<AssignmentIdAlias> relatedAssignments)
+        IReadOnlyList<TrailerAssignment> assignments)
     {
         if (requestedIds.Contains(photoTrailerId, StringComparer.OrdinalIgnoreCase))
             return photoTrailerId;
 
-        foreach (var assignment in relatedAssignments)
+        foreach (var assignment in assignments)
         {
-            if (string.Equals(photoTrailerId, assignment.TrailerId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(photoTrailerId, assignment.PermitNumber, StringComparison.OrdinalIgnoreCase))
-            {
-                if (requestedIds.Contains(assignment.TrailerId, StringComparer.OrdinalIgnoreCase))
-                    return assignment.TrailerId;
-                if (!string.IsNullOrWhiteSpace(assignment.PermitNumber)
-                    && requestedIds.Contains(assignment.PermitNumber, StringComparer.OrdinalIgnoreCase))
-                    return assignment.PermitNumber;
+            if (!TrailerIdMatches(photoTrailerId, assignment.TrailerId)
+                && !TrailerIdMatches(photoTrailerId, assignment.PermitNumber)
+                && !TrailerIdMatches(photoTrailerId, assignment.AssignedTruckNumber))
+                continue;
+
+            if (requestedIds.Contains(assignment.TrailerId, StringComparer.OrdinalIgnoreCase))
                 return assignment.TrailerId;
-            }
+            if (!string.IsNullOrWhiteSpace(assignment.PermitNumber)
+                && requestedIds.Contains(assignment.PermitNumber, StringComparer.OrdinalIgnoreCase))
+                return assignment.PermitNumber;
+            if (!string.IsNullOrWhiteSpace(assignment.AssignedTruckNumber)
+                && requestedIds.Contains(assignment.AssignedTruckNumber, StringComparer.OrdinalIgnoreCase))
+                return assignment.AssignedTruckNumber;
+            return assignment.TrailerId;
         }
 
         return photoTrailerId;
     }
+
+    private static bool TrailerIdMatches(string left, string? right) =>
+        !string.IsNullOrWhiteSpace(right)
+        && string.Equals(NormalizeTrailerId(left), NormalizeTrailerId(right), StringComparison.OrdinalIgnoreCase);
 
     [HttpPost("{trailerId}/upload")]
     [RequestSizeLimit(25 * 1024 * 1024)]
@@ -156,13 +203,28 @@ public class TrailerPhotosController : ControllerBase
         if (!hasUnrestrictedAccess && organizationId <= 0)
             organizationId = 0;
 
+        var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess && organizationId > 0)
+            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
+
+        var assignments = await assignmentQuery.ToListAsync();
+        var expandedIds = ExpandTrailerIdAliases(new[] { normalizedTrailerId }, assignments);
+        var preferredTrailerId = assignments
+            .Where(a =>
+                expandedIds.Contains(a.TrailerId)
+                || (!string.IsNullOrWhiteSpace(a.PermitNumber) && expandedIds.Contains(a.PermitNumber))
+                || (!string.IsNullOrWhiteSpace(a.AssignedTruckNumber) && expandedIds.Contains(a.AssignedTruckNumber)))
+            .Select(a => a.PermitNumber)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+            ?? normalizedTrailerId;
+
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream);
         var base64Content = Convert.ToBase64String(memoryStream.ToArray());
 
         var photo = new TrailerPhoto
         {
-            TrailerId = normalizedTrailerId,
+            TrailerId = NormalizeTrailerId(preferredTrailerId),
             OrganizationId = organizationId,
             FileName = file.FileName,
             ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
@@ -200,25 +262,32 @@ public class TrailerPhotosController : ControllerBase
 
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
-        var relatedAssignmentIds = await _context.TrailerAssignments
-            .AsNoTracking()
-            .Where(a =>
-                a.TrailerId == normalizedTrailerId
-                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId))
-            .Select(a => new AssignmentIdAlias(a.TrailerId, a.PermitNumber))
-            .ToListAsync();
+        var organizationId = user.OrganizationId ?? 0;
+        var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess && organizationId > 0)
+            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
 
-        var expandedIds = relatedAssignmentIds
-            .SelectMany(a => new[] { a.TrailerId, a.PermitNumber })
-            .Append(normalizedTrailerId)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var assignments = await assignmentQuery.ToListAsync();
+        var expandedIds = ExpandTrailerIdAliases(new[] { normalizedTrailerId }, assignments);
 
-        var photos = await query
-            .Where(p => expandedIds.Contains(p.TrailerId))
+        var allPhotos = await query
             .OrderByDescending(p => p.CreatedAt)
             .ThenByDescending(p => p.Id)
+            .Select(p => new
+            {
+                p.Id,
+                p.TrailerId,
+                p.FileName,
+                p.ContentType,
+                p.FileSize,
+                p.UploadedBy,
+                p.CreatedAt,
+                p.UpdatedAt
+            })
+            .ToListAsync();
+
+        var photos = allPhotos
+            .Where(p => expandedIds.Contains(p.TrailerId))
             .Select(p => new
             {
                 p.Id,
@@ -231,7 +300,7 @@ public class TrailerPhotosController : ControllerBase
                 p.UpdatedAt,
                 photoUrl = BuildPhotoViewUrl(p.Id)
             })
-            .ToListAsync();
+            .ToList();
 
         return Ok(new { data = photos });
     }
@@ -250,25 +319,19 @@ public class TrailerPhotosController : ControllerBase
 
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
-        var relatedAssignmentIds = await _context.TrailerAssignments
-            .AsNoTracking()
-            .Where(a =>
-                a.TrailerId == normalizedTrailerId
-                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId))
-            .Select(a => new AssignmentIdAlias(a.TrailerId, a.PermitNumber))
+        var organizationId = user.OrganizationId ?? 0;
+        var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess && organizationId > 0)
+            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
+
+        var assignments = await assignmentQuery.ToListAsync();
+        var expandedIds = ExpandTrailerIdAliases(new[] { normalizedTrailerId }, assignments);
+
+        var candidates = await query
+            .OrderByDescending(p => p.UpdatedAt)
             .ToListAsync();
 
-        var expandedIds = relatedAssignmentIds
-            .SelectMany(a => new[] { a.TrailerId, a.PermitNumber })
-            .Append(normalizedTrailerId)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        var photo = await query
-            .Where(p => expandedIds.Contains(p.TrailerId))
-            .OrderByDescending(p => p.UpdatedAt)
-            .FirstOrDefaultAsync();
+        var photo = candidates.FirstOrDefault(p => expandedIds.Contains(p.TrailerId));
 
         if (photo == null || string.IsNullOrWhiteSpace(photo.FileContent))
             return NotFound(new { error = "Trailer photo not found" });
@@ -332,5 +395,3 @@ public class TrailerPhotosController : ControllerBase
     private static string BuildPhotoViewUrl(int photoId) =>
         $"/api/v1/trailer-photos/photo/{photoId}/view";
 }
-
-internal sealed record AssignmentIdAlias(string TrailerId, string? PermitNumber);

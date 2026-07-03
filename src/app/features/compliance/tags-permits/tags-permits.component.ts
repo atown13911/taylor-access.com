@@ -383,6 +383,77 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return { name: '', historical: false };
   }
 
+  private resolveTrailerPhotoStorageId(source: any): string {
+    const keys = this.resolveTrailerAssignmentKeys(source);
+    const preferred = keys.find((key) => /[A-Za-z]/.test(key))
+      || keys.find((key) => String(key).length >= 5)
+      || keys[0]
+      || '';
+    return String(preferred).trim();
+  }
+
+  private buildTrailerPhotoAliasGroups(): string[][] {
+    const groups: string[][] = [];
+    const seen = new Set<string>();
+
+    const addGroup = (keys: string[]) => {
+      const normalized = Array.from(new Set(keys.map((key) => String(key ?? '').trim()).filter(Boolean)));
+      if (!normalized.length) return;
+      const signature = normalized.map((key) => key.toLowerCase()).sort().join('|');
+      if (seen.has(signature)) return;
+      seen.add(signature);
+      groups.push(normalized);
+    };
+
+    for (const t of this.trailers()) {
+      addGroup(this.resolveTrailerAssignmentKeys(t));
+    }
+
+    for (const [key, assignment] of Object.entries(this.trailerAssignments())) {
+      addGroup([
+        key,
+        String(assignment.permitNumber ?? '').trim(),
+        String(assignment.assignedTruckNumber ?? '').trim()
+      ]);
+    }
+
+    return groups;
+  }
+
+  private async syncAssignmentPermitNumbersFromAssets(): Promise<void> {
+    const items: any[] = [];
+    for (const t of this.trailers()) {
+      const trailerId = String(this.resolveTrailerId(t) ?? '').trim();
+      const permitNumber = String(
+        t?.tagNumber || t?.permitNumber || t?.number || t?.trailerNumber || t?.unitNumber || ''
+      ).trim();
+      if (!trailerId || !permitNumber) continue;
+
+      const assignment = this.getTrailerAssignmentForAsset(t);
+      if (String(assignment?.permitNumber ?? '').trim() === permitNumber) continue;
+
+      items.push({
+        trailerId,
+        permitNumber,
+        permitType: assignment?.permitType || t?.type || t?.subtype || 'standard_equipment',
+        trailerStatus: assignment?.trailerStatus || this.normalizeTrailerStatus(t?.trailerStatus || t?.status),
+        assignedTruckNumber: permitNumber,
+        driverOverride: !!assignment?.driverOverride
+      });
+    }
+
+    if (!items.length) return;
+
+    try {
+      await firstValueFrom(
+        this.http.post<any>(`${this.apiUrl}/api/v1/trailer-assignments/bulk-upsert`, { items })
+      );
+      await this.loadTrailerAssignmentsFromApi();
+    } catch {
+      // Non-blocking metadata sync.
+    }
+  }
+
   private resolveTrailerPhotoMetaId(row: any): string {
     return String(this.resolveTrailerId(row) ?? row?.id ?? '').trim();
   }
@@ -816,7 +887,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   openTrailerDrawer(row: any): void {
     if (this.activeTab() !== 'trailer') return;
     this.selectedTrailerDrawer.set(row);
-    void this.loadTrailerPhotoHistory(this.resolveTrailerId(row));
+    void this.loadTrailerPhotoHistory(row);
   }
 
   closeTrailerDrawer(): void {
@@ -1230,7 +1301,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const files = Array.from((event.target as HTMLInputElement)?.files || []);
     if (!files.length) return;
     const trailer = this.selectedTrailerDrawer();
-    const trailerId = this.resolveTrailerId(trailer);
+    const trailerId = this.resolveTrailerPhotoStorageId(trailer) || this.resolveTrailerId(trailer);
     if (!trailerId) {
       this.toast.error('Select a trailer first.', 'Photo upload');
       return;
@@ -1253,7 +1324,11 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   async uploadTrailerPhoto(): Promise<void> {
-    const trailerId = String(this.permitForm?.trailerId ?? this.editingPermit()?.id ?? '').trim();
+    const trailerId = this.resolveTrailerPhotoStorageId({
+      id: this.permitForm?.trailerId ?? this.editingPermit()?.id,
+      permitNumber: this.permitForm?.permitNumber,
+      assignedTruckNumber: this.permitForm?.assignedTruckNumber
+    }) || String(this.permitForm?.trailerId ?? this.editingPermit()?.id ?? '').trim();
     if (!trailerId) {
       this.toast.error('Save or select a trailer first before uploading a photo.', 'Photo upload');
       return;
@@ -2147,7 +2222,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   private async tryUploadTrailerPhoto(trailerId: string, file: File): Promise<string | null> {
     const payload = new FormData();
     payload.append('file', file);
-    const encodedTrailerId = encodeURIComponent(String(trailerId).trim());
+    const storageId = String(trailerId).trim();
+    const encodedTrailerId = encodeURIComponent(storageId);
     const res: any = await firstValueFrom(
       this.http.post<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/upload`, payload)
     );
@@ -2232,6 +2308,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   private async afterTrailersLoaded(): Promise<void> {
     await this.loadTrailerAssignmentsFromApi();
+    await this.syncAssignmentPermitNumbersFromAssets();
     await this.syncTrailerPhotoOverrides();
   }
 
@@ -2304,23 +2381,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   private async syncTrailerPhotoOverrides(): Promise<void> {
-    const trailerIds = new Set<string>();
-    for (const t of this.trailers()) {
-      for (const key of this.resolveTrailerAssignmentKeys(t)) {
-        if (key) trailerIds.add(key);
-      }
-    }
-    for (const [key, assignment] of Object.entries(this.trailerAssignments())) {
-      if (key) trailerIds.add(key);
-      const permit = String(assignment.permitNumber ?? '').trim();
-      if (permit) trailerIds.add(permit);
-    }
+    const aliasGroups = this.buildTrailerPhotoAliasGroups();
+    const trailerIds = new Set<string>(aliasGroups.flat());
     if (!trailerIds.size) return;
 
     try {
-      const query = encodeURIComponent(Array.from(trailerIds).join(','));
       const res: any = await firstValueFrom(
-        this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos?trailerIds=${query}`)
+        this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos`)
       );
       const photos = Array.isArray(res?.data) ? res.data : [];
 
@@ -2330,45 +2397,58 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
         nextMeta[trailerId] = { count: 0, previewUrl: null, thumbBlobUrl: null };
       }
 
+      const applyPhotoMeta = (
+        keys: string[],
+        count: number,
+        photoUrl: string | null
+      ) => {
+        if (count <= 0 || !photoUrl) return;
+        for (const key of keys) {
+          const previous = previousMeta[key];
+          const reuseThumb = previous?.previewUrl === photoUrl ? previous.thumbBlobUrl : null;
+          const existing = nextMeta[key];
+          if (existing && existing.count >= count) continue;
+          nextMeta[key] = { count, previewUrl: photoUrl, thumbBlobUrl: reuseThumb };
+        }
+      };
+
       for (const row of photos) {
-        const trailerId = String(row?.trailerId ?? '').trim();
-        if (!trailerId) continue;
+        const sourceTrailerId = String(row?.trailerId ?? row?.sourceTrailerId ?? '').trim();
+        if (!sourceTrailerId) continue;
 
         const count = Math.max(0, Number(row?.photoCount ?? 1));
-        const photoUrl = this.normalizeTrailerPhotoUrl(row?.photoUrl, trailerId) || this.buildTrailerPhotoViewUrl(trailerId);
-        const previous = previousMeta[trailerId];
-        const reuseThumb = previous?.previewUrl === photoUrl ? previous.thumbBlobUrl : null;
+        const photoUrl = this.normalizeTrailerPhotoUrl(row?.photoUrl, sourceTrailerId)
+          || `${this.apiUrl}/api/v1/trailer-photos/photo/${row?.latestPhotoId}/view`;
 
-        nextMeta[trailerId] = {
-          count,
-          previewUrl: photoUrl,
-          thumbBlobUrl: reuseThumb
-        };
+        const matchingGroups = aliasGroups.filter((group) =>
+          group.some((key) => key.toLowerCase() === sourceTrailerId.toLowerCase())
+        );
+
+        if (matchingGroups.length) {
+          for (const group of matchingGroups) {
+            applyPhotoMeta(group, count, photoUrl);
+          }
+          continue;
+        }
+
+        applyPhotoMeta([sourceTrailerId], count, photoUrl);
       }
 
-      const aliasMetaToKeys = (keys: string[]) => {
+      for (const group of aliasGroups) {
         let best: { count: number; previewUrl: string | null; thumbBlobUrl: string | null } | null = null;
-        for (const key of keys) {
+        for (const key of group) {
           const meta = nextMeta[key];
           if (meta && meta.count > 0) {
             best = meta;
             break;
           }
         }
-        if (!best) return;
-        for (const key of keys) {
+        if (!best) continue;
+        for (const key of group) {
           if (!nextMeta[key] || nextMeta[key].count === 0) {
             nextMeta[key] = { ...best };
           }
         }
-      };
-
-      for (const t of this.trailers()) {
-        aliasMetaToKeys(this.resolveTrailerAssignmentKeys(t));
-      }
-      for (const [key, assignment] of Object.entries(this.trailerAssignments())) {
-        const keys = [key, String(assignment.permitNumber ?? '').trim()].filter(Boolean);
-        aliasMetaToKeys(keys);
       }
 
       for (const [trailerId, info] of Object.entries(previousMeta)) {
@@ -2414,8 +2494,11 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadTrailerPhotoHistory(trailerId: any): Promise<void> {
-    const id = String(trailerId ?? '').trim();
+  private async loadTrailerPhotoHistory(source: any): Promise<void> {
+    const lookupKeys = typeof source === 'object' && source !== null
+      ? this.resolveTrailerAssignmentKeys(source)
+      : [String(source ?? '').trim()];
+    const id = lookupKeys.find(Boolean) || '';
     if (!id) {
       this.trailerPhotoHistory.set([]);
       return;
@@ -2423,11 +2506,24 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
     this.trailerPhotoHistoryLoading.set(true);
     try {
-      const encodedTrailerId = encodeURIComponent(id);
-      const res: any = await firstValueFrom(
-        this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/photos`)
-      );
-      const rows = Array.isArray(res?.data) ? res.data : [];
+      let rows: any[] = [];
+      for (const key of lookupKeys) {
+        const encodedTrailerId = encodeURIComponent(String(key).trim());
+        if (!encodedTrailerId) continue;
+        try {
+          const res: any = await firstValueFrom(
+            this.http.get<any>(`${this.apiUrl}/api/v1/trailer-photos/${encodedTrailerId}/photos`)
+          );
+          const batch = Array.isArray(res?.data) ? res.data : [];
+          if (batch.length) {
+            rows = batch;
+            break;
+          }
+        } catch {
+          // Try the next alias key.
+        }
+      }
+
       this.trailerPhotoHistory.set(rows);
       if (rows.length > 0) {
         const latestUrl = this.normalizeTrailerPhotoUrl(rows[0]?.photoUrl, id);
