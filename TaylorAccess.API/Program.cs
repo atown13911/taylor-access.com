@@ -607,6 +607,7 @@ using (var scope = app.Services.CreateScope())
             ON ""TrailerAssignments"" (""OrganizationId"", ""TrailerId"");
         CREATE INDEX IF NOT EXISTS ""IX_TrailerAssignments_TrailerStatus""
             ON ""TrailerAssignments"" (""TrailerStatus"", ""UpdatedAt"");
+        ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""DriverOverride"" BOOLEAN NOT NULL DEFAULT FALSE;
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"

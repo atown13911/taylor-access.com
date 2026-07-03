@@ -267,11 +267,17 @@ public class TrailerAssignmentsController : ControllerBase
         {
             assignment.AssignedDriverId = null;
             assignment.AssignedDriverName = null;
+            assignment.DriverOverride = true;
         }
-        else
+        else if (request.AssignedDriverId.HasValue || request.AssignedDriverName != null)
         {
             if (request.AssignedDriverId.HasValue) assignment.AssignedDriverId = request.AssignedDriverId;
             if (request.AssignedDriverName != null) assignment.AssignedDriverName = request.AssignedDriverName;
+            assignment.DriverOverride = true;
+        }
+        else if (request.DriverOverride == true)
+        {
+            assignment.DriverOverride = true;
         }
         if (request.AssignedTruckNumber != null) assignment.AssignedTruckNumber = request.AssignedTruckNumber;
         if (request.Notes != null) assignment.Notes = request.Notes;
@@ -313,6 +319,7 @@ public class TrailerAssignmentsController : ControllerBase
         trailerStatus = a.TrailerStatus,
         assignedDriverId = a.AssignedDriverId,
         assignedDriverName = a.AssignedDriverName,
+        driverOverride = a.DriverOverride,
         assignedTruckNumber = a.AssignedTruckNumber,
         notes = a.Notes,
         fileName = a.FileName,
@@ -341,6 +348,7 @@ public class TrailerAssignmentUpsertRequest
     public string? AssignedTruckNumber { get; set; }
     public string? Notes { get; set; }
     public bool? ClearAssignedDriver { get; set; }
+    public bool? DriverOverride { get; set; }
 }
 
 public class TrailerAssignmentBulkUpsertRequest

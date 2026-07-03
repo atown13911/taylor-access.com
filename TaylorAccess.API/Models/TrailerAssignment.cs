@@ -43,6 +43,11 @@ public class TrailerAssignment
     [MaxLength(150)]
     public string? AssignedDriverName { get; set; }
 
+    /// <summary>
+    /// When true, Taylor Access driver assignment takes precedence over Taylor Assets.
+    /// </summary>
+    public bool DriverOverride { get; set; }
+
     [MaxLength(50)]
     public string? AssignedTruckNumber { get; set; }
 

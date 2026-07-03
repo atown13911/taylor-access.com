@@ -168,7 +168,15 @@
     border-color: rgba(0,212,255,0.45);
   }
 }
-.tp-driver-link { color: var(--cyan); font-weight: 500; }
+.tp-driver-link {
+  color: var(--cyan);
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  &:hover { text-decoration: underline; }
+}
 .tp-actions { display: flex; gap: 4px; }
 .tp-doc-cell { display: flex; gap: 3px; align-items: center; }
 .tp-row-clickable { cursor: pointer; }

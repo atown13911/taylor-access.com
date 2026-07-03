@@ -18,6 +18,7 @@ type TrailerAssignmentRecord = {
   trailerStatus?: 'active' | 'inactive' | 'returned' | 'closed_out';
   assignedDriverId?: any;
   assignedDriverName?: string;
+  driverOverride?: boolean;
   assignedTruckNumber?: string;
   notes?: string;
   fileName?: string | null;
@@ -492,6 +493,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       trailerStatus: this.normalizeTrailerStatus(row?.trailerStatus),
       assignedDriverId: row?.assignedDriverId ?? null,
       assignedDriverName: row?.assignedDriverName ?? '',
+      driverOverride: !!row?.driverOverride,
       assignedTruckNumber: row?.assignedTruckNumber ?? '',
       notes: row?.notes ?? '',
       fileName: row?.fileName ?? null,
@@ -606,6 +608,9 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     if (options?.clearAssignedDriver) {
       payload['clearAssignedDriver'] = true;
     }
+    if (options?.clearAssignedDriver || values.assignedDriverId != null || String(values.assignedDriverName || '').trim()) {
+      payload['driverOverride'] = true;
+    }
     return payload;
   }
 
@@ -645,7 +650,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     await this.persistTrailerAssignment(trailerId, {
       trailerStatus: status,
       assignedDriverId,
-      assignedDriverName
+      assignedDriverName,
+      driverOverride: true
     }, { clearAssignedDriver: !assignedDriverId });
   }
 
@@ -1617,6 +1623,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const trailerId = this.resolveTrailerId(t);
     const backendStatus = this.getTrailerAssignmentStatus(t);
     const assignment = this.getTrailerAssignment(trailerId) || {};
+    const useAssignmentDriver = !!assignment.driverOverride;
+    const resolvedAssignedDriverId = useAssignmentDriver
+      ? (assignment.assignedDriverId ?? null)
+      : (assignment.assignedDriverId ?? assignedDriverId);
+    const resolvedAssignedDriverName = useAssignmentDriver
+      ? String(assignment.assignedDriverName ?? '').trim()
+      : (String(assignment.assignedDriverName || assignedDriverName || '').trim());
     const resolvedTrailerStatus = assignment.trailerStatus
       ? this.normalizeTrailerStatus(assignment.trailerStatus)
       : backendStatus;
@@ -1638,10 +1651,10 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       vendorLabel: this.getTrailerVendorLabel(assignment.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
       chargeFrequency: assignment.chargeFrequency || t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       trailerStatus: resolvedTrailerStatus,
-      assignedDriverId: assignment.assignedDriverId ?? assignedDriverId,
-      assignedDriverName: assignment.assignedDriverName || assignedDriverName || '',
+      assignedDriverId: resolvedAssignedDriverId,
+      assignedDriverName: resolvedAssignedDriverName,
       assignedTruckNumber: assignment.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
-      status: t?.status || (assignedDriverId ? 'active' : 'expiring'),
+      status: t?.status || (resolvedAssignedDriverId ? 'active' : 'expiring'),
       notes: assignment.notes || t?.notes || '',
       photoUrl: resolvedPhotoUrl,
       hasFile: !!assignment.hasFile,
@@ -1731,6 +1744,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
       if (trailerId && persistedDriverId && selectedTrailerStatus === 'active') {
         await this.assignDriverToTrailer(trailerId, this.permitForm.assignedDriverId, assignedDriverName);
+      } else if (trailerId && !persistedDriverId) {
+        await this.unassignDriverFromTrailer(trailerId);
       }
       if (trailerId) {
         await this.persistTrailerAssignment(trailerId, {
@@ -1745,6 +1760,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           trailerStatus: selectedTrailerStatus,
           assignedDriverId: persistedDriverId,
           assignedDriverName: persistedDriverName || '',
+          driverOverride: true,
           assignedTruckNumber: trailerBody.number || '',
           notes: trailerBody.notes || ''
         }, { clearAssignedDriver: !persistedDriverId });
@@ -1780,6 +1796,58 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
         // Try next assignment strategy.
       }
     }
+  }
+
+  private async unassignDriverFromTrailer(trailerId: any): Promise<void> {
+    const id = `${trailerId}`;
+    const clearPayload = {
+      assignedDriverId: null,
+      driverId: null,
+      assignedDriverName: null,
+      ownerName: null,
+      status: 'available'
+    };
+    const trailerClearPayload = {
+      assignedDriverId: null,
+      driverId: null,
+      assignedDriverName: null,
+      ownerName: null,
+      status: 'available',
+      assignmentStatus: 'inactive',
+      trailerStatus: 'inactive'
+    };
+    const payloads = [
+      () => firstValueFrom(this.http.post(this.trailerPath(`/trailers/${id}/return`), {})),
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/trailers/${id}`), trailerClearPayload)),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/trailers/${id}`), trailerClearPayload)),
+      () => firstValueFrom(this.http.patch(this.trailerPath(`/equipment/${id}`), clearPayload)),
+      () => firstValueFrom(this.http.put(this.trailerPath(`/equipment/${id}`), clearPayload))
+    ];
+
+    for (const request of payloads) {
+      try {
+        await request();
+        return;
+      } catch {
+        // Try next unassign strategy.
+      }
+    }
+  }
+
+  async unassignTrailerDriver(row: any): Promise<void> {
+    const trailerId = String(this.resolveTrailerId(row) ?? '').trim();
+    const driverName = String(row?.assignedDriverName || '').trim();
+    if (!trailerId || !driverName) return;
+    if (!confirm(`Unassign ${driverName} from trailer ${row?.permitNumber || row?.assignedTruckNumber || trailerId}?`)) return;
+
+    await this.unassignDriverFromTrailer(trailerId);
+    await this.persistTrailerAssignment(trailerId, {
+      assignedDriverId: null,
+      assignedDriverName: '',
+      driverOverride: true
+    }, { clearAssignedDriver: true });
+    this.loadData();
+    this.toast.success('Driver unassigned from trailer', 'Unassigned');
   }
 
   private deleteTrailer(row: any): void {
@@ -1852,6 +1920,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     }
 
     await this.applyTrailerAssignmentState(trailerId, inactiveTrailerStatus, null, '');
+    await this.unassignDriverFromTrailer(trailerId);
     this.loadData();
     this.toast.success('Trailer moved to inactive', 'Status updated');
   }

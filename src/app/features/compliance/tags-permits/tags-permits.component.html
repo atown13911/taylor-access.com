@@ -243,7 +243,13 @@
               <td>{{ p.state || '—' }}</td>
               <td>
                 @if (p.assignedDriverName) {
-                  <span class="tp-driver-link">{{ p.assignedDriverName }}</span>
+                  <button
+                    type="button"
+                    class="tp-driver-link"
+                    title="Unassign driver"
+                    (click)="$event.stopPropagation(); unassignTrailerDriver(p)">
+                    {{ p.assignedDriverName }}
+                  </button>
                 } @else {
                   <span class="tp-muted">Unassigned</span>
                 }
@@ -276,6 +282,11 @@
               </td>
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
+                @if (p.assignedDriverName) {
+                  <button class="tp-icon-btn" title="Unassign driver" (click)="$event.stopPropagation(); unassignTrailerDriver(p)">
+                    <i class="bx bx-user-x"></i>
+                  </button>
+                }
                 @if (getTrailerAssignmentStatus(p) === 'active') {
                   <button class="tp-icon-btn" title="Move to inactive" (click)="$event.stopPropagation(); moveTrailerToInactive(p)">
                     <i class="bx bx-pause-circle"></i>
