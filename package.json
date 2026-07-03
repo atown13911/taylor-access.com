@@ -5,7 +5,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "ng build && node scripts/abs-chunk-imports.mjs",
     "build:ci": "npm run build",
     "pages:deploy": "wrangler pages deploy dist/taylor-access/browser --project-name taylor-access-com --branch main",
     "deploy:cloudflare": "npm run build && npm run pages:deploy",

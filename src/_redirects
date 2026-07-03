@@ -1,1 +1,7 @@
+/:segment/chunk-:hash.js /chunk-:hash.js 301
+/:a/:b/chunk-:hash.js /chunk-:hash.js 301
+/:a/:b/:c/chunk-:hash.js /chunk-:hash.js 301
+/:segment/main-:hash.js /main-:hash.js 301
+/:segment/polyfills-:hash.js /polyfills-:hash.js 301
+/:segment/styles-:hash.css /styles-:hash.css 301
 /* /index.html 200
