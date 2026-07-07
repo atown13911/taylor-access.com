@@ -141,29 +141,19 @@ public class DispatchersController : ControllerBase
 
         var dbAssignmentMap = await TryGetDriverDispatchAssignmentMapAsync(drivers.Select(d => d.Id));
 
-        var fleetLookupOrgIds = new HashSet<int>(allowedOrgIds);
-        if (isCurrentUserDispatcherRole && !canBypassOrgFilter && allowedOrgIds.Count > 0)
-        {
-            var driverOrgIds = await _context.Drivers
-                .AsNoTracking()
-                .Where(d => drivers.Select(x => x.Id).Contains(d.Id))
-                .Select(d => d.OrganizationId)
-                .ToListAsync();
-            foreach (var orgId in driverOrgIds)
-            {
-                if (orgId > 0) fleetLookupOrgIds.Add(orgId);
-            }
-        }
+        // Fleet name resolution must stay unscoped to match the driver query above --
+        // this roster is explicitly shared/read-only across orgs (see comment above),
+        // so org-filtering the fleet lookup here silently broke it: a driver whose
+        // Fleet record lives in an org outside the viewer's membership would fail to
+        // resolve a fleet name at all (falls back to "-"), so IsLandmarkOtrFleet/
+        // IsLandmarkDrayageFleet would never match and the driver vanished from the
+        // roster despite being correctly tagged "Landmark OTR"/"Landmark Drayage".
+        var fleetNameById = await _context.Fleets
+            .AsNoTracking()
+            .ToDictionaryAsync(f => f.Id, f => f.Name);
 
-        var fleetQuery = _context.Fleets.AsNoTracking().AsQueryable();
-        if (!canBypassOrgFilter && allowedOrgIds.Count > 0)
-            fleetQuery = fleetQuery.Where(f => fleetLookupOrgIds.Contains(f.OrganizationId));
-        var fleetNameById = await fleetQuery.ToDictionaryAsync(f => f.Id, f => f.Name);
-
-        var fleetDriverQuery = _context.FleetDrivers.AsNoTracking().AsQueryable();
-        if (!canBypassOrgFilter && allowedOrgIds.Count > 0)
-            fleetDriverQuery = fleetDriverQuery.Where(fd => fleetLookupOrgIds.Contains(fd.Fleet!.OrganizationId));
-        var fleetDriverRows = await fleetDriverQuery
+        var fleetDriverRows = await _context.FleetDrivers
+            .AsNoTracking()
             .Select(fd => new { fd.DriverId, fd.FleetId })
             .ToListAsync();
         var fleetDriverLookup = fleetDriverRows
