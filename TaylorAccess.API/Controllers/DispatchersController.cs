@@ -701,6 +701,76 @@ public class DispatchersController : ControllerBase
         return raw;
     }
 
+    /// <summary>
+    /// Temporary diagnostic: shows exactly why a driver is/isn't included in the
+    /// Landmark OTR/Drayage roster (raw status, resolved fleet name, and each filter
+    /// check), bypassing the normal [Authorize] so it can be checked without a live
+    /// session. Remove once the roster-visibility investigation is done.
+    /// </summary>
+    [HttpGet("debug/roster-check")]
+    [AllowAnonymous]
+    public async Task<ActionResult> DebugRosterCheck([FromQuery] string name, [FromQuery] string key)
+    {
+        var expectedKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY") ?? "ta-internal-service-key-2026";
+        if (!string.Equals(key, expectedKey, StringComparison.Ordinal))
+            return Unauthorized(new { error = "Invalid key" });
+
+        var needle = NormalizePersonName(name);
+        var drivers = await _context.Drivers
+            .AsNoTracking()
+            .Where(d => !d.IsDeleted)
+            .Select(d => new DriverWire
+            {
+                Id = d.Id,
+                Name = d.Name,
+                Email = d.Email,
+                Phone = d.Phone,
+                Status = d.Status,
+                FleetId = d.FleetId,
+                Notes = d.Notes,
+                HireDate = d.HireDate
+            })
+            .ToListAsync();
+
+        var matches = drivers.Where(d => NormalizePersonName(d.Name).Contains(needle)).ToList();
+        if (matches.Count == 0)
+            return NotFound(new { error = "No driver found matching that name", searched = needle });
+
+        var fleetNameById = await _context.Fleets.AsNoTracking().ToDictionaryAsync(f => f.Id, f => f.Name);
+        var fleetDriverRows = await _context.FleetDrivers.AsNoTracking()
+            .Select(fd => new { fd.DriverId, fd.FleetId }).ToListAsync();
+        var fleetDriverLookup = fleetDriverRows.GroupBy(x => x.DriverId).ToDictionary(g => g.Key, g => g.Select(x => x.FleetId).ToList());
+        var dbAssignmentMap = await TryGetDriverDispatchAssignmentMapAsync(matches.Select(d => d.Id));
+
+        var result = matches.Select(d =>
+        {
+            var fleetName = ResolveFleetName(d, fleetNameById, fleetDriverLookup);
+            var normalizedStatus = NormalizeStatus(d.Status);
+            var dispatchMeta = ResolveDispatchMetadataFromNotes(d.Notes);
+            dbAssignmentMap.TryGetValue(d.Id, out var dbAssignment);
+            return new
+            {
+                d.Id,
+                d.Name,
+                rawStatus = d.Status,
+                normalizedStatus,
+                passesIsActiveStatus = IsActiveStatus(d.Status),
+                d.FleetId,
+                resolvedFleetName = fleetName,
+                passesIsLandmarkOtrFleet = IsLandmarkOtrFleet(fleetName),
+                passesIsLandmarkDrayageFleet = IsLandmarkDrayageFleet(fleetName),
+                notesDispatchUserId = dispatchMeta.DispatchUserId,
+                notesDispatcherName = dispatchMeta.DispatcherName,
+                dbAssignmentDispatchUserId = dbAssignment?.DispatchUserId,
+                dbAssignmentDispatcherName = dbAssignment?.DispatcherName,
+                wouldAppearInOtrRoster = IsActiveStatus(d.Status) && IsLandmarkOtrFleet(fleetName),
+                wouldAppearInDrayageRoster = IsActiveStatus(d.Status) && IsLandmarkDrayageFleet(fleetName)
+            };
+        });
+
+        return Ok(new { data = result });
+    }
+
     private static string ResolveFleetName(
         DriverWire driver,
         IReadOnlyDictionary<int, string> fleetNameById,
