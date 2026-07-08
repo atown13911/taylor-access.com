@@ -1207,7 +1207,9 @@ public class MotivController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] string? kind = null,
         [FromQuery] string? scope = null,
-        [FromQuery] string? driverName = null)
+        [FromQuery] string? driverName = null,
+        [FromQuery] string? fromDate = null,
+        [FromQuery] string? toDate = null)
     {
         var orgId = await ResolveOrganizationId();
         var cappedLimit = Math.Clamp(limit <= 0 ? 1000 : limit, 1, 5000);
@@ -1216,6 +1218,8 @@ public class MotivController : ControllerBase
         var normalizedScope = (scope ?? "").Trim().ToLowerInvariant();
         var normalizedSearch = (search ?? "").Trim();
         var normalizedDriver = (driverName ?? "").Trim();
+        var fromUtc = ParseActivityLogDateBoundary(fromDate, endOfDay: false);
+        var toUtc = ParseActivityLogDateBoundary(toDate, endOfDay: true);
 
         var query = _db.MotivActivityLogs.AsNoTracking();
         if (orgId > 0)
@@ -1223,6 +1227,12 @@ public class MotivController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(normalizedKind))
             query = query.Where(x => x.Kind == normalizedKind);
+
+        if (fromUtc.HasValue)
+            query = query.Where(x => x.EventAt >= fromUtc.Value);
+
+        if (toUtc.HasValue)
+            query = query.Where(x => x.EventAt <= toUtc.Value);
 
         if (!string.IsNullOrWhiteSpace(normalizedDriver))
             query = query.Where(x => x.DriverName != null && EF.Functions.ILike(x.DriverName, $"%{normalizedDriver}%"));
@@ -3413,6 +3423,18 @@ public class MotivController : ControllerBase
         if (string.IsNullOrWhiteSpace(input)) return null;
         if (DateTime.TryParse(input, out var dt)) return dt.Date;
         return null;
+    }
+
+    private static DateTime? ParseActivityLogDateBoundary(string? input, bool endOfDay)
+    {
+        var date = ParseDateOnly(input);
+        if (!date.HasValue) return null;
+
+        var boundary = endOfDay
+            ? date.Value.Date.AddDays(1).AddTicks(-1)
+            : date.Value.Date;
+
+        return DateTime.SpecifyKind(boundary, DateTimeKind.Utc);
     }
 
     private static IEnumerable<string> BuildDateRangePaths(string basePath, DateTime start, DateTime end)
