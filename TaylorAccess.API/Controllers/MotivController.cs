@@ -1211,44 +1211,23 @@ public class MotivController : ControllerBase
         [FromQuery] string? fromDate = null,
         [FromQuery] string? toDate = null)
     {
-        var orgId = await ResolveOrganizationId();
         var cappedLimit = Math.Clamp(limit <= 0 ? 1000 : limit, 1, 5000);
-
-        var normalizedKind = NormalizeActivityKind(kind);
-        var normalizedScope = (scope ?? "").Trim().ToLowerInvariant();
-        var normalizedSearch = (search ?? "").Trim();
-        var normalizedDriver = (driverName ?? "").Trim();
-        var fromUtc = ParseActivityLogDateBoundary(fromDate, endOfDay: false);
-        var toUtc = ParseActivityLogDateBoundary(toDate, endOfDay: true);
+        var fromUtc = MotivActivityLogReadHelper.ParseDateBoundary(fromDate, endOfDay: false);
+        var toUtc = MotivActivityLogReadHelper.ParseDateBoundary(toDate, endOfDay: true);
 
         var query = _db.MotivActivityLogs.AsNoTracking();
-        if (orgId > 0)
-            query = query.Where(x => x.OrganizationId == orgId);
-
-        if (!string.IsNullOrWhiteSpace(normalizedKind))
-            query = query.Where(x => x.Kind == normalizedKind);
-
-        if (fromUtc.HasValue)
-            query = query.Where(x => x.EventAt >= fromUtc.Value);
-
-        if (toUtc.HasValue)
-            query = query.Where(x => x.EventAt <= toUtc.Value);
-
-        if (!string.IsNullOrWhiteSpace(normalizedDriver))
-            query = query.Where(x => x.DriverName != null && EF.Functions.ILike(x.DriverName, $"%{normalizedDriver}%"));
-
-        if (normalizedScope == "driver")
-            query = query.Where(x => x.DriverName != null && x.DriverName != "");
-        else if (normalizedScope == "system")
-            query = query.Where(x => x.DriverName == null || x.DriverName == "");
-
-        if (!string.IsNullOrWhiteSpace(normalizedSearch))
-        {
-            query = query.Where(x =>
-                EF.Functions.ILike(x.Title, $"%{normalizedSearch}%")
-                || EF.Functions.ILike(x.Details, $"%{normalizedSearch}%")
-                || (x.DriverName != null && EF.Functions.ILike(x.DriverName, $"%{normalizedSearch}%")));
-        }
+        query = await MotivActivityLogReadHelper.ApplyUserOrgScopeAsync(
+            query,
+            _currentUserService,
+            ResolveOrganizationId);
+        query = MotivActivityLogReadHelper.ApplyFilters(
+            query,
+            kind,
+            scope,
+            search,
+            driverName,
+            fromUtc,
+            toUtc);
 
         var rows = await query
             .OrderByDescending(x => x.EventAt)

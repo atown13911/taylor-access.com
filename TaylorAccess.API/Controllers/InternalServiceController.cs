@@ -496,6 +496,60 @@ public class InternalServiceController : ControllerBase
         });
     }
 
+    /// <summary>Fleet-wide Motive activity logs for VanTac (no per-user org scoping).</summary>
+    [HttpGet("motiv/activity-logs")]
+    public async Task<ActionResult> GetMotivActivityLogs(
+        [FromQuery] int limit = 1000,
+        [FromQuery] string? search = null,
+        [FromQuery] string? kind = null,
+        [FromQuery] string? scope = null,
+        [FromQuery] string? driverName = null,
+        [FromQuery] string? fromDate = null,
+        [FromQuery] string? toDate = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var cappedLimit = Math.Clamp(limit <= 0 ? 1000 : limit, 1, 5000);
+        var fromUtc = MotivActivityLogReadHelper.ParseDateBoundary(fromDate, endOfDay: false);
+        var toUtc = MotivActivityLogReadHelper.ParseDateBoundary(toDate, endOfDay: true);
+
+        var query = _db.MotivActivityLogs.AsNoTracking();
+        query = MotivActivityLogReadHelper.ApplyFilters(
+            query,
+            kind,
+            scope,
+            search,
+            driverName,
+            fromUtc,
+            toUtc);
+
+        var rows = await query
+            .OrderByDescending(x => x.EventAt)
+            .ThenByDescending(x => x.Id)
+            .Take(cappedLimit)
+            .Select(x => new
+            {
+                id = x.Id,
+                kind = x.Kind,
+                title = x.Title,
+                details = x.Details,
+                driverName = x.DriverName,
+                previousLocation = x.PreviousLocation,
+                currentLocation = x.CurrentLocation,
+                timestamp = x.EventAt
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            rows,
+            count = rows.Count,
+            limit = cappedLimit,
+            source = "internal"
+        });
+    }
+
     /// <summary>Get drivers for internal service consumers.</summary>
     [HttpGet("drivers")]
     public async Task<ActionResult> GetDrivers(
