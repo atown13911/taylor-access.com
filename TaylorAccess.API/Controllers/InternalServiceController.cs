@@ -21,17 +21,20 @@ public class InternalServiceController : ControllerBase
     private readonly IConfiguration _config;
     private readonly ILogger<InternalServiceController> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly MotivFuelLiveClient _motivFuelLiveClient;
 
     public InternalServiceController(
         TaylorAccessDbContext db,
         IConfiguration config,
         ILogger<InternalServiceController> logger,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        MotivFuelLiveClient motivFuelLiveClient)
     {
         _db = db;
         _config = config;
         _logger = logger;
         _scopeFactory = scopeFactory;
+        _motivFuelLiveClient = motivFuelLiveClient;
     }
 
     private bool ValidateServiceKey()
@@ -284,6 +287,46 @@ public class InternalServiceController : ControllerBase
         }).ToList();
 
         return Ok(new { data, total = data.Count, source = "taylor-access-motiv-fuel" });
+    }
+
+    /// <summary>Live Motive fuel card transactions for Accounting and other internal consumers.</summary>
+    [HttpGet("motiv/fuel-transactions")]
+    public async Task<ActionResult> GetLiveFuelTransactions(
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var from = (fromDate ?? DateTime.UtcNow.Date.AddMonths(-1)).Date;
+        var to = (toDate ?? DateTime.UtcNow.Date).Date;
+        if (to < from)
+            (from, to) = (to, from);
+
+        var result = await _motivFuelLiveClient.FetchTransactionsAsync(from, to);
+        var data = result.Records.Select(r => new
+        {
+            id = r.TransactionId,
+            transaction_id = r.TransactionId,
+            transaction_time = r.TransactionDate?.ToUniversalTime().ToString("O"),
+            amount = r.Amount,
+            total_amount = r.Amount,
+            driver_name = r.DriverName,
+            merchant_name = r.MerchantName,
+            vehicle_number = r.TruckNumber,
+            truck_number = r.TruckNumber,
+            unit = r.TruckNumber,
+            status = r.Status
+        }).ToList();
+
+        return Ok(new
+        {
+            source = "motive-live",
+            connected = result.Connected,
+            total = data.Count,
+            warning = result.Warning,
+            data
+        });
     }
 
     private static string? ExtractFuelPurchaseVehicleNumber(string? rawJson)

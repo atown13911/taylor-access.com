@@ -231,6 +231,7 @@ builder.Services.AddCors(options =>
 // Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<CurrentUserService>();
+builder.Services.AddScoped<MotivFuelLiveClient>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
