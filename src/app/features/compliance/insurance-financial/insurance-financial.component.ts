@@ -429,9 +429,18 @@ export class InsuranceFinancialComponent implements OnInit {
     return this.expenseBasisOptions.find(o => o.value === basis)?.label || basis || '—';
   }
 
-  formatCurrency(val: number): string {
-    if (!val) return '—';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
+  getPolicyCost(policy: InsuranceRow | any): number {
+    return Number(policy?.premiumCost ?? 0);
+  }
+
+  formatCurrency(val: number, fractionDigits = 0): string {
+    if (!val && val !== 0) return '—';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits
+    }).format(val);
   }
 
   formatDate(d: string): string {

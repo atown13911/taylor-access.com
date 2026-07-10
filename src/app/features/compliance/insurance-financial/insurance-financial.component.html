@@ -43,6 +43,8 @@
               <th>Provider</th>
               <th>Policy #</th>
               <th>Coverage</th>
+              <th>Cost</th>
+              <th>Cost Basis</th>
               <th>Effective</th>
               <th>Expiry</th>
               <th>Document</th>
@@ -70,6 +72,8 @@
                 <td>{{ group.current.providerName }}</td>
                 <td class="mono">{{ group.current.policyNumber || '—' }}</td>
                 <td>{{ formatCurrency(group.current.coverageAmount) }}</td>
+                <td>{{ formatCurrency(getPolicyCost(group.current), 2) }}</td>
+                <td>{{ getExpenseBasisLabel(group.current.expenseBasis || '') }}</td>
                 <td>{{ formatDate(group.current.effectiveDate) }}</td>
                 <td>{{ formatDate(group.current.expiryDate) }}</td>
                 <td>
@@ -102,6 +106,8 @@
                     <td class="history-muted">{{ policy.providerName }}</td>
                     <td class="mono history-muted">{{ policy.policyNumber || '—' }}</td>
                     <td class="history-muted">{{ formatCurrency(policy.coverageAmount) }}</td>
+                    <td class="history-muted">{{ formatCurrency(getPolicyCost(policy), 2) }}</td>
+                    <td class="history-muted">{{ getExpenseBasisLabel(policy.expenseBasis || '') }}</td>
                     <td class="history-muted">{{ formatDate(policy.effectiveDate) }}</td>
                     <td class="history-muted">{{ formatDate(policy.expiryDate) }}</td>
                     <td>
