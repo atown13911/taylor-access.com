@@ -20,7 +20,7 @@
     </div>
 
     <nav class="sidebar-nav">
-      @for (section of navSections; track section.label) {
+      @for (section of filteredNavSections(); track section.label) {
         @if (section.label && !sidebarCollapsed()) {
           <div class="nav-section-label">{{ section.label }}</div>
         }

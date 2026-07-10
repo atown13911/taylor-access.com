@@ -6,6 +6,7 @@ import { AuthService } from '../core/services/auth.service';
 import { InactivityService } from '../core/services/inactivity.service';
 import { EventTrackingService } from '../core/services/event-tracking.service';
 import { EchoActivityService } from '../core/services/echo-activity.service';
+import { NavPermissionService } from '../core/services/nav-permission.service';
 import { environment } from '../../environments/environment';
 
 interface NavSection {
@@ -24,6 +25,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   authService = inject(AuthService);
   inactivity = inject(InactivityService);
   private echoActivity = inject(EchoActivityService);
+  private navPermission = inject(NavPermissionService);
   private router = inject(Router);
   private http = inject(HttpClient);
   private tracking = inject(EventTrackingService);
@@ -128,6 +130,20 @@ export class ShellComponent implements OnInit, OnDestroy {
       ]
     }
   ];
+
+  filteredNavSections = computed(() => {
+    const role = this.authService.getEffectiveRole();
+    const roles = this.authService.getEffectiveRoles();
+    const permissions = this.authService.permissions();
+    return this.navSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          this.navPermission.canAccessRoute(item.route, role, permissions, roles)
+        ),
+      }))
+      .filter((section) => section.items.length > 0);
+  });
 
   ngOnInit(): void {
     if (!this.authService.isAuthenticated()) {

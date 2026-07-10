@@ -44,8 +44,47 @@ public class CurrentUserService
         GetClaimValue(ClaimTypes.Name, "name", "given_name", "preferred_username")
         ?? _httpContextAccessor.HttpContext?.User.Identity?.Name;
 
-    public string? Role =>
-        GetClaimValue(ClaimTypes.Role, "role", "roles");
+    public string? Role => ResolveEffectiveRole();
+
+    private static readonly HashSet<string> AdminRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "product_owner", "superadmin", "admin", "development"
+    };
+
+    private string? ResolveEffectiveRole()
+    {
+        var user = _httpContextAccessor.HttpContext?.User;
+        if (user == null) return null;
+
+        var roles = user.FindAll("role")
+            .Concat(user.FindAll(ClaimTypes.Role))
+            .Select(c => c.Value?.Trim().ToLowerInvariant())
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var appRole = user.FindFirst("app_role")?.Value?.Trim().ToLowerInvariant();
+
+        foreach (var role in roles)
+        {
+            if (AdminRoles.Contains(role))
+                return role;
+        }
+
+        if (!string.IsNullOrEmpty(appRole))
+            return appRole;
+
+        return roles.FirstOrDefault() ?? GetClaimValue(ClaimTypes.Role, "roles")?.Trim().ToLowerInvariant();
+    }
+
+    public static bool IsPortalAdminRole(string? role)
+    {
+        var normalized = (role ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized is "product_owner" or "superadmin" or "super_admin" or "development"
+            or "admin" or "administrator";
+    }
+
+    public bool CanBypassOrgFilter => IsPortalAdminRole(Role);
 
     public bool IsAuthenticated => 
         _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
@@ -122,6 +161,21 @@ public class CurrentUserService
             };
         }
 
+        if (_cachedUser != null)
+        {
+            var effectiveRole = Role?.Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(effectiveRole))
+                _cachedUser.Role = effectiveRole;
+
+            if (!_cachedUser.OrganizationId.HasValue || _cachedUser.OrganizationId.Value <= 0)
+            {
+                var claimOrgIds = GetOrganizationIdsFromClaims();
+                var claimOrgId = claimOrgIds.FirstOrDefault(id => id > 0);
+                if (claimOrgId > 0)
+                    _cachedUser.OrganizationId = claimOrgId;
+            }
+        }
+
         _userLoaded = true;
         return _cachedUser;
     }
@@ -142,14 +196,35 @@ public class CurrentUserService
 
     public bool IsProductOwner => Role == "product_owner";
 
-    public bool CanSeeAllOrganizations => Role == "product_owner" || Role == "superadmin";
+    public bool CanSeeAllOrganizations => CanBypassOrgFilter;
 
     public async Task<bool> ShouldBypassOrgFilterAsync()
     {
-        if (CanSeeAllOrganizations) return true;
-        
+        if (CanBypassOrgFilter) return true;
+
         var user = await GetUserAsync();
-        return user?.Role == "product_owner" || user?.Role == "superadmin";
+        return user != null && IsPortalAdminRole(user.Role);
+    }
+
+    public async Task<HashSet<int>> GetAllowedOrganizationIdsAsync()
+    {
+        var allowed = new HashSet<int>();
+
+        foreach (var id in GetOrganizationIdsFromClaims())
+        {
+            if (id > 0) allowed.Add(id);
+        }
+
+        foreach (var id in await GetUserOrganizationIdsAsync())
+        {
+            if (id > 0) allowed.Add(id);
+        }
+
+        var user = await GetUserAsync();
+        if (user?.OrganizationId is > 0)
+            allowed.Add(user.OrganizationId.Value);
+
+        return allowed;
     }
 
     public async Task<(int? orgId, User? user, string? error)> ResolveOrgFilterAsync()
@@ -157,7 +232,7 @@ public class CurrentUserService
         var user = await GetUserAsync();
         if (user == null) return (null, null, "Not authenticated");
 
-        if (user.Role == "product_owner" || user.Role == "superadmin" || user.Role == "development")
+        if (user.Role == "product_owner" || user.Role == "superadmin" || user.Role == "super_admin" || user.Role == "development" || IsPortalAdminRole(user.Role))
             return (null, user, null);
 
         if (user.OrganizationId == null)

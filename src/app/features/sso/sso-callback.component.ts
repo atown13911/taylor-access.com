@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { NavPermissionService } from '../../core/services/nav-permission.service';
 
 @Component({
   selector: 'app-sso-callback',
@@ -25,6 +26,7 @@ export class SsoCallbackComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private http = inject(HttpClient);
+  private navPermission = inject(NavPermissionService);
   private portalUrl = environment.portalApiUrl || 'https://ttac-gateway-production.up.railway.app/api/v1/open/tss-portal';
 
   error = '';
@@ -62,7 +64,7 @@ export class SsoCallbackComponent implements OnInit {
         id: payload.userId || payload.sub,
         name: payload.name,
         email: payload.email,
-        role: payload.app_role || payload.role,
+        role: this.navPermission.resolveStoredRole(payload),
         organizationId: payload.organizationId,
         avatarUrl: payload.avatarUrl || payload.avatar,
         avatar: payload.avatar,
@@ -124,17 +126,20 @@ export class SsoCallbackComponent implements OnInit {
           headers: { Authorization: `Bearer ${accessToken}` }
         }).subscribe({
           next: (userInfo) => {
+            const payload = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            const rolePayload = { ...payload, ...userInfo };
+
             localStorage.setItem('vantac_token', accessToken);
             localStorage.setItem('vantac_user', JSON.stringify({
               id: userInfo.sub, name: userInfo.name, email: userInfo.email,
-              role: userInfo.role, avatar: userInfo.avatar,
+              role: this.navPermission.resolveStoredRole(rolePayload),
+              avatar: userInfo.avatar,
               avatarUrl: userInfo.avatarUrl || userInfo.avatar,
               organizationId: userInfo.organizationId,
               organizationName: userInfo.organizationName,
             }));
             if (refreshToken) localStorage.setItem('sso_refresh_token', refreshToken);
 
-            const payload = JSON.parse(atob(accessToken.split('.')[1]));
             localStorage.setItem('vantac_permissions', JSON.stringify(
               this.extractPermissions(payload)
             ));

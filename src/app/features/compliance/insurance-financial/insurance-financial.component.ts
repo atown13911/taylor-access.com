@@ -21,6 +21,7 @@ interface ChargingRow {
   perIncidentDeductible: number;
   enrollmentStatus: string;
   policyStatus: string;
+  sortOrder: number;
 }
 
 interface EnrollmentMatrixColumn {
@@ -33,7 +34,7 @@ interface EnrollmentMatrixColumn {
 interface EnrollmentMatrixRow {
   driverId: number;
   driverName: string;
-  cells: Record<string, 'enrolled' | 'not_enrolled'>;
+  cells: Record<string, 'driver_expense' | 'company_expense'>;
 }
 
 interface InsuranceRow {
@@ -52,6 +53,43 @@ interface InsuranceRow {
   notes: string;
   fileName: string;
   hasFile: boolean;
+}
+
+/** Policy types billed at the company level regardless of expenseBasis field. */
+const COMPANY_EXPENSE_POLICY_TYPES = new Set([
+  'cargo',
+  'trailer_interchange',
+]);
+
+interface PolicyBundleRule {
+  parentType: string;
+  childTypes: Set<string>;
+  label: string;
+}
+
+const POLICY_BUNDLE_RULES: PolicyBundleRule[] = [
+  {
+    parentType: 'cargo',
+    childTypes: new Set(['trailer_interchange']),
+    label: 'Included in Cargo'
+  },
+  {
+    parentType: 'auto_liability',
+    childTypes: new Set(['general_liability']),
+    label: 'Included in Auto Liability'
+  },
+  {
+    parentType: 'physical_damage',
+    childTypes: new Set(['non_trucking']),
+    label: 'Included in Physical Damage'
+  }
+];
+
+interface PolicyTypeGroup {
+  type: string;
+  current: InsuranceRow;
+  history: InsuranceRow[];
+  includedCoverages: InsuranceRow[];
 }
 
 
@@ -91,10 +129,6 @@ export class InsuranceFinancialComponent implements OnInit {
     providerName: '',
     policyNumber: '',
     coverageAmount: 0,
-    premiumCost: 0,
-    expenseBasis: 'whole_policy',
-    perIncidentDeductible: 0,
-    billingFrequency: 'monthly',
     effectiveDate: '',
     expiryDate: '',
     notes: '',
@@ -163,9 +197,15 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   /** Groups policies by type, picks the most current as the primary row. */
-  groupedByType = computed(() => {
+  groupedByType = computed((): PolicyTypeGroup[] => {
+    const all = this.policies();
+    const bundledChildIds = new Set(
+      all.filter((p) => this.isBundledChildPolicy(p, all)).map((p) => String(p.id))
+    );
+
     const map = new Map<string, InsuranceRow[]>();
-    for (const p of this.policies()) {
+    for (const p of all) {
+      if (bundledChildIds.has(String(p.id))) continue;
       const arr = map.get(p.policyType) ?? [];
       arr.push(p);
       map.set(p.policyType, arr);
@@ -174,16 +214,16 @@ export class InsuranceFinancialComponent implements OnInit {
     const statusOrder: Record<string, number> = { active: 0, expiring: 1, expired: 2 };
 
     return Array.from(map.entries()).map(([type, rows]) => {
-      // Sort: active first, then by effectiveDate desc
       const sorted = [...rows].sort((a, b) => {
         const sA = statusOrder[a.status] ?? 3;
         const sB = statusOrder[b.status] ?? 3;
         if (sA !== sB) return sA - sB;
         return new Date(b.effectiveDate || 0).getTime() - new Date(a.effectiveDate || 0).getTime();
       });
-      return { type, current: sorted[0], history: sorted.slice(1) };
+      const current = sorted[0];
+      const includedCoverages = this.getBundledChildCoverages(type, current, all);
+      return { type, current, history: sorted.slice(1), includedCoverages };
     }).sort((a, b) => {
-      // Sort groups: active types first
       const aStatus = statusOrder[a.current.status] ?? 3;
       const bStatus = statusOrder[b.current.status] ?? 3;
       if (aStatus !== bStatus) return aStatus - bStatus;
@@ -191,10 +231,13 @@ export class InsuranceFinancialComponent implements OnInit {
     });
   });
 
-  currentPolicyGroups = computed(() =>
-    this.groupedByType().filter((group) =>
-      group.current.status === 'active' || group.current.status === 'expiring'
-    )
+  currentPolicyGroups = computed((): PolicyTypeGroup[] =>
+    this.groupedByType()
+      .filter((group) => group.current.status === 'active' || group.current.status === 'expiring')
+      .map((group) => ({
+        ...group,
+        history: group.history.filter((p) => p.status === 'active' || p.status === 'expiring')
+      }))
   );
 
   elapsedPolicies = computed(() =>
@@ -254,6 +297,33 @@ export class InsuranceFinancialComponent implements OnInit {
     return this.policies().reduce((sum, p) => sum + (p.coverageAmount || 0), 0);
   });
 
+  /** Active + expiring policies only — used by the insurance report. */
+  reportPolicies = computed(() =>
+    this.policies().filter((p) => p.status === 'active' || p.status === 'expiring')
+  );
+
+  reportStats = computed(() => {
+    const all = this.reportPolicies();
+    return {
+      total: all.length,
+      active: all.filter((p) => p.status === 'active').length,
+      expiring: all.filter((p) => p.status === 'expiring').length,
+      totalCoverage: all.reduce((sum, p) => sum + (p.coverageAmount || 0), 0)
+    };
+  });
+
+  reportCoverageSummary = computed(() => {
+    const byType = new Map<string, { type: string; count: number; totalCoverage: number; hasExpired: boolean; hasExpiring: boolean }>();
+    for (const p of this.reportPolicies()) {
+      const existing = byType.get(p.policyType) || { type: p.policyType, count: 0, totalCoverage: 0, hasExpired: false, hasExpiring: false };
+      existing.count++;
+      existing.totalCoverage += p.coverageAmount || 0;
+      if (p.status === 'expiring') existing.hasExpiring = true;
+      byType.set(p.policyType, existing);
+    }
+    return Array.from(byType.values());
+  });
+
   coverageSummary = computed(() => {
     const byType = new Map<string, { type: string; count: number; totalCoverage: number; hasExpired: boolean; hasExpiring: boolean }>();
     for (const p of this.policies()) {
@@ -279,7 +349,7 @@ export class InsuranceFinancialComponent implements OnInit {
   exportReportCSV(): void {
     const rows: string[] = [];
     rows.push('Type,Provider,Policy #,Coverage,Effective,Expiry,Status');
-    for (const p of this.policies()) {
+    for (const p of this.reportPolicies()) {
       rows.push([
         this.getPolicyTypeLabel(p.policyType),
         `"${p.providerName}"`,
@@ -337,108 +407,75 @@ export class InsuranceFinancialComponent implements OnInit {
   chargingRows = computed((): ChargingRow[] => {
     const map = this.chargingEnrollmentsByPolicy();
     const rows: ChargingRow[] = [];
+    const activeDrivers = this.chargingDrivers().filter((driver) =>
+      this.isMatrixActiveDriver(this.normalizeDriverStatus(driver.status))
+    );
+
+    let sortOrder = 0;
 
     for (const group of this.groupedByType()) {
       const policy = group.current;
       if (policy.status !== 'active' && policy.status !== 'expiring') continue;
 
-      const meta = policy as any;
-      const basis = meta.expenseBasis || 'whole_policy';
-      const policyCost = this.getPolicyCost(policy);
-      const deductible = Number(meta.perIncidentDeductible ?? 0);
-      const frequency = meta.billingFrequency || '';
-      const enrollments = map[String(policy.id)] || [];
+      sortOrder += 100;
+      this.appendChargingRowsForPolicy(policy, rows, map, activeDrivers, sortOrder);
 
-      if (basis === 'per_driver') {
-        const activeEnrollments = enrollments.filter((e: any) => e.status === 'active');
-        if (!activeEnrollments.length) {
-          rows.push({
-            driverName: '—',
-            policyType: policy.policyType,
-            providerName: policy.providerName,
-            policyNumber: policy.policyNumber || '',
-            expenseBasis: basis,
-            billingFrequency: frequency,
-            policyCost,
-            chargeAmount: 0,
-            perIncidentDeductible: deductible,
-            enrollmentStatus: 'none',
-            policyStatus: policy.status
-          });
-          continue;
-        }
-
-        for (const enrollment of activeEnrollments) {
-          rows.push({
-            driverName: enrollment.driverName || 'Unknown Driver',
-            policyType: policy.policyType,
-            providerName: policy.providerName,
-            policyNumber: policy.policyNumber || '',
-            expenseBasis: basis,
-            billingFrequency: enrollment.deductionFrequency || frequency,
-            policyCost,
-            chargeAmount: Number(enrollment.deductionAmount ?? 0) || policyCost,
-            perIncidentDeductible: deductible,
-            enrollmentStatus: enrollment.status || 'active',
-            policyStatus: policy.status
-          });
-        }
-        continue;
+      for (const included of group.includedCoverages) {
+        if (included.status !== 'active' && included.status !== 'expiring') continue;
+        if (!this.shouldShowBundledChildInCharging(included)) continue;
+        sortOrder += 1;
+        this.appendChargingRowsForPolicy(included, rows, map, activeDrivers, sortOrder);
       }
-
-      rows.push({
-        driverName: 'Company (Whole Policy)',
-        policyType: policy.policyType,
-        providerName: policy.providerName,
-        policyNumber: policy.policyNumber || '',
-        expenseBasis: basis,
-        billingFrequency: frequency,
-        policyCost,
-        chargeAmount: policyCost,
-        perIncidentDeductible: deductible,
-        enrollmentStatus: 'n/a',
-        policyStatus: policy.status
-      });
     }
 
     const term = this.chargingSearch.trim().toLowerCase();
     const filtered = term
       ? rows.filter((row) =>
-          row.driverName.toLowerCase().includes(term) ||
-          this.getPolicyTypeLabel(row.policyType).toLowerCase().includes(term) ||
+          this.getChargingPolicyTypeLabel(row.policyType).toLowerCase().includes(term) ||
           row.providerName.toLowerCase().includes(term) ||
           row.policyNumber.toLowerCase().includes(term)
         )
       : rows;
 
-    return filtered.sort((a, b) => {
-      const driverCmp = a.driverName.localeCompare(b.driverName);
-      if (driverCmp !== 0) return driverCmp;
-      return this.getPolicyTypeLabel(a.policyType).localeCompare(this.getPolicyTypeLabel(b.policyType));
-    });
+    return filtered.sort((a, b) => a.sortOrder - b.sortOrder);
   });
 
   chargingStats = computed(() => {
     const rows = this.chargingRows();
-    const driverNames = new Set(rows.map((r) => r.driverName).filter((n) => n !== '—' && !n.startsWith('Company')));
     return {
       chargeLines: rows.length,
-      drivers: driverNames.size,
+      drivers: this.matrixDriverCounts().active,
       totalCharges: rows.reduce((sum, row) => sum + (row.chargeAmount || 0), 0)
     };
   });
 
   enrollmentMatrixColumns = computed((): EnrollmentMatrixColumn[] => {
-    return this.groupedByType()
-      .map((group) => group.current)
-      .filter((policy) => policy.status === 'active' || policy.status === 'expiring')
-      .map((policy) => ({
-        policyId: String(policy.id),
-        policyType: policy.policyType,
-        label: this.getPolicyTypeLabel(policy.policyType),
-        expenseBasis: (policy as any).expenseBasis || 'whole_policy'
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    const columns: EnrollmentMatrixColumn[] = [];
+
+    for (const group of this.groupedByType()) {
+      const current = group.current;
+      if (current.status !== 'active' && current.status !== 'expiring') continue;
+
+      columns.push({
+        policyId: String(current.id),
+        policyType: current.policyType,
+        label: this.getPolicyTypeLabel(current.policyType),
+        expenseBasis: this.resolveExpenseBasis(current)
+      });
+
+      for (const included of group.includedCoverages) {
+        if (included.status !== 'active' && included.status !== 'expiring') continue;
+        if (!this.shouldShowBundledChildInCharging(included)) continue;
+        columns.push({
+          policyId: String(included.id),
+          policyType: included.policyType,
+          label: this.getPolicyTypeLabel(included.policyType),
+          expenseBasis: this.resolveExpenseBasis(included)
+        });
+      }
+    }
+
+    return columns;
   });
 
   enrollmentMatrixRows = computed((): EnrollmentMatrixRow[] => {
@@ -449,13 +486,16 @@ export class InsuranceFinancialComponent implements OnInit {
     const enrolledDriverIdsByPolicy = new Map<string, Set<number>>();
 
     for (const column of columns) {
-      const enrolled = new Set<number>();
-      for (const enrollment of enrollmentsByPolicy[column.policyId] || []) {
-        if (enrollment.status !== 'active') continue;
-        const driverId = Number(enrollment.driverId);
-        if (driverId > 0) enrolled.add(driverId);
-      }
-      enrolledDriverIdsByPolicy.set(column.policyId, enrolled);
+      const policyEnrollments = enrollmentsByPolicy[column.policyId] || [];
+      enrolledDriverIdsByPolicy.set(
+        column.policyId,
+        new Set(
+          policyEnrollments
+            .filter((e) => e.status === 'active')
+            .map((e) => Number(e.driverId))
+            .filter((id) => id > 0)
+        )
+      );
     }
 
     const tab = this.matrixDriverTab();
@@ -474,15 +514,23 @@ export class InsuranceFinancialComponent implements OnInit {
       })
       .map((driver) => {
         const driverId = Number(driver.id);
-        const cells: Record<string, 'enrolled' | 'not_enrolled'> = {};
+        const cells: Record<string, 'driver_expense' | 'company_expense'> = {};
         for (const column of columns) {
-          if (column.expenseBasis === 'per_driver') {
-            cells[column.policyId] = enrolledDriverIdsByPolicy.get(column.policyId)?.has(driverId)
-              ? 'enrolled'
-              : 'not_enrolled';
-          } else {
-            cells[column.policyId] = 'enrolled';
+          if (column.expenseBasis !== 'per_driver') {
+            cells[column.policyId] = 'company_expense';
+            continue;
           }
+
+          const policyEnrollments = enrollmentsByPolicy[column.policyId] || [];
+          const hasActiveEnrollments = policyEnrollments.some((e) => e.status === 'active');
+          if (!hasActiveEnrollments) {
+            cells[column.policyId] = 'driver_expense';
+            continue;
+          }
+
+          cells[column.policyId] = enrolledDriverIdsByPolicy.get(column.policyId)?.has(driverId)
+            ? 'driver_expense'
+            : 'company_expense';
         }
         return {
           driverId,
@@ -512,11 +560,32 @@ export class InsuranceFinancialComponent implements OnInit {
     let missing = 0;
     for (const row of rows) {
       for (const column of perDriverColumns) {
-        if (row.cells[column.policyId] === 'enrolled') enrolled++;
+        if (row.cells[column.policyId] === 'driver_expense') enrolled++;
         else missing++;
       }
     }
     return { drivers: rows.length, policies: perDriverColumns.length, enrolled, missing };
+  });
+
+  matrixDashStats = computed(() => {
+    const counts = this.matrixDriverCounts();
+    const columns = this.enrollmentMatrixColumns();
+    const perDriverColumns = columns.filter((c) => c.expenseBasis === 'per_driver');
+    const matrixStats = this.enrollmentMatrixStats();
+    const enrollmentSlots = matrixStats.enrolled + matrixStats.missing;
+
+    return {
+      totalDrivers: counts.active + counts.inactive,
+      active: counts.active,
+      inactive: counts.inactive,
+      policies: columns.length,
+      perDriverPolicies: perDriverColumns.length,
+      enrolled: matrixStats.enrolled,
+      gaps: matrixStats.missing,
+      coveragePct: enrollmentSlots > 0
+        ? Math.round((matrixStats.enrolled / enrollmentSlots) * 100)
+        : (perDriverColumns.length > 0 ? 0 : 100),
+    };
   });
 
   setPageTab(tab: PageTab): void {
@@ -530,9 +599,7 @@ export class InsuranceFinancialComponent implements OnInit {
     if (this.loadingPolicies()) return;
     this.loadingCharging.set(true);
 
-    const chargeablePolicies = this.groupedByType()
-      .map((group) => group.current)
-      .filter((policy) => policy.status === 'active' || policy.status === 'expiring');
+    const chargeablePolicies = this.getChargeablePolicies();
 
     const enrollmentPromise = !chargeablePolicies.length
       ? Promise.resolve([] as { policyId: string; rows: any[] }[])
@@ -611,6 +678,229 @@ export class InsuranceFinancialComponent implements OnInit {
     return true;
   }
 
+  isCompanyExpensePolicy(policyType: string): boolean {
+    return COMPANY_EXPENSE_POLICY_TYPES.has(String(policyType || '').trim().toLowerCase());
+  }
+
+  isBundledChildPolicy(policy: InsuranceRow | any, policies: InsuranceRow[] = this.policies()): boolean {
+    const rule = this.getBundleRuleForChild(String(policy?.policyType || '').trim().toLowerCase());
+    if (!rule) return false;
+
+    if (policy?.status === 'expired') return false;
+
+    const parentPolicies = policies.filter(
+      (p) => p.policyType === rule.parentType && p.status !== 'expired'
+    );
+    if (!parentPolicies.length) return false;
+
+    for (const parent of parentPolicies) {
+      if (!this.policyPeriodsOverlap(policy, parent)) continue;
+      if (this.policiesBelongToSameBundle(parent, policy, rule)) return true;
+    }
+
+    return false;
+  }
+
+  getBundledChildCoverages(
+    parentType: string,
+    parentPolicy: InsuranceRow,
+    policies: InsuranceRow[] = this.policies()
+  ): InsuranceRow[] {
+    const rule = this.getBundleRuleForParent(parentType);
+    if (!rule || parentPolicy.status === 'expired') return [];
+
+    return policies
+      .filter((p) =>
+        (p.status === 'active' || p.status === 'expiring') &&
+        rule.childTypes.has(String(p.policyType || '').trim().toLowerCase()) &&
+        this.isBundledChildPolicy(p, policies) &&
+        this.policyPeriodsOverlap(p, parentPolicy) &&
+        this.policiesBelongToSameBundle(parentPolicy, p, rule)
+      )
+      .sort((a, b) =>
+        new Date(b.effectiveDate || 0).getTime() - new Date(a.effectiveDate || 0).getTime()
+      );
+  }
+
+  getBundledCoverageLabel(parentType: string): string {
+    return this.getBundleRuleForParent(parentType)?.label ?? 'Included Coverage';
+  }
+
+  getBundledCostLabel(parentType: string): string {
+    if (parentType === 'cargo') return 'In cargo policy';
+    if (parentType === 'auto_liability') return 'In auto policy';
+    if (parentType === 'physical_damage') return 'In physical damage policy';
+    return 'Included';
+  }
+
+  private getBundleRuleForChild(childType: string): PolicyBundleRule | undefined {
+    return POLICY_BUNDLE_RULES.find((rule) => rule.childTypes.has(childType));
+  }
+
+  private getBundleRuleForParent(parentType: string): PolicyBundleRule | undefined {
+    return POLICY_BUNDLE_RULES.find((rule) => rule.parentType === parentType);
+  }
+
+  private policiesBelongToSameBundle(
+    parent: InsuranceRow | any,
+    child: InsuranceRow | any,
+    rule: PolicyBundleRule
+  ): boolean {
+    const childNotes = String(child?.notes || '').toLowerCase();
+    if (rule.parentType === 'cargo') {
+      if (/covered in.*cargo|included in.*cargo|part of.*cargo/.test(childNotes)) return true;
+      const parentNotes = String(parent?.notes || '').toLowerCase();
+      if (/trailer interchange/.test(parentNotes)) return true;
+      const zeroCost = child?.premiumCost != null && Number(child.premiumCost) === 0;
+      if (zeroCost) return true;
+      return false;
+    }
+
+    if (rule.parentType === 'auto_liability') {
+      if (/covered in.*auto|included in.*auto|part of.*auto/.test(childNotes)) return true;
+      const parentNumber = this.normalizePolicyNumber(parent?.policyNumber);
+      const childNumber = this.normalizePolicyNumber(child?.policyNumber);
+      if (parentNumber && childNumber && parentNumber === childNumber) return true;
+    }
+
+    if (rule.parentType === 'physical_damage') {
+      if (/covered in.*physical|included in.*physical|part of.*physical/.test(childNotes)) return true;
+      const parentNotes = String(parent?.notes || '').toLowerCase();
+      if (/non[- ]?trucking/.test(parentNotes)) return true;
+      const zeroCost = child?.premiumCost == null || Number(child.premiumCost) === 0;
+      if (zeroCost && this.policyPeriodsOverlap(parent, child)) return true;
+    }
+
+    return false;
+  }
+
+  private normalizePolicyNumber(value: unknown): string {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+  }
+
+  private getChargeablePolicies(): InsuranceRow[] {
+    const policies: InsuranceRow[] = [];
+
+    for (const group of this.groupedByType()) {
+      const current = group.current;
+      if (current.status !== 'active' && current.status !== 'expiring') continue;
+
+      policies.push(current);
+      for (const included of group.includedCoverages) {
+        if (included.status !== 'active' && included.status !== 'expiring') continue;
+        if (!this.shouldShowBundledChildInCharging(included)) continue;
+        policies.push(included);
+      }
+    }
+
+    return policies;
+  }
+
+  private shouldShowBundledChildInCharging(policy: InsuranceRow): boolean {
+    return this.getPolicyCost(policy) > 0;
+  }
+
+  private appendChargingRowsForPolicy(
+    policy: InsuranceRow,
+    rows: ChargingRow[],
+    enrollmentsByPolicy: Record<string, any[]>,
+    activeDrivers: any[],
+    sortOrder: number
+  ): void {
+    const meta = policy as any;
+    const basis = this.resolveExpenseBasis(policy);
+    const policyCost = this.getPolicyCost(policy);
+    const deductible = Number(meta.perIncidentDeductible ?? 0);
+    const frequency = this.resolveBillingFrequency(policy);
+    const enrollments = enrollmentsByPolicy[String(policy.id)] || [];
+    const isCompanyExpense = this.isCompanyExpensePolicy(policy.policyType);
+
+    if (basis === 'per_driver') {
+      const activeEnrollments = enrollments.filter((e: any) => e.status === 'active');
+
+      if (!activeEnrollments.length) {
+        const driverCount = activeDrivers.length;
+        rows.push({
+          driverName: driverCount > 0
+            ? `All Active Drivers (${driverCount})`
+            : 'All Active Drivers',
+          policyType: policy.policyType,
+          providerName: policy.providerName,
+          policyNumber: policy.policyNumber || '',
+          expenseBasis: basis,
+          billingFrequency: frequency,
+          policyCost,
+          chargeAmount: policyCost,
+          perIncidentDeductible: deductible,
+          enrollmentStatus: 'active',
+          policyStatus: policy.status,
+          sortOrder
+        });
+        return;
+      }
+
+      for (const enrollment of activeEnrollments) {
+        rows.push({
+          driverName: enrollment.driverName || 'Unknown Driver',
+          policyType: policy.policyType,
+          providerName: policy.providerName,
+          policyNumber: policy.policyNumber || '',
+          expenseBasis: basis,
+          billingFrequency: enrollment.deductionFrequency || frequency,
+          policyCost,
+          chargeAmount: Number(enrollment.deductionAmount ?? 0) || policyCost,
+          perIncidentDeductible: deductible,
+          enrollmentStatus: enrollment.status || 'active',
+          policyStatus: policy.status,
+          sortOrder
+        });
+      }
+      return;
+    }
+
+    rows.push({
+      driverName: isCompanyExpense ? 'Company Expense' : 'Company (Whole Policy)',
+      policyType: policy.policyType,
+      providerName: policy.providerName,
+      policyNumber: policy.policyNumber || '',
+      expenseBasis: basis,
+      billingFrequency: frequency,
+      policyCost,
+      chargeAmount: policyCost,
+      perIncidentDeductible: deductible,
+      enrollmentStatus: isCompanyExpense ? 'company' : 'n/a',
+      policyStatus: policy.status,
+      sortOrder
+    });
+  }
+
+  private policyPeriodsOverlap(a: InsuranceRow | any, b: InsuranceRow | any): boolean {
+    const aStart = new Date(a?.effectiveDate || 0).getTime();
+    const aEnd = new Date(a?.expiryDate || a?.effectiveDate || 0).getTime();
+    const bStart = new Date(b?.effectiveDate || 0).getTime();
+    const bEnd = new Date(b?.expiryDate || b?.effectiveDate || 0).getTime();
+    return aStart <= bEnd && aEnd >= bStart;
+  }
+
+  resolveExpenseBasis(policy: InsuranceRow | any): string {
+    if (this.isCompanyExpensePolicy(policy?.policyType)) return 'whole_policy';
+    const basis = String(policy?.expenseBasis || 'whole_policy').trim().toLowerCase();
+    return basis === 'per_driver' ? 'per_driver' : 'whole_policy';
+  }
+
+  resolveBillingFrequency(policy: InsuranceRow | any): string {
+    const frequency = String(policy?.billingFrequency || 'monthly').trim().toLowerCase();
+    return this.billingFrequencyOptions.some(o => o.value === frequency) ? frequency : 'monthly';
+  }
+
+  getPolicyExpenseBasisLabel(policy: InsuranceRow | any): string {
+    return this.getExpenseBasisLabel(this.resolveExpenseBasis(policy));
+  }
+
+  getPolicyBillingFrequencyLabel(policy: InsuranceRow | any): string {
+    return this.getBillingFrequencyLabel(this.resolveBillingFrequency(policy));
+  }
+
   // ========== INSURANCE ==========
 
   async loadPolicies() {
@@ -633,6 +923,17 @@ export class InsuranceFinancialComponent implements OnInit {
     return this.policyTypes.find(t => t.value === type)?.label || type;
   }
 
+  getMatrixExpenseLabel(cell: 'driver_expense' | 'company_expense' | undefined): string {
+    return cell === 'driver_expense' ? 'Driver Expense' : 'Company Expense';
+  }
+
+  getChargingPolicyTypeLabel(type: string): string {
+    if (String(type || '').trim().toLowerCase() === 'physical_damage') {
+      return 'Physical Damage/ NTL';
+    }
+    return this.getPolicyTypeLabel(type);
+  }
+
   openAddPolicy(): void {
     this.editingPolicy.set(null);
     this.policyForm = {
@@ -640,10 +941,6 @@ export class InsuranceFinancialComponent implements OnInit {
       providerName: '',
       policyNumber: '',
       coverageAmount: 0,
-      premiumCost: 0,
-      expenseBasis: 'whole_policy',
-      perIncidentDeductible: 0,
-      billingFrequency: 'monthly',
       effectiveDate: '',
       expiryDate: '',
       notes: '',
@@ -665,10 +962,6 @@ export class InsuranceFinancialComponent implements OnInit {
       providerName: policy.providerName,
       policyNumber: policy.policyNumber || '',
       coverageAmount: policy.coverageAmount || 0,
-      premiumCost: p.premiumCost || 0,
-      expenseBasis: p.expenseBasis || 'whole_policy',
-      perIncidentDeductible: p.perIncidentDeductible || 0,
-      billingFrequency: p.billingFrequency || 'monthly',
       effectiveDate: policy.effectiveDate ? new Date(policy.effectiveDate).toISOString().split('T')[0] : '',
       expiryDate: policy.expiryDate ? new Date(policy.expiryDate).toISOString().split('T')[0] : '',
       notes: policy.notes || '',
@@ -707,10 +1000,12 @@ export class InsuranceFinancialComponent implements OnInit {
     fd.append('providerName', this.policyForm.providerName);
     fd.append('policyNumber', this.policyForm.policyNumber);
     if (this.policyForm.coverageAmount) fd.append('coverageAmount', this.policyForm.coverageAmount.toString());
-    fd.append('premiumCost', String(this.policyForm.premiumCost ?? 0));
-    fd.append('expenseBasis', this.policyForm.expenseBasis || 'whole_policy');
-    fd.append('perIncidentDeductible', String(this.policyForm.perIncidentDeductible ?? 0));
-    fd.append('billingFrequency', this.policyForm.billingFrequency || 'monthly');
+    if (!this.editingPolicy()) {
+      fd.append('premiumCost', '0');
+      fd.append('expenseBasis', 'whole_policy');
+      fd.append('perIncidentDeductible', '0');
+      fd.append('billingFrequency', 'monthly');
+    }
     if (this.policyForm.effectiveDate) fd.append('effectiveDate', this.policyForm.effectiveDate);
     if (this.policyForm.expiryDate) fd.append('expiryDate', this.policyForm.expiryDate);
     fd.append('notes', this.policyForm.notes);

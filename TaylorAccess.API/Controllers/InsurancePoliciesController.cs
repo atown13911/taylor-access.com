@@ -33,8 +33,14 @@ public class InsurancePoliciesController : ControllerBase
 
         var query = _context.InsurancePolicies.AsNoTracking().AsQueryable();
 
-        if (!user.IsProductOwner() && !user.IsSuperAdmin() && user.OrganizationId.HasValue)
-            query = query.Where(p => p.OrganizationId == user.OrganizationId.Value);
+        if (!await _currentUserService.ShouldBypassOrgFilterAsync())
+        {
+            var allowedOrgIds = await _currentUserService.GetAllowedOrganizationIdsAsync();
+            if (allowedOrgIds.Count == 0)
+                return Ok(new { data = Array.Empty<object>() });
+
+            query = query.Where(p => allowedOrgIds.Contains(p.OrganizationId));
+        }
 
         if (!string.IsNullOrEmpty(policyType))
             query = query.Where(p => p.PolicyType == policyType);

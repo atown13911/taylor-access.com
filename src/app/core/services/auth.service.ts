@@ -2,6 +2,7 @@ import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap, catchError, of, map } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { NavPermissionService } from './nav-permission.service';
 
 export interface User {
   id: string;
@@ -33,6 +34,7 @@ export interface Organization {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private http = inject(HttpClient);
+  private navPermission = inject(NavPermissionService);
 
   private readonly TOKEN_KEY = 'vantac_token';
   private readonly USER_KEY = 'vantac_user';
@@ -56,17 +58,71 @@ export class AuthService {
   private hydrateFromStorage(): void {
     const token = this.getToken();
     if (token && !this.isTokenExpired()) {
-      this.currentUser.set(this.getStored<User>(this.USER_KEY));
+      const storedUser = this.getStored<User>(this.USER_KEY);
+      const syncedUser = this.syncUserRoleFromToken(storedUser, token);
+      this.currentUser.set(syncedUser);
       this.currentOrganization.set(this.getStored<Organization>(this.ORG_KEY));
-      this.permissions.set(this.getStored<string[]>(this.PERMS_KEY) ?? []);
+      this.permissions.set(this.getStoredPermissions(token));
       this.isAuthenticated.set(true);
     } else if (token) {
       this.clearStorage();
     }
   }
 
+  private getStoredPermissions(token: string): string[] {
+    const fromToken = this.extractPermissionsFromToken();
+    if (fromToken.length > 0) {
+      localStorage.setItem(this.PERMS_KEY, JSON.stringify(fromToken));
+      return fromToken;
+    }
+    return this.getStored<string[]>(this.PERMS_KEY) ?? [];
+  }
+
+  private syncUserRoleFromToken(storedUser: User | null, token: string): User | null {
+    if (!storedUser) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const resolvedRole = this.navPermission.resolveStoredRole(payload);
+      const updated: User = {
+        ...storedUser,
+        role: resolvedRole,
+      };
+      if (!storedUser.organizationId && payload['organizationId']) {
+        updated.organizationId = String(payload['organizationId']);
+      }
+      if (resolvedRole !== storedUser.role || updated.organizationId !== storedUser.organizationId) {
+        localStorage.setItem(this.USER_KEY, JSON.stringify(updated));
+      }
+      return updated;
+    } catch {
+      return storedUser;
+    }
+  }
+
   getToken(): string | null {
     return localStorage.getItem(this.TOKEN_KEY);
+  }
+
+  getTokenPayload(): Record<string, unknown> | null {
+    const token = this.getToken();
+    if (!token) return null;
+    try {
+      return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    } catch {
+      return null;
+    }
+  }
+
+  getEffectiveRole(): string {
+    const stored = this.currentUser()?.role;
+    return this.navPermission.resolveEffectiveRole(this.getTokenPayload(), stored);
+  }
+
+  getEffectiveRoles(): string[] {
+    const fromToken = this.navPermission.parseRoles(this.getTokenPayload());
+    const stored = (this.currentUser()?.role || '').trim().toLowerCase();
+    if (stored && !fromToken.includes(stored)) fromToken.push(stored);
+    return fromToken;
   }
 
   private isTokenExpired(): boolean {

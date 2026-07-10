@@ -92,6 +92,19 @@
 
 .charging-stats-bar { grid-template-columns: repeat(3, 1fr); }
 
+.matrix-stats-bar {
+  grid-template-columns: repeat(5, 1fr);
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 1100px) {
+  .matrix-stats-bar { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .matrix-stats-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
 .charging-toolbar {
   margin-bottom: 1rem;
   .search-input {
@@ -276,20 +289,14 @@
   border-radius: 50%;
   vertical-align: middle;
 
-  &.enrolled {
+  &.driver_expense {
     background: #00ff88;
     box-shadow: 0 0 8px rgba(0, 255, 136, 0.45);
   }
 
-  &.not_enrolled {
-    background: #ff4444;
-    box-shadow: 0 0 8px rgba(255, 68, 68, 0.35);
-  }
-
-  &.company {
-    background: rgba(0, 229, 255, 0.35);
-    border: 1px solid rgba(0, 229, 255, 0.55);
-    box-shadow: none;
+  &.company_expense {
+    background: #4488ff;
+    box-shadow: 0 0 8px rgba(68, 136, 255, 0.45);
   }
 }
 
@@ -665,6 +672,23 @@
 .history-muted {
   color: var(--text-secondary) !important;
   font-size: 0.78rem !important;
+}
+
+.policy-included-row {
+  background: rgba(0, 229, 255, 0.03);
+  td { border-top: 1px dashed rgba(0, 229, 255, 0.12); }
+}
+
+.included-label {
+  margin-bottom: 0.15rem;
+  color: #00e5ff;
+  font-style: normal;
+  i { color: #00e5ff; opacity: 0.85; }
+}
+
+.included-cost {
+  font-style: italic;
+  opacity: 0.85;
 }
 
 // Report

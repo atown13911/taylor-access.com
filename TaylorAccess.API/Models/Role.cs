@@ -322,6 +322,7 @@ public static class DefaultRoles
             Permissions.InvoicesView, Permissions.InvoicesCreate, Permissions.InvoicesEdit, Permissions.InvoicesSend, Permissions.InvoicesApprove,
             Permissions.PayablesView, Permissions.PayablesCreate, Permissions.PayablesApprove, Permissions.PayablesPay,
             Permissions.FinanceView, Permissions.FinanceManage,
+            Permissions.ComplianceView, Permissions.ComplianceManage,
             Permissions.RatesView, Permissions.RatesManage,
             Permissions.ContactsView,
             Permissions.ReportsView, Permissions.ReportsExport, Permissions.ReportsCreate,

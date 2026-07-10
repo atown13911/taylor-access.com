@@ -83,8 +83,8 @@
                 <td class="mono">{{ policy.policyNumber || '—' }}</td>
                 <td>{{ formatCurrency(policy.coverageAmount) }}</td>
                 <td>{{ formatCurrency(getPolicyCost(policy), 2) }}</td>
-                <td>{{ getExpenseBasisLabel(policy.expenseBasis || '') }}</td>
-                <td>{{ getBillingFrequencyLabel(policy.billingFrequency || '') }}</td>
+                <td>{{ getPolicyExpenseBasisLabel(policy) }}</td>
+                <td>{{ getPolicyBillingFrequencyLabel(policy) }}</td>
                 <td>{{ formatDate(policy.effectiveDate) }}</td>
                 <td>{{ formatDate(policy.expiryDate) }}</td>
                 <td>
@@ -131,7 +131,7 @@
           <tbody>
             @for (group of currentPolicyGroups(); track group.type) {
               <!-- Current / primary row -->
-              <tr class="policy-current-row" [class.has-history]="group.history.length > 0"
+              <tr class="policy-current-row" [class.has-history]="group.history.length > 0 || group.includedCoverages.length > 0"
                   [class.row-active]="group.current.status === 'active'"
                   [class.row-expiring]="group.current.status === 'expiring'"
                   [class.row-expired]="group.current.status === 'expired'">
@@ -149,8 +149,8 @@
                 <td class="mono">{{ group.current.policyNumber || '—' }}</td>
                 <td>{{ formatCurrency(group.current.coverageAmount) }}</td>
                 <td>{{ formatCurrency(getPolicyCost(group.current), 2) }}</td>
-                <td>{{ getExpenseBasisLabel(group.current.expenseBasis || '') }}</td>
-                <td>{{ getBillingFrequencyLabel(group.current.billingFrequency || '') }}</td>
+                <td>{{ getPolicyExpenseBasisLabel(group.current) }}</td>
+                <td>{{ getPolicyBillingFrequencyLabel(group.current) }}</td>
                 <td>{{ formatDate(group.current.effectiveDate) }}</td>
                 <td>{{ formatDate(group.current.expiryDate) }}</td>
                 <td>
@@ -172,6 +172,39 @@
                 </td>
               </tr>
 
+              @for (included of group.includedCoverages; track included.id) {
+                <tr class="policy-included-row">
+                  <td></td>
+                  <td class="history-type-cell">
+                    <span class="history-label included-label"><i class='bx bx-link-alt'></i> {{ getBundledCoverageLabel(group.type) }}</span>
+                    <strong>{{ getPolicyTypeLabel(included.policyType) }}</strong>
+                  </td>
+                  <td class="history-muted">{{ included.providerName }}</td>
+                  <td class="mono history-muted">{{ included.policyNumber || '—' }}</td>
+                  <td class="history-muted">{{ formatCurrency(included.coverageAmount) }}</td>
+                  <td class="history-muted included-cost">{{ getBundledCostLabel(group.type) }}</td>
+                  <td class="history-muted">{{ getPolicyExpenseBasisLabel(included) }}</td>
+                  <td class="history-muted">{{ getPolicyBillingFrequencyLabel(included) }}</td>
+                  <td class="history-muted">{{ formatDate(included.effectiveDate) }}</td>
+                  <td class="history-muted">{{ formatDate(included.expiryDate) }}</td>
+                  <td>
+                    @if (included.hasFile) {
+                      <div class="doc-btns">
+                        <button class="icon-btn" title="View" (click)="viewPolicyDoc(included)"><i class='bx bx-show'></i></button>
+                        <button class="icon-btn" title="Download" (click)="downloadPolicyDoc(included)"><i class='bx bx-download'></i></button>
+                      </div>
+                    } @else {
+                      <span class="no-doc">No file</span>
+                    }
+                  </td>
+                  <td><span class="status-badge" [class]="included.status">{{ included.status }}</span></td>
+                  <td class="actions-cell">
+                    <button class="icon-btn" title="Edit" (click)="editPolicy(included)"><i class='bx bx-edit'></i></button>
+                    <button class="icon-btn danger" title="Delete" (click)="deletePolicy(included)"><i class='bx bx-trash'></i></button>
+                  </td>
+                </tr>
+              }
+
               <!-- History rows — only visible when expanded -->
               @if (expandedTypes().has(group.type)) {
                 @for (policy of group.history; track policy.id) {
@@ -184,8 +217,8 @@
                     <td class="mono history-muted">{{ policy.policyNumber || '—' }}</td>
                     <td class="history-muted">{{ formatCurrency(policy.coverageAmount) }}</td>
                     <td class="history-muted">{{ formatCurrency(getPolicyCost(policy), 2) }}</td>
-                    <td class="history-muted">{{ getExpenseBasisLabel(policy.expenseBasis || '') }}</td>
-                    <td class="history-muted">{{ getBillingFrequencyLabel(policy.billingFrequency || '') }}</td>
+                    <td class="history-muted">{{ getPolicyExpenseBasisLabel(policy) }}</td>
+                    <td class="history-muted">{{ getPolicyBillingFrequencyLabel(policy) }}</td>
                     <td class="history-muted">{{ formatDate(policy.effectiveDate) }}</td>
                     <td class="history-muted">{{ formatDate(policy.expiryDate) }}</td>
                     <td>
@@ -231,7 +264,7 @@
     </div>
 
     <div class="charging-toolbar">
-      <input type="text" class="search-input" [(ngModel)]="chargingSearch" placeholder="Search driver, policy type, provider, or policy #...">
+      <input type="text" class="search-input" [(ngModel)]="chargingSearch" placeholder="Search policy type, provider, or policy #...">
     </div>
 
     @if (loadingCharging()) {
@@ -247,7 +280,6 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Driver</th>
               <th>Policy Type</th>
               <th>Provider</th>
               <th>Policy #</th>
@@ -262,8 +294,7 @@
           <tbody>
             @for (row of chargingRows(); track $index) {
               <tr [class.row-expired]="row.policyStatus === 'expired'" [class.row-expiring]="row.policyStatus === 'expiring'">
-                <td><strong>{{ row.driverName }}</strong></td>
-                <td>{{ getPolicyTypeLabel(row.policyType) }}</td>
+                <td>{{ getChargingPolicyTypeLabel(row.policyType) }}</td>
                 <td>{{ row.providerName }}</td>
                 <td class="mono">{{ row.policyNumber || '—' }}</td>
                 <td>{{ getExpenseBasisLabel(row.expenseBasis) }}</td>
@@ -274,8 +305,12 @@
                 <td>
                   @if (row.enrollmentStatus === 'none') {
                     <span class="status-badge expired">Not Enrolled</span>
+                  } @else if (row.enrollmentStatus === 'company') {
+                    <span class="status-badge active">Company Expense</span>
                   } @else if (row.enrollmentStatus === 'n/a') {
                     <span class="status-badge active">Whole Policy</span>
+                  } @else if (row.enrollmentStatus === 'active') {
+                    <span class="status-badge active">Enrolled</span>
                   } @else {
                     <span class="status-badge" [class]="row.enrollmentStatus">{{ row.enrollmentStatus }}</span>
                   }
@@ -289,21 +324,67 @@
 
     <!-- Driver enrollment matrix -->
     <section class="enrollment-matrix-section">
+      <div class="stats-bar matrix-stats-bar">
+        <div class="stat-card">
+          <div class="stat-icon total"><i class='bx bx-group'></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ matrixDashStats().totalDrivers }}</span>
+            <span class="stat-label">Total Drivers</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon active"><i class='bx bx-user-check'></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ matrixDashStats().active }}</span>
+            <span class="stat-label">Active</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon expired"><i class='bx bx-user-x'></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ matrixDashStats().inactive }}</span>
+            <span class="stat-label">Inactive</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon expiring"><i class='bx bx-shield-quarter'></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ matrixDashStats().policies }}</span>
+            <span class="stat-label">Active Policies</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          @if (matrixDashStats().perDriverPolicies > 0) {
+            <div class="stat-icon active"><i class='bx bx-pie-chart-alt-2'></i></div>
+            <div class="stat-info">
+              <span class="stat-value">{{ matrixDashStats().coveragePct }}%</span>
+              <span class="stat-label">Enrollment Coverage</span>
+            </div>
+          } @else {
+            <div class="stat-icon total"><i class='bx bx-buildings'></i></div>
+            <div class="stat-info">
+              <span class="stat-value">{{ matrixDashStats().policies }}</span>
+              <span class="stat-label">Company-Wide</span>
+            </div>
+          }
+        </div>
+      </div>
+
       <div class="matrix-section-header">
         <div>
           <h2><i class='bx bx-grid-alt'></i> Driver Enrollment Matrix</h2>
           <p class="matrix-subtitle">
             @if (matrixDriverTab() === 'active') {
-              Active drivers vs. each policy — green = enrolled (or whole-company coverage), red = not enrolled
+              Active drivers vs. each policy — green = driver expense, blue = company expense
             } @else {
-              Inactive drivers vs. each policy — green = enrolled (or whole-company coverage), red = not enrolled
+              Inactive drivers vs. each policy — green = driver expense, blue = company expense
             }
           </p>
         </div>
         @if (enrollmentMatrixStats().drivers > 0) {
           <div class="matrix-legend">
-            <span class="legend-item"><span class="enrollment-dot enrolled"></span> Enrolled</span>
-            <span class="legend-item"><span class="enrollment-dot not_enrolled"></span> Not Enrolled</span>
+            <span class="legend-item"><span class="enrollment-dot driver_expense"></span> Driver Expense</span>
+            <span class="legend-item"><span class="enrollment-dot company_expense"></span> Company Expense</span>
           </div>
         }
       </div>
@@ -360,9 +441,9 @@
                     <td class="matrix-cell">
                       <span
                         class="enrollment-dot"
-                        [class.enrolled]="row.cells[col.policyId] === 'enrolled'"
-                        [class.not_enrolled]="row.cells[col.policyId] === 'not_enrolled'"
-                        [title]="row.cells[col.policyId] === 'enrolled' ? 'Enrolled' : 'Not enrolled'"
+                        [class.driver_expense]="row.cells[col.policyId] === 'driver_expense'"
+                        [class.company_expense]="row.cells[col.policyId] === 'company_expense'"
+                        [title]="getMatrixExpenseLabel(row.cells[col.policyId])"
                       ></span>
                     </td>
                   }
@@ -459,34 +540,6 @@
           <div class="form-group">
             <label>Expiry Date</label>
             <input type="date" [(ngModel)]="policyForm.expiryDate">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Cost ($)</label>
-            <input type="number" [(ngModel)]="policyForm.premiumCost" step="0.01" placeholder="0.00">
-          </div>
-          <div class="form-group">
-            <label>Expense Basis</label>
-            <select [(ngModel)]="policyForm.expenseBasis">
-              @for (opt of expenseBasisOptions; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Per Incident Deductible ($)</label>
-            <input type="number" [(ngModel)]="policyForm.perIncidentDeductible" step="0.01" placeholder="0.00">
-          </div>
-          <div class="form-group">
-            <label>Frequency</label>
-            <select [(ngModel)]="policyForm.billingFrequency">
-              @for (opt of billingFrequencyOptions; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
           </div>
         </div>
         <div class="form-group">
@@ -721,23 +774,19 @@
         <!-- Summary -->
         <div class="report-summary">
           <div class="report-stat">
-            <span class="rs-value">{{ policies().length }}</span>
+            <span class="rs-value">{{ reportStats().total }}</span>
             <span class="rs-label">Total Policies</span>
           </div>
           <div class="report-stat">
-            <span class="rs-value">{{ insuranceStats().active }}</span>
+            <span class="rs-value">{{ reportStats().active }}</span>
             <span class="rs-label">Active</span>
           </div>
           <div class="report-stat">
-            <span class="rs-value">{{ insuranceStats().expiring }}</span>
+            <span class="rs-value">{{ reportStats().expiring }}</span>
             <span class="rs-label">Expiring Soon</span>
           </div>
           <div class="report-stat">
-            <span class="rs-value">{{ insuranceStats().expired }}</span>
-            <span class="rs-label">Expired</span>
-          </div>
-          <div class="report-stat">
-            <span class="rs-value">{{ formatCurrency(totalCoverage()) }}</span>
+            <span class="rs-value">{{ formatCurrency(reportStats().totalCoverage) }}</span>
             <span class="rs-label">Total Coverage</span>
           </div>
         </div>
@@ -757,8 +806,8 @@
             </tr>
           </thead>
           <tbody>
-            @for (policy of policies(); track policy.id) {
-              <tr [class.expired-row]="policy.status === 'expired'" [class.expiring-row]="policy.status === 'expiring'">
+            @for (policy of reportPolicies(); track policy.id) {
+              <tr [class.expiring-row]="policy.status === 'expiring'">
                 <td>{{ getPolicyTypeLabel(policy.policyType) }}</td>
                 <td>{{ policy.providerName }}</td>
                 <td>{{ policy.policyNumber || '—' }}</td>
@@ -783,15 +832,13 @@
             </tr>
           </thead>
           <tbody>
-            @for (summary of coverageSummary(); track summary.type) {
+            @for (summary of reportCoverageSummary(); track summary.type) {
               <tr>
                 <td>{{ getPolicyTypeLabel(summary.type) }}</td>
                 <td>{{ summary.count }}</td>
                 <td>{{ formatCurrency(summary.totalCoverage) }}</td>
                 <td>
-                  @if (summary.hasExpired) {
-                    <span class="status-badge expired">Expired</span>
-                  } @else if (summary.hasExpiring) {
+                  @if (summary.hasExpiring) {
                     <span class="status-badge expiring">Expiring</span>
                   } @else {
                     <span class="status-badge active">Active</span>
