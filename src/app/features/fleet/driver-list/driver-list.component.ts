@@ -372,8 +372,10 @@ export class DriverListComponent implements OnInit {
     });
   }
 
-  loadDrivers(): void {
-    this.isLoading.set(true);
+  loadDrivers(options: { silent?: boolean } = {}): void {
+    if (!options.silent) {
+      this.isLoading.set(true);
+    }
 
     // Load drivers -- the backend already filters by the user's org/entity access
     this.api.getDrivers({ limit: 2000 }).subscribe({
@@ -409,11 +411,15 @@ export class DriverListComponent implements OnInit {
         const fleets = [...new Set(mapped.filter(d => d.fleetName !== '—').map(d => d.fleetName))];
         this.fleetName.set(fleets.length === 1 ? fleets[0] : '');
 
-        this.isLoading.set(false);
+        if (!options.silent) {
+          this.isLoading.set(false);
+        }
       },
       error: () => {
-        this.toast.error('Failed to load drivers', 'Error');
-        this.isLoading.set(false);
+        if (!options.silent) {
+          this.toast.error('Failed to load drivers', 'Error');
+          this.isLoading.set(false);
+        }
       }
     });
   }
@@ -1377,16 +1383,21 @@ export class DriverListComponent implements OnInit {
 
     const previousRows = this.drivers();
     this.drivers.update(rows => rows.map((row) =>
-      String(row.id ?? '').trim() === targetIdRaw
+      this.sameDriverId(row.id, targetIdRaw)
         ? { ...row, status: this.normalizeStatus(targetStatus) }
         : row
     ));
+
+    if (targetStatus === 'archived' && this.sameDriverId(this.selectedDriver()?.id, targetIdRaw)) {
+      this.selectedDriver.set(null);
+    }
+
     this.toast.success(`${driver.name} ${successVerb}`, 'Success');
 
     this.api.updateDriver(driver.id, { status: targetStatus }).subscribe({
       next: () => {
-        // Reconcile with server shortly after optimistic update.
-        setTimeout(() => this.loadDrivers(), 1500);
+        // Reconcile with server shortly after optimistic update without remounting the table.
+        setTimeout(() => this.loadDrivers({ silent: true }), 1500);
       },
       error: (err: any) => {
         this.drivers.set(previousRows);
@@ -1482,7 +1493,26 @@ export class DriverListComponent implements OnInit {
       normalized === 'off-duty' ||
       normalized === 'terminated' ||
       normalized === 'deactivated' ||
-      normalized === 'disabled';
+      normalized === 'disabled' ||
+      normalized === 'suspended';
+  }
+
+  showRestoreDriverAction(driver: DriverRow): boolean {
+    return this.isArchivedStatus(driver.status);
+  }
+
+  showArchiveDriverAction(driver: DriverRow): boolean {
+    return this.isInactiveStatus(driver.status);
+  }
+
+  showDeactivateDriverAction(driver: DriverRow): boolean {
+    return !this.showRestoreDriverAction(driver) && !this.showArchiveDriverAction(driver);
+  }
+
+  private sameDriverId(left: unknown, right: unknown): boolean {
+    const leftId = String(left ?? '').trim();
+    const rightId = String(right ?? '').trim();
+    return !!leftId && !!rightId && leftId === rightId;
   }
 
   private isActiveStatus(status: string): boolean {
