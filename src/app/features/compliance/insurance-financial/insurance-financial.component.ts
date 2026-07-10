@@ -1014,12 +1014,39 @@ export class InsuranceFinancialComponent implements OnInit {
       status === 'terminated' ||
       status === 'deactivated' ||
       status === 'disabled' ||
-      status === 'suspended';
+      status === 'suspended' ||
+      status === 'vacation' ||
+      status === 'sleeper';
+  }
+
+  private isMatrixOnboardingDriver(status: string): boolean {
+    return status === 'onboarding' ||
+      status === 'pending' ||
+      status === 'invited' ||
+      status === 'application' ||
+      status === 'applicant' ||
+      status === 'orientation' ||
+      status === 'recruiting' ||
+      status === 'pre-hire' ||
+      status === 'prehire' ||
+      status === 'background-check' ||
+      status === 'training' ||
+      status === 'closeout';
+  }
+
+  private isMatrixFleetEligibleStatus(status: string): boolean {
+    return status === 'active' ||
+      status === 'available' ||
+      status === 'online' ||
+      status === 'dispatched' ||
+      status === 'en-route' ||
+      status === 'at-location';
   }
 
   private isMatrixActiveDriver(status: string): boolean {
     if (this.isMatrixArchivedDriver(status) || this.isMatrixInactiveDriver(status)) return false;
-    return true;
+    if (this.isMatrixOnboardingDriver(status)) return false;
+    return this.isMatrixFleetEligibleStatus(status);
   }
 
   private buildEnrollmentMatrixColumn(policy: InsuranceRow): EnrollmentMatrixColumn {
