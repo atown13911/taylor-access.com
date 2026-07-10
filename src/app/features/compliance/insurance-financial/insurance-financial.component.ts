@@ -939,17 +939,13 @@ export class InsuranceFinancialComponent implements OnInit {
     const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
 
     if (hireDate && hireDate > end) return false;
-    if (terminationDate && terminationDate < start) return false;
 
-    if (terminationDate) {
+    if (this.isMatrixActiveDriver(status)) {
       return true;
     }
 
-    if (!this.isMatrixActiveDriver(status)) {
-      return false;
-    }
-
-    return true;
+    if (!terminationDate || terminationDate < start) return false;
+    return (hireDate ?? terminationDate) <= end;
   }
 
   private parseDriverEmploymentDate(value: unknown): Date | null {
