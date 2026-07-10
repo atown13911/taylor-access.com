@@ -587,27 +587,6 @@
           </div>
         </div>
 
-        <div class="form-section termination-section">
-          <h4>Termination</h4>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Termination Date</label>
-              <input type="date" [ngModel]="driverForm().terminationDate" (ngModelChange)="updateField('terminationDate', $event)">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group full-width">
-              <label>Reason for Termination</label>
-              <textarea
-                rows="3"
-                [ngModel]="driverForm().terminationNotes"
-                (ngModelChange)="updateField('terminationNotes', $event)"
-                placeholder="Why was this driver terminated?"
-              ></textarea>
-            </div>
-          </div>
-        </div>
-
         @if (driverForm().driverType === 'team') {
           <div class="form-section team-driver-section">
             <h4><i class='bx bx-group'></i> Team Driver Partner</h4>
@@ -641,6 +620,27 @@
             <div class="form-group">
               <label>Contact Phone</label>
               <input type="tel" [ngModel]="driverForm().emergencyPhone" (ngModelChange)="updateField('emergencyPhone', $event)" placeholder="(555) 987-6543">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section termination-section">
+          <h4>Termination</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Termination Date</label>
+              <input type="date" [ngModel]="driverForm().terminationDate" (ngModelChange)="updateField('terminationDate', $event)">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label>Reason for Termination</label>
+              <textarea
+                rows="3"
+                [ngModel]="driverForm().terminationNotes"
+                (ngModelChange)="updateField('terminationNotes', $event)"
+                placeholder="Why was this driver terminated?"
+              ></textarea>
             </div>
           </div>
         </div>
