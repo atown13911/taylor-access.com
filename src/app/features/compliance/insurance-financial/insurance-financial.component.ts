@@ -282,8 +282,10 @@ export class InsuranceFinancialComponent implements OnInit {
   accountingInvoices = signal<AccountingVendorInvoice[]>([]);
   showFleetDriverSettingsModal = signal(false);
   fleetDriverSettingsSearch = signal('');
+  loadingFleetDriverOverrides = signal(false);
   fleetDriverOverrides = signal<Record<string, Record<string, FleetDriverOverrideState>>>({});
   private readonly fleetDriverOverridesStorageKey = 'insurance_fleet_driver_overrides_v1';
+  private readonly fleetDriverOverridesMigratedKey = 'insurance_fleet_driver_overrides_migrated_v1';
   expandedTypes = signal<Set<string>>(new Set());
 
   toggleTypeExpand(type: string): void {
@@ -1140,12 +1142,12 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadFleetDriverOverrides();
     this.loadPolicies();
     this.loadPayments();
     this.summarySpecificPeriod.set(
       this.buildSummarySpecificPeriodOptions(this.summaryPeriodTab())[0]?.value || ''
     );
+    void this.initializeFleetDriverOverrides();
   }
 
   openFleetDriverSettingsModal(): void {
@@ -1169,6 +1171,7 @@ export class InsuranceFinancialComponent implements OnInit {
     const autoEligible = this.isDriverAutoEligibleForPeriod(driver, start, end);
     const periodKey = this.getFleetOverridePeriodKey();
     const driverKey = String(driverId);
+    const previousOverrides = { ...this.fleetDriverOverrides() };
     const nextPeriodOverrides = { ...this.getFleetDriverOverridesForCurrentPeriod() };
 
     if (included === autoEligible) {
@@ -1178,7 +1181,7 @@ export class InsuranceFinancialComponent implements OnInit {
     }
 
     const nextOverrides = {
-      ...this.fleetDriverOverrides(),
+      ...previousOverrides,
       [periodKey]: nextPeriodOverrides
     };
 
@@ -1187,38 +1190,144 @@ export class InsuranceFinancialComponent implements OnInit {
     }
 
     this.fleetDriverOverrides.set(nextOverrides);
-    this.persistFleetDriverOverrides(nextOverrides);
+
+    const { periodType, periodKey: periodValue } = this.getFleetOverridePeriodParts();
+    const inclusionState: FleetDriverOverrideState | null =
+      included === autoEligible ? null : (included ? 'included' : 'excluded');
+
+    void firstValueFrom(
+      this.api.upsertInsuranceFleetDriverOverride(driverId, {
+        periodType,
+        periodKey: periodValue,
+        inclusionState
+      })
+    ).catch(() => {
+      this.fleetDriverOverrides.set(previousOverrides);
+      this.toast.error('Could not save fleet driver setting.', 'Save Failed');
+    });
   }
 
   resetFleetDriverOverridesForPeriod(): void {
     const periodKey = this.getFleetOverridePeriodKey();
-    const nextOverrides = { ...this.fleetDriverOverrides() };
+    const { periodType, periodKey: periodValue } = this.getFleetOverridePeriodParts();
+    const previousOverrides = { ...this.fleetDriverOverrides() };
+    const nextOverrides = { ...previousOverrides };
     delete nextOverrides[periodKey];
     this.fleetDriverOverrides.set(nextOverrides);
-    this.persistFleetDriverOverrides(nextOverrides);
-    this.toast.success('Fleet driver selections reset to automatic rules.', 'Reset');
+
+    void firstValueFrom(
+      this.api.deleteInsuranceFleetDriverOverridesForPeriod(periodType, periodValue)
+    ).then(() => {
+      this.toast.success('Fleet driver selections reset to automatic rules.', 'Reset');
+    }).catch(() => {
+      this.fleetDriverOverrides.set(previousOverrides);
+      this.toast.error('Could not reset fleet driver settings.', 'Reset Failed');
+    });
   }
 
   getFleetDriverSettingsModalTitle(): string {
     return `Fleet Drivers — ${this.getSummarySpecificPeriodLabel()}`;
   }
 
-  private loadFleetDriverOverrides(): void {
+  private async initializeFleetDriverOverrides(): Promise<void> {
+    await this.migrateLocalFleetDriverOverridesIfNeeded();
+    await this.loadFleetDriverOverridesForCurrentPeriod();
+  }
+
+  private async migrateLocalFleetDriverOverridesIfNeeded(): Promise<void> {
+    if (localStorage.getItem(this.fleetDriverOverridesMigratedKey) === '1') return;
+
+    let stored: Record<string, Record<string, FleetDriverOverrideState>> = {};
     try {
       const raw = localStorage.getItem(this.fleetDriverOverridesStorageKey);
       if (!raw) {
-        this.fleetDriverOverrides.set({});
+        localStorage.setItem(this.fleetDriverOverridesMigratedKey, '1');
         return;
       }
-      const parsed = JSON.parse(raw);
-      this.fleetDriverOverrides.set(parsed && typeof parsed === 'object' ? parsed : {});
+      stored = JSON.parse(raw);
     } catch {
-      this.fleetDriverOverrides.set({});
+      localStorage.setItem(this.fleetDriverOverridesMigratedKey, '1');
+      return;
+    }
+
+    const items: Array<{ periodType: string; periodKey: string; driverId: number; inclusionState: string }> = [];
+    for (const [combinedPeriodKey, driverMap] of Object.entries(stored || {})) {
+      const separatorIndex = combinedPeriodKey.indexOf(':');
+      if (separatorIndex <= 0) continue;
+      const periodType = combinedPeriodKey.slice(0, separatorIndex);
+      const periodKey = combinedPeriodKey.slice(separatorIndex + 1);
+      if (!periodKey) continue;
+
+      for (const [driverId, state] of Object.entries(driverMap || {})) {
+        if (state === 'included' || state === 'excluded') {
+          items.push({
+            periodType,
+            periodKey,
+            driverId: Number(driverId),
+            inclusionState: state
+          });
+        }
+      }
+    }
+
+    if (!items.length) {
+      localStorage.removeItem(this.fleetDriverOverridesStorageKey);
+      localStorage.setItem(this.fleetDriverOverridesMigratedKey, '1');
+      return;
+    }
+
+    try {
+      await firstValueFrom(this.api.bulkMigrateInsuranceFleetDriverOverrides(items));
+      localStorage.removeItem(this.fleetDriverOverridesStorageKey);
+      localStorage.setItem(this.fleetDriverOverridesMigratedKey, '1');
+    } catch {
+      // Keep local values until migration succeeds.
     }
   }
 
-  private persistFleetDriverOverrides(overrides: Record<string, Record<string, FleetDriverOverrideState>>): void {
-    localStorage.setItem(this.fleetDriverOverridesStorageKey, JSON.stringify(overrides));
+  private async loadFleetDriverOverridesForCurrentPeriod(): Promise<void> {
+    const { periodType, periodKey } = this.getFleetOverridePeriodParts();
+    if (!periodKey) {
+      this.applyFleetDriverOverridesForPeriod({});
+      return;
+    }
+
+    this.loadingFleetDriverOverrides.set(true);
+    try {
+      const res: any = await firstValueFrom(
+        this.api.getInsuranceFleetDriverOverrides(periodType, periodKey)
+      );
+      const data = res?.data || {};
+      const normalized: Record<string, FleetDriverOverrideState> = {};
+      for (const [driverId, state] of Object.entries(data)) {
+        if (state === 'included' || state === 'excluded') {
+          normalized[driverId] = state;
+        }
+      }
+      this.applyFleetDriverOverridesForPeriod(normalized);
+    } catch {
+      this.applyFleetDriverOverridesForPeriod({});
+    } finally {
+      this.loadingFleetDriverOverrides.set(false);
+    }
+  }
+
+  private applyFleetDriverOverridesForPeriod(overrides: Record<string, FleetDriverOverrideState>): void {
+    const periodKey = this.getFleetOverridePeriodKey();
+    const next = { ...this.fleetDriverOverrides() };
+    if (Object.keys(overrides).length) {
+      next[periodKey] = overrides;
+    } else {
+      delete next[periodKey];
+    }
+    this.fleetDriverOverrides.set(next);
+  }
+
+  private getFleetOverridePeriodParts(): { periodType: MatrixPeriodTab; periodKey: string } {
+    return {
+      periodType: this.summaryPeriodTab(),
+      periodKey: this.summarySpecificPeriod()
+    };
   }
 
   private getFleetOverridePeriodKey(): string {
@@ -1286,13 +1395,15 @@ export class InsuranceFinancialComponent implements OnInit {
     this.summaryPeriodTab.set(tab);
     if (tab === 'daily') {
       this.summarySpecificPeriod.set(this.formatSummaryDateKey(new Date()));
-      return;
+    } else {
+      this.summarySpecificPeriod.set(this.buildSummarySpecificPeriodOptions(tab)[0]?.value || '');
     }
-    this.summarySpecificPeriod.set(this.buildSummarySpecificPeriodOptions(tab)[0]?.value || '');
+    void this.loadFleetDriverOverridesForCurrentPeriod();
   }
 
   setSummarySpecificPeriod(value: string): void {
     this.summarySpecificPeriod.set(value || this.formatSummaryDateKey(new Date()));
+    void this.loadFleetDriverOverridesForCurrentPeriod();
   }
 
   getSummaryMaxDate(): string {

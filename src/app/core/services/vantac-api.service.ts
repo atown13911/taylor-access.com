@@ -350,4 +350,27 @@ export class VanTacApiService {
   deleteInsuranceEnrollment(policyId: any, enrollmentId: any): Observable<any> {
     return this.http.delete(`${this.baseUrl}/api/v1/insurance-policies/${policyId}/enrollments/${enrollmentId}`);
   }
+
+  // Insurance fleet driver period overrides
+  getInsuranceFleetDriverOverrides(periodType: string, periodKey: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-fleet-driver-overrides`, {
+      params: { periodType, periodKey }
+    });
+  }
+  upsertInsuranceFleetDriverOverride(
+    driverId: number,
+    data: { periodType: string; periodKey: string; inclusionState: 'included' | 'excluded' | null }
+  ): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-fleet-driver-overrides/${driverId}`, data);
+  }
+  deleteInsuranceFleetDriverOverridesForPeriod(periodType: string, periodKey: string): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/insurance-fleet-driver-overrides`, {
+      params: { periodType, periodKey }
+    });
+  }
+  bulkMigrateInsuranceFleetDriverOverrides(
+    items: Array<{ periodType: string; periodKey: string; driverId: number; inclusionState: string }>
+  ): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/insurance-fleet-driver-overrides/bulk-migrate`, { items });
+  }
 }

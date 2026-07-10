@@ -55,6 +55,7 @@ public class TaylorAccessDbContext : DbContext
     // Insurance & Compliance
     public DbSet<InsurancePolicy> InsurancePolicies => Set<InsurancePolicy>();
     public DbSet<InsuranceEnrollment> InsuranceEnrollments => Set<InsuranceEnrollment>();
+    public DbSet<InsuranceFleetDriverPeriodOverride> InsuranceFleetDriverPeriodOverrides => Set<InsuranceFleetDriverPeriodOverride>();
 
     // OAuth2 / SSO
     public DbSet<OAuthClient> OAuthClients => Set<OAuthClient>();

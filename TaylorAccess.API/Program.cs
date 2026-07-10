@@ -616,6 +616,21 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""ExpenseBasis"" VARCHAR(20) NULL;
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""PerIncidentDeductible"" DECIMAL(18,2) NULL;
         ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TerminationNotes"" TEXT NULL;
+
+        CREATE TABLE IF NOT EXISTS ""InsuranceFleetDriverPeriodOverrides"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""PeriodType"" VARCHAR(10) NOT NULL,
+            ""PeriodKey"" VARCHAR(20) NOT NULL,
+            ""DriverId"" INTEGER NOT NULL,
+            ""InclusionState"" VARCHAR(10) NOT NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_InsuranceFleetDriverPeriodOverrides_Org_Period_Driver""
+            ON ""InsuranceFleetDriverPeriodOverrides"" (""OrganizationId"", ""PeriodType"", ""PeriodKey"", ""DriverId"");
+        CREATE INDEX IF NOT EXISTS ""IX_InsuranceFleetDriverPeriodOverrides_Org_Period""
+            ON ""InsuranceFleetDriverPeriodOverrides"" (""OrganizationId"", ""PeriodType"", ""PeriodKey"");
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"

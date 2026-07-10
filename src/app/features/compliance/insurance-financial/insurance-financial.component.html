@@ -1148,6 +1148,11 @@
             </tr>
           </thead>
           <tbody>
+            @if (loadingFleetDriverOverrides()) {
+              <tr>
+                <td colspan="7" class="fleet-driver-settings-empty">Loading fleet driver settings...</td>
+              </tr>
+            } @else {
             @for (row of fleetDriverSettingsRows(); track row.driverId) {
               <tr [class.fleet-driver-excluded]="!row.included" [class.fleet-driver-override]="row.hasOverride">
                 <td>
@@ -1171,6 +1176,7 @@
               <tr>
                 <td colspan="7" class="fleet-driver-settings-empty">No drivers match your search.</td>
               </tr>
+            }
             }
           </tbody>
         </table>
