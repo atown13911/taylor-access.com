@@ -278,19 +278,34 @@
     </div>
 
     <section class="fleet-summary-section">
-      <h3 class="section-title"><i class='bx bx-pie-chart-alt-2'></i> Fleet Cost vs. Driver Charges</h3>
-      <p class="fleet-summary-subtitle">
-        {{ chargingFleetSummary().activeDrivers }} active drivers — company cost vs. driver-charged premiums for this fleet size
-      </p>
+      <div class="fleet-summary-header">
+        <div>
+          <h3 class="section-title"><i class='bx bx-pie-chart-alt-2'></i> Fleet Cost vs. Driver Charges</h3>
+          <p class="fleet-summary-subtitle">
+            {{ chargingFleetSummary().activeDrivers }} active drivers — company cost vs. driver-charged premiums for this fleet size
+          </p>
+        </div>
+        <div class="fleet-period-filter">
+          <label for="summaryPeriodSelect">Period</label>
+          <select
+            id="summaryPeriodSelect"
+            class="fleet-period-select"
+            [ngModel]="summaryPeriodTab()"
+            (ngModelChange)="setSummaryPeriodTab($event)"
+          >
+            <option value="daily">Day</option>
+            <option value="monthly">Month</option>
+            <option value="yearly">Year</option>
+          </select>
+        </div>
+      </div>
       <div class="data-table-container">
         <table class="data-table fleet-summary-table">
           <thead>
             <tr>
               <th>Active Drivers</th>
               <th>Cost Type</th>
-              <th>Per Day</th>
-              <th>Per Month</th>
-              <th>Per Year</th>
+              <th>{{ getSummaryPeriodColumnLabel() }}</th>
             </tr>
           </thead>
           <tbody>
@@ -299,21 +314,15 @@
                 <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
               </td>
               <td>Driver Charges</td>
-              <td>{{ formatCurrency(chargingFleetSummary().driverChargesDaily, 2) }}</td>
-              <td>{{ formatCurrency(chargingFleetSummary().driverChargesMonthly, 2) }}</td>
-              <td>{{ formatCurrency(chargingFleetSummary().driverChargesAnnual, 2) }}</td>
+              <td>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</td>
             </tr>
             <tr>
               <td>Company Cost</td>
-              <td>{{ formatCurrency(chargingFleetSummary().companyCostDaily, 2) }}</td>
-              <td>{{ formatCurrency(chargingFleetSummary().companyCostMonthly, 2) }}</td>
-              <td>{{ formatCurrency(chargingFleetSummary().companyCostAnnual, 2) }}</td>
+              <td>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</td>
             </tr>
             <tr class="fleet-total-row">
               <td><strong>Total Fleet Cost</strong></td>
-              <td><strong>{{ formatCurrency(chargingFleetSummary().totalFleetCostDaily, 2) }}</strong></td>
-              <td><strong>{{ formatCurrency(chargingFleetSummary().totalFleetCostMonthly, 2) }}</strong></td>
-              <td><strong>{{ formatCurrency(chargingFleetSummary().totalFleetCostAnnual, 2) }}</strong></td>
+              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
             </tr>
           </tbody>
         </table>
@@ -459,14 +468,14 @@
       </div>
 
       <div class="matrix-period-tabs">
-        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'yearly'" (click)="setMatrixPeriodTab('yearly')">
-          Yearly
+        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'daily'" (click)="setMatrixPeriodTab('daily')">
+          Day
         </button>
         <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'monthly'" (click)="setMatrixPeriodTab('monthly')">
-          Monthly
+          Month
         </button>
-        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'weekly'" (click)="setMatrixPeriodTab('weekly')">
-          Weekly
+        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'yearly'" (click)="setMatrixPeriodTab('yearly')">
+          Year
         </button>
       </div>
 

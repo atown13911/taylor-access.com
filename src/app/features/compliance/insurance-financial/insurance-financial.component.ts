@@ -57,7 +57,7 @@ interface ChargingFleetSummary {
   totalFleetCostDaily: number;
 }
 
-type MatrixPeriodTab = 'yearly' | 'monthly' | 'weekly';
+type MatrixPeriodTab = 'daily' | 'monthly' | 'yearly';
 
 interface InsuranceRow {
   id: string;
@@ -140,6 +140,7 @@ export class InsuranceFinancialComponent implements OnInit {
   matrixSearch = '';
   matrixDriverTab = signal<'active' | 'inactive'>('active');
   matrixPeriodTab = signal<MatrixPeriodTab>('monthly');
+  summaryPeriodTab = signal<MatrixPeriodTab>('monthly');
 
   // Insurance state
   policies = signal<InsuranceRow[]>([]);
@@ -523,6 +524,30 @@ export class InsuranceFinancialComponent implements OnInit {
     };
   });
 
+  chargingFleetSummaryDisplay = computed(() => {
+    const summary = this.chargingFleetSummary();
+    switch (this.summaryPeriodTab()) {
+      case 'daily':
+        return {
+          driverCharges: summary.driverChargesDaily,
+          companyCost: summary.companyCostDaily,
+          totalFleetCost: summary.totalFleetCostDaily
+        };
+      case 'yearly':
+        return {
+          driverCharges: summary.driverChargesAnnual,
+          companyCost: summary.companyCostAnnual,
+          totalFleetCost: summary.totalFleetCostAnnual
+        };
+      default:
+        return {
+          driverCharges: summary.driverChargesMonthly,
+          companyCost: summary.companyCostMonthly,
+          totalFleetCost: summary.totalFleetCostMonthly
+        };
+    }
+  });
+
   enrollmentMatrixColumns = computed((): EnrollmentMatrixColumn[] => {
     const columns: EnrollmentMatrixColumn[] = [];
 
@@ -681,10 +706,22 @@ export class InsuranceFinancialComponent implements OnInit {
     this.matrixPeriodTab.set(tab);
   }
 
+  setSummaryPeriodTab(tab: MatrixPeriodTab): void {
+    this.summaryPeriodTab.set(tab);
+  }
+
+  getSummaryPeriodColumnLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
+    switch (tab) {
+      case 'daily': return 'Per Day';
+      case 'yearly': return 'Per Year';
+      default: return 'Per Month';
+    }
+  }
+
   getMatrixPeriodLabel(tab: MatrixPeriodTab = this.matrixPeriodTab()): string {
     switch (tab) {
+      case 'daily': return 'Daily';
       case 'yearly': return 'Yearly';
-      case 'weekly': return 'Weekly';
       default: return 'Monthly';
     }
   }
@@ -796,10 +833,10 @@ export class InsuranceFinancialComponent implements OnInit {
   private convertMatrixChargeToPeriod(amount: number, billingFrequency: string, target: MatrixPeriodTab): number {
     const monthly = this.toMonthlyChargeAmount(amount, billingFrequency);
     switch (target) {
+      case 'daily':
+        return (monthly * 12) / 365;
       case 'yearly':
         return monthly * 12;
-      case 'weekly':
-        return (monthly * 12) / 52;
       default:
         return monthly;
     }

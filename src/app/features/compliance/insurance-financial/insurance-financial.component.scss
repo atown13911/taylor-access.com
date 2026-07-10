@@ -99,6 +99,14 @@
   border: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.02);
 
+  .fleet-summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+  }
+
   .section-title {
     display: flex;
     align-items: center;
@@ -112,9 +120,39 @@
   }
 
   .fleet-summary-subtitle {
-    margin: 0 0 0.85rem;
+    margin: 0;
     font-size: 0.78rem;
     color: var(--text-secondary);
+  }
+
+  .fleet-period-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 120px;
+
+    label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+  }
+
+  .fleet-period-select {
+    padding: 0.45rem 0.65rem;
+    background: var(--bg-primary, #010409);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    cursor: pointer;
+    outline: none;
+
+    &:focus {
+      border-color: rgba(255, 107, 53, 0.45);
+    }
   }
 }
 
