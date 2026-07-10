@@ -1418,16 +1418,11 @@ export class InsuranceFinancialComponent implements OnInit {
     return this.wasDriverEmployedDuringPeriod(driver, start, end);
   }
 
-  private getDriverEmploymentEndDate(driver: any, status: string): Date | null {
-    const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
-    if (terminationDate) return terminationDate;
-
-    if (this.isMatrixArchivedDriver(status) || this.isMatrixInactiveDriver(status)) {
-      const updatedAt = this.parseDriverEmploymentDate(driver?.updatedAt || driver?.UpdatedAt);
-      if (updatedAt) return updatedAt;
-    }
-
-    return null;
+  private isSelectedPeriodCurrentMonth(start: Date, end: Date): boolean {
+    const now = new Date();
+    const currentStart = this.startOfSummaryDay(new Date(now.getFullYear(), now.getMonth(), 1));
+    const currentEnd = this.endOfSummaryDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    return start.getTime() === currentStart.getTime() && end.getTime() === currentEnd.getTime();
   }
 
   private normalizeTruckNumberForBilling(value: unknown): string {
@@ -1487,17 +1482,18 @@ export class InsuranceFinancialComponent implements OnInit {
     const hireDate = this.parseDriverEmploymentDate(driver?.hireDate || driver?.HireDate);
     if (hireDate && hireDate > end) return false;
 
+    if (this.isSelectedPeriodCurrentMonth(start, end)) {
+      return this.isMatrixActiveDriver(status);
+    }
+
     if (this.isMatrixActiveDriver(status)) {
       return true;
     }
 
-    const employmentEnd = this.getDriverEmploymentEndDate(driver, status);
-    if (!employmentEnd) {
-      return !hireDate || hireDate <= end;
-    }
-
-    if (employmentEnd < start) return false;
-    return (hireDate ?? employmentEnd) <= end;
+    const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
+    if (!terminationDate) return false;
+    if (terminationDate < start) return false;
+    return (hireDate ?? terminationDate) <= end;
   }
 
   private parseDriverEmploymentDate(value: unknown): Date | null {
