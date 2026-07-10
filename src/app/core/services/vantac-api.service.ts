@@ -265,7 +265,18 @@ export class VanTacApiService {
     return this.http.post(`${this.baseUrl}/api/v1/driver-documents`, data);
   }
   updateDriverDocument(id: any, data: any): Observable<any> {
-    return this.http.put(`${this.baseUrl}/api/v1/driver-documents/${id}`, data);
+    const payload = data instanceof FormData ? data : this.toDriverDocumentFormData(data);
+    return this.http.put(`${this.baseUrl}/api/v1/driver-documents/${id}`, payload);
+  }
+
+  private toDriverDocumentFormData(data: Record<string, unknown> | null | undefined): FormData {
+    const fd = new FormData();
+    if (!data) return fd;
+    for (const [key, value] of Object.entries(data)) {
+      if (value == null || value === '') continue;
+      fd.append(key, String(value));
+    }
+    return fd;
   }
   deleteDriverDocument(id: any): Observable<any> {
     return this.http.delete(`${this.baseUrl}/api/v1/driver-documents/${id}`);

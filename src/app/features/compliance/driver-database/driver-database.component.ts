@@ -749,9 +749,22 @@ export class DriverDatabaseComponent implements OnInit {
   
   getDaysUntilExpiration(date: string): number {
     if (!date) return 999;
-    const exp = new Date(date);
+    const normalized = String(date).trim();
+    const dateOnly = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateOnly) {
+      const exp = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const diff = exp.getTime() - today.getTime();
+      return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }
+
+    const exp = new Date(normalized);
+    if (Number.isNaN(exp.getTime())) return 999;
     const now = new Date();
-    const diff = exp.getTime() - now.getTime();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const expDay = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate());
+    const diff = expDay.getTime() - today.getTime();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
   
@@ -1436,13 +1449,8 @@ export class DriverDatabaseComponent implements OnInit {
     const editId = (this as any)._editingDocId;
 
     if (editId) {
-      this.api.updateDriverDocument(editId, {
-        documentName: this.compForm.documentName,
-        documentNumber: this.compForm.documentNumber,
-        issueDate: this.compForm.issueDate || null,
-        expiryDate: this.compForm.expiryDate || null,
-        notes: this.compForm.notes
-      }).subscribe({
+      const fd = this.buildCompDocumentFormData(item, { includeDriverId: false });
+      this.api.updateDriverDocument(editId, fd).subscribe({
         next: () => {
           this.toast.success(`${item.label} updated`, 'Updated');
           this.compSaving.set(false);
@@ -1452,7 +1460,11 @@ export class DriverDatabaseComponent implements OnInit {
           if (apiDriverId) this.syncDriverProfileFromDocument(item, apiDriverId);
           this.refreshComplianceData();
         },
-        error: () => { this.toast.error('Update failed', 'Error'); this.compSaving.set(false); }
+        error: (err: any) => {
+          const msg = err?.error?.error || err?.error?.message || 'Update failed';
+          this.toast.error(msg, 'Error');
+          this.compSaving.set(false);
+        }
       });
     } else {
       const apiDriverId = this.resolveApiDriverId(driver);
@@ -1468,16 +1480,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   private createComplianceDocumentUpload(driver: any, item: any, apiDriverId: string): void {
-    const fd = new FormData();
-    fd.append('driverId', apiDriverId);
-    fd.append('category', this.catMap[item.key] || item.key);
-    fd.append('subCategory', this.subMap[item.key] || item.key);
-    fd.append('documentName', this.compForm.documentName);
-    fd.append('documentNumber', this.compForm.documentNumber);
-    if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
-    if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
-    fd.append('notes', this.compForm.notes);
-    if (this.compFile) fd.append('file', this.compFile);
+    const fd = this.buildCompDocumentFormData(item, { includeDriverId: true, driverId: apiDriverId });
 
     this.api.createDriverDocument(fd).subscribe({
       next: () => {
@@ -1487,8 +1490,31 @@ export class DriverDatabaseComponent implements OnInit {
         this.syncDriverProfileFromDocument(item, apiDriverId);
         this.refreshComplianceData();
       },
-      error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
+      error: (err: any) => {
+        const msg = err?.error?.error || err?.error?.message || 'Upload failed';
+        this.toast.error(msg, 'Error');
+        this.compSaving.set(false);
+      }
     });
+  }
+
+  private buildCompDocumentFormData(
+    item: any,
+    options: { includeDriverId: boolean; driverId?: string }
+  ): FormData {
+    const fd = new FormData();
+    if (options.includeDriverId && options.driverId) {
+      fd.append('driverId', options.driverId);
+    }
+    fd.append('category', this.catMap[item.key] || item.key);
+    fd.append('subCategory', this.subMap[item.key] || item.key);
+    fd.append('documentName', this.compForm.documentName);
+    fd.append('documentNumber', this.compForm.documentNumber || '');
+    if (this.compForm.issueDate) fd.append('issueDate', this.compForm.issueDate);
+    if (this.compForm.expiryDate) fd.append('expiryDate', this.compForm.expiryDate);
+    fd.append('notes', this.compForm.notes || '');
+    if (this.compFile) fd.append('file', this.compFile);
+    return fd;
   }
 
   private syncDriverProfileFromDocument(item: any, apiDriverId: string): void {
