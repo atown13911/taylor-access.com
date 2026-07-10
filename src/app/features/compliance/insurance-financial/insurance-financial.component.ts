@@ -929,15 +929,24 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   private wasDriverEmployedDuringPeriod(driver: any, start: Date, end: Date): boolean {
+    const status = this.normalizeDriverStatus(driver?.status);
+
+    if (this.isMatrixArchivedDriver(status) || driver?.isDeleted || driver?.IsDeleted) {
+      return false;
+    }
+
     const hireDate = this.parseDriverEmploymentDate(driver?.hireDate || driver?.HireDate);
-    const fallbackHireDate = hireDate || this.parseDriverEmploymentDate(driver?.createdAt || driver?.CreatedAt);
     const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
 
-    if (fallbackHireDate && fallbackHireDate > end) return false;
+    if (hireDate && hireDate > end) return false;
     if (terminationDate && terminationDate < start) return false;
 
-    if (!fallbackHireDate) {
-      return this.isMatrixActiveDriver(this.normalizeDriverStatus(driver?.status));
+    if (terminationDate) {
+      return true;
+    }
+
+    if (!this.isMatrixActiveDriver(status)) {
+      return false;
     }
 
     return true;

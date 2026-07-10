@@ -538,7 +538,8 @@ public class DriversController : ControllerBase
         
         // Employment
         if (request.HireDate.HasValue) driver.HireDate = request.HireDate;
-        if (request.TerminationDate.HasValue) driver.TerminationDate = request.TerminationDate;
+        if (request.ResetTerminationDate == true) driver.TerminationDate = null;
+        else if (request.TerminationDate.HasValue) driver.TerminationDate = request.TerminationDate;
         if (request.PayRate.HasValue) driver.PayRate = request.PayRate;
         if (request.PayType != null) driver.PayType = request.PayType;
         
@@ -1211,6 +1212,7 @@ public record UpdateDriverRequest(
     string? EmergencyContactPhone,
     DateOnly? HireDate,
     DateOnly? TerminationDate,
+    bool? ResetTerminationDate,
     decimal? PayRate,
     string? PayType,
     decimal? Latitude,
