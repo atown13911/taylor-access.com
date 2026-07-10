@@ -1,10 +1,14 @@
 import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpBackend, HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { VanTacApiService } from '../../../core/services/vantac-api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { EventTrackingService } from '../../../core/services/event-tracking.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
+import { AuthService } from '../../../core/services/auth.service';
+import { environment } from '../../../../environments/environment';
 
 type PageTab = 'insurance' | 'charging' | 'financial';
 type InsuranceSubTab = 'current' | 'elapsed';
@@ -45,7 +49,10 @@ interface MatrixCellCharge {
 }
 
 interface ChargingFleetSummary {
+  /** Unique trucks (team drivers sharing a truck count once). */
   activeDrivers: number;
+  /** Individual active fleet drivers before truck deduplication. */
+  activeDriverHeadcount: number;
   driverChargesAnnual: number;
   companyCostAnnual: number;
   totalFleetCostAnnual: number;
@@ -70,7 +77,9 @@ interface FleetCalculationLine {
 }
 
 interface FleetCostBreakdownData {
+  /** Unique trucks used as the billing multiplier for per-truck policies. */
   activeDriverCount: number;
+  activeDriverHeadcount: number;
   lines: FleetCalculationLine[];
   driverChargesAnnual: number;
   companyCostAnnual: number;
@@ -138,6 +147,20 @@ interface PolicyTypeGroup {
   includedCoverages: InsuranceRow[];
 }
 
+interface AccountingVendorInvoice {
+  id: string;
+  vendorInvoiceNumber?: string;
+  vendorName: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate?: string;
+  amount: number;
+  category?: string;
+  status?: string;
+  fileName?: string;
+  fileUrl?: string;
+}
+
 
 @Component({
   selector: 'app-insurance-financial',
@@ -151,6 +174,9 @@ export class InsuranceFinancialComponent implements OnInit {
   private toast = inject(ToastService);
   private tracking = inject(EventTrackingService);
   private confirm = inject(ConfirmService);
+  private auth = inject(AuthService);
+  private accountingHttp = new HttpClient(inject(HttpBackend));
+  private readonly accountingTokenKey = 'ta_accounting_api_token';
 
   pageTab = signal<PageTab>('insurance');
   insuranceSubTab = signal<InsuranceSubTab>('current');
@@ -235,6 +261,9 @@ export class InsuranceFinancialComponent implements OnInit {
   reportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   showChargingReport = signal(false);
   chargingReportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  showAccountingInvoiceModal = signal(false);
+  loadingAccountingInvoices = signal(false);
+  accountingInvoices = signal<AccountingVendorInvoice[]>([]);
 
   // Collapsed-by-type view
   expandedTypes = signal<Set<string>>(new Set());
@@ -459,10 +488,148 @@ export class InsuranceFinancialComponent implements OnInit {
     this.showChargingReport.set(false);
   }
 
+  getAccountingInvoiceButtonTitle(): string {
+    return `View Taylor Accounting insurance invoices for ${this.getSummarySpecificPeriodLabel()}`;
+  }
+
+  getAccountingInvoiceModalTitle(): string {
+    return `Taylor Accounting Insurance Invoices — ${this.getSummarySpecificPeriodLabel()}`;
+  }
+
+  async openAccountingInvoicesModal(): Promise<void> {
+    this.showAccountingInvoiceModal.set(true);
+    await this.loadAccountingInvoicesForPeriod();
+  }
+
+  closeAccountingInvoicesModal(): void {
+    this.showAccountingInvoiceModal.set(false);
+  }
+
+  openTaylorAccountingInsuranceInvoices(): void {
+    const base = String(environment.taylorAccountingUrl || 'https://taylor-accounting.net').replace(/\/$/, '');
+    window.open(`${base}/finance/vendor-invoicing`, '_blank', 'noopener,noreferrer');
+  }
+
+  async viewAccountingInvoiceFile(invoice: AccountingVendorInvoice): Promise<void> {
+    if (!invoice.fileUrl) {
+      this.toast.info('This invoice has no attached file in Taylor Accounting.', 'No File');
+      return;
+    }
+
+    try {
+      const token = await this.getAccountingApiToken();
+      if (!token) {
+        this.toast.error('Unable to authenticate with Taylor Accounting.', 'Access Denied');
+        return;
+      }
+
+      const url = this.resolveAccountingInvoiceFileUrl(invoice.fileUrl);
+      const blob = await firstValueFrom(
+        this.accountingHttp.get(url, {
+          responseType: 'blob',
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      );
+      window.open(URL.createObjectURL(blob), '_blank', 'noopener,noreferrer');
+    } catch {
+      this.toast.error('Failed to open invoice file from Taylor Accounting.', 'Error');
+    }
+  }
+
+  private async loadAccountingInvoicesForPeriod(): Promise<void> {
+    this.loadingAccountingInvoices.set(true);
+    this.accountingInvoices.set([]);
+
+    try {
+      const token = await this.getAccountingApiToken();
+      if (!token) {
+        this.toast.error('Unable to authenticate with Taylor Accounting.', 'Access Denied');
+        return;
+      }
+
+      const apiBase = this.getAccountingApiBaseUrl();
+      const response = await firstValueFrom(
+        this.accountingHttp.get<any>(`${apiBase}/api/v1/vendorinvoices`, {
+          params: {
+            category: 'insurance',
+            includeAll: 'true',
+            pageSize: '500'
+          },
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      );
+
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      const { start, end } = this.getSummaryPeriodDateRange();
+      const filtered = rows
+        .filter((invoice: AccountingVendorInvoice) => this.invoiceMatchesSelectedPeriod(invoice.invoiceDate, start, end))
+        .sort((a: AccountingVendorInvoice, b: AccountingVendorInvoice) =>
+          String(b.invoiceDate || '').localeCompare(String(a.invoiceDate || ''))
+        );
+
+      this.accountingInvoices.set(filtered);
+      if (!filtered.length) {
+        this.toast.info(`No insurance vendor invoices found for ${this.getSummarySpecificPeriodLabel()}.`, 'No Invoices');
+      }
+    } catch {
+      this.toast.error('Failed to load insurance invoices from Taylor Accounting.', 'Error');
+    } finally {
+      this.loadingAccountingInvoices.set(false);
+    }
+  }
+
+  private invoiceMatchesSelectedPeriod(invoiceDate: string, start: Date, end: Date): boolean {
+    const date = this.parseSummaryDateKey(String(invoiceDate || '').trim().split('T')[0]);
+    if (!date) return false;
+    return date >= start && date <= end;
+  }
+
+  private getAccountingApiBaseUrl(): string {
+    return String(
+      environment.taylorAccountingApiUrl || 'https://ttac-gateway-production.up.railway.app'
+    ).replace(/\/$/, '');
+  }
+
+  private resolveAccountingInvoiceFileUrl(fileUrl: string): string {
+    if (fileUrl.startsWith('http') || fileUrl.startsWith('blob:')) return fileUrl;
+    return `${this.getAccountingApiBaseUrl()}${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+  }
+
+  private async getAccountingApiToken(): Promise<string | null> {
+    const cached = sessionStorage.getItem(this.accountingTokenKey);
+    if (cached) return cached;
+
+    const accessToken = this.auth.getToken();
+    if (!accessToken) return null;
+
+    try {
+      const response = await firstValueFrom(
+        this.accountingHttp.post<any>(`${this.getAccountingApiBaseUrl()}/api/v1/auth/sso-login`, {
+          token: accessToken
+        })
+      );
+      const token = String(response?.token || '').trim();
+      if (!token) return null;
+      sessionStorage.setItem(this.accountingTokenKey, token);
+      return token;
+    } catch {
+      sessionStorage.removeItem(this.accountingTokenKey);
+      return null;
+    }
+  }
+
   getChargingReportPeriodLabel(): string {
     const period = this.getSummaryPeriodColumnLabel();
     const specific = this.getSummarySpecificPeriodLabel();
     return `Period: ${specific} (${period.replace('Per ', '')})`;
+  }
+
+  getChargingReportTotalLabel(): string {
+    return `Total Charges (${this.getSummaryPeriodColumnLabel()})`;
+  }
+
+  getChargingReportCostTypeLabel(category: FleetCalculationLine['category']): string {
+    return category === 'company' ? 'Company Cost' : 'Driver Charges';
   }
 
   getChargingEnrollmentStatusLabel(status: string): string {
@@ -476,43 +643,33 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   exportChargingReportCSV(): void {
+    const periodLabel = this.getSummaryPeriodColumnLabel();
     const rows: string[] = [];
-    rows.push('Section,Policy Type,Provider,Policy #,Cost Basis,Frequency,Policy Cost,Charge Amount,Deductible,Status,Value');
+    rows.push(`Insurance Charging Report - ${this.getChargingReportPeriodLabel()}`);
+    rows.push(`Generated,${this.chargingReportDate}`);
+    rows.push('');
+    rows.push('Summary Metric,Value');
+    rows.push(`Charge Lines,${this.chargingStats().chargeLines}`);
+    rows.push(`${this.getChargingFleetCountLabel()},${this.chargingStats().drivers}`);
+    rows.push(`${this.getChargingReportTotalLabel()},${this.chargingStats().totalCharges}`);
+    rows.push('');
+    rows.push(`Policy,Provider,Cost Type,Calculation,${periodLabel}`);
 
-    const fleet = this.chargingFleetSummary();
-    const display = this.chargingFleetSummaryDisplay();
-    rows.push([
-      'Fleet Summary',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      'Drivers on Fleet',
-      String(fleet.activeDrivers)
-    ].join(','));
-    rows.push(['Fleet Summary', '', '', '', '', '', '', '', '', 'Driver Charges', String(display.driverCharges)].join(','));
-    rows.push(['Fleet Summary', '', '', '', '', '', '', '', '', 'Company Cost', String(display.companyCost)].join(','));
-    rows.push(['Fleet Summary', '', '', '', '', '', '', '', '', 'Total Fleet Cost', String(display.totalFleetCost)].join(','));
-
-    for (const row of this.chargingRows()) {
+    for (const line of this.chargingFleetCalculationLines()) {
       rows.push([
-        'Policy Charge',
-        `"${this.getChargingPolicyTypeLabel(row.policyType)}"`,
-        `"${row.providerName}"`,
-        row.policyNumber || '',
-        `"${this.getExpenseBasisLabel(row.expenseBasis)}"`,
-        `"${this.getBillingFrequencyLabel(row.billingFrequency)}"`,
-        row.policyCost ?? '',
-        row.chargeAmount ?? '',
-        row.perIncidentDeductible ?? '',
-        `"${this.getChargingEnrollmentStatusLabel(row.enrollmentStatus)}"`,
-        ''
+        `"${line.policyLabel}"`,
+        `"${line.providerName}"`,
+        `"${this.getChargingReportCostTypeLabel(line.category)}"`,
+        `"${line.formula.replace(/"/g, '""')}"`,
+        line.periodAmount
       ].join(','));
     }
+
+    const display = this.chargingFleetSummaryDisplay();
+    rows.push('');
+    rows.push(`Driver Charges Subtotal,,,Sum of per-driver policy charges,${display.driverCharges}`);
+    rows.push(`Company Cost Subtotal,,,Sum of whole-policy company charges,${display.companyCost}`);
+    rows.push(`Total Fleet Cost,,,"${this.formatCurrency(display.driverCharges, 2)} driver charges + ${this.formatCurrency(display.companyCost, 2)} company cost",${display.totalFleetCost}`);
 
     const csv = rows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -601,6 +758,7 @@ export class InsuranceFinancialComponent implements OnInit {
     return {
       chargeLines: breakdown.lines.length,
       drivers: breakdown.activeDriverCount,
+      driverHeadcount: breakdown.activeDriverHeadcount,
       totalCharges: display.totalFleetCost
     };
   });
@@ -638,6 +796,7 @@ export class InsuranceFinancialComponent implements OnInit {
 
     return {
       activeDrivers: breakdown.activeDriverCount,
+      activeDriverHeadcount: breakdown.activeDriverHeadcount,
       driverChargesAnnual,
       companyCostAnnual,
       totalFleetCostAnnual,
@@ -900,7 +1059,9 @@ export class InsuranceFinancialComponent implements OnInit {
 
   private buildFleetCostBreakdown(): FleetCostBreakdownData {
     const { start, end } = this.getSummaryPeriodDateRange();
-    const activeDriverCount = this.countDriversEmployedDuringPeriod(start, end);
+    const eligibleDrivers = this.getFleetEligibleDriversDuringPeriod(start, end);
+    const activeDriverHeadcount = eligibleDrivers.length;
+    const activeDriverCount = this.countUniqueTruckBillingUnits(eligibleDrivers);
     const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
     const periodLabel = this.getFleetCalculationPeriodLabel();
     const periodTab = this.summaryPeriodTab();
@@ -935,16 +1096,16 @@ export class InsuranceFinancialComponent implements OnInit {
       if (!enrollments.length) {
         const perDriverAnnual = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, 'yearly');
         const perDriverPeriod = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, periodTab);
-        const driverCount = Math.max(activeDriverCount, 0);
-        const annualAmount = this.roundMoney(perDriverAnnual * driverCount);
-        const periodAmount = this.roundMoney(perDriverPeriod * driverCount);
+        const truckCount = Math.max(activeDriverCount, 0);
+        const annualAmount = this.roundMoney(perDriverAnnual * truckCount);
+        const periodAmount = this.roundMoney(perDriverPeriod * truckCount);
         driverChargesAnnual += annualAmount;
-        const driverLabel = driverCount === 1 ? 'driver' : 'drivers';
+        const truckLabel = truckCount === 1 ? 'truck' : 'trucks';
         lines.push({
           policyLabel,
           providerName: policy.providerName,
           category: 'driver',
-          formula: `${driverCount} fleet ${driverLabel} × ${this.formatCurrency(perDriverPeriod, 2)} ${periodLabel} each`,
+          formula: `${truckCount} fleet ${truckLabel} × ${this.formatCurrency(perDriverPeriod, 2)} ${periodLabel} each`,
           annualAmount,
           periodAmount
         });
@@ -955,9 +1116,29 @@ export class InsuranceFinancialComponent implements OnInit {
       let annualAmount = 0;
       let periodAmount = 0;
       let samplePeriodCharge = 0;
+      const billedTruckKeys = new Set<string>();
       for (const enrollment of enrollments) {
         const driver = this.chargingDrivers().find((d) => Number(d.id) === Number(enrollment.driverId));
         if (driver && !this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
+        if (driver && !this.isMatrixActiveDriver(this.normalizeDriverStatus(driver.status))) continue;
+
+        if (driver) {
+          const billingDriverId = this.getTruckBillingDriverIdForPolicy(
+            driver,
+            String(policy.id),
+            enrollmentsByPolicy,
+            policy,
+            start,
+            end
+          );
+          if (billingDriverId !== Number(enrollment.driverId)) continue;
+        }
+
+        const truckKey = driver
+          ? this.getDriverTruckBillingKey(driver)
+          : `driver:${enrollment.driverId}`;
+        if (billedTruckKeys.has(truckKey)) continue;
+        billedTruckKeys.add(truckKey);
 
         enrolledCount++;
         const amount = Number(enrollment.deductionAmount ?? 0) || policyCost;
@@ -970,11 +1151,13 @@ export class InsuranceFinancialComponent implements OnInit {
       }
 
       driverChargesAnnual += annualAmount;
-      const driverLabel = enrolledCount === 1 ? 'driver' : 'drivers';
-      const uniformRate = enrolledCount > 0 && Math.abs(periodAmount - samplePeriodCharge * enrolledCount) < 0.01;
+      periodAmount = this.roundMoney(periodAmount);
+      annualAmount = this.roundMoney(annualAmount);
+      const truckLabel = enrolledCount === 1 ? 'truck' : 'trucks';
+      const uniformRate = enrolledCount > 0 && Math.abs(periodAmount - this.roundMoney(samplePeriodCharge * enrolledCount)) < 0.01;
       const formula = uniformRate && enrolledCount > 0
-        ? `${enrolledCount} enrolled ${driverLabel} × ${this.formatCurrency(samplePeriodCharge, 2)} ${periodLabel} each`
-        : `${enrolledCount} enrolled ${driverLabel} — sum of individual enrollment charges (${this.formatCurrency(annualAmount, 2)} annual)`;
+        ? `${enrolledCount} enrolled ${truckLabel} × ${this.formatCurrency(samplePeriodCharge, 2)} ${periodLabel} each`
+        : `${enrolledCount} enrolled ${truckLabel} — sum of per-truck enrollment charges (${this.formatCurrency(annualAmount, 2)} annual)`;
 
       lines.push({
         policyLabel,
@@ -982,16 +1165,39 @@ export class InsuranceFinancialComponent implements OnInit {
         category: 'driver',
         formula,
         annualAmount,
-        periodAmount
+        periodAmount: uniformRate && enrolledCount > 0
+          ? this.roundMoney(samplePeriodCharge * enrolledCount)
+          : periodAmount
       });
     }
 
     return {
       activeDriverCount,
+      activeDriverHeadcount,
       lines,
       driverChargesAnnual,
       companyCostAnnual
     };
+  }
+
+  getFleetBillingSummaryLabel(): string {
+    const summary = this.chargingFleetSummary();
+    const trucks = summary.activeDrivers;
+    const drivers = summary.activeDriverHeadcount;
+    const truckLabel = trucks === 1 ? 'truck' : 'trucks';
+    const period = this.getSummarySpecificPeriodLabel();
+    if (drivers > trucks) {
+      return `${trucks} ${truckLabel} (${drivers} drivers) on fleet — ${period}`;
+    }
+    return `${trucks} ${truckLabel} on fleet — ${period}`;
+  }
+
+  getChargingFleetCountLabel(): string {
+    const summary = this.chargingFleetSummary();
+    if (summary.activeDriverHeadcount > summary.activeDrivers) {
+      return `Trucks on Fleet (${summary.activeDriverHeadcount} drivers)`;
+    }
+    return 'Trucks on Fleet';
   }
 
   getSummarySpecificPeriodFilterLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
@@ -1151,15 +1357,60 @@ export class InsuranceFinancialComponent implements OnInit {
     }
   }
 
-  private countDriversEmployedDuringPeriod(start: Date, end: Date): number {
-    let count = 0;
-    for (const driver of this.chargingDrivers()) {
+  private getFleetEligibleDriversDuringPeriod(start: Date, end: Date): any[] {
+    return this.chargingDrivers().filter((driver) => {
       const status = this.normalizeDriverStatus(driver.status);
-      if (!this.isMatrixActiveDriver(status)) continue;
-      if (!this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
-      count++;
+      if (!this.isMatrixActiveDriver(status)) return false;
+      return this.wasDriverEmployedDuringPeriod(driver, start, end);
+    });
+  }
+
+  private normalizeTruckNumberForBilling(value: unknown): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    return raw.replace(/\s+/g, '').replace(/-/g, '').toUpperCase();
+  }
+
+  private getDriverTruckBillingKey(driver: any): string {
+    const truck = this.normalizeTruckNumberForBilling(
+      driver?.truckNumber ?? driver?.TruckNumber ?? driver?.truckTag ?? driver?.TruckTag ?? ''
+    );
+    if (truck) return `truck:${truck}`;
+    const driverId = Number(driver?.id);
+    return Number.isFinite(driverId) && driverId > 0 ? `driver:${driverId}` : `driver:unknown`;
+  }
+
+  private countUniqueTruckBillingUnits(drivers: any[]): number {
+    const keys = new Set<string>();
+    for (const driver of drivers) {
+      keys.add(this.getDriverTruckBillingKey(driver));
     }
-    return count;
+    return keys.size;
+  }
+
+  private getTruckBillingDriverIdForPolicy(
+    driver: any,
+    policyId: string,
+    enrollmentsByPolicy: Record<string, any[]>,
+    policy: InsuranceRow,
+    start: Date,
+    end: Date
+  ): number | null {
+    const key = this.getDriverTruckBillingKey(driver);
+    const peers = this.getFleetEligibleDriversDuringPeriod(start, end)
+      .filter((peer) => this.getDriverTruckBillingKey(peer) === key);
+    if (!peers.length) return null;
+
+    const activeEnrollments = (enrollmentsByPolicy[policyId] || []).filter((e) => e.status === 'active');
+    if (activeEnrollments.length) {
+      const enrolledPeers = peers.filter((peer) =>
+        activeEnrollments.some((enrollment) => Number(enrollment.driverId) === Number(peer.id))
+      );
+      if (!enrolledPeers.length) return null;
+      return Math.min(...enrolledPeers.map((peer) => Number(peer.id)));
+    }
+
+    return Math.min(...peers.map((peer) => Number(peer.id)));
   }
 
   private wasDriverEmployedDuringPeriod(driver: any, start: Date, end: Date): boolean {
@@ -1313,13 +1564,27 @@ export class InsuranceFinancialComponent implements OnInit {
   ): MatrixCellCharge | null {
     const policyCost = this.getPolicyCost(policy);
     const policyFrequency = this.resolveBillingFrequency(policy);
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const driver = this.chargingDrivers().find((d) => Number(d.id) === driverId);
+    if (!driver) return null;
+
+    const billingDriverId = this.getTruckBillingDriverIdForPolicy(
+      driver,
+      column.policyId,
+      enrollmentsByPolicy,
+      policy,
+      start,
+      end
+    );
+    if (billingDriverId !== driverId) return null;
+
+    const truckCount = this.countUniqueTruckBillingUnits(this.getFleetEligibleDriversDuringPeriod(start, end));
 
     if (column.expenseType === 'company_expense') {
       if (!this.isMatrixActiveDriver(driverStatus) || policyCost <= 0) return null;
-      const activeCount = this.matrixDriverCounts().active;
-      if (activeCount <= 0) return null;
+      if (truckCount <= 0) return null;
       return {
-        amount: policyCost / activeCount,
+        amount: policyCost / truckCount,
         billingFrequency: policyFrequency
       };
     }
@@ -1540,11 +1805,11 @@ export class InsuranceFinancialComponent implements OnInit {
       const activeEnrollments = enrollments.filter((e: any) => e.status === 'active');
 
       if (!activeEnrollments.length) {
-        const driverCount = activeDrivers.length;
+        const truckCount = this.countUniqueTruckBillingUnits(activeDrivers);
         rows.push({
-          driverName: driverCount > 0
-            ? `All Active Drivers (${driverCount})`
-            : 'All Active Drivers',
+          driverName: truckCount > 0
+            ? `All Active Trucks (${truckCount})`
+            : 'All Active Trucks',
           policyType: policy.policyType,
           providerName: policy.providerName,
           policyNumber: policy.policyNumber || '',

@@ -272,7 +272,10 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon active"><i class='bx bx-user'></i></div>
-        <div class="stat-info"><span class="stat-value">{{ chargingStats().drivers }}</span><span class="stat-label">Drivers</span></div>
+        <div class="stat-info">
+          <span class="stat-value">{{ chargingStats().drivers }}</span>
+          <span class="stat-label">{{ getChargingFleetCountLabel() }}</span>
+        </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon expiring"><i class='bx bx-dollar'></i></div>
@@ -288,7 +291,7 @@
         <div>
           <h3 class="section-title"><i class='bx bx-pie-chart-alt-2'></i> Fleet Cost vs. Driver Charges</h3>
           <p class="fleet-summary-subtitle">
-            {{ chargingFleetSummary().activeDrivers }} drivers on fleet — {{ getSummarySpecificPeriodLabel() }}
+            {{ getFleetBillingSummaryLabel() }}
           </p>
         </div>
         <div class="fleet-period-filters">
@@ -332,13 +335,27 @@
               </select>
             }
           </div>
+          <button
+            type="button"
+            class="fleet-accounting-invoice-btn"
+            (click)="openAccountingInvoicesModal()"
+            [disabled]="loadingAccountingInvoices()"
+            [title]="getAccountingInvoiceButtonTitle()"
+            aria-label="View Taylor Accounting insurance invoices for selected period"
+          >
+            @if (loadingAccountingInvoices()) {
+              <i class='bx bx-loader-alt bx-spin'></i>
+            } @else {
+              <i class='bx bx-receipt'></i>
+            }
+          </button>
         </div>
       </div>
       <div class="data-table-container">
         <table class="data-table fleet-summary-table">
           <thead>
             <tr>
-              <th>Drivers on Fleet</th>
+              <th>Trucks on Fleet</th>
               <th>Policy / Cost Type</th>
               <th>Calculation</th>
               <th>{{ getSummaryPeriodColumnLabel() }}</th>
@@ -1075,6 +1092,76 @@
 }
 
 <!-- ========== CHARGING TABLE REPORT MODAL ========== -->
+@if (showAccountingInvoiceModal()) {
+  <div class="modal-overlay" (click)="closeAccountingInvoicesModal()">
+    <div class="modal modal-wide" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class='bx bx-receipt'></i> {{ getAccountingInvoiceModalTitle() }}</h3>
+        <div class="report-actions-header">
+          <button class="btn btn-secondary btn-sm" (click)="openTaylorAccountingInsuranceInvoices()">
+            <i class='bx bx-link-external'></i> Open Taylor Accounting
+          </button>
+          <button class="close-btn" (click)="closeAccountingInvoicesModal()"><i class='bx bx-x'></i></button>
+        </div>
+      </div>
+      <div class="modal-body">
+        @if (loadingAccountingInvoices()) {
+          <div class="accounting-invoice-loading">
+            <i class='bx bx-loader-alt bx-spin'></i>
+            <span>Loading insurance invoices from Taylor Accounting…</span>
+          </div>
+        } @else if (!accountingInvoices().length) {
+          <div class="accounting-invoice-empty">
+            <i class='bx bx-receipt'></i>
+            <p>No insurance vendor invoices were found for {{ getSummarySpecificPeriodLabel() }}.</p>
+            <button class="btn btn-secondary btn-sm" (click)="openTaylorAccountingInsuranceInvoices()">
+              <i class='bx bx-link-external'></i> Open Vendor Invoicing
+            </button>
+          </div>
+        } @else {
+          <table class="data-table accounting-invoice-table">
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th>Invoice #</th>
+                <th>Invoice Date</th>
+                <th>Due Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (invoice of accountingInvoices(); track invoice.id) {
+                <tr>
+                  <td>{{ invoice.vendorName || '—' }}</td>
+                  <td>{{ invoice.invoiceNumber || invoice.vendorInvoiceNumber || '—' }}</td>
+                  <td>{{ invoice.invoiceDate || '—' }}</td>
+                  <td>{{ invoice.dueDate || '—' }}</td>
+                  <td>{{ formatCurrency(invoice.amount, 2) }}</td>
+                  <td>{{ invoice.status || '—' }}</td>
+                  <td class="accounting-invoice-actions">
+                    @if (invoice.fileUrl) {
+                      <button class="btn btn-secondary btn-sm" (click)="viewAccountingInvoiceFile(invoice)">
+                        <i class='bx bx-show'></i> View
+                      </button>
+                    } @else {
+                      <span class="text-muted">No file</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeAccountingInvoicesModal()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
 @if (showChargingReport()) {
   <div class="modal-overlay" (click)="closeChargingReport()">
     <div class="modal modal-wide" (click)="$event.stopPropagation()">
@@ -1100,11 +1187,11 @@
           </div>
           <div class="report-stat">
             <span class="rs-value">{{ chargingStats().drivers }}</span>
-            <span class="rs-label">Drivers on Fleet</span>
+            <span class="rs-label">{{ getChargingFleetCountLabel() }}</span>
           </div>
           <div class="report-stat">
             <span class="rs-value">{{ formatCurrency(chargingStats().totalCharges, 2) }}</span>
-            <span class="rs-label">Total Annual Charges</span>
+            <span class="rs-label">{{ getChargingReportTotalLabel() }}</span>
           </div>
         </div>
 
@@ -1112,57 +1199,79 @@
         <table class="report-table">
           <thead>
             <tr>
-              <th>Drivers on Fleet</th>
-              <th>Cost Type</th>
+              <th>Trucks on Fleet</th>
+              <th>Policy / Cost Type</th>
+              <th>Calculation</th>
               <th>{{ getSummaryPeriodColumnLabel() }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td rowspan="3"><strong>{{ chargingFleetSummary().activeDrivers }}</strong></td>
-              <td>Driver Charges</td>
-              <td>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</td>
-            </tr>
-            <tr>
-              <td>Company Cost</td>
-              <td>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</td>
-            </tr>
-            <tr>
-              <td><strong>Total Fleet Cost</strong></td>
-              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h4 class="report-section-title">Policy Charge Lines</h4>
-        <table class="report-table">
-          <thead>
-            <tr>
-              <th>Policy Type</th>
-              <th>Provider</th>
-              <th>Policy #</th>
-              <th>Cost Basis</th>
-              <th>Frequency</th>
-              <th>Policy Cost</th>
-              <th>Charge Amount</th>
-              <th>Deductible</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of chargingRows(); track $index) {
+            @if (chargingFleetDriverCalculationLines().length) {
+              @for (line of chargingFleetDriverCalculationLines(); track line.policyLabel + line.formula; let i = $index) {
+                <tr>
+                  @if (i === 0) {
+                    <td [attr.rowspan]="fleetSummaryDetailRowSpan()" class="report-driver-count">
+                      <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
+                    </td>
+                  }
+                  <td>
+                    <strong>{{ line.policyLabel }}</strong>
+                    <span class="report-line-category">{{ getChargingReportCostTypeLabel(line.category) }}</span>
+                  </td>
+                  <td>{{ line.formula }}</td>
+                  <td>{{ formatCurrency(line.periodAmount, 2) }}</td>
+                </tr>
+              }
+            } @else {
               <tr>
-                <td>{{ getChargingPolicyTypeLabel(row.policyType) }}</td>
-                <td>{{ row.providerName }}</td>
-                <td>{{ row.policyNumber || '—' }}</td>
-                <td>{{ getExpenseBasisLabel(row.expenseBasis) }}</td>
-                <td>{{ getBillingFrequencyLabel(row.billingFrequency) }}</td>
-                <td>{{ formatCurrency(row.policyCost, 2) }}</td>
-                <td>{{ formatCurrency(row.chargeAmount, 2) }}</td>
-                <td>{{ formatCurrency(row.perIncidentDeductible, 2) }}</td>
-                <td>{{ getChargingEnrollmentStatusLabel(row.enrollmentStatus) }}</td>
+                <td [attr.rowspan]="fleetSummaryDetailRowSpan()" class="report-driver-count">
+                  <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
+                </td>
+                <td>Driver Charges</td>
+                <td>No per-driver policies</td>
+                <td>{{ formatCurrency(0, 2) }}</td>
               </tr>
             }
+
+            <tr>
+              <td colspan="2"><strong>Driver Charges Subtotal</strong></td>
+              <td>Sum of per-driver policy charges</td>
+              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</strong></td>
+            </tr>
+
+            @if (chargingFleetCompanyCalculationLines().length) {
+              @for (line of chargingFleetCompanyCalculationLines(); track line.policyLabel + line.formula) {
+                <tr>
+                  <td>
+                    <strong>{{ line.policyLabel }}</strong>
+                    <span class="report-line-category">{{ getChargingReportCostTypeLabel(line.category) }}</span>
+                  </td>
+                  <td>{{ line.formula }}</td>
+                  <td>{{ formatCurrency(line.periodAmount, 2) }}</td>
+                </tr>
+              }
+            } @else {
+              <tr>
+                <td>Company Cost</td>
+                <td>No company-wide policies</td>
+                <td>{{ formatCurrency(0, 2) }}</td>
+              </tr>
+            }
+
+            <tr>
+              <td colspan="2"><strong>Company Cost Subtotal</strong></td>
+              <td>Sum of whole-policy company charges</td>
+              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</strong></td>
+            </tr>
+
+            <tr class="report-total-row">
+              <td colspan="2"><strong>Total Fleet Cost</strong></td>
+              <td>
+                {{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }} driver charges +
+                {{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }} company cost
+              </td>
+              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
+            </tr>
           </tbody>
         </table>
       </div>
