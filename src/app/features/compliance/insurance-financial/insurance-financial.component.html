@@ -375,9 +375,9 @@
           <h2><i class='bx bx-grid-alt'></i> Driver Enrollment Matrix</h2>
           <p class="matrix-subtitle">
             @if (matrixDriverTab() === 'active') {
-              Active drivers vs. each policy — green = driver expense, blue = company expense
+              Per-driver charge amounts by policy — green = driver expense, blue = company expense
             } @else {
-              Inactive drivers vs. each policy — green = driver expense, blue = company expense
+              Inactive driver charges by policy — green = driver expense, blue = company expense
             }
           </p>
         </div>
@@ -427,8 +427,15 @@
               <tr>
                 <th class="matrix-driver-col sticky-col">Driver</th>
                 @for (col of enrollmentMatrixColumns(); track col.policyId) {
-                  <th class="matrix-policy-col" [title]="col.expenseBasis === 'whole_policy' ? 'Whole company policy' : 'Per driver enrollment'">
-                    <span class="matrix-col-label">{{ col.label }}</span>
+                  <th class="matrix-policy-col" [title]="getMatrixColumnExpenseLabel(col)">
+                    <span class="matrix-col-heading">
+                      <span
+                        class="enrollment-dot"
+                        [class.driver_expense]="col.expenseType === 'driver_expense'"
+                        [class.company_expense]="col.expenseType === 'company_expense'"
+                      ></span>
+                      <span class="matrix-col-label">{{ col.label }}</span>
+                    </span>
                   </th>
                 }
               </tr>
@@ -439,12 +446,7 @@
                   <td class="matrix-driver-col sticky-col"><strong>{{ row.driverName }}</strong></td>
                   @for (col of enrollmentMatrixColumns(); track col.policyId) {
                     <td class="matrix-cell">
-                      <span
-                        class="enrollment-dot"
-                        [class.driver_expense]="row.cells[col.policyId] === 'driver_expense'"
-                        [class.company_expense]="row.cells[col.policyId] === 'company_expense'"
-                        [title]="getMatrixExpenseLabel(row.cells[col.policyId])"
-                      ></span>
+                      <span class="matrix-cost">{{ getMatrixCellDisplayAmount(col, row.cells[col.policyId]) }}</span>
                     </td>
                   }
                 </tr>

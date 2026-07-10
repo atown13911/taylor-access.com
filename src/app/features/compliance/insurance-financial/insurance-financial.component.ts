@@ -29,12 +29,13 @@ interface EnrollmentMatrixColumn {
   policyType: string;
   label: string;
   expenseBasis: string;
+  expenseType: 'driver_expense' | 'company_expense';
 }
 
 interface EnrollmentMatrixRow {
   driverId: number;
   driverName: string;
-  cells: Record<string, 'driver_expense' | 'company_expense'>;
+  cells: Record<string, number>;
 }
 
 interface InsuranceRow {
@@ -456,22 +457,12 @@ export class InsuranceFinancialComponent implements OnInit {
       const current = group.current;
       if (current.status !== 'active' && current.status !== 'expiring') continue;
 
-      columns.push({
-        policyId: String(current.id),
-        policyType: current.policyType,
-        label: this.getPolicyTypeLabel(current.policyType),
-        expenseBasis: this.resolveExpenseBasis(current)
-      });
+      columns.push(this.buildEnrollmentMatrixColumn(current));
 
       for (const included of group.includedCoverages) {
         if (included.status !== 'active' && included.status !== 'expiring') continue;
         if (!this.shouldShowBundledChildInCharging(included)) continue;
-        columns.push({
-          policyId: String(included.id),
-          policyType: included.policyType,
-          label: this.getPolicyTypeLabel(included.policyType),
-          expenseBasis: this.resolveExpenseBasis(included)
-        });
+        columns.push(this.buildEnrollmentMatrixColumn(included));
       }
     }
 
@@ -483,23 +474,9 @@ export class InsuranceFinancialComponent implements OnInit {
     if (!columns.length) return [];
 
     const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
-    const enrolledDriverIdsByPolicy = new Map<string, Set<number>>();
-
-    for (const column of columns) {
-      const policyEnrollments = enrollmentsByPolicy[column.policyId] || [];
-      enrolledDriverIdsByPolicy.set(
-        column.policyId,
-        new Set(
-          policyEnrollments
-            .filter((e) => e.status === 'active')
-            .map((e) => Number(e.driverId))
-            .filter((id) => id > 0)
-        )
-      );
-    }
-
     const tab = this.matrixDriverTab();
     const term = this.matrixSearch.trim().toLowerCase();
+
     return this.chargingDrivers()
       .filter((driver) => {
         const status = this.normalizeDriverStatus(driver.status);
@@ -514,24 +491,16 @@ export class InsuranceFinancialComponent implements OnInit {
       })
       .map((driver) => {
         const driverId = Number(driver.id);
-        const cells: Record<string, 'driver_expense' | 'company_expense'> = {};
+        const driverStatus = this.normalizeDriverStatus(driver.status);
+        const cells: Record<string, number> = {};
+
         for (const column of columns) {
-          if (column.expenseBasis !== 'per_driver') {
-            cells[column.policyId] = 'company_expense';
-            continue;
-          }
-
-          const policyEnrollments = enrollmentsByPolicy[column.policyId] || [];
-          const hasActiveEnrollments = policyEnrollments.some((e) => e.status === 'active');
-          if (!hasActiveEnrollments) {
-            cells[column.policyId] = 'driver_expense';
-            continue;
-          }
-
-          cells[column.policyId] = enrolledDriverIdsByPolicy.get(column.policyId)?.has(driverId)
-            ? 'driver_expense'
-            : 'company_expense';
+          const policy = this.findPolicyById(column.policyId);
+          cells[column.policyId] = policy
+            ? this.getMatrixDriverCharge(driverId, driverStatus, column, policy, enrollmentsByPolicy)
+            : 0;
         }
+
         return {
           driverId,
           driverName: driver.name || 'Unknown Driver',
@@ -555,12 +524,12 @@ export class InsuranceFinancialComponent implements OnInit {
 
   enrollmentMatrixStats = computed(() => {
     const rows = this.enrollmentMatrixRows();
-    const perDriverColumns = this.enrollmentMatrixColumns().filter((c) => c.expenseBasis === 'per_driver');
+    const perDriverColumns = this.enrollmentMatrixColumns().filter((c) => c.expenseType === 'driver_expense');
     let enrolled = 0;
     let missing = 0;
     for (const row of rows) {
       for (const column of perDriverColumns) {
-        if (row.cells[column.policyId] === 'driver_expense') enrolled++;
+        if ((row.cells[column.policyId] || 0) > 0) enrolled++;
         else missing++;
       }
     }
@@ -570,7 +539,7 @@ export class InsuranceFinancialComponent implements OnInit {
   matrixDashStats = computed(() => {
     const counts = this.matrixDriverCounts();
     const columns = this.enrollmentMatrixColumns();
-    const perDriverColumns = columns.filter((c) => c.expenseBasis === 'per_driver');
+    const perDriverColumns = columns.filter((c) => c.expenseType === 'driver_expense');
     const matrixStats = this.enrollmentMatrixStats();
     const enrollmentSlots = matrixStats.enrolled + matrixStats.missing;
 
@@ -676,6 +645,59 @@ export class InsuranceFinancialComponent implements OnInit {
   private isMatrixActiveDriver(status: string): boolean {
     if (this.isMatrixArchivedDriver(status) || this.isMatrixInactiveDriver(status)) return false;
     return true;
+  }
+
+  private buildEnrollmentMatrixColumn(policy: InsuranceRow): EnrollmentMatrixColumn {
+    const expenseBasis = this.resolveExpenseBasis(policy);
+    return {
+      policyId: String(policy.id),
+      policyType: policy.policyType,
+      label: this.getChargingPolicyTypeLabel(policy.policyType),
+      expenseBasis,
+      expenseType: expenseBasis === 'per_driver' ? 'driver_expense' : 'company_expense'
+    };
+  }
+
+  private findPolicyById(policyId: string): InsuranceRow | null {
+    for (const group of this.groupedByType()) {
+      if (String(group.current.id) === policyId) return group.current;
+      for (const included of group.includedCoverages) {
+        if (String(included.id) === policyId) return included;
+      }
+    }
+    return null;
+  }
+
+  private getMatrixDriverCharge(
+    driverId: number,
+    driverStatus: string,
+    column: EnrollmentMatrixColumn,
+    policy: InsuranceRow,
+    enrollmentsByPolicy: Record<string, any[]>
+  ): number {
+    if (column.expenseType === 'company_expense') return 0;
+
+    const policyCost = this.getPolicyCost(policy);
+    const enrollments = enrollmentsByPolicy[column.policyId] || [];
+    const activeEnrollments = enrollments.filter((e) => e.status === 'active');
+
+    if (!activeEnrollments.length) {
+      return this.isMatrixActiveDriver(driverStatus) ? policyCost : 0;
+    }
+
+    const enrollment = activeEnrollments.find((e) => Number(e.driverId) === driverId);
+    if (!enrollment) return 0;
+
+    return Number(enrollment.deductionAmount ?? 0) || policyCost;
+  }
+
+  getMatrixColumnExpenseLabel(column: EnrollmentMatrixColumn): string {
+    return this.getMatrixExpenseLabel(column.expenseType);
+  }
+
+  getMatrixCellDisplayAmount(column: EnrollmentMatrixColumn, amount: number | undefined): string {
+    if (column.expenseType === 'company_expense') return '—';
+    return this.formatCurrency(amount ?? 0, 2);
   }
 
   isCompanyExpensePolicy(policyType: string): boolean {

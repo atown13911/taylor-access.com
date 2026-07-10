@@ -238,10 +238,17 @@
   }
 
   .matrix-policy-col {
-    min-width: 88px;
+    min-width: 96px;
     text-align: center;
     vertical-align: bottom;
     padding: 0.65rem 0.4rem;
+  }
+
+  .matrix-col-heading {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
   }
 
   .matrix-col-label {
@@ -279,6 +286,13 @@
   .matrix-cell {
     text-align: center;
     padding: 0.55rem 0.35rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .matrix-cost {
+    font-size: 0.78rem;
+    color: var(--text-primary, #e6edf3);
+    white-space: nowrap;
   }
 }
 
