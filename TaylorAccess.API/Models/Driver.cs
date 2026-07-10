@@ -217,6 +217,8 @@ public class Driver
 
     public DateOnly? TerminationDate { get; set; }
 
+    public string? TerminationNotes { get; set; }
+
     [Column(TypeName = "decimal(10,2)")]
     public decimal? PayRate { get; set; }
 

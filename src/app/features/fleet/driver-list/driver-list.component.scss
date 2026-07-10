@@ -631,7 +631,7 @@
     font-weight: 500;
   }
 
-  input, select {
+  input, select, textarea {
     padding: 0.5rem 0.75rem;
     background: var(--bg-primary, #010409);
     border: 1px solid var(--border-color);
@@ -648,6 +648,28 @@
 
     &::placeholder { color: var(--text-muted, #555); }
   }
+
+  textarea {
+    resize: vertical;
+    min-height: 4.5rem;
+    line-height: 1.45;
+    font-family: inherit;
+  }
+}
+
+.termination-section {
+  border-top: 1px solid rgba(255, 107, 53, 0.15);
+  padding-top: 0.25rem;
+
+  h4 {
+    color: #ff8a65;
+  }
+}
+
+.termination-notes-row,
+.termination-notes {
+  white-space: pre-wrap;
+  line-height: 1.45;
 }
 
 .helper-text {

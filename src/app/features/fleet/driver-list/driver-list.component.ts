@@ -23,6 +23,7 @@ interface DriverRow {
   fleetName: string;
   hireDate: string;
   terminationDate: string;
+  terminationNotes?: string;
   type: string;
   notes?: string;
   dispatchUserId?: number | null;
@@ -136,6 +137,7 @@ export class DriverListComponent implements OnInit {
     emergencyPhone: '',
     hireDate: '',
     terminationDate: '',
+    terminationNotes: '',
     payRate: 0,
     payType: 'mile' as 'mile' | 'hour' | 'percentage',
     driverType: 'company' as string,
@@ -394,6 +396,7 @@ export class DriverListComponent implements OnInit {
           fleetName: this.resolveFleetName(d),
           hireDate: d.hireDate || d.createdAt || '',
           terminationDate: d.terminationDate || '',
+          terminationNotes: String(d.terminationNotes ?? '').trim(),
           type: this.normalizeDriverType(d.driverType),
           notes: String(d.notes ?? '').trim(),
           dispatchUserId: this.resolveDispatchUserId(d)
@@ -601,6 +604,7 @@ export class DriverListComponent implements OnInit {
           payType: d.payType || '',
           hireDate: d.hireDate || driver.hireDate || '',
           terminationDate: d.terminationDate || '',
+          terminationNotes: String(d.terminationNotes ?? '').trim(),
           notes: String(d.notes ?? driver.notes ?? '').trim(),
           dispatchUserId: this.resolveDispatchUserId(d),
         };
@@ -1121,6 +1125,7 @@ export class DriverListComponent implements OnInit {
           emergencyPhone: d.emergencyContactPhone || d.emergencyPhone || '',
           hireDate: d.hireDate ? d.hireDate.split('T')[0] : '',
           terminationDate: d.terminationDate ? d.terminationDate.split('T')[0] : '',
+          terminationNotes: String(d.terminationNotes ?? '').trim(),
           payRate: d.payRate || 0,
           payType: d.payType || 'mile',
           driverType: this.normalizeFormDriverType(d.driverType),
@@ -1145,6 +1150,7 @@ export class DriverListComponent implements OnInit {
           emergencyContact: '', emergencyPhone: '',
           hireDate: driver.hireDate ? driver.hireDate.split('T')[0] : '',
           terminationDate: (driver as any).terminationDate ? String((driver as any).terminationDate).split('T')[0] : '',
+          terminationNotes: String((driver as any).terminationNotes ?? '').trim(),
           payRate: 0, payType: 'mile', driverType: this.normalizeFormDriverType(driver.type),
           dispatchUserId: this.resolveDispatchUserId(driver),
           teamDriverId: null, teamDriverName: ''
@@ -1169,7 +1175,7 @@ export class DriverListComponent implements OnInit {
       truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '',
       truckOwnerName: '', truckOwnerPhone: '', truckOwnerCompany: '',
       emergencyContact: '', emergencyPhone: '',
-      hireDate: '', terminationDate: '', payRate: 0, payType: 'mile', driverType: 'company', dispatchUserId: null,
+      hireDate: '', terminationDate: '', terminationNotes: '', payRate: 0, payType: 'mile', driverType: 'company', dispatchUserId: null,
       teamDriverId: null, teamDriverName: ''
     });
     this.availableDivisions.set([]);
@@ -1261,8 +1267,12 @@ export class DriverListComponent implements OnInit {
       emergencyPhone: form.emergencyPhone,
       hireDate: form.hireDate || null,
       terminationDate: form.terminationDate || null,
+      terminationNotes: form.terminationNotes?.trim() || null,
       ...(this.modalType() === 'edit'
-        ? { resetTerminationDate: !form.terminationDate }
+        ? {
+            resetTerminationDate: !form.terminationDate,
+            resetTerminationNotes: !form.terminationNotes?.trim()
+          }
         : {}),
       payRate: form.payRate,
       payType: form.payType,

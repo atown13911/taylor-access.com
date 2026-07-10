@@ -556,10 +556,6 @@
               <label>Hire Date</label>
               <input type="date" [ngModel]="driverForm().hireDate" (ngModelChange)="updateField('hireDate', $event)">
             </div>
-            <div class="form-group">
-              <label>Termination Date</label>
-              <input type="date" [ngModel]="driverForm().terminationDate" (ngModelChange)="updateField('terminationDate', $event)">
-            </div>
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -587,6 +583,27 @@
             <div class="form-group">
               <label>Pay Rate</label>
               <input type="number" [ngModel]="driverForm().payRate" (ngModelChange)="updateField('payRate', +$event)" step="0.01">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section termination-section">
+          <h4>Termination</h4>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Termination Date</label>
+              <input type="date" [ngModel]="driverForm().terminationDate" (ngModelChange)="updateField('terminationDate', $event)">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label>Reason for Termination</label>
+              <textarea
+                rows="3"
+                [ngModel]="driverForm().terminationNotes"
+                (ngModelChange)="updateField('terminationNotes', $event)"
+                placeholder="Why was this driver terminated?"
+              ></textarea>
             </div>
           </div>
         </div>
@@ -695,13 +712,23 @@
         <h4>Employment</h4>
         <div class="detail-row"><span class="label">Type</span><span>{{ formatDriverType(selectedDriver()!.type) }}</span></div>
         <div class="detail-row"><span class="label">Hire Date</span><span>{{ formatDate(selectedDriver()!.hireDate) }}</span></div>
-        <div class="detail-row"><span class="label">Termination Date</span><span>{{ formatDate(selectedDriver()!.terminationDate) }}</span></div>
         <div class="detail-row"><span class="label">Fleet</span><span>{{ selectedDriver()!.fleetName || '—' }}</span></div>
         <div class="detail-row dispatcher-detail-row">
           <span class="label">Dispatcher</span>
           <span class="dispatcher-display">{{ resolveDispatcherName(selectedDriver()!) }}</span>
         </div>
       </div>
+
+      @if (selectedDriver()!.terminationDate || selectedDriver()!.terminationNotes) {
+        <div class="panel-section">
+          <h4>Termination</h4>
+          <div class="detail-row"><span class="label">Termination Date</span><span>{{ formatDate(selectedDriver()!.terminationDate) }}</span></div>
+          <div class="detail-row termination-notes-row">
+            <span class="label">Reason</span>
+            <span>{{ selectedDriver()!.terminationNotes || '—' }}</span>
+          </div>
+        </div>
+      }
 
       <div class="panel-section">
         <h4>Compliance Summary</h4>
@@ -906,7 +933,6 @@
               <div class="profile-grid">
                 <div class="profile-field"><span class="profile-label">Type</span><span class="profile-value">{{ formatDriverType(profileDriver()!.type) }}</span></div>
                 <div class="profile-field"><span class="profile-label">Hire Date</span><span class="profile-value">{{ formatDate(profileDriver()!.hireDate) }}</span></div>
-                <div class="profile-field"><span class="profile-label">Termination Date</span><span class="profile-value">{{ formatDate(profileDriver()!.terminationDate) }}</span></div>
                 <div class="profile-field"><span class="profile-label">Fleet</span><span class="profile-value">{{ profileDriver()!.fleetName || '—' }}</span></div>
                 <div class="profile-field"><span class="profile-label">Pay</span><span class="profile-value">{{ profileDriver()!.payType || '—' }} — {{ profileDriver()!.payRate || '—' }}</span></div>
                 <div class="profile-field full">
@@ -915,6 +941,19 @@
                 </div>
               </div>
             </div>
+
+            @if (profileDriver()!.terminationDate || profileDriver()!.terminationNotes) {
+              <div class="profile-section-block">
+                <h4>Termination</h4>
+                <div class="profile-grid">
+                  <div class="profile-field"><span class="profile-label">Termination Date</span><span class="profile-value">{{ formatDate(profileDriver()!.terminationDate) }}</span></div>
+                  <div class="profile-field full">
+                    <span class="profile-label">Reason</span>
+                    <span class="profile-value termination-notes">{{ profileDriver()!.terminationNotes || '—' }}</span>
+                  </div>
+                </div>
+              </div>
+            }
 
             <div class="profile-section-block">
               <h4>Emergency Contact</h4>
