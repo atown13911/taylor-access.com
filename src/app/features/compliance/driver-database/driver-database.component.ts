@@ -769,20 +769,26 @@ export class DriverDatabaseComponent implements OnInit {
   }
   
   getDriverLicenseExpiry(driver: any): string | null {
-    const doc = this.findDocInList(driver?._docs || [], 'cdl');
+    const doc = this.findDocInList(this.getDocsForDriver(driver), 'cdl');
     if (doc?.expiryDate) return doc.expiryDate;
     return driver?.licenseExpiry || driver?.licenseExpiration || null;
   }
 
   getDriverMedicalExpiry(driver: any): string | null {
-    const doc = this.findDocInList(driver?._docs || [], 'medical');
+    const doc = this.findDocInList(this.getDocsForDriver(driver), 'medical');
     if (doc?.expiryDate) return doc.expiryDate;
     return driver?.medicalCardExpiry || driver?.medicalCardExpiration || null;
   }
 
   getDriverLicenseNumber(driver: any): string | null {
-    const doc = this.findDocInList(driver?._docs || [], 'cdl');
+    const doc = this.findDocInList(this.getDocsForDriver(driver), 'cdl');
     return doc?.documentNumber || driver?.licenseNumber || null;
+  }
+
+  private getDocsForDriver(driver: any): any[] {
+    const isSelected = `${this.selectedDriver()?.id ?? ''}` === `${driver?.id ?? ''}`;
+    const loaded = isSelected ? this.driverDocs() : [];
+    return this.mergeDocs(Array.isArray(driver?._docs) ? driver._docs : [], loaded);
   }
 
   private resolveDocComplianceStatus(doc: any): 'compliant' | 'expiring' | 'expired' | 'none' {
@@ -799,7 +805,7 @@ export class DriverDatabaseComponent implements OnInit {
     fieldExpiry: unknown,
     fieldFallback?: () => 'compliant' | 'none'
   ): 'compliant' | 'expiring' | 'expired' | 'none' {
-    const doc = this.findDocInList(driver?._docs || [], item);
+    const doc = this.findDocInList(this.getDocsForDriver(driver), item);
     if (doc) return this.resolveDocComplianceStatus(doc);
     if (fieldExpiry) return this.getExpirationStatus(String(fieldExpiry));
     return fieldFallback ? fieldFallback() : 'none';
@@ -937,8 +943,17 @@ export class DriverDatabaseComponent implements OnInit {
   private updateDriverDocsInState(driverId: any, docs: any[]): void {
     const id = `${driverId ?? ''}`;
     this.drivers.update((rows: any[]) =>
-      rows.map((d: any) => (`${d?.id ?? ''}` === id ? { ...d, _docs: docs } : d))
+      rows.map((d: any) => {
+        if (`${d?.id ?? ''}` !== id) return d;
+        return this.enrichDriverWithComplianceCache({ ...d, _docs: docs });
+      })
     );
+
+    const selected = this.selectedDriver();
+    if (`${selected?.id ?? ''}` === id) {
+      const updated = this.drivers().find((d: any) => `${d?.id ?? ''}` === id);
+      if (updated) this.selectedDriver.set(updated);
+    }
   }
 
   private mergeDocs(...docSets: any[][]): any[] {
@@ -961,8 +976,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getCompDoc(driver: any, key: string): any {
-    const rowDocs = Array.isArray(driver?._docs) ? driver._docs : [];
-    const docs = this.driverDocs().length > 0 ? this.driverDocs() : rowDocs;
+    const docs = this.getDocsForDriver(driver);
     if (docs.length === 0) return null;
     return this.findDocInList(docs, key);
   }
@@ -1231,37 +1245,48 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   private findDocInList(docs: any[], key: string): any {
-    if (!docs || docs.length === 0) return null;
+    const matches = this.findMatchingDocs(docs, key);
+    if (!matches.length) return null;
+    return this.pickBestComplianceDoc(matches);
+  }
+
+  private findMatchingDocs(docs: any[], key: string): any[] {
+    if (!docs?.length) return [];
 
     const sub = this.subMap[key];
     const cat = this.catMap[key];
-
-    // 1. Primary subCategory match
-    if (sub) {
-      const doc = docs.find((d: any) => d.subCategory === sub);
-      if (doc) return doc;
-    }
-
-    // 2. Any doc in the right category — return the most recent one
-    if (cat) {
-      const catDocs = docs.filter((d: any) => d.category === cat);
-      if (catDocs.length > 0) {
-        // Prefer active/non-expired, then most recently created
-        return catDocs.sort((a: any, b: any) => {
-          const aExp = a.status === 'expired' ? 1 : 0;
-          const bExp = b.status === 'expired' ? 1 : 0;
-          if (aExp !== bExp) return aExp - bExp;
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-        })[0];
-      }
-    }
-
-    // 3. Fuzzy keyword search across document name / subCategory / category
     const terms = this.docSearchTerms[key] || [key];
-    return docs.find((d: any) => {
-      const haystack = ((d.documentName || '') + ' ' + (d.subCategory || '') + ' ' + (d.category || '')).toLowerCase();
-      return terms.some((t: string) => haystack.includes(t));
-    }) || null;
+    const catAliases = new Set<string>([cat, key].filter(Boolean));
+
+    return docs.filter((d: any) => {
+      const category = String(d?.category ?? '').toLowerCase();
+      const subCategory = String(d?.subCategory ?? '').toLowerCase();
+      if (sub && subCategory === sub) return true;
+      if (cat && (category === cat || catAliases.has(category))) return true;
+      const haystack = `${d?.documentName ?? ''} ${d?.subCategory ?? ''} ${d?.category ?? ''}`.toLowerCase();
+      return terms.some((term: string) => haystack.includes(term));
+    });
+  }
+
+  private pickBestComplianceDoc(docs: any[]): any {
+    return [...docs].sort((a: any, b: any) => {
+      const rank = (status: string) =>
+        status === 'compliant' ? 0 : status === 'expiring' ? 1 : status === 'expired' ? 2 : 3;
+      const statusDiff = rank(this.resolveDocComplianceStatus(a)) - rank(this.resolveDocComplianceStatus(b));
+      if (statusDiff !== 0) return statusDiff;
+      return this.parseDocExpiryTime(b) - this.parseDocExpiryTime(a);
+    })[0];
+  }
+
+  private parseDocExpiryTime(doc: any): number {
+    if (!doc?.expiryDate) return 0;
+    const normalized = String(doc.expiryDate).trim();
+    const dateOnly = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateOnly) {
+      return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])).getTime();
+    }
+    const parsed = new Date(normalized).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
   }
 
   private readonly docSearchTerms: Record<string, string[]> = {
@@ -1331,7 +1356,7 @@ export class DriverDatabaseComponent implements OnInit {
         return this.resolveFieldOrDocStatus(driver, item, driver.insuranceExpiry || driver.insuranceExpiration);
     }
 
-    const doc = this.findDocInList(driver._docs || [], item);
+    const doc = this.findDocInList(this.getDocsForDriver(driver), item);
     return this.resolveDocComplianceStatus(doc);
   }
 
