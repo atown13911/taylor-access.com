@@ -15,13 +15,16 @@
       function reloadWithCacheBuster() {
         try {
           var attempt = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) || '0');
-          if (attempt >= MAX_RELOAD_ATTEMPTS) return;
+          if (attempt >= MAX_RELOAD_ATTEMPTS) {
+            window.location.replace('/');
+            return;
+          }
           sessionStorage.setItem(RELOAD_GUARD_KEY, String(attempt + 1));
           var nextUrl = new URL(window.location.href);
           nextUrl.searchParams.set('v', Date.now().toString());
           window.location.replace(nextUrl.toString());
         } catch (_) {
-          // Ignore storage/URL errors.
+          window.location.replace('/?v=' + Date.now());
         }
       }
 
