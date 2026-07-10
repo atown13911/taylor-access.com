@@ -7,6 +7,7 @@ import { EventTrackingService } from '../../../core/services/event-tracking.serv
 import { ConfirmService } from '../../../core/services/confirm.service';
 
 type PageTab = 'insurance' | 'charging' | 'financial';
+type InsuranceSubTab = 'current' | 'elapsed';
 
 interface ChargingRow {
   driverName: string;
@@ -68,6 +69,7 @@ export class InsuranceFinancialComponent implements OnInit {
   private confirm = inject(ConfirmService);
 
   pageTab = signal<PageTab>('insurance');
+  insuranceSubTab = signal<InsuranceSubTab>('current');
 
   // Charging table state
   chargingEnrollmentsByPolicy = signal<Record<string, any[]>>({});
@@ -75,6 +77,7 @@ export class InsuranceFinancialComponent implements OnInit {
   loadingCharging = signal(false);
   chargingSearch = '';
   matrixSearch = '';
+  matrixDriverTab = signal<'active' | 'inactive'>('active');
 
   // Insurance state
   policies = signal<InsuranceRow[]>([]);
@@ -187,6 +190,26 @@ export class InsuranceFinancialComponent implements OnInit {
       return (a.current.policyType || '').localeCompare(b.current.policyType || '');
     });
   });
+
+  currentPolicyGroups = computed(() =>
+    this.groupedByType().filter((group) =>
+      group.current.status === 'active' || group.current.status === 'expiring'
+    )
+  );
+
+  elapsedPolicies = computed(() =>
+    this.policies()
+      .filter((p) => p.status === 'expired')
+      .sort((a, b) =>
+        new Date(b.expiryDate || b.effectiveDate || 0).getTime() -
+        new Date(a.expiryDate || a.effectiveDate || 0).getTime()
+      )
+  );
+
+  setInsuranceSubTab(tab: InsuranceSubTab): void {
+    this.insuranceSubTab.set(tab);
+    this.expandedTypes.set(new Set());
+  }
 
   // Year grouping
   selectedYear = signal<number | null>(null);
@@ -435,9 +458,15 @@ export class InsuranceFinancialComponent implements OnInit {
       enrolledDriverIdsByPolicy.set(column.policyId, enrolled);
     }
 
+    const tab = this.matrixDriverTab();
     const term = this.matrixSearch.trim().toLowerCase();
     return this.chargingDrivers()
       .filter((driver) => {
+        const status = this.normalizeDriverStatus(driver.status);
+        const isActive = this.isMatrixActiveDriver(status);
+        const isInactive = this.isMatrixInactiveDriver(status);
+        if (tab === 'active' && !isActive) return false;
+        if (tab === 'inactive' && !isInactive) return false;
         if (!term) return true;
         const name = String(driver.name || '').toLowerCase();
         const email = String(driver.email || '').toLowerCase();
@@ -462,6 +491,18 @@ export class InsuranceFinancialComponent implements OnInit {
         };
       })
       .sort((a, b) => a.driverName.localeCompare(b.driverName));
+  });
+
+  matrixDriverCounts = computed(() => {
+    const all = this.chargingDrivers();
+    let active = 0;
+    let inactive = 0;
+    for (const driver of all) {
+      const status = this.normalizeDriverStatus(driver.status);
+      if (this.isMatrixInactiveDriver(status)) inactive++;
+      else if (this.isMatrixActiveDriver(status)) active++;
+    }
+    return { active, inactive };
   });
 
   enrollmentMatrixStats = computed(() => {
@@ -503,9 +544,7 @@ export class InsuranceFinancialComponent implements OnInit {
           )
         );
 
-    const driversPromise = this.api.getDrivers({ status: 'active', limit: 1000 }).toPromise()
-      .then((res: any) => res?.data || [])
-      .catch(() => [] as any[]);
+    const driversPromise = this.loadDriversForMatrix();
 
     Promise.all([enrollmentPromise, driversPromise]).then(([results, drivers]) => {
       const map: Record<string, any[]> = {};
@@ -519,6 +558,57 @@ export class InsuranceFinancialComponent implements OnInit {
   ngOnInit(): void {
     this.loadPolicies();
     this.loadPayments();
+  }
+
+  setMatrixDriverTab(tab: 'active' | 'inactive'): void {
+    this.matrixDriverTab.set(tab);
+  }
+
+  private async loadDriversForMatrix(): Promise<any[]> {
+    const limit = 5000;
+    try {
+      const res: any = await this.api.getDrivers({ limit, page: 1 }).toPromise();
+      const firstPage = res?.data || [];
+      const total = Number(res?.total ?? firstPage.length);
+      if (firstPage.length >= total || firstPage.length < limit) return firstPage;
+
+      const all = [...firstPage];
+      const totalPages = Math.ceil(total / limit);
+      for (let page = 2; page <= totalPages; page++) {
+        const next: any = await this.api.getDrivers({ limit, page }).toPromise();
+        all.push(...(next?.data || []));
+      }
+      return all;
+    } catch {
+      return [];
+    }
+  }
+
+  private normalizeDriverStatus(status: unknown): string {
+    const normalized = String(status ?? 'active')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/_/g, '-');
+    return normalized || 'active';
+  }
+
+  private isMatrixArchivedDriver(status: string): boolean {
+    return status === 'archived' || status === 'deleted';
+  }
+
+  private isMatrixInactiveDriver(status: string): boolean {
+    return status === 'inactive' ||
+      status === 'off-duty' ||
+      status === 'terminated' ||
+      status === 'deactivated' ||
+      status === 'disabled' ||
+      status === 'suspended';
+  }
+
+  private isMatrixActiveDriver(status: string): boolean {
+    if (this.isMatrixArchivedDriver(status) || this.isMatrixInactiveDriver(status)) return false;
+    return true;
   }
 
   // ========== INSURANCE ==========

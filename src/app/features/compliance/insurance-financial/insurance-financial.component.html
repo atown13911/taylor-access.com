@@ -30,6 +30,17 @@
 
   <!-- ========== INSURANCE TAB ========== -->
   @if (pageTab() === 'insurance') {
+    <div class="insurance-sub-tabs">
+      <button class="insurance-sub-tab" [class.active]="insuranceSubTab() === 'current'" (click)="setInsuranceSubTab('current')">
+        <i class='bx bx-check-shield'></i> Current
+        <span class="sub-tab-count">{{ currentPolicyGroups().length }}</span>
+      </button>
+      <button class="insurance-sub-tab" [class.active]="insuranceSubTab() === 'elapsed'" (click)="setInsuranceSubTab('elapsed')">
+        <i class='bx bx-time-five'></i> Elapsed
+        <span class="sub-tab-count">{{ elapsedPolicies().length }}</span>
+      </button>
+    </div>
+
     <div class="stats-bar">
       <div class="stat-card"><div class="stat-icon total"><i class='bx bx-file'></i></div><div class="stat-info"><span class="stat-value">{{ insuranceStats().total }}</span><span class="stat-label">Total Policies</span></div></div>
       <div class="stat-card"><div class="stat-icon active"><i class='bx bx-check-circle'></i></div><div class="stat-info"><span class="stat-value">{{ insuranceStats().active }}</span><span class="stat-label">Active</span></div></div>
@@ -41,6 +52,61 @@
       <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading policies...</p></div>
     } @else if (policies().length === 0) {
       <div class="empty-state"><i class='bx bx-shield-alt-2'></i><h3>No insurance policies</h3><p>Add your first insurance policy to start tracking coverage.</p></div>
+    } @else if (insuranceSubTab() === 'current' && currentPolicyGroups().length === 0) {
+      <div class="empty-state"><i class='bx bx-check-shield'></i><h3>No current policies</h3><p>All policies have elapsed. View the Elapsed tab for historical coverage.</p></div>
+    } @else if (insuranceSubTab() === 'elapsed' && elapsedPolicies().length === 0) {
+      <div class="empty-state"><i class='bx bx-time-five'></i><h3>No elapsed policies</h3><p>Expired and superseded policies will appear here.</p></div>
+    } @else if (insuranceSubTab() === 'elapsed') {
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Provider</th>
+              <th>Policy #</th>
+              <th>Coverage</th>
+              <th>Cost</th>
+              <th>Cost Basis</th>
+              <th>Frequency</th>
+              <th>Effective</th>
+              <th>Expiry</th>
+              <th>Document</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (policy of elapsedPolicies(); track policy.id) {
+              <tr class="policy-history-row row-expired">
+                <td><strong>{{ getPolicyTypeLabel(policy.policyType) }}</strong></td>
+                <td>{{ policy.providerName }}</td>
+                <td class="mono">{{ policy.policyNumber || '—' }}</td>
+                <td>{{ formatCurrency(policy.coverageAmount) }}</td>
+                <td>{{ formatCurrency(getPolicyCost(policy), 2) }}</td>
+                <td>{{ getExpenseBasisLabel(policy.expenseBasis || '') }}</td>
+                <td>{{ getBillingFrequencyLabel(policy.billingFrequency || '') }}</td>
+                <td>{{ formatDate(policy.effectiveDate) }}</td>
+                <td>{{ formatDate(policy.expiryDate) }}</td>
+                <td>
+                  @if (policy.hasFile) {
+                    <div class="doc-btns">
+                      <button class="icon-btn" title="View" (click)="viewPolicyDoc(policy)"><i class='bx bx-show'></i></button>
+                      <button class="icon-btn" title="Download" (click)="downloadPolicyDoc(policy)"><i class='bx bx-download'></i></button>
+                    </div>
+                  } @else {
+                    <span class="no-doc">No file</span>
+                  }
+                </td>
+                <td><span class="status-badge" [class]="policy.status">{{ policy.status }}</span></td>
+                <td class="actions-cell">
+                  <button class="icon-btn" title="Edit" (click)="editPolicy(policy)"><i class='bx bx-edit'></i></button>
+                  <button class="icon-btn danger" title="Delete" (click)="deletePolicy(policy)"><i class='bx bx-trash'></i></button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
     } @else {
       <!-- Grouped by Policy Type — current policy shown, history collapsible -->
       <div class="data-table-container">
@@ -63,7 +129,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (group of groupedByType(); track group.type) {
+            @for (group of currentPolicyGroups(); track group.type) {
               <!-- Current / primary row -->
               <tr class="policy-current-row" [class.has-history]="group.history.length > 0"
                   [class.row-active]="group.current.status === 'active'"
@@ -226,7 +292,13 @@
       <div class="matrix-section-header">
         <div>
           <h2><i class='bx bx-grid-alt'></i> Driver Enrollment Matrix</h2>
-          <p class="matrix-subtitle">All active policies — green = enrolled (or whole-company coverage), red = not enrolled</p>
+          <p class="matrix-subtitle">
+            @if (matrixDriverTab() === 'active') {
+              Active drivers vs. each policy — green = enrolled (or whole-company coverage), red = not enrolled
+            } @else {
+              Inactive drivers vs. each policy — green = enrolled (or whole-company coverage), red = not enrolled
+            }
+          </p>
         </div>
         @if (enrollmentMatrixStats().drivers > 0) {
           <div class="matrix-legend">
@@ -234,6 +306,17 @@
             <span class="legend-item"><span class="enrollment-dot not_enrolled"></span> Not Enrolled</span>
           </div>
         }
+      </div>
+
+      <div class="matrix-driver-tabs">
+        <button class="matrix-driver-tab" [class.active]="matrixDriverTab() === 'active'" (click)="setMatrixDriverTab('active')">
+          <i class='bx bx-user-check'></i> Active
+          <span class="sub-tab-count">{{ matrixDriverCounts().active }}</span>
+        </button>
+        <button class="matrix-driver-tab" [class.active]="matrixDriverTab() === 'inactive'" (click)="setMatrixDriverTab('inactive')">
+          <i class='bx bx-user-x'></i> Inactive
+          <span class="sub-tab-count">{{ matrixDriverCounts().inactive }}</span>
+        </button>
       </div>
 
       <div class="charging-toolbar">
@@ -250,7 +333,11 @@
       } @else if (enrollmentMatrixRows().length === 0) {
         <div class="empty-state compact">
           <i class='bx bx-user-x'></i>
-          <p>No active drivers found.</p>
+          @if (matrixDriverTab() === 'inactive') {
+            <p>No inactive drivers found.</p>
+          } @else {
+            <p>No active drivers found.</p>
+          }
         </div>
       } @else {
         <div class="data-table-container enrollment-matrix-scroll">

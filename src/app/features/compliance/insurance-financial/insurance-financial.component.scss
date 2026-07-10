@@ -35,6 +35,61 @@
   i { font-size: 1rem; }
 }
 
+.insurance-sub-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin: -0.5rem 0 1.25rem;
+  padding: 0.35rem;
+  width: fit-content;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.insurance-sub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  &.active {
+    color: var(--cyan, #00e5ff);
+    background: rgba(0, 229, 255, 0.08);
+    border-color: rgba(0, 229, 255, 0.25);
+  }
+
+  i { font-size: 0.95rem; }
+}
+
+.sub-tab-count {
+  min-width: 1.25rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+
+  .insurance-sub-tab.active & {
+    color: var(--cyan, #00e5ff);
+    background: rgba(0, 229, 255, 0.12);
+  }
+}
+
 .charging-stats-bar { grid-template-columns: repeat(3, 1fr); }
 
 .charging-toolbar {
@@ -63,7 +118,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 
   h2 {
@@ -99,6 +154,61 @@
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.matrix-driver-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.35rem;
+  width: fit-content;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.matrix-driver-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  &.active {
+    color: var(--cyan, #00e5ff);
+    background: rgba(0, 229, 255, 0.08);
+    border-color: rgba(0, 229, 255, 0.25);
+  }
+
+  i { font-size: 0.95rem; }
+
+  .sub-tab-count {
+    min-width: 1.25rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &.active .sub-tab-count {
+    color: var(--cyan, #00e5ff);
+    background: rgba(0, 229, 255, 0.12);
+  }
 }
 
 .enrollment-matrix-scroll {

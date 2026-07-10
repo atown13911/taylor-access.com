@@ -185,7 +185,16 @@ export class VanTacApiService {
   // Drivers
   getDrivers(params?: any): Observable<any> {
     return this.http.get(`${this.baseUrl}/api/v1/drivers`, { params }).pipe(
-      map((res: any) => this.normalizeListResponse(res))
+      map((res: any) => {
+        const normalized = this.normalizeListResponse(res);
+        return {
+          ...normalized,
+          total: res?.total ?? normalized.data.length,
+          page: res?.page,
+          limit: res?.limit,
+          totalPages: res?.totalPages
+        };
+      })
     );
   }
 
