@@ -35,8 +35,15 @@ interface EnrollmentMatrixColumn {
 interface EnrollmentMatrixRow {
   driverId: number;
   driverName: string;
-  cells: Record<string, number>;
+  cells: Record<string, MatrixCellCharge | null>;
 }
+
+interface MatrixCellCharge {
+  amount: number;
+  billingFrequency: string;
+}
+
+type MatrixPeriodTab = 'yearly' | 'monthly' | 'weekly';
 
 interface InsuranceRow {
   id: string;
@@ -117,6 +124,7 @@ export class InsuranceFinancialComponent implements OnInit {
   chargingSearch = '';
   matrixSearch = '';
   matrixDriverTab = signal<'active' | 'inactive'>('active');
+  matrixPeriodTab = signal<MatrixPeriodTab>('monthly');
 
   // Insurance state
   policies = signal<InsuranceRow[]>([]);
@@ -492,13 +500,13 @@ export class InsuranceFinancialComponent implements OnInit {
       .map((driver) => {
         const driverId = Number(driver.id);
         const driverStatus = this.normalizeDriverStatus(driver.status);
-        const cells: Record<string, number> = {};
+        const cells: Record<string, MatrixCellCharge | null> = {};
 
         for (const column of columns) {
           const policy = this.findPolicyById(column.policyId);
           cells[column.policyId] = policy
             ? this.getMatrixDriverCharge(driverId, driverStatus, column, policy, enrollmentsByPolicy)
-            : 0;
+            : null;
         }
 
         return {
@@ -529,7 +537,7 @@ export class InsuranceFinancialComponent implements OnInit {
     let missing = 0;
     for (const row of rows) {
       for (const column of perDriverColumns) {
-        if ((row.cells[column.policyId] || 0) > 0) enrolled++;
+        if ((row.cells[column.policyId]?.amount || 0) > 0) enrolled++;
         else missing++;
       }
     }
@@ -598,6 +606,18 @@ export class InsuranceFinancialComponent implements OnInit {
 
   setMatrixDriverTab(tab: 'active' | 'inactive'): void {
     this.matrixDriverTab.set(tab);
+  }
+
+  setMatrixPeriodTab(tab: MatrixPeriodTab): void {
+    this.matrixPeriodTab.set(tab);
+  }
+
+  getMatrixPeriodLabel(tab: MatrixPeriodTab = this.matrixPeriodTab()): string {
+    switch (tab) {
+      case 'yearly': return 'Yearly';
+      case 'weekly': return 'Weekly';
+      default: return 'Monthly';
+    }
   }
 
   private async loadDriversForMatrix(): Promise<any[]> {
@@ -674,30 +694,61 @@ export class InsuranceFinancialComponent implements OnInit {
     column: EnrollmentMatrixColumn,
     policy: InsuranceRow,
     enrollmentsByPolicy: Record<string, any[]>
-  ): number {
-    if (column.expenseType === 'company_expense') return 0;
+  ): MatrixCellCharge | null {
+    if (column.expenseType === 'company_expense') return null;
 
     const policyCost = this.getPolicyCost(policy);
+    const policyFrequency = this.resolveBillingFrequency(policy);
     const enrollments = enrollmentsByPolicy[column.policyId] || [];
     const activeEnrollments = enrollments.filter((e) => e.status === 'active');
 
     if (!activeEnrollments.length) {
-      return this.isMatrixActiveDriver(driverStatus) ? policyCost : 0;
+      if (!this.isMatrixActiveDriver(driverStatus)) return null;
+      return { amount: policyCost, billingFrequency: policyFrequency };
     }
 
     const enrollment = activeEnrollments.find((e) => Number(e.driverId) === driverId);
-    if (!enrollment) return 0;
+    if (!enrollment) return null;
 
-    return Number(enrollment.deductionAmount ?? 0) || policyCost;
+    const amount = Number(enrollment.deductionAmount ?? 0) || policyCost;
+    const billingFrequency = String(enrollment.deductionFrequency || policyFrequency).trim().toLowerCase() || policyFrequency;
+    return { amount, billingFrequency };
+  }
+
+  private convertMatrixChargeToPeriod(amount: number, billingFrequency: string, target: MatrixPeriodTab): number {
+    const monthly = this.toMonthlyChargeAmount(amount, billingFrequency);
+    switch (target) {
+      case 'yearly':
+        return monthly * 12;
+      case 'weekly':
+        return (monthly * 12) / 52;
+      default:
+        return monthly;
+    }
+  }
+
+  private toMonthlyChargeAmount(amount: number, billingFrequency: string): number {
+    switch (String(billingFrequency || 'monthly').trim().toLowerCase()) {
+      case 'quarterly':
+        return amount / 3;
+      case 'semi_annual':
+        return amount / 6;
+      case 'annual':
+        return amount / 12;
+      default:
+        return amount;
+    }
   }
 
   getMatrixColumnExpenseLabel(column: EnrollmentMatrixColumn): string {
     return this.getMatrixExpenseLabel(column.expenseType);
   }
 
-  getMatrixCellDisplayAmount(column: EnrollmentMatrixColumn, amount: number | undefined): string {
+  getMatrixCellDisplayAmount(column: EnrollmentMatrixColumn, cell: MatrixCellCharge | null | undefined): string {
     if (column.expenseType === 'company_expense') return '—';
-    return this.formatCurrency(amount ?? 0, 2);
+    if (!cell || cell.amount <= 0) return this.formatCurrency(0, 2);
+    const converted = this.convertMatrixChargeToPeriod(cell.amount, cell.billingFrequency, this.matrixPeriodTab());
+    return this.formatCurrency(converted, 2);
   }
 
   isCompanyExpensePolicy(policyType: string): boolean {

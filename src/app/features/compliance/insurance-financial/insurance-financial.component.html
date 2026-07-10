@@ -375,9 +375,9 @@
           <h2><i class='bx bx-grid-alt'></i> Driver Enrollment Matrix</h2>
           <p class="matrix-subtitle">
             @if (matrixDriverTab() === 'active') {
-              Per-driver charge amounts by policy — green = driver expense, blue = company expense
+              {{ getMatrixPeriodLabel() }} per-driver charges — green = driver expense, blue = company expense
             } @else {
-              Inactive driver charges by policy — green = driver expense, blue = company expense
+              {{ getMatrixPeriodLabel() }} inactive driver charges — green = driver expense, blue = company expense
             }
           </p>
         </div>
@@ -397,6 +397,18 @@
         <button class="matrix-driver-tab" [class.active]="matrixDriverTab() === 'inactive'" (click)="setMatrixDriverTab('inactive')">
           <i class='bx bx-user-x'></i> Inactive
           <span class="sub-tab-count">{{ matrixDriverCounts().inactive }}</span>
+        </button>
+      </div>
+
+      <div class="matrix-period-tabs">
+        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'yearly'" (click)="setMatrixPeriodTab('yearly')">
+          Yearly
+        </button>
+        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'monthly'" (click)="setMatrixPeriodTab('monthly')">
+          Monthly
+        </button>
+        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'weekly'" (click)="setMatrixPeriodTab('weekly')">
+          Weekly
         </button>
       </div>
 
