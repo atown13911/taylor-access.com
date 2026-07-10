@@ -654,33 +654,19 @@ export class InsuranceFinancialComponent implements OnInit {
   });
 
   chargingFleetSummaryDisplay = computed(() => {
-    const summary = this.chargingFleetSummary();
-    switch (this.summaryPeriodTab()) {
-      case 'daily':
-        return {
-          driverCharges: summary.driverChargesDaily,
-          companyCost: summary.companyCostDaily,
-          totalFleetCost: summary.totalFleetCostDaily
-        };
-      case 'weekly':
-        return {
-          driverCharges: summary.driverChargesWeekly,
-          companyCost: summary.companyCostWeekly,
-          totalFleetCost: summary.totalFleetCostWeekly
-        };
-      case 'yearly':
-        return {
-          driverCharges: summary.driverChargesAnnual,
-          companyCost: summary.companyCostAnnual,
-          totalFleetCost: summary.totalFleetCostAnnual
-        };
-      default:
-        return {
-          driverCharges: summary.driverChargesMonthly,
-          companyCost: summary.companyCostMonthly,
-          totalFleetCost: summary.totalFleetCostMonthly
-        };
-    }
+    this.summaryPeriodTab();
+    const lines = this.chargingFleetCalculationLines();
+    const driverCharges = this.roundMoney(
+      lines.filter((line) => line.category === 'driver').reduce((sum, line) => sum + line.periodAmount, 0)
+    );
+    const companyCost = this.roundMoney(
+      lines.filter((line) => line.category === 'company').reduce((sum, line) => sum + line.periodAmount, 0)
+    );
+    return {
+      driverCharges,
+      companyCost,
+      totalFleetCost: this.roundMoney(driverCharges + companyCost)
+    };
   });
 
   summarySpecificPeriodOptions = computed((): SummaryPeriodOption[] =>
@@ -770,11 +756,15 @@ export class InsuranceFinancialComponent implements OnInit {
         rowSum += amount;
         columnTotals[col.policyId] += amount;
       }
-      rowTotals[row.driverId] = rowSum;
+      rowTotals[row.driverId] = this.roundMoney(rowSum);
       grandTotal += rowSum;
     }
 
-    return { columnTotals, rowTotals, grandTotal };
+    for (const col of columns) {
+      columnTotals[col.policyId] = this.roundMoney(columnTotals[col.policyId]);
+    }
+
+    return { columnTotals, rowTotals, grandTotal: this.roundMoney(grandTotal) };
   });
 
   matrixDriverCounts = computed(() => {
@@ -946,8 +936,8 @@ export class InsuranceFinancialComponent implements OnInit {
         const perDriverAnnual = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, 'yearly');
         const perDriverPeriod = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, periodTab);
         const driverCount = Math.max(activeDriverCount, 0);
-        const annualAmount = perDriverAnnual * driverCount;
-        const periodAmount = perDriverPeriod * driverCount;
+        const annualAmount = this.roundMoney(perDriverAnnual * driverCount);
+        const periodAmount = this.roundMoney(perDriverPeriod * driverCount);
         driverChargesAnnual += annualAmount;
         const driverLabel = driverCount === 1 ? 'driver' : 'drivers';
         lines.push({
@@ -1352,16 +1342,25 @@ export class InsuranceFinancialComponent implements OnInit {
 
   private convertMatrixChargeToPeriod(amount: number, billingFrequency: string, target: MatrixPeriodTab): number {
     const monthly = this.toMonthlyChargeAmount(amount, billingFrequency);
+    let raw: number;
     switch (target) {
       case 'daily':
-        return (monthly * 12) / 365;
+        raw = (monthly * 12) / 365;
+        break;
       case 'weekly':
-        return (monthly * 12) / 52;
+        raw = (monthly * 12) / 52;
+        break;
       case 'yearly':
-        return monthly * 12;
+        raw = monthly * 12;
+        break;
       default:
-        return monthly;
+        raw = monthly;
     }
+    return this.roundMoney(raw);
+  }
+
+  private roundMoney(amount: number): number {
+    return Math.round((amount + Number.EPSILON) * 100) / 100;
   }
 
   private toMonthlyChargeAmount(amount: number, billingFrequency: string): number {
