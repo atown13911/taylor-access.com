@@ -44,6 +44,19 @@ interface MatrixCellCharge {
   billingFrequency: string;
 }
 
+interface ChargingFleetSummary {
+  activeDrivers: number;
+  driverChargesAnnual: number;
+  companyCostAnnual: number;
+  totalFleetCostAnnual: number;
+  driverChargesMonthly: number;
+  companyCostMonthly: number;
+  totalFleetCostMonthly: number;
+  driverChargesDaily: number;
+  companyCostDaily: number;
+  totalFleetCostDaily: number;
+}
+
 type MatrixPeriodTab = 'yearly' | 'monthly' | 'weekly';
 
 interface InsuranceRow {
@@ -457,6 +470,56 @@ export class InsuranceFinancialComponent implements OnInit {
       chargeLines: rows.length,
       drivers: this.matrixDriverCounts().active,
       totalCharges: rows.reduce((sum, row) => sum + (row.chargeAmount || 0), 0)
+    };
+  });
+
+  chargingFleetSummary = computed((): ChargingFleetSummary => {
+    const activeDriverCount = this.matrixDriverCounts().active;
+    const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
+    let driverChargesAnnual = 0;
+    let companyCostAnnual = 0;
+
+    for (const policy of this.getChargeablePolicies()) {
+      const policyFrequency = this.resolveBillingFrequency(policy);
+      const annualPolicyCost = this.convertMatrixChargeToPeriod(
+        this.getPolicyCost(policy),
+        policyFrequency,
+        'yearly'
+      );
+      const basis = this.resolveExpenseBasis(policy);
+      const isCompanyCost = basis !== 'per_driver' || this.isCompanyExpensePolicy(policy.policyType);
+
+      if (isCompanyCost) {
+        companyCostAnnual += annualPolicyCost;
+        continue;
+      }
+
+      const enrollments = (enrollmentsByPolicy[String(policy.id)] || []).filter((e) => e.status === 'active');
+      if (!enrollments.length) {
+        driverChargesAnnual += annualPolicyCost * Math.max(activeDriverCount, 0);
+        continue;
+      }
+
+      for (const enrollment of enrollments) {
+        const amount = Number(enrollment.deductionAmount ?? 0) || this.getPolicyCost(policy);
+        const frequency = String(enrollment.deductionFrequency || policyFrequency).trim().toLowerCase() || policyFrequency;
+        driverChargesAnnual += this.convertMatrixChargeToPeriod(amount, frequency, 'yearly');
+      }
+    }
+
+    const totalFleetCostAnnual = driverChargesAnnual + companyCostAnnual;
+
+    return {
+      activeDrivers: activeDriverCount,
+      driverChargesAnnual,
+      companyCostAnnual,
+      totalFleetCostAnnual,
+      driverChargesMonthly: driverChargesAnnual / 12,
+      companyCostMonthly: companyCostAnnual / 12,
+      totalFleetCostMonthly: totalFleetCostAnnual / 12,
+      driverChargesDaily: driverChargesAnnual / 365,
+      companyCostDaily: companyCostAnnual / 365,
+      totalFleetCostDaily: totalFleetCostAnnual / 365
     };
   });
 

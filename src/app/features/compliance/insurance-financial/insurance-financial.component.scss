@@ -92,6 +92,54 @@
 
 .charging-stats-bar { grid-template-columns: repeat(3, 1fr); }
 
+.fleet-summary-section {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.35rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+
+    i { color: var(--cyan, #00e5ff); }
+  }
+
+  .fleet-summary-subtitle {
+    margin: 0 0 0.85rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+  }
+}
+
+.fleet-summary-table {
+  .fleet-driver-count {
+    vertical-align: middle;
+    text-align: center;
+    font-size: 1.35rem;
+    color: var(--cyan, #00e5ff);
+    background: rgba(0, 229, 255, 0.04);
+    border-right: 1px solid var(--border-color);
+  }
+
+  td, th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fleet-total-row {
+    td {
+      background: rgba(255, 107, 53, 0.06);
+      border-top: 1px solid rgba(255, 107, 53, 0.18);
+    }
+  }
+}
+
 .matrix-stats-bar {
   grid-template-columns: repeat(5, 1fr);
   margin-bottom: 1.25rem;

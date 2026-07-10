@@ -277,6 +277,49 @@
       </div>
     </div>
 
+    <section class="fleet-summary-section">
+      <h3 class="section-title"><i class='bx bx-pie-chart-alt-2'></i> Fleet Cost vs. Driver Charges</h3>
+      <p class="fleet-summary-subtitle">
+        {{ chargingFleetSummary().activeDrivers }} active drivers — company cost vs. driver-charged premiums for this fleet size
+      </p>
+      <div class="data-table-container">
+        <table class="data-table fleet-summary-table">
+          <thead>
+            <tr>
+              <th>Active Drivers</th>
+              <th>Cost Type</th>
+              <th>Per Day</th>
+              <th>Per Month</th>
+              <th>Per Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td rowspan="3" class="fleet-driver-count">
+                <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
+              </td>
+              <td>Driver Charges</td>
+              <td>{{ formatCurrency(chargingFleetSummary().driverChargesDaily, 2) }}</td>
+              <td>{{ formatCurrency(chargingFleetSummary().driverChargesMonthly, 2) }}</td>
+              <td>{{ formatCurrency(chargingFleetSummary().driverChargesAnnual, 2) }}</td>
+            </tr>
+            <tr>
+              <td>Company Cost</td>
+              <td>{{ formatCurrency(chargingFleetSummary().companyCostDaily, 2) }}</td>
+              <td>{{ formatCurrency(chargingFleetSummary().companyCostMonthly, 2) }}</td>
+              <td>{{ formatCurrency(chargingFleetSummary().companyCostAnnual, 2) }}</td>
+            </tr>
+            <tr class="fleet-total-row">
+              <td><strong>Total Fleet Cost</strong></td>
+              <td><strong>{{ formatCurrency(chargingFleetSummary().totalFleetCostDaily, 2) }}</strong></td>
+              <td><strong>{{ formatCurrency(chargingFleetSummary().totalFleetCostMonthly, 2) }}</strong></td>
+              <td><strong>{{ formatCurrency(chargingFleetSummary().totalFleetCostAnnual, 2) }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <div class="charging-toolbar">
       <input type="text" class="search-input" [(ngModel)]="chargingSearch" placeholder="Search policy type, provider, or policy #...">
     </div>
