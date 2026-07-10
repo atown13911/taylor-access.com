@@ -8,6 +8,7 @@ import { ConfirmService } from '../../../core/services/confirm.service';
 
 type PageTab = 'insurance' | 'charging' | 'financial';
 type InsuranceSubTab = 'current' | 'elapsed';
+type ChargingSubTab = 'summary' | 'breakdown';
 
 interface ChargingRow {
   driverName: string;
@@ -116,6 +117,7 @@ export class InsuranceFinancialComponent implements OnInit {
 
   pageTab = signal<PageTab>('insurance');
   insuranceSubTab = signal<InsuranceSubTab>('current');
+  chargingSubTab = signal<ChargingSubTab>('summary');
 
   // Charging table state
   chargingEnrollmentsByPolicy = signal<Record<string, any[]>>({});
@@ -570,6 +572,10 @@ export class InsuranceFinancialComponent implements OnInit {
     if (tab === 'charging') {
       this.loadChargingData();
     }
+  }
+
+  setChargingSubTab(tab: ChargingSubTab): void {
+    this.chargingSubTab.set(tab);
   }
 
   loadChargingData(): void {

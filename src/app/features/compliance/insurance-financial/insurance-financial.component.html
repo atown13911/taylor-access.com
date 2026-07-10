@@ -4,7 +4,11 @@
       <h1><i class='bx bx-shield-alt-2'></i> Insurance</h1>
       <p class="subtitle">
         @if (pageTab() === 'charging') {
-          Driver and company insurance charge breakdown
+          @if (chargingSubTab() === 'breakdown') {
+            Per-driver insurance charge breakdown by policy
+          } @else {
+            Policy-level insurance charge summary
+          }
         } @else {
           Manage insurance policies
         }
@@ -248,6 +252,16 @@
 
   <!-- ========== CHARGING TABLE TAB ========== -->
   @if (pageTab() === 'charging') {
+    <div class="insurance-sub-tabs">
+      <button class="insurance-sub-tab" [class.active]="chargingSubTab() === 'summary'" (click)="setChargingSubTab('summary')">
+        <i class='bx bx-list-ul'></i> Summary
+      </button>
+      <button class="insurance-sub-tab" [class.active]="chargingSubTab() === 'breakdown'" (click)="setChargingSubTab('breakdown')">
+        <i class='bx bx-grid-alt'></i> Breakdown
+      </button>
+    </div>
+
+    @if (chargingSubTab() === 'summary') {
     <div class="stats-bar charging-stats-bar">
       <div class="stat-card">
         <div class="stat-icon total"><i class='bx bx-list-ul'></i></div>
@@ -321,8 +335,9 @@
         </table>
       </div>
     }
+    }
 
-    <!-- Driver enrollment matrix -->
+    @if (chargingSubTab() === 'breakdown') {
     <section class="enrollment-matrix-section">
       <div class="stats-bar matrix-stats-bar">
         <div class="stat-card">
@@ -468,6 +483,7 @@
         </div>
       }
     </section>
+    }
   }
 
   <!-- ========== FINANCIAL TAB ========== -->
