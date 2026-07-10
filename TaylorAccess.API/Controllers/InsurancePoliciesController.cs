@@ -47,7 +47,8 @@ public class InsurancePoliciesController : ControllerBase
                 p.Id, p.OrganizationId, p.PolicyType, p.ProviderName, p.PolicyNumber,
                 p.CoverageAmount, p.EffectiveDate, p.ExpiryDate, p.Status, p.Notes,
                 p.FileName, p.FileSize,
-                p.PremiumCost, p.BillingFrequency, p.PaymentMethod,
+                p.PremiumCost, p.ExpenseBasis, p.PerIncidentDeductible,
+                p.BillingFrequency, p.PaymentMethod,
                 p.DueDayOfMonth, p.NextPaymentDate, p.AutoRenew, p.BillingNotes,
                 p.Remind3Months, p.Remind30Days, p.Remind15Days, p.RemindDayOf, p.RemindDailyPastDue,
                 p.CreatedAt, p.UpdatedAt,
@@ -77,6 +78,7 @@ public class InsurancePoliciesController : ControllerBase
         [FromForm] string? policyNumber, [FromForm] decimal? coverageAmount,
         [FromForm] DateTime? effectiveDate, [FromForm] DateTime? expiryDate,
         [FromForm] string? notes,
+        [FromForm] decimal? premiumCost, [FromForm] string? expenseBasis, [FromForm] decimal? perIncidentDeductible,
         [FromForm] bool? remind3Months, [FromForm] bool? remind30Days, [FromForm] bool? remind15Days,
         [FromForm] bool? remindDayOf, [FromForm] bool? remindDailyPastDue,
         IFormFile? file)
@@ -103,6 +105,9 @@ public class InsurancePoliciesController : ControllerBase
             ExpiryDate = expiryDate,
             Status = CalculateStatus(expiryDate),
             Notes = notes,
+            PremiumCost = premiumCost,
+            ExpenseBasis = NormalizeExpenseBasis(expenseBasis),
+            PerIncidentDeductible = perIncidentDeductible,
             Remind3Months = remind3Months ?? false,
             Remind30Days = remind30Days ?? true,
             Remind15Days = remind15Days ?? true,
@@ -135,6 +140,7 @@ public class InsurancePoliciesController : ControllerBase
         [FromForm] string? policyNumber, [FromForm] decimal? coverageAmount,
         [FromForm] DateTime? effectiveDate, [FromForm] DateTime? expiryDate,
         [FromForm] string? notes, [FromForm] string? status,
+        [FromForm] decimal? premiumCost, [FromForm] string? expenseBasis, [FromForm] decimal? perIncidentDeductible,
         [FromForm] bool? remind3Months, [FromForm] bool? remind30Days, [FromForm] bool? remind15Days,
         [FromForm] bool? remindDayOf, [FromForm] bool? remindDailyPastDue,
         IFormFile? file)
@@ -149,6 +155,9 @@ public class InsurancePoliciesController : ControllerBase
         if (effectiveDate.HasValue) policy.EffectiveDate = effectiveDate;
         if (expiryDate.HasValue) policy.ExpiryDate = expiryDate;
         if (notes != null) policy.Notes = notes;
+        if (premiumCost.HasValue) policy.PremiumCost = premiumCost;
+        if (expenseBasis != null) policy.ExpenseBasis = NormalizeExpenseBasis(expenseBasis);
+        if (perIncidentDeductible.HasValue) policy.PerIncidentDeductible = perIncidentDeductible;
         if (remind3Months.HasValue) policy.Remind3Months = remind3Months.Value;
         if (remind30Days.HasValue) policy.Remind30Days = remind30Days.Value;
         if (remind15Days.HasValue) policy.Remind15Days = remind15Days.Value;
@@ -221,6 +230,8 @@ public class InsurancePoliciesController : ControllerBase
         if (policy == null) return NotFound(new { error = "Policy not found" });
 
         if (request.PremiumCost.HasValue) policy.PremiumCost = request.PremiumCost;
+        if (request.ExpenseBasis != null) policy.ExpenseBasis = NormalizeExpenseBasis(request.ExpenseBasis);
+        if (request.PerIncidentDeductible.HasValue) policy.PerIncidentDeductible = request.PerIncidentDeductible;
         if (request.BillingFrequency != null) policy.BillingFrequency = request.BillingFrequency;
         if (request.PaymentMethod != null) policy.PaymentMethod = request.PaymentMethod;
         if (request.DueDayOfMonth.HasValue) policy.DueDayOfMonth = request.DueDayOfMonth;
@@ -333,6 +344,13 @@ public class InsurancePoliciesController : ControllerBase
         if (days <= 30) return "expiring";
         return "active";
     }
+
+    private static string? NormalizeExpenseBasis(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized is "whole_policy" or "per_driver" ? normalized : null;
+    }
 }
 
 public record CreateEnrollmentRequest(
@@ -348,6 +366,8 @@ public record CreateEnrollmentRequest(
 
 public record UpdateBillingRequest(
     decimal? PremiumCost,
+    string? ExpenseBasis,
+    decimal? PerIncidentDeductible,
     string? BillingFrequency,
     string? PaymentMethod,
     int? DueDayOfMonth,

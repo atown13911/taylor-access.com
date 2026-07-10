@@ -612,6 +612,9 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""LastAssignedDriverId"" INTEGER NULL;
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""LastAssignedDriverName"" VARCHAR(150) NULL;
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""InactivatedAt"" TIMESTAMP NULL;
+
+        ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""ExpenseBasis"" VARCHAR(20) NULL;
+        ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""PerIncidentDeductible"" DECIMAL(18,2) NULL;
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"

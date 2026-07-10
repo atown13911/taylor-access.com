@@ -44,6 +44,13 @@ public class InsurancePolicy
     [Column(TypeName = "decimal(18,2)")]
     public decimal? PremiumCost { get; set; }
 
+    /// <summary>whole_policy or per_driver — how premium cost is applied.</summary>
+    [MaxLength(20)]
+    public string? ExpenseBasis { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? PerIncidentDeductible { get; set; }
+
     [MaxLength(20)]
     public string? BillingFrequency { get; set; } // monthly, quarterly, semi_annual, annual
 

@@ -215,6 +215,26 @@
             <input type="date" [(ngModel)]="policyForm.expiryDate">
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cost ($)</label>
+            <input type="number" [(ngModel)]="policyForm.premiumCost" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Expense Basis</label>
+            <select [(ngModel)]="policyForm.expenseBasis">
+              @for (opt of expenseBasisOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Per Incident Deductible ($)</label>
+            <input type="number" [(ngModel)]="policyForm.perIncidentDeductible" step="0.01" placeholder="0.00">
+          </div>
+        </div>
         <div class="form-group">
           <label>Expiry Reminders</label>
           <div class="reminder-options">
@@ -551,6 +571,20 @@
           <div class="form-group">
             <label>Premium Cost ($)</label>
             <input type="number" [(ngModel)]="billingForm.premiumCost" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Expense Basis</label>
+            <select [(ngModel)]="billingForm.expenseBasis">
+              @for (opt of expenseBasisOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Per Incident Deductible ($)</label>
+            <input type="number" [(ngModel)]="billingForm.perIncidentDeductible" step="0.01" placeholder="0.00">
           </div>
           <div class="form-group">
             <label>Billing Frequency</label>

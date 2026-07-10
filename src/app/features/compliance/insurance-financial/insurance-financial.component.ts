@@ -14,6 +14,9 @@ interface InsuranceRow {
   providerName: string;
   policyNumber: string;
   coverageAmount: number;
+  premiumCost?: number;
+  expenseBasis?: string;
+  perIncidentDeductible?: number;
   effectiveDate: string;
   expiryDate: string;
   status: string;
@@ -50,6 +53,9 @@ export class InsuranceFinancialComponent implements OnInit {
     providerName: '',
     policyNumber: '',
     coverageAmount: 0,
+    premiumCost: 0,
+    expenseBasis: 'whole_policy',
+    perIncidentDeductible: 0,
     effectiveDate: '',
     expiryDate: '',
     notes: '',
@@ -59,6 +65,11 @@ export class InsuranceFinancialComponent implements OnInit {
     remindDayOf: true,
     remindDailyPastDue: true
   };
+
+  readonly expenseBasisOptions = [
+    { value: 'whole_policy', label: 'One Whole Policy' },
+    { value: 'per_driver', label: 'Per Driver' }
+  ];
 
   readonly policyTypes = [
     { value: 'general_liability', label: 'General Liability' },
@@ -281,7 +292,23 @@ export class InsuranceFinancialComponent implements OnInit {
 
   openAddPolicy(): void {
     this.editingPolicy.set(null);
-    this.policyForm = { policyType: 'general_liability', providerName: '', policyNumber: '', coverageAmount: 0, effectiveDate: '', expiryDate: '', notes: '', remind3Months: false, remind30Days: true, remind15Days: true, remindDayOf: true, remindDailyPastDue: true };
+    this.policyForm = {
+      policyType: 'general_liability',
+      providerName: '',
+      policyNumber: '',
+      coverageAmount: 0,
+      premiumCost: 0,
+      expenseBasis: 'whole_policy',
+      perIncidentDeductible: 0,
+      effectiveDate: '',
+      expiryDate: '',
+      notes: '',
+      remind3Months: false,
+      remind30Days: true,
+      remind15Days: true,
+      remindDayOf: true,
+      remindDailyPastDue: true
+    };
     this.policyFile = null;
     this.showPolicyModal.set(true);
   }
@@ -294,6 +321,9 @@ export class InsuranceFinancialComponent implements OnInit {
       providerName: policy.providerName,
       policyNumber: policy.policyNumber || '',
       coverageAmount: policy.coverageAmount || 0,
+      premiumCost: p.premiumCost || 0,
+      expenseBasis: p.expenseBasis || 'whole_policy',
+      perIncidentDeductible: p.perIncidentDeductible || 0,
       effectiveDate: policy.effectiveDate ? new Date(policy.effectiveDate).toISOString().split('T')[0] : '',
       expiryDate: policy.expiryDate ? new Date(policy.expiryDate).toISOString().split('T')[0] : '',
       notes: policy.notes || '',
@@ -332,6 +362,9 @@ export class InsuranceFinancialComponent implements OnInit {
     fd.append('providerName', this.policyForm.providerName);
     fd.append('policyNumber', this.policyForm.policyNumber);
     if (this.policyForm.coverageAmount) fd.append('coverageAmount', this.policyForm.coverageAmount.toString());
+    fd.append('premiumCost', String(this.policyForm.premiumCost ?? 0));
+    fd.append('expenseBasis', this.policyForm.expenseBasis || 'whole_policy');
+    fd.append('perIncidentDeductible', String(this.policyForm.perIncidentDeductible ?? 0));
     if (this.policyForm.effectiveDate) fd.append('effectiveDate', this.policyForm.effectiveDate);
     if (this.policyForm.expiryDate) fd.append('expiryDate', this.policyForm.expiryDate);
     fd.append('notes', this.policyForm.notes);
@@ -392,6 +425,10 @@ export class InsuranceFinancialComponent implements OnInit {
     });
   }
 
+  getExpenseBasisLabel(basis: string): string {
+    return this.expenseBasisOptions.find(o => o.value === basis)?.label || basis || '—';
+  }
+
   formatCurrency(val: number): string {
     if (!val) return '—';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
@@ -409,6 +446,8 @@ export class InsuranceFinancialComponent implements OnInit {
   savingBilling = signal(false);
   billingForm = {
     premiumCost: 0,
+    expenseBasis: 'whole_policy',
+    perIncidentDeductible: 0,
     billingFrequency: 'monthly',
     paymentMethod: '',
     dueDayOfMonth: 1,
@@ -421,6 +460,8 @@ export class InsuranceFinancialComponent implements OnInit {
     this.billingPolicy.set(policy);
     this.billingForm = {
       premiumCost: (policy as any).premiumCost || 0,
+      expenseBasis: (policy as any).expenseBasis || 'whole_policy',
+      perIncidentDeductible: (policy as any).perIncidentDeductible || 0,
       billingFrequency: (policy as any).billingFrequency || 'monthly',
       paymentMethod: (policy as any).paymentMethod || '',
       dueDayOfMonth: (policy as any).dueDayOfMonth || 1,
@@ -442,6 +483,8 @@ export class InsuranceFinancialComponent implements OnInit {
 
     this.api.updateInsurancePolicyBilling(policyId, {
       premiumCost: this.billingForm.premiumCost || null,
+      expenseBasis: this.billingForm.expenseBasis,
+      perIncidentDeductible: this.billingForm.perIncidentDeductible || null,
       billingFrequency: this.billingForm.billingFrequency,
       paymentMethod: this.billingForm.paymentMethod,
       dueDayOfMonth: this.billingForm.dueDayOfMonth || null,
