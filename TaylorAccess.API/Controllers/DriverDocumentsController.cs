@@ -32,10 +32,43 @@ public class DriverDocumentsController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] int limit = 200)
     {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null)
+            return Unauthorized(new { error = "Not authenticated" });
+
+        var userRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
+        var canBypassOrgFilter =
+            userRole == "product_owner" ||
+            userRole == "superadmin" ||
+            userRole == "super_admin" ||
+            userRole == "development" ||
+            userRole == "admin" ||
+            userRole == "administrator";
+
+        var allowedOrgIds = new HashSet<int>();
+        if (!canBypassOrgFilter)
+        {
+            var membershipOrgIds = await _currentUserService.GetUserOrganizationIdsAsync();
+            foreach (var id in membershipOrgIds)
+            {
+                if (id > 0) allowedOrgIds.Add(id);
+            }
+
+            if (user.OrganizationId.HasValue && user.OrganizationId.Value > 0)
+                allowedOrgIds.Add(user.OrganizationId.Value);
+
+            if (allowedOrgIds.Count == 0)
+                return BadRequest(new { error = "User must belong to an organization" });
+        }
+
+        limit = Math.Clamp(limit, 1, 10000);
+
         var query = _context.DriverDocuments
             .AsNoTracking()
-            .Include(d => d.Driver)
             .AsQueryable();
+
+        if (!canBypassOrgFilter)
+            query = query.Where(d => allowedOrgIds.Contains(d.OrganizationId));
 
         if (driverId.HasValue) query = query.Where(d => d.DriverId == driverId.Value);
         if (!string.IsNullOrEmpty(category)) query = query.Where(d => d.Category == category);
@@ -45,7 +78,11 @@ public class DriverDocumentsController : ControllerBase
             .OrderByDescending(d => d.CreatedAt)
             .Take(limit)
             .Select(d => new {
-                d.Id, d.DriverId, DriverName = d.Driver != null ? d.Driver.Name : null,
+                d.Id, d.DriverId,
+                DriverName = _context.Drivers.AsNoTracking()
+                    .Where(x => x.Id == d.DriverId)
+                    .Select(x => x.Name)
+                    .FirstOrDefault(),
                 d.OrganizationId, d.Category, d.SubCategory,
                 d.DocumentName, d.DocumentNumber, d.IssueDate, d.ExpiryDate,
                 d.Status, d.Notes, d.FileName, d.FileSize, d.RemindExpiry,

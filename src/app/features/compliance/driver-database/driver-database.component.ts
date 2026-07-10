@@ -79,7 +79,7 @@ export class DriverDatabaseComponent implements OnInit {
   });
 
   complianceStats = computed(() => {
-    const drivers = this.drivers().filter((d: any) => this.isActiveStatus(d.status));
+    const drivers = this.filteredDrivers();
     const requiredItems = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
     const totalSlots = drivers.length * requiredItems.length;
 
@@ -158,29 +158,71 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   refreshComplianceData(): void {
-    Promise.all([
+    this.loading.set(true);
+    this.docsReady.set(false);
+    this.loadComplianceBoard()
+      .then(() => this.mergeOnboardingApplicants())
+      .finally(() => {
+        this.loading.set(false);
+        this.docsReady.set(true);
+      });
+  }
+
+  private async loadComplianceBoard(): Promise<void> {
+    try {
+      const res: any = await this.http
+        .get(`${environment.apiUrl}/api/v1/drivers/compliance-board?limit=10000`)
+        .toPromise();
+      const payload = res?.data ?? res;
+      const boardDrivers = Array.isArray(payload?.drivers) ? payload.drivers : [];
+      const documents = Array.isArray(payload?.documents) ? payload.documents : [];
+
+      this.allDocs.set(documents);
+      this.drivers.set(this.deduplicateDrivers(boardDrivers.map((driver: any) => ({
+        ...driver,
+        _docs: Array.isArray(driver?._docs) ? driver._docs : []
+      }))));
+    } catch (err) {
+      console.error('Failed to load compliance board:', err);
+      await this.loadComplianceBoardFallback();
+    }
+  }
+
+  private async loadComplianceBoardFallback(): Promise<void> {
+    await Promise.all([
       this.loadDrivers(),
       this.loadAllDocsAsync()
-    ]).then(() => {
+    ]);
+    this.attachDocsToDrivers();
+  }
+
+  private async mergeOnboardingApplicants(): Promise<void> {
+    try {
+      const hiredApplicants = await this.loadHiredApplicants();
+      if (!hiredApplicants.length) return;
+      const linkedApplicants = this.linkOnboardingApplicants(this.drivers(), hiredApplicants);
+      this.drivers.set(this.deduplicateDrivers([...this.drivers(), ...linkedApplicants]));
       this.attachDocsToDrivers();
-    });
+    } catch {
+      // Keep compliance board data when applicant enrichment fails.
+    }
   }
   
   async loadDrivers() {
     this.loading.set(true);
     try {
       const [driversRes, applicantsRes] = await Promise.allSettled([
-        this.http.get(`${environment.apiUrl}/api/v1/drivers?limit=5000`).toPromise(),
+        this.fetchAllDrivers(),
         this.loadHiredApplicants()
       ]);
 
       const rawDrivers = driversRes.status === 'fulfilled'
-        ? ((driversRes.value as any)?.data || [])
+        ? driversRes.value
         : [];
       const hiredApplicants = applicantsRes.status === 'fulfilled'
         ? applicantsRes.value
         : [];
-      const linkedOnboardingApplicants = await this.ensureOnboardingDriversHaveNumericIds(rawDrivers, hiredApplicants);
+      const linkedOnboardingApplicants = this.linkOnboardingApplicants(rawDrivers, hiredApplicants);
 
       this.drivers.set(this.deduplicateDrivers([...rawDrivers, ...linkedOnboardingApplicants]));
     } catch (err) {
@@ -189,6 +231,26 @@ export class DriverDatabaseComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async fetchAllDrivers(): Promise<any[]> {
+    const limit = 2000;
+    let page = 1;
+    let totalPages = 1;
+    const all: any[] = [];
+
+    while (page <= totalPages) {
+      const res: any = await this.http
+        .get(`${environment.apiUrl}/api/v1/drivers?limit=${limit}&page=${page}`)
+        .toPromise();
+      const batch = Array.isArray(res?.data) ? res.data : [];
+      all.push(...batch);
+      totalPages = Number(res?.totalPages || 1);
+      if (!batch.length) break;
+      page += 1;
+    }
+
+    return all;
   }
 
   private async loadHiredApplicants(): Promise<any[]> {
@@ -318,7 +380,7 @@ export class DriverDatabaseComponent implements OnInit {
         const fetched = res?.fetched ?? 0;
         this.toast.success(`Imported ${fetched} DrayTac drivers to archived (${created} new, ${updated} updated).`, 'Import Complete');
         this.activeStatusTab.set('archived');
-        this.loadDrivers();
+        this.refreshComplianceData();
         this.importingArchived.set(false);
       },
       error: (err: any) => {
@@ -634,6 +696,7 @@ export class DriverDatabaseComponent implements OnInit {
       this.driverDocs.set([]);
     } else {
       this.selectedDriver.set(driver);
+      this.driverDocs.set(Array.isArray(driver?._docs) ? [...driver._docs] : []);
       this.loadDriverDocs(driver.id);
       if (this.isApiDriverId(driver.id)) {
         this.loadDriverDetails(driver.id);
@@ -734,7 +797,8 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getCompDoc(driver: any, key: string): any {
-    const docs = this.driverDocs();
+    const rowDocs = Array.isArray(driver?._docs) ? driver._docs : [];
+    const docs = this.driverDocs().length > 0 ? this.driverDocs() : rowDocs;
     if (docs.length === 0) return null;
     return this.findDocInList(docs, key);
   }
@@ -906,6 +970,7 @@ export class DriverDatabaseComponent implements OnInit {
       normalized === 'on-leave' ||
       normalized === 'off-duty' ||
       normalized === 'sleeper' ||
+      normalized === 'vacation' ||
       normalized === 'suspended' ||
       normalized === 'terminated' ||
       normalized === 'deactivated' ||
@@ -975,11 +1040,10 @@ export class DriverDatabaseComponent implements OnInit {
     return `Other (I-9, W-9, Direct Deposit, Deduction): ${labels[this.getOtherStatus(driver)]}`;
   }
 
-  async attachDocsToDrivers(): Promise<void> {
+  attachDocsToDrivers(): void {
     const drivers = this.drivers();
     const allDocs = this.allDocs();
 
-    // Build a map of all docs by driverId for O(1) lookup
     const docsByDriver = new Map<string, any[]>();
     for (const doc of allDocs) {
       const key = doc.driverId?.toString();
@@ -988,34 +1052,16 @@ export class DriverDatabaseComponent implements OnInit {
       docsByDriver.get(key)!.push(doc);
     }
 
-    // Assign bulk docs first — covers all drivers that have docs in allDocs
     for (const driver of drivers) {
-      driver._docs = docsByDriver.get(driver.id?.toString()) || [];
+      const docsForDriver: any[] = [];
+      for (const id of this.getDriverIdKeys(driver)) {
+        const bucket = docsByDriver.get(id);
+        if (bucket?.length) docsForDriver.push(...bucket);
+      }
+      driver._docs = this.mergeDocs(docsForDriver, Array.isArray(driver._docs) ? driver._docs : []);
     }
-    this.drivers.set([...drivers]);
-    this.docsReady.set(true); // show initial dots from bulk load immediately
 
-    // For drivers with 0 docs from bulk, fetch individually in batches
-    const missing = drivers.filter(d => (d._docs || []).length === 0 && this.isApiDriverId(d?.id));
-    const batchSize = 5;
-    for (let i = 0; i < missing.length; i += batchSize) {
-      const batch = missing.slice(i, i + batchSize);
-      await Promise.all(batch.map(driver =>
-        this.http.get<any>(`${environment.apiUrl}/api/v1/driver-documents?driverId=${driver.id}&limit=500`)
-          .toPromise()
-          .then((res: any) => {
-            const fetched = res?.data || [];
-            if (fetched.length > 0) {
-              // Merge with existing — deduplicate by ID
-              const map = new Map((driver._docs || []).map((d: any) => [d.id, d]));
-              fetched.forEach((d: any) => map.set(d.id, d));
-              driver._docs = Array.from(map.values());
-            }
-          })
-          .catch(() => {})
-      ));
-      this.drivers.set([...drivers]);
-    }
+    this.drivers.set([...drivers]);
   }
 
   private findDocInList(docs: any[], key: string): any {
@@ -1220,8 +1266,7 @@ export class DriverDatabaseComponent implements OnInit {
         (this as any)._editingDocId = null;
         const driver = this.selectedDriver();
         if (driver) {
-          this.loadAllDocs();
-          this.loadDriverDocs(driver.id);
+          this.refreshComplianceData();
         }
       },
       error: () => {
@@ -1253,8 +1298,7 @@ export class DriverDatabaseComponent implements OnInit {
           this.compSaving.set(false);
           this.compUploadOpen.set(false);
           (this as any)._editingDocId = null;
-          this.loadAllDocs();
-          this.loadDriverDocs(driver.id);
+          this.refreshComplianceData();
         },
         error: () => { this.toast.error('Update failed', 'Error'); this.compSaving.set(false); }
       });
@@ -1288,8 +1332,7 @@ export class DriverDatabaseComponent implements OnInit {
         this.toast.success(`${item.label} uploaded`, 'Success');
         this.compSaving.set(false);
         this.compUploadOpen.set(false);
-        this.loadAllDocs();
-        this.loadDriverDocs(driver.id);
+        this.refreshComplianceData();
       },
       error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
     });
@@ -1334,33 +1377,35 @@ export class DriverDatabaseComponent implements OnInit {
     });
   }
 
-  private async ensureOnboardingDriversHaveNumericIds(rawDrivers: any[], onboardingRows: any[]): Promise<any[]> {
+  private linkOnboardingApplicants(rawDrivers: any[], onboardingRows: any[]): any[] {
     if (!Array.isArray(onboardingRows) || onboardingRows.length === 0) return onboardingRows || [];
 
-    const linkedRows: any[] = [];
-    for (const row of onboardingRows) {
+    return onboardingRows.map((row) => {
       const existingApiId = this.resolveApiDriverId(row);
-      if (existingApiId) {
-        linkedRows.push(row);
-        continue;
-      }
+      if (existingApiId) return row;
 
       const matchedId = this.findBestMatchingDriverId(row, rawDrivers);
-      if (matchedId) {
-        linkedRows.push(this.withLinkedDriverId(row, matchedId));
-        continue;
-      }
+      if (matchedId) return this.withLinkedDriverId(row, matchedId);
 
-      const createdId = await this.createOnboardingDriverRecordAsync(row);
-      if (createdId) {
-        linkedRows.push(this.withLinkedDriverId(row, createdId));
-        continue;
-      }
+      return row;
+    });
+  }
 
-      linkedRows.push(row);
-    }
+  private getDriverIdKeys(driver: any): string[] {
+    const ids = new Set<string>(
+      [
+        String(driver?.id ?? '').trim(),
+        String(driver?._linkedDriverId ?? '').trim(),
+        ...(Array.isArray(driver?._aliasDriverIds)
+          ? driver._aliasDriverIds.map((value: any) => String(value ?? '').trim())
+          : [])
+      ].filter((value: string) => !!value)
+    );
+    return Array.from(ids);
+  }
 
-    return linkedRows;
+  private async ensureOnboardingDriversHaveNumericIds(rawDrivers: any[], onboardingRows: any[]): Promise<any[]> {
+    return this.linkOnboardingApplicants(rawDrivers, onboardingRows);
   }
 
   private async createOnboardingDriverRecordAsync(row: any): Promise<string | null> {

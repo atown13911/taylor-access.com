@@ -118,6 +118,227 @@ public class DriversController : ControllerBase
     }
 
     /// <summary>
+    /// Compliance matrix payload: drivers plus lightweight document metadata in one round trip.
+    /// Includes drivers referenced by documents even when soft-deleted (archived compliance history).
+    /// </summary>
+    [HttpGet("compliance-board")]
+    public async Task<ActionResult<object>> GetComplianceBoard(
+        [FromQuery] string? search,
+        [FromQuery] int limit = 10000)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null)
+            return Unauthorized(new { error = "Not authenticated" });
+
+        var userRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
+        var canBypassOrgFilter =
+            userRole == "product_owner" ||
+            userRole == "superadmin" ||
+            userRole == "super_admin" ||
+            userRole == "development" ||
+            userRole == "admin" ||
+            userRole == "administrator";
+
+        var allowedOrgIds = new HashSet<int>();
+        if (!canBypassOrgFilter)
+        {
+            var membershipOrgIds = await _currentUserService.GetUserOrganizationIdsAsync();
+            foreach (var id in membershipOrgIds)
+            {
+                if (id > 0) allowedOrgIds.Add(id);
+            }
+
+            if (user.OrganizationId.HasValue && user.OrganizationId.Value > 0)
+                allowedOrgIds.Add(user.OrganizationId.Value);
+
+            if (allowedOrgIds.Count == 0)
+                return BadRequest(new { error = "User must belong to an organization" });
+        }
+
+        limit = Math.Clamp(limit, 1, 10000);
+
+        var activeDriverQuery = _context.Drivers
+            .AsNoTracking()
+            .Where(d => !d.IsDeleted)
+            .AsQueryable();
+
+        if (!canBypassOrgFilter)
+            activeDriverQuery = activeDriverQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            activeDriverQuery = activeDriverQuery.Where(d =>
+                d.Name.Contains(term) ||
+                (d.Email != null && d.Email.Contains(term)) ||
+                (d.Phone != null && d.Phone.Contains(term)) ||
+                (d.LicenseNumber != null && d.LicenseNumber.Contains(term)));
+        }
+
+        var activeDrivers = await activeDriverQuery
+            .OrderBy(d => d.Name)
+            .Take(limit)
+            .Select(d => new ComplianceBoardDriverRow
+            {
+                Id = d.Id,
+                OrganizationId = d.OrganizationId,
+                Name = d.Name,
+                Email = d.Email,
+                Phone = d.Phone,
+                LicenseNumber = d.LicenseNumber,
+                LicenseState = d.LicenseState,
+                LicenseExpiry = d.LicenseExpiry,
+                LicenseClass = d.LicenseClass,
+                MedicalCardExpiry = d.MedicalCardExpiry,
+                Status = d.Status,
+                DriverType = d.DriverType,
+                HireDate = d.HireDate,
+                TwiccCardNumber = d.TwiccCardNumber,
+                TwiccExpiry = d.TwiccExpiry,
+                CreatedAt = d.CreatedAt,
+                UpdatedAt = d.UpdatedAt,
+                IsDeleted = d.IsDeleted
+            })
+            .ToListAsync();
+
+        var docQuery = _context.DriverDocuments.AsNoTracking().AsQueryable();
+        if (!canBypassOrgFilter)
+            docQuery = docQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
+
+        var documents = await docQuery
+            .OrderByDescending(d => d.CreatedAt)
+            .Select(d => new ComplianceBoardDocumentRow
+            {
+                Id = d.Id,
+                DriverId = d.DriverId,
+                OrganizationId = d.OrganizationId,
+                Category = d.Category,
+                SubCategory = d.SubCategory,
+                DocumentName = d.DocumentName,
+                DocumentNumber = d.DocumentNumber,
+                IssueDate = d.IssueDate,
+                ExpiryDate = d.ExpiryDate,
+                Status = d.Status,
+                Notes = d.Notes,
+                FileName = d.FileName,
+                FileSize = d.FileSize,
+                CreatedAt = d.CreatedAt,
+                UpdatedAt = d.UpdatedAt,
+                HasFile = d.FileContent != null
+            })
+            .ToListAsync();
+
+        var docsByDriver = documents
+            .GroupBy(d => d.DriverId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var driverIds = activeDrivers.Select(d => d.Id).ToHashSet();
+        var missingDocDriverIds = docsByDriver.Keys
+            .Where(id => !driverIds.Contains(id))
+            .Distinct()
+            .ToList();
+
+        if (missingDocDriverIds.Count > 0)
+        {
+            var supplementalQuery = _context.Drivers
+                .AsNoTracking()
+                .Where(d => missingDocDriverIds.Contains(d.Id))
+                .AsQueryable();
+
+            if (!canBypassOrgFilter)
+                supplementalQuery = supplementalQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
+
+            var supplementalDrivers = await supplementalQuery
+                .OrderBy(d => d.Name)
+                .Select(d => new ComplianceBoardDriverRow
+                {
+                    Id = d.Id,
+                    OrganizationId = d.OrganizationId,
+                    Name = d.Name,
+                    Email = d.Email,
+                    Phone = d.Phone,
+                    LicenseNumber = d.LicenseNumber,
+                    LicenseState = d.LicenseState,
+                    LicenseExpiry = d.LicenseExpiry,
+                    LicenseClass = d.LicenseClass,
+                    MedicalCardExpiry = d.MedicalCardExpiry,
+                    Status = string.IsNullOrWhiteSpace(d.Status) ? "archived" : d.Status,
+                    DriverType = d.DriverType,
+                    HireDate = d.HireDate,
+                    TwiccCardNumber = d.TwiccCardNumber,
+                    TwiccExpiry = d.TwiccExpiry,
+                    CreatedAt = d.CreatedAt,
+                    UpdatedAt = d.UpdatedAt,
+                    IsDeleted = d.IsDeleted
+                })
+                .ToListAsync();
+
+            foreach (var driver in supplementalDrivers)
+            {
+                if (driverIds.Add(driver.Id))
+                    activeDrivers.Add(driver);
+            }
+
+            foreach (var driverId in missingDocDriverIds.Where(id => !driverIds.Contains(id)))
+            {
+                var orphanDocs = docsByDriver.GetValueOrDefault(driverId) ?? new List<ComplianceBoardDocumentRow>();
+                activeDrivers.Add(new ComplianceBoardDriverRow
+                {
+                    Id = driverId,
+                    Name = orphanDocs.FirstOrDefault()?.DocumentName != null
+                        ? $"Driver #{driverId}"
+                        : $"Driver #{driverId}",
+                    Status = "archived",
+                    IsDeleted = true
+                });
+                driverIds.Add(driverId);
+            }
+        }
+
+        var payloadDrivers = activeDrivers
+            .OrderBy(d => d.Name)
+            .Select(d => new
+            {
+                d.Id,
+                d.OrganizationId,
+                d.Name,
+                d.Email,
+                d.Phone,
+                d.LicenseNumber,
+                d.LicenseState,
+                d.LicenseExpiry,
+                d.LicenseClass,
+                d.MedicalCardExpiry,
+                d.Status,
+                d.DriverType,
+                d.HireDate,
+                d.TwiccCardNumber,
+                d.TwiccExpiry,
+                d.CreatedAt,
+                d.UpdatedAt,
+                d.IsDeleted,
+                _docs = docsByDriver.GetValueOrDefault(d.Id) ?? new List<ComplianceBoardDocumentRow>()
+            })
+            .ToList();
+
+        return Ok(new
+        {
+            data = new
+            {
+                drivers = payloadDrivers,
+                documents
+            },
+            total = payloadDrivers.Count,
+            stats = new
+            {
+                totalDocuments = documents.Count,
+                driversWithDocuments = docsByDriver.Count,
+                driverCount = payloadDrivers.Count
+            }
+        });
+    }
+
+    /// <summary>
     /// Get a single driver by ID
     /// </summary>
     [HttpGet("{id}")]
@@ -1013,6 +1234,44 @@ public record SimulateRequest(decimal? StartLatitude, decimal? StartLongitude);
 
 public record ImportDrayTacDriversRequest(int? Limit = 5000, bool? ForceArchive = true);
 
+file sealed class ComplianceBoardDriverRow
+{
+    public int Id { get; set; }
+    public int OrganizationId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? LicenseNumber { get; set; }
+    public string? LicenseState { get; set; }
+    public DateOnly? LicenseExpiry { get; set; }
+    public string? LicenseClass { get; set; }
+    public DateOnly? MedicalCardExpiry { get; set; }
+    public string Status { get; set; } = "available";
+    public string? DriverType { get; set; }
+    public DateOnly? HireDate { get; set; }
+    public string? TwiccCardNumber { get; set; }
+    public DateOnly? TwiccExpiry { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public bool IsDeleted { get; set; }
+}
 
-
-
+file sealed class ComplianceBoardDocumentRow
+{
+    public int Id { get; set; }
+    public int DriverId { get; set; }
+    public int OrganizationId { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public string? SubCategory { get; set; }
+    public string DocumentName { get; set; } = string.Empty;
+    public string? DocumentNumber { get; set; }
+    public DateTime? IssueDate { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public string Status { get; set; } = "active";
+    public string? Notes { get; set; }
+    public string? FileName { get; set; }
+    public long? FileSize { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public bool HasFile { get; set; }
+}

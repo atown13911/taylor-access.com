@@ -99,6 +99,9 @@
           </tr>
         </thead>
         <tbody>
+          @if (loading() || !docsReady()) {
+            <tr><td colspan="19" class="empty-row">Loading compliance data...</td></tr>
+          } @else {
           @for (driver of filteredDrivers(); track driver.id) {
             <tr [class.selected]="selectedDriver()?.id === driver.id" (click)="selectDriver(driver)">
               <td class="col-name">
@@ -165,8 +168,9 @@
               </td>
             </tr>
           }
-          @if (filteredDrivers().length === 0 && !loading()) {
+          @if (filteredDrivers().length === 0) {
             <tr><td colspan="19" class="empty-row">No drivers found</td></tr>
+          }
           }
         </tbody>
       </table>
