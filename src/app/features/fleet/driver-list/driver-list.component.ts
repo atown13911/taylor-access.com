@@ -56,6 +56,7 @@ export class DriverListComponent implements OnInit {
   private confirmDialog = inject(ConfirmService);
   private adminService = inject(AdminService);
   private baseUrl = environment.apiUrl;
+  readonly usPhonePattern = String.raw`\(\d{3}\) \d{3}-\d{4}`;
 
   isLoading = signal(false);
   syncingArchived = signal(false);
@@ -1104,7 +1105,7 @@ export class DriverListComponent implements OnInit {
         this.driverForm.set({
           name: d.name || '',
           email: d.email || '',
-          phone: d.phone || '',
+          phone: this.formatPhoneInput(d.phone || ''),
           organizationId: d.organizationId || null,
           fleetId: d.fleetId || null,
           divisionId: d.divisionId || null,
@@ -1127,10 +1128,10 @@ export class DriverListComponent implements OnInit {
           twiccCardNumber: d.twiccCardNumber || '',
           twiccExpiry: d.twiccExpiry ? d.twiccExpiry.split('T')[0] : '',
           truckOwnerName: d.truckOwnerName || '',
-          truckOwnerPhone: d.truckOwnerPhone || '',
+          truckOwnerPhone: this.formatPhoneInput(d.truckOwnerPhone || ''),
           truckOwnerCompany: d.truckOwnerCompany || '',
           emergencyContact: d.emergencyContactName || d.emergencyContact || '',
-          emergencyPhone: d.emergencyContactPhone || d.emergencyPhone || '',
+          emergencyPhone: this.formatPhoneInput(d.emergencyContactPhone || d.emergencyPhone || ''),
           hireDate: d.hireDate ? d.hireDate.split('T')[0] : '',
           terminationDate: d.terminationDate ? d.terminationDate.split('T')[0] : '',
           terminationNotes: String(d.terminationNotes ?? '').trim(),
@@ -1149,7 +1150,7 @@ export class DriverListComponent implements OnInit {
       },
       error: () => {
         this.driverForm.set({
-          name: driver.name, email: driver.email, phone: driver.phone,
+          name: driver.name, email: driver.email, phone: this.formatPhoneInput(driver.phone || ''),
           organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
           licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : '',
           dateOfBirth: '', address: '', city: '', state: '', zip: '', ssn: '',
@@ -1191,6 +1192,9 @@ export class DriverListComponent implements OnInit {
   }
 
   updateField(field: string, value: any): void {
+    if (this.isPhoneField(field)) {
+      value = this.formatPhoneInput(String(value ?? ''));
+    }
     this.driverForm.update(f => ({ ...f, [field]: value }));
     if (field === 'fleetId') {
       this.driverForm.update(f => ({ ...f, divisionId: null, driverTerminalId: null }));
@@ -1243,12 +1247,24 @@ export class DriverListComponent implements OnInit {
       this.toast.error(`Required: ${missing.join(', ')}`, 'Missing Fields');
       return;
     }
+    if (!this.isValidUsPhone(form.phone)) {
+      this.toast.error('Enter a valid 10-digit phone number', 'Invalid Phone');
+      return;
+    }
+    if (form.emergencyPhone?.trim() && !this.isValidUsPhone(form.emergencyPhone)) {
+      this.toast.error('Enter a valid emergency contact phone number', 'Invalid Phone');
+      return;
+    }
+    if (form.truckOwnerPhone?.trim() && !this.isValidUsPhone(form.truckOwnerPhone)) {
+      this.toast.error('Enter a valid truck owner phone number', 'Invalid Phone');
+      return;
+    }
 
     this.saving.set(true);
     const payload = {
       name: form.name,
       email: form.email,
-      phone: form.phone,
+      phone: this.normalizePhoneForSave(form.phone),
       organizationId: form.organizationId || null,
       fleetId: form.fleetId || null,
       divisionId: form.divisionId || null,
@@ -1271,8 +1287,8 @@ export class DriverListComponent implements OnInit {
       truckTag: form.truckTag || null,
       emergencyContactName: form.emergencyContact,
       emergencyContact: form.emergencyContact,
-      emergencyContactPhone: form.emergencyPhone,
-      emergencyPhone: form.emergencyPhone,
+      emergencyContactPhone: form.emergencyPhone?.trim() ? this.normalizePhoneForSave(form.emergencyPhone) : null,
+      emergencyPhone: form.emergencyPhone?.trim() ? this.normalizePhoneForSave(form.emergencyPhone) : null,
       hireDate: form.hireDate || null,
       terminationDate: form.terminationDate || null,
       terminationNotes: form.terminationNotes?.trim() || null,
@@ -1426,6 +1442,33 @@ export class DriverListComponent implements OnInit {
   formatTruckNumber(truckNumber: string): string {
     const value = String(truckNumber ?? '').trim();
     return value || '—';
+  }
+
+  formatPhoneDisplay(value: string): string {
+    const formatted = this.formatPhoneInput(value);
+    return this.isValidUsPhone(formatted) ? formatted : (String(value ?? '').trim() || '—');
+  }
+
+  formatPhoneInput(value: string): string {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    const normalized = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+    const local = normalized.slice(0, 10);
+    if (!local) return '';
+    if (local.length <= 3) return `(${local}`;
+    if (local.length <= 6) return `(${local.slice(0, 3)}) ${local.slice(3)}`;
+    return `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+  }
+
+  isValidUsPhone(value: string): boolean {
+    return /^\d{10}$/.test(String(value ?? '').replace(/\D/g, ''));
+  }
+
+  normalizePhoneForSave(value: string): string {
+    return this.formatPhoneInput(value);
+  }
+
+  private isPhoneField(field: string): boolean {
+    return field === 'phone' || field === 'emergencyPhone' || field === 'truckOwnerPhone';
   }
 
   formatDriverType(type: string): string {

@@ -196,7 +196,7 @@
                     <div class="avatar">{{ driver.name.charAt(0) }}</div>
                     {{ driver.name }}
                   </td>
-                  <td>{{ driver.phone }}</td>
+                  <td>{{ formatPhoneDisplay(driver.phone) }}</td>
                   <td>{{ driver.email || '—' }}</td>
                   <td class="mono">{{ driver.licenseNumber || '—' }}</td>
                   <td class="mono">{{ formatTruckNumber(driver.truckNumber) }}</td>
@@ -268,7 +268,7 @@
                 <div class="avatar">{{ driver.name.charAt(0) }}</div>
                 {{ driver.name }}
               </td>
-              <td>{{ driver.phone }}</td>
+              <td>{{ formatPhoneDisplay(driver.phone) }}</td>
               <td>{{ driver.email || '—' }}</td>
               <td class="mono">{{ driver.licenseNumber || '—' }}</td>
               <td class="mono">{{ formatTruckNumber(driver.truckNumber) }}</td>
@@ -360,7 +360,15 @@
             </div>
             <div class="form-group">
               <label>Phone *</label>
-              <input type="tel" [ngModel]="driverForm().phone" (ngModelChange)="updateField('phone', $event)" placeholder="(555) 123-4567">
+              <input
+                type="tel"
+                inputmode="tel"
+                maxlength="14"
+                [pattern]="usPhonePattern"
+                [ngModel]="driverForm().phone"
+                (ngModelChange)="updateField('phone', $event)"
+                placeholder="(555) 123-4567"
+              >
             </div>
           </div>
           <div class="form-row">
@@ -522,7 +530,15 @@
             </div>
             <div class="form-group">
               <label>Owner Phone</label>
-              <input type="text" [ngModel]="driverForm().truckOwnerPhone" (ngModelChange)="updateField('truckOwnerPhone', $event)" placeholder="Owner phone number">
+              <input
+                type="tel"
+                inputmode="tel"
+                maxlength="14"
+                [pattern]="usPhonePattern"
+                [ngModel]="driverForm().truckOwnerPhone"
+                (ngModelChange)="updateField('truckOwnerPhone', $event)"
+                placeholder="(555) 123-4567"
+              >
             </div>
           </div>
           <div class="form-row">
@@ -615,7 +631,15 @@
             </div>
             <div class="form-group">
               <label>Contact Phone</label>
-              <input type="tel" [ngModel]="driverForm().emergencyPhone" (ngModelChange)="updateField('emergencyPhone', $event)" placeholder="(555) 987-6543">
+              <input
+                type="tel"
+                inputmode="tel"
+                maxlength="14"
+                [pattern]="usPhonePattern"
+                [ngModel]="driverForm().emergencyPhone"
+                (ngModelChange)="updateField('emergencyPhone', $event)"
+                placeholder="(555) 987-6543"
+              >
             </div>
           </div>
         </div>
@@ -687,7 +711,7 @@
     @if (detailTab() === 'overview') {
       <div class="panel-section">
         <h4>Contact</h4>
-        <div class="detail-row"><span class="label">Phone</span><span>{{ selectedDriver()!.phone || '—' }}</span></div>
+        <div class="detail-row"><span class="label">Phone</span><span>{{ formatPhoneDisplay(selectedDriver()!.phone) }}</span></div>
         <div class="detail-row"><span class="label">Email</span><span>{{ selectedDriver()!.email || '—' }}</span></div>
       </div>
 
@@ -894,7 +918,7 @@
             <div class="profile-section-block">
               <h4>Contact</h4>
               <div class="profile-grid">
-                <div class="profile-field"><span class="profile-label">Phone</span><span class="profile-value">{{ profileDriver()!.phone || '—' }}</span></div>
+                <div class="profile-field"><span class="profile-label">Phone</span><span class="profile-value">{{ formatPhoneDisplay(profileDriver()!.phone) }}</span></div>
                 <div class="profile-field"><span class="profile-label">Email</span><span class="profile-value">{{ profileDriver()!.email || '—' }}</span></div>
               </div>
             </div>
