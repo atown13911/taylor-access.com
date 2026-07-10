@@ -276,7 +276,10 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon expiring"><i class='bx bx-dollar'></i></div>
-        <div class="stat-info"><span class="stat-value">{{ formatCurrency(chargingStats().totalCharges, 2) }}</span><span class="stat-label">Total Charges</span></div>
+        <div class="stat-info">
+          <span class="stat-value">{{ formatCurrency(chargingStats().totalCharges, 2) }}</span>
+          <span class="stat-label">Total Charges ({{ getSummaryPeriodColumnLabel() }})</span>
+        </div>
       </div>
     </div>
 
@@ -336,81 +339,80 @@
           <thead>
             <tr>
               <th>Drivers on Fleet</th>
-              <th>Cost Type</th>
+              <th>Policy / Cost Type</th>
+              <th>Calculation</th>
               <th>{{ getSummaryPeriodColumnLabel() }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td rowspan="3" class="fleet-driver-count">
-                <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
-              </td>
-              <td>Driver Charges</td>
-              <td>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</td>
+            @if (chargingFleetDriverCalculationLines().length) {
+              @for (line of chargingFleetDriverCalculationLines(); track line.policyLabel + line.formula; let i = $index) {
+                <tr class="fleet-detail-row">
+                  @if (i === 0) {
+                    <td [attr.rowspan]="fleetSummaryDetailRowSpan()" class="fleet-driver-count">
+                      <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
+                    </td>
+                  }
+                  <td>
+                    <strong>{{ line.policyLabel }}</strong>
+                    <span class="fleet-line-category driver">Driver Charges</span>
+                  </td>
+                  <td class="fleet-calc-formula">{{ line.formula }}</td>
+                  <td class="fleet-calc-amount">{{ formatCurrency(line.periodAmount, 2) }}</td>
+                </tr>
+              }
+            } @else {
+              <tr class="fleet-detail-row">
+                <td [attr.rowspan]="fleetSummaryDetailRowSpan()" class="fleet-driver-count">
+                  <strong>{{ chargingFleetSummary().activeDrivers }}</strong>
+                </td>
+                <td>Driver Charges</td>
+                <td class="fleet-calc-formula">No per-driver policies</td>
+                <td class="fleet-calc-amount">{{ formatCurrency(0, 2) }}</td>
+              </tr>
+            }
+
+            <tr class="fleet-subtotal-row">
+              <td colspan="2"><strong>Driver Charges Subtotal</strong></td>
+              <td class="fleet-calc-formula">Sum of per-driver policy charges</td>
+              <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</strong></td>
             </tr>
-            <tr>
-              <td>Company Cost</td>
-              <td>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</td>
+
+            @if (chargingFleetCompanyCalculationLines().length) {
+              @for (line of chargingFleetCompanyCalculationLines(); track line.policyLabel + line.formula) {
+                <tr class="fleet-detail-row">
+                  <td>
+                    <strong>{{ line.policyLabel }}</strong>
+                    <span class="fleet-line-category company">Company Cost</span>
+                  </td>
+                  <td class="fleet-calc-formula">{{ line.formula }}</td>
+                  <td class="fleet-calc-amount">{{ formatCurrency(line.periodAmount, 2) }}</td>
+                </tr>
+              }
+            } @else {
+              <tr class="fleet-detail-row">
+                <td>Company Cost</td>
+                <td class="fleet-calc-formula">No company-wide policies</td>
+                <td class="fleet-calc-amount">{{ formatCurrency(0, 2) }}</td>
+              </tr>
+            }
+
+            <tr class="fleet-subtotal-row">
+              <td colspan="2"><strong>Company Cost Subtotal</strong></td>
+              <td class="fleet-calc-formula">Sum of whole-policy company charges</td>
+              <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</strong></td>
             </tr>
+
             <tr class="fleet-total-row">
-              <td><strong>Total Fleet Cost</strong></td>
-              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
+              <td colspan="2"><strong>Total Fleet Cost</strong></td>
+              <td class="fleet-calc-formula">
+                {{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }} driver charges +
+                {{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }} company cost
+              </td>
+              <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div class="fleet-calculation-section">
-        <button type="button" class="fleet-calculation-toggle" (click)="toggleFleetCostCalculation()">
-          <i class='bx' [class.bx-chevron-down]="showFleetCostCalculation()" [class.bx-chevron-right]="!showFleetCostCalculation()"></i>
-          How these totals are calculated
-        </button>
-
-        @if (showFleetCostCalculation()) {
-          <div class="data-table-container fleet-calculation-table-wrap">
-            <table class="data-table fleet-calculation-table">
-              <thead>
-                <tr>
-                  <th>Policy</th>
-                  <th>Cost Type</th>
-                  <th>Calculation</th>
-                  <th>{{ getSummaryPeriodColumnLabel() }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (line of chargingFleetCalculationLines(); track line.policyLabel + line.category + line.formula) {
-                  <tr>
-                    <td>
-                      <strong>{{ line.policyLabel }}</strong>
-                      <span class="fleet-calc-provider">{{ line.providerName }}</span>
-                    </td>
-                    <td>
-                      <span class="fleet-calc-category" [class.company]="line.category === 'company'">
-                        {{ getFleetCalculationCategoryLabel(line.category) }}
-                      </span>
-                    </td>
-                    <td class="fleet-calc-formula">{{ line.formula }}</td>
-                    <td class="fleet-calc-amount">{{ formatCurrency(line.periodAmount, 2) }}</td>
-                  </tr>
-                }
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="3"><strong>Driver Charges Subtotal</strong></td>
-                  <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</strong></td>
-                </tr>
-                <tr>
-                  <td colspan="3"><strong>Company Cost Subtotal</strong></td>
-                  <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</strong></td>
-                </tr>
-                <tr class="fleet-calculation-total-row">
-                  <td colspan="3"><strong>Total Fleet Cost</strong></td>
-                  <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        }
       </div>
     </section>
 

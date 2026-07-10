@@ -188,66 +188,29 @@
     color: var(--cyan, #00e5ff);
     background: rgba(0, 229, 255, 0.04);
     border-right: 1px solid var(--border-color);
+    width: 120px;
+  }
+
+  th:last-child,
+  .fleet-calc-amount {
+    text-align: right;
+    white-space: nowrap;
   }
 
   td, th {
     font-variant-numeric: tabular-nums;
   }
 
-  .fleet-total-row td {
-    background: rgba(255, 107, 53, 0.06);
-    border-top: 1px solid rgba(255, 107, 53, 0.18);
-  }
-}
-
-.fleet-calculation-section {
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.fleet-calculation-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition: color 0.2s;
-
-  i {
-    color: var(--orange, #ff6b35);
-    font-size: 1rem;
-  }
-
-  &:hover {
-    color: var(--text-primary);
-  }
-}
-
-.fleet-calculation-table-wrap {
-  margin-top: 0.75rem;
-}
-
-.fleet-calculation-table {
-  th:last-child,
-  .fleet-calc-amount {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .fleet-calc-provider {
+  .fleet-line-category {
     display: block;
     margin-top: 0.15rem;
-    font-size: 0.72rem;
-    color: var(--text-secondary);
-    font-weight: 400;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+
+    &.driver { color: #00ff88; }
+    &.company { color: #4488ff; }
   }
 
   .fleet-calc-formula {
@@ -256,32 +219,18 @@
     line-height: 1.45;
   }
 
-  .fleet-calc-category {
-    display: inline-block;
-    padding: 0.15rem 0.45rem;
-    border-radius: 999px;
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: #00ff88;
-    background: rgba(0, 255, 136, 0.08);
-    border: 1px solid rgba(0, 255, 136, 0.18);
-
-    &.company {
-      color: #4488ff;
-      background: rgba(68, 136, 255, 0.08);
-      border-color: rgba(68, 136, 255, 0.18);
-    }
+  .fleet-detail-row td {
+    background: rgba(255, 255, 255, 0.01);
   }
 
-  tfoot td {
+  .fleet-subtotal-row td {
+    background: rgba(255, 255, 255, 0.03);
     border-top: 1px solid var(--border-color);
-    background: rgba(255, 255, 255, 0.02);
   }
 
-  .fleet-calculation-total-row td {
+  .fleet-total-row td {
+    background: rgba(255, 107, 53, 0.06);
     border-top: 2px solid rgba(255, 107, 53, 0.25);
-    background: rgba(255, 107, 53, 0.04);
-    color: var(--orange, #ff6b35);
   }
 }
 

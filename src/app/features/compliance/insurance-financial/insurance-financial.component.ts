@@ -235,7 +235,6 @@ export class InsuranceFinancialComponent implements OnInit {
   reportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   showChargingReport = signal(false);
   chargingReportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  showFleetCostCalculation = signal(true);
 
   // Collapsed-by-type view
   expandedTypes = signal<Set<string>>(new Set());
@@ -595,11 +594,14 @@ export class InsuranceFinancialComponent implements OnInit {
   });
 
   chargingStats = computed(() => {
-    const rows = this.chargingRows();
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
+    const breakdown = this.fleetCostBreakdownData();
+    const display = this.chargingFleetSummaryDisplay();
     return {
-      chargeLines: rows.length,
-      drivers: this.matrixDriverCounts().active,
-      totalCharges: rows.reduce((sum, row) => sum + (row.chargeAmount || 0), 0)
+      chargeLines: breakdown.lines.length,
+      drivers: breakdown.activeDriverCount,
+      totalCharges: display.totalFleetCost
     };
   });
 
@@ -613,6 +615,20 @@ export class InsuranceFinancialComponent implements OnInit {
   });
 
   chargingFleetCalculationLines = computed(() => this.fleetCostBreakdownData().lines);
+
+  chargingFleetDriverCalculationLines = computed(() =>
+    this.chargingFleetCalculationLines().filter((line) => line.category === 'driver')
+  );
+
+  chargingFleetCompanyCalculationLines = computed(() =>
+    this.chargingFleetCalculationLines().filter((line) => line.category === 'company')
+  );
+
+  fleetSummaryDetailRowSpan = computed(() => {
+    const driverRows = this.chargingFleetDriverCalculationLines().length || 1;
+    const companyRows = this.chargingFleetCompanyCalculationLines().length || 1;
+    return driverRows + companyRows + 3;
+  });
 
   chargingFleetSummary = computed((): ChargingFleetSummary => {
     const breakdown = this.fleetCostBreakdownData();
@@ -892,14 +908,6 @@ export class InsuranceFinancialComponent implements OnInit {
     return this.getSummaryPeriodColumnLabel().replace('Per ', 'per ').toLowerCase();
   }
 
-  toggleFleetCostCalculation(): void {
-    this.showFleetCostCalculation.update((open) => !open);
-  }
-
-  getFleetCalculationCategoryLabel(category: FleetCalculationLine['category']): string {
-    return category === 'company' ? 'Company Cost' : 'Driver Charges';
-  }
-
   private buildFleetCostBreakdown(): FleetCostBreakdownData {
     const { start, end } = this.getSummaryPeriodDateRange();
     const activeDriverCount = this.countDriversEmployedDuringPeriod(start, end);
@@ -1156,7 +1164,10 @@ export class InsuranceFinancialComponent implements OnInit {
   private countDriversEmployedDuringPeriod(start: Date, end: Date): number {
     let count = 0;
     for (const driver of this.chargingDrivers()) {
-      if (this.wasDriverEmployedDuringPeriod(driver, start, end)) count++;
+      const status = this.normalizeDriverStatus(driver.status);
+      if (!this.isMatrixActiveDriver(status)) continue;
+      if (!this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
+      count++;
     }
     return count;
   }
