@@ -198,12 +198,12 @@
 
         <div class="panel-section">
           <h4>License</h4>
-          <div class="detail-row"><span class="label">Number</span><span class="mono">{{ selectedDriver()!.licenseNumber || '—' }}</span></div>
+          <div class="detail-row"><span class="label">Number</span><span class="mono">{{ getDriverLicenseNumber(selectedDriver()!) || '—' }}</span></div>
           <div class="detail-row"><span class="label">State</span><span>{{ selectedDriver()!.licenseState || '—' }}</span></div>
           <div class="detail-row">
             <span class="label">Expires</span>
-            <span [class.expiring]="isExpiringSoon(selectedDriver()!.licenseExpiry || selectedDriver()!.licenseExpiration)" [class.expired]="isExpired(selectedDriver()!.licenseExpiry || selectedDriver()!.licenseExpiration)">
-              {{ formatDate(selectedDriver()!.licenseExpiry || selectedDriver()!.licenseExpiration) }}
+            <span [class.expiring]="isExpiringSoon(getDriverLicenseExpiry(selectedDriver()!) || '')" [class.expired]="isExpired(getDriverLicenseExpiry(selectedDriver()!) || '')">
+              {{ formatDate(getDriverLicenseExpiry(selectedDriver()!) || '') }}
             </span>
           </div>
           <div class="detail-row"><span class="label">Class</span><span>{{ selectedDriver()!.licenseClass || '—' }}</span></div>

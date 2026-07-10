@@ -755,6 +755,43 @@ export class DriverDatabaseComponent implements OnInit {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
   
+  getDriverLicenseExpiry(driver: any): string | null {
+    const doc = this.findDocInList(driver?._docs || [], 'cdl');
+    if (doc?.expiryDate) return doc.expiryDate;
+    return driver?.licenseExpiry || driver?.licenseExpiration || null;
+  }
+
+  getDriverMedicalExpiry(driver: any): string | null {
+    const doc = this.findDocInList(driver?._docs || [], 'medical');
+    if (doc?.expiryDate) return doc.expiryDate;
+    return driver?.medicalCardExpiry || driver?.medicalCardExpiration || null;
+  }
+
+  getDriverLicenseNumber(driver: any): string | null {
+    const doc = this.findDocInList(driver?._docs || [], 'cdl');
+    return doc?.documentNumber || driver?.licenseNumber || null;
+  }
+
+  private resolveDocComplianceStatus(doc: any): 'compliant' | 'expiring' | 'expired' | 'none' {
+    if (!doc) return 'none';
+    if (doc.expiryDate) return this.getExpirationStatus(doc.expiryDate);
+    if (doc.status === 'expired') return 'expired';
+    if (doc.status === 'expiring') return 'expiring';
+    return 'compliant';
+  }
+
+  private resolveFieldOrDocStatus(
+    driver: any,
+    item: string,
+    fieldExpiry: unknown,
+    fieldFallback?: () => 'compliant' | 'none'
+  ): 'compliant' | 'expiring' | 'expired' | 'none' {
+    const doc = this.findDocInList(driver?._docs || [], item);
+    if (doc) return this.resolveDocComplianceStatus(doc);
+    if (fieldExpiry) return this.getExpirationStatus(String(fieldExpiry));
+    return fieldFallback ? fieldFallback() : 'none';
+  }
+
   getExpirationStatus(date: string): 'compliant' | 'expiring' | 'expired' {
     const days = this.getDaysUntilExpiration(date);
     if (days < 0) return 'expired';
@@ -1257,44 +1294,32 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   private computeItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
-    // 1. Check driver record fields (fast path for CDL/Medical/etc.)
     switch (item) {
-      case 'cdl': {
-        const exp = driver.licenseExpiry || driver.licenseExpiration;
-        if (exp) return this.getExpirationStatus(exp);
-        if (driver.licenseNumber) return 'compliant';
-        break;
-      }
-      case 'medical': {
-        const exp = driver.medicalCardExpiry || driver.medicalCardExpiration;
-        if (exp) return this.getExpirationStatus(exp);
-        break;
-      }
+      case 'cdl':
+        return this.resolveFieldOrDocStatus(
+          driver,
+          item,
+          driver.licenseExpiry || driver.licenseExpiration,
+          () => (driver.licenseNumber ? 'compliant' : 'none')
+        );
+      case 'medical':
+        return this.resolveFieldOrDocStatus(driver, item, driver.medicalCardExpiry || driver.medicalCardExpiration);
       case 'employment':
         if (driver.hireDate || driver.employmentVerified) return 'compliant';
         break;
-      case 'permits': {
-        const twicExp = driver.twiccExpiry;
-        if (twicExp) return this.getExpirationStatus(twicExp);
-        if (driver.twiccCardNumber) return 'compliant';
-        break;
-      }
-      case 'insurance': {
-        const exp = driver.insuranceExpiry || driver.insuranceExpiration;
-        if (exp) return this.getExpirationStatus(exp);
-        break;
-      }
+      case 'permits':
+        return this.resolveFieldOrDocStatus(
+          driver,
+          item,
+          driver.twiccExpiry,
+          () => (driver.twiccCardNumber ? 'compliant' : 'none')
+        );
+      case 'insurance':
+        return this.resolveFieldOrDocStatus(driver, item, driver.insuranceExpiry || driver.insuranceExpiration);
     }
 
-    // 2. Fall back to checking uploaded documents
-    const docs: any[] = driver._docs || [];
-    const doc = this.findDocInList(docs, item);
-    if (!doc) return 'none';
-
-    if (doc.status === 'expired') return 'expired';
-    if (doc.status === 'expiring') return 'expiring';
-    if (doc.expiryDate) return this.getExpirationStatus(doc.expiryDate);
-    return 'compliant';
+    const doc = this.findDocInList(driver._docs || [], item);
+    return this.resolveDocComplianceStatus(doc);
   }
 
   getOverallStatus(driver: any): string {
@@ -1423,6 +1448,8 @@ export class DriverDatabaseComponent implements OnInit {
           this.compSaving.set(false);
           this.compUploadOpen.set(false);
           (this as any)._editingDocId = null;
+          const apiDriverId = this.resolveApiDriverId(driver);
+          if (apiDriverId) this.syncDriverProfileFromDocument(item, apiDriverId);
           this.refreshComplianceData();
         },
         error: () => { this.toast.error('Update failed', 'Error'); this.compSaving.set(false); }
@@ -1457,9 +1484,30 @@ export class DriverDatabaseComponent implements OnInit {
         this.toast.success(`${item.label} uploaded`, 'Success');
         this.compSaving.set(false);
         this.compUploadOpen.set(false);
+        this.syncDriverProfileFromDocument(item, apiDriverId);
         this.refreshComplianceData();
       },
       error: () => { this.toast.error('Upload failed', 'Error'); this.compSaving.set(false); }
+    });
+  }
+
+  private syncDriverProfileFromDocument(item: any, apiDriverId: string): void {
+    const patch: Record<string, string> = {};
+    if (item.key === 'cdl') {
+      if (this.compForm.expiryDate) patch['licenseExpiry'] = this.compForm.expiryDate;
+      if (this.compForm.documentNumber?.trim()) patch['licenseNumber'] = this.compForm.documentNumber.trim();
+    } else if (item.key === 'medical') {
+      if (this.compForm.expiryDate) patch['medicalCardExpiry'] = this.compForm.expiryDate;
+    } else {
+      return;
+    }
+
+    if (!Object.keys(patch).length) return;
+
+    this.http.put(`${environment.apiUrl}/api/v1/drivers/${apiDriverId}`, patch).subscribe({
+      error: () => {
+        // Profile sync is best-effort; compliance dots use uploaded documents.
+      }
     });
   }
 
