@@ -282,21 +282,37 @@
         <div>
           <h3 class="section-title"><i class='bx bx-pie-chart-alt-2'></i> Fleet Cost vs. Driver Charges</h3>
           <p class="fleet-summary-subtitle">
-            {{ chargingFleetSummary().activeDrivers }} active drivers — company cost vs. driver-charged premiums for this fleet size
+            {{ chargingFleetSummary().activeDrivers }} active drivers — {{ getSummarySpecificPeriodLabel() }}
           </p>
         </div>
-        <div class="fleet-period-filter">
-          <label for="summaryPeriodSelect">Period</label>
-          <select
-            id="summaryPeriodSelect"
-            class="fleet-period-select"
-            [ngModel]="summaryPeriodTab()"
-            (ngModelChange)="setSummaryPeriodTab($event)"
-          >
-            <option value="daily">Day</option>
-            <option value="monthly">Month</option>
-            <option value="yearly">Year</option>
-          </select>
+        <div class="fleet-period-filters">
+          <div class="fleet-period-filter">
+            <label for="summaryPeriodSelect">Period</label>
+            <select
+              id="summaryPeriodSelect"
+              class="fleet-period-select"
+              [ngModel]="summaryPeriodTab()"
+              (ngModelChange)="setSummaryPeriodTab($event)"
+            >
+              <option value="daily">Day</option>
+              <option value="weekly">Week</option>
+              <option value="monthly">Month</option>
+              <option value="yearly">Year</option>
+            </select>
+          </div>
+          <div class="fleet-period-filter">
+            <label for="summarySpecificPeriodSelect">{{ getSummarySpecificPeriodFilterLabel() }}</label>
+            <select
+              id="summarySpecificPeriodSelect"
+              class="fleet-period-select"
+              [ngModel]="summarySpecificPeriod()"
+              (ngModelChange)="setSummarySpecificPeriod($event)"
+            >
+              @for (option of summarySpecificPeriodOptions(); track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </div>
         </div>
       </div>
       <div class="data-table-container">
@@ -470,6 +486,9 @@
       <div class="matrix-period-tabs">
         <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'daily'" (click)="setMatrixPeriodTab('daily')">
           Day
+        </button>
+        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'weekly'" (click)="setMatrixPeriodTab('weekly')">
+          Week
         </button>
         <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'monthly'" (click)="setMatrixPeriodTab('monthly')">
           Month

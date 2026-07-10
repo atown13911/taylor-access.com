@@ -125,11 +125,18 @@
     color: var(--text-secondary);
   }
 
+  .fleet-period-filters {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .fleet-period-filter {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    min-width: 120px;
+    min-width: 150px;
 
     label {
       font-size: 0.68rem;

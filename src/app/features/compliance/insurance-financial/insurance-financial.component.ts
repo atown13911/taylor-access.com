@@ -52,12 +52,20 @@ interface ChargingFleetSummary {
   driverChargesMonthly: number;
   companyCostMonthly: number;
   totalFleetCostMonthly: number;
+  driverChargesWeekly: number;
+  companyCostWeekly: number;
+  totalFleetCostWeekly: number;
   driverChargesDaily: number;
   companyCostDaily: number;
   totalFleetCostDaily: number;
 }
 
-type MatrixPeriodTab = 'daily' | 'monthly' | 'yearly';
+interface SummaryPeriodOption {
+  value: string;
+  label: string;
+}
+
+type MatrixPeriodTab = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 interface InsuranceRow {
   id: string;
@@ -141,6 +149,7 @@ export class InsuranceFinancialComponent implements OnInit {
   matrixDriverTab = signal<'active' | 'inactive'>('active');
   matrixPeriodTab = signal<MatrixPeriodTab>('monthly');
   summaryPeriodTab = signal<MatrixPeriodTab>('monthly');
+  summarySpecificPeriod = signal<string>('');
 
   // Insurance state
   policies = signal<InsuranceRow[]>([]);
@@ -518,6 +527,9 @@ export class InsuranceFinancialComponent implements OnInit {
       driverChargesMonthly: driverChargesAnnual / 12,
       companyCostMonthly: companyCostAnnual / 12,
       totalFleetCostMonthly: totalFleetCostAnnual / 12,
+      driverChargesWeekly: driverChargesAnnual / 52,
+      companyCostWeekly: companyCostAnnual / 52,
+      totalFleetCostWeekly: totalFleetCostAnnual / 52,
       driverChargesDaily: driverChargesAnnual / 365,
       companyCostDaily: companyCostAnnual / 365,
       totalFleetCostDaily: totalFleetCostAnnual / 365
@@ -533,6 +545,12 @@ export class InsuranceFinancialComponent implements OnInit {
           companyCost: summary.companyCostDaily,
           totalFleetCost: summary.totalFleetCostDaily
         };
+      case 'weekly':
+        return {
+          driverCharges: summary.driverChargesWeekly,
+          companyCost: summary.companyCostWeekly,
+          totalFleetCost: summary.totalFleetCostWeekly
+        };
       case 'yearly':
         return {
           driverCharges: summary.driverChargesAnnual,
@@ -547,6 +565,10 @@ export class InsuranceFinancialComponent implements OnInit {
         };
     }
   });
+
+  summarySpecificPeriodOptions = computed((): SummaryPeriodOption[] =>
+    this.buildSummarySpecificPeriodOptions(this.summaryPeriodTab())
+  );
 
   enrollmentMatrixColumns = computed((): EnrollmentMatrixColumn[] => {
     const columns: EnrollmentMatrixColumn[] = [];
@@ -696,6 +718,9 @@ export class InsuranceFinancialComponent implements OnInit {
   ngOnInit(): void {
     this.loadPolicies();
     this.loadPayments();
+    this.summarySpecificPeriod.set(
+      this.buildSummarySpecificPeriodOptions(this.summaryPeriodTab())[0]?.value || ''
+    );
   }
 
   setMatrixDriverTab(tab: 'active' | 'inactive'): void {
@@ -708,19 +733,116 @@ export class InsuranceFinancialComponent implements OnInit {
 
   setSummaryPeriodTab(tab: MatrixPeriodTab): void {
     this.summaryPeriodTab.set(tab);
+    this.summarySpecificPeriod.set(this.buildSummarySpecificPeriodOptions(tab)[0]?.value || '');
+  }
+
+  setSummarySpecificPeriod(value: string): void {
+    this.summarySpecificPeriod.set(value);
   }
 
   getSummaryPeriodColumnLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
     switch (tab) {
       case 'daily': return 'Per Day';
+      case 'weekly': return 'Per Week';
       case 'yearly': return 'Per Year';
       default: return 'Per Month';
     }
   }
 
+  getSummarySpecificPeriodFilterLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
+    switch (tab) {
+      case 'daily': return 'Day';
+      case 'weekly': return 'Week';
+      case 'yearly': return 'Year';
+      default: return 'Month';
+    }
+  }
+
+  getSummarySpecificPeriodLabel(): string {
+    const value = this.summarySpecificPeriod();
+    return this.summarySpecificPeriodOptions().find((option) => option.value === value)?.label || value || '—';
+  }
+
+  private buildSummarySpecificPeriodOptions(tab: MatrixPeriodTab): SummaryPeriodOption[] {
+    const now = new Date();
+    switch (tab) {
+      case 'daily':
+        return this.buildSummaryDayOptions(now);
+      case 'weekly':
+        return this.buildSummaryWeekOptions(now);
+      case 'yearly':
+        return this.buildSummaryYearOptions(now);
+      default:
+        return this.buildSummaryMonthOptions(now);
+    }
+  }
+
+  private buildSummaryDayOptions(now: Date): SummaryPeriodOption[] {
+    const options: SummaryPeriodOption[] = [];
+    for (let i = 0; i < 90; i++) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i);
+      options.push({
+        value: this.formatSummaryDateKey(date),
+        label: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      });
+    }
+    return options;
+  }
+
+  private buildSummaryWeekOptions(now: Date): SummaryPeriodOption[] {
+    const options: SummaryPeriodOption[] = [];
+    const currentWeekStart = this.startOfSummaryWeek(now);
+    for (let i = 0; i < 26; i++) {
+      const weekStart = new Date(currentWeekStart);
+      weekStart.setDate(currentWeekStart.getDate() - i * 7);
+      options.push({
+        value: this.formatSummaryDateKey(weekStart),
+        label: `Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      });
+    }
+    return options;
+  }
+
+  private buildSummaryMonthOptions(now: Date): SummaryPeriodOption[] {
+    const options: SummaryPeriodOption[] = [];
+    for (let i = 0; i < 24; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      options.push({
+        value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      });
+    }
+    return options;
+  }
+
+  private buildSummaryYearOptions(now: Date): SummaryPeriodOption[] {
+    const options: SummaryPeriodOption[] = [];
+    for (let i = 0; i < 6; i++) {
+      const year = now.getFullYear() - i;
+      options.push({ value: String(year), label: String(year) });
+    }
+    return options;
+  }
+
+  private startOfSummaryWeek(date: Date): Date {
+    const start = new Date(date);
+    start.setDate(start.getDate() - start.getDay());
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  private formatSummaryDateKey(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   getMatrixPeriodLabel(tab: MatrixPeriodTab = this.matrixPeriodTab()): string {
     switch (tab) {
       case 'daily': return 'Daily';
+      case 'weekly': return 'Weekly';
       case 'yearly': return 'Yearly';
       default: return 'Monthly';
     }
@@ -835,6 +957,8 @@ export class InsuranceFinancialComponent implements OnInit {
     switch (target) {
       case 'daily':
         return (monthly * 12) / 365;
+      case 'weekly':
+        return (monthly * 12) / 52;
       case 'yearly':
         return monthly * 12;
       default:
