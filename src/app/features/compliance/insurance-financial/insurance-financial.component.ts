@@ -60,6 +60,22 @@ interface ChargingFleetSummary {
   totalFleetCostDaily: number;
 }
 
+interface FleetCalculationLine {
+  policyLabel: string;
+  providerName: string;
+  category: 'driver' | 'company';
+  formula: string;
+  annualAmount: number;
+  periodAmount: number;
+}
+
+interface FleetCostBreakdownData {
+  activeDriverCount: number;
+  lines: FleetCalculationLine[];
+  driverChargesAnnual: number;
+  companyCostAnnual: number;
+}
+
 interface SummaryPeriodOption {
   value: string;
   label: string;
@@ -147,7 +163,6 @@ export class InsuranceFinancialComponent implements OnInit {
   chargingSearch = '';
   matrixSearch = '';
   matrixDriverTab = signal<'active' | 'inactive'>('active');
-  matrixPeriodTab = signal<MatrixPeriodTab>('monthly');
   summaryPeriodTab = signal<MatrixPeriodTab>('monthly');
   summarySpecificPeriod = signal<string>('');
 
@@ -218,6 +233,9 @@ export class InsuranceFinancialComponent implements OnInit {
   // Report state
   showReport = signal(false);
   reportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  showChargingReport = signal(false);
+  chargingReportDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  showFleetCostCalculation = signal(true);
 
   // Collapsed-by-type view
   expandedTypes = signal<Set<string>>(new Set());
@@ -428,6 +446,108 @@ export class InsuranceFinancialComponent implements OnInit {
     printWindow.print();
   }
 
+  openChargingReport(): void {
+    this.chargingReportDate = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    this.showChargingReport.set(true);
+  }
+
+  closeChargingReport(): void {
+    this.showChargingReport.set(false);
+  }
+
+  getChargingReportPeriodLabel(): string {
+    const period = this.getSummaryPeriodColumnLabel();
+    const specific = this.getSummarySpecificPeriodLabel();
+    return `Period: ${specific} (${period.replace('Per ', '')})`;
+  }
+
+  getChargingEnrollmentStatusLabel(status: string): string {
+    switch (status) {
+      case 'none': return 'Not Enrolled';
+      case 'company': return 'Company Expense';
+      case 'n/a': return 'Whole Policy';
+      case 'active': return 'Enrolled';
+      default: return status || '—';
+    }
+  }
+
+  exportChargingReportCSV(): void {
+    const rows: string[] = [];
+    rows.push('Section,Policy Type,Provider,Policy #,Cost Basis,Frequency,Policy Cost,Charge Amount,Deductible,Status,Value');
+
+    const fleet = this.chargingFleetSummary();
+    const display = this.chargingFleetSummaryDisplay();
+    rows.push([
+      'Fleet Summary',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      'Drivers on Fleet',
+      String(fleet.activeDrivers)
+    ].join(','));
+    rows.push(['Fleet Summary', '', '', '', '', '', '', '', '', 'Driver Charges', String(display.driverCharges)].join(','));
+    rows.push(['Fleet Summary', '', '', '', '', '', '', '', '', 'Company Cost', String(display.companyCost)].join(','));
+    rows.push(['Fleet Summary', '', '', '', '', '', '', '', '', 'Total Fleet Cost', String(display.totalFleetCost)].join(','));
+
+    for (const row of this.chargingRows()) {
+      rows.push([
+        'Policy Charge',
+        `"${this.getChargingPolicyTypeLabel(row.policyType)}"`,
+        `"${row.providerName}"`,
+        row.policyNumber || '',
+        `"${this.getExpenseBasisLabel(row.expenseBasis)}"`,
+        `"${this.getBillingFrequencyLabel(row.billingFrequency)}"`,
+        row.policyCost ?? '',
+        row.chargeAmount ?? '',
+        row.perIncidentDeductible ?? '',
+        `"${this.getChargingEnrollmentStatusLabel(row.enrollmentStatus)}"`,
+        ''
+      ].join(','));
+    }
+
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `insurance-charging-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    this.toast.success('CSV exported', 'Download');
+  }
+
+  printChargingReport(): void {
+    const reportEl = document.getElementById('charging-report');
+    if (!reportEl) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html><head><title>Insurance Charging Report</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+        h2 { margin-bottom: 5px; } h4 { margin-top: 20px; margin-bottom: 8px; color: #555; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 8px 12px; border: 1px solid #ddd; text-align: left; font-size: 13px; }
+        th { background: #f5f5f5; font-weight: 600; }
+        .report-summary { display: flex; gap: 20px; margin: 15px 0; }
+        .report-stat { text-align: center; }
+        .rs-value { display: block; font-size: 24px; font-weight: 700; }
+        .rs-label { font-size: 11px; color: #888; text-transform: uppercase; }
+      </style></head><body>${reportEl.innerHTML}</body></html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  }
+
   insuranceStats = computed(() => {
     const all = this.policies();
     return {
@@ -483,50 +603,25 @@ export class InsuranceFinancialComponent implements OnInit {
     };
   });
 
-  chargingFleetSummary = computed((): ChargingFleetSummary => {
+  fleetCostBreakdownData = computed((): FleetCostBreakdownData => {
     this.summaryPeriodTab();
     this.summarySpecificPeriod();
-    const { start, end } = this.getSummaryPeriodDateRange();
-    const activeDriverCount = this.countDriversEmployedDuringPeriod(start, end);
-    const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
-    let driverChargesAnnual = 0;
-    let companyCostAnnual = 0;
+    this.chargingEnrollmentsByPolicy();
+    this.chargingDrivers();
+    this.policies();
+    return this.buildFleetCostBreakdown();
+  });
 
-    for (const policy of this.getChargeablePolicies()) {
-      const policyFrequency = this.resolveBillingFrequency(policy);
-      const annualPolicyCost = this.convertMatrixChargeToPeriod(
-        this.getPolicyCost(policy),
-        policyFrequency,
-        'yearly'
-      );
-      const basis = this.resolveExpenseBasis(policy);
-      const isCompanyCost = basis !== 'per_driver' || this.isCompanyExpensePolicy(policy.policyType);
+  chargingFleetCalculationLines = computed(() => this.fleetCostBreakdownData().lines);
 
-      if (isCompanyCost) {
-        companyCostAnnual += annualPolicyCost;
-        continue;
-      }
-
-      const enrollments = (enrollmentsByPolicy[String(policy.id)] || []).filter((e) => e.status === 'active');
-      if (!enrollments.length) {
-        driverChargesAnnual += annualPolicyCost * Math.max(activeDriverCount, 0);
-        continue;
-      }
-
-      for (const enrollment of enrollments) {
-        const driver = this.chargingDrivers().find((d) => Number(d.id) === Number(enrollment.driverId));
-        if (driver && !this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
-
-        const amount = Number(enrollment.deductionAmount ?? 0) || this.getPolicyCost(policy);
-        const frequency = String(enrollment.deductionFrequency || policyFrequency).trim().toLowerCase() || policyFrequency;
-        driverChargesAnnual += this.convertMatrixChargeToPeriod(amount, frequency, 'yearly');
-      }
-    }
-
+  chargingFleetSummary = computed((): ChargingFleetSummary => {
+    const breakdown = this.fleetCostBreakdownData();
+    const driverChargesAnnual = breakdown.driverChargesAnnual;
+    const companyCostAnnual = breakdown.companyCostAnnual;
     const totalFleetCostAnnual = driverChargesAnnual + companyCostAnnual;
 
     return {
-      activeDrivers: activeDriverCount,
+      activeDrivers: breakdown.activeDriverCount,
       driverChargesAnnual,
       companyCostAnnual,
       totalFleetCostAnnual,
@@ -596,12 +691,15 @@ export class InsuranceFinancialComponent implements OnInit {
   });
 
   enrollmentMatrixRows = computed((): EnrollmentMatrixRow[] => {
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
     const columns = this.enrollmentMatrixColumns();
     if (!columns.length) return [];
 
     const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
     const tab = this.matrixDriverTab();
     const term = this.matrixSearch.trim().toLowerCase();
+    const { start, end } = this.getSummaryPeriodDateRange();
 
     return this.chargingDrivers()
       .filter((driver) => {
@@ -610,6 +708,7 @@ export class InsuranceFinancialComponent implements OnInit {
         const isInactive = this.isMatrixInactiveDriver(status);
         if (tab === 'active' && !isActive) return false;
         if (tab === 'inactive' && !isInactive) return false;
+        if (!this.wasDriverEmployedDuringPeriod(driver, start, end)) return false;
         if (!term) return true;
         const name = String(driver.name || '').toLowerCase();
         const email = String(driver.email || '').toLowerCase();
@@ -636,11 +735,41 @@ export class InsuranceFinancialComponent implements OnInit {
       .sort((a, b) => a.driverName.localeCompare(b.driverName));
   });
 
+  enrollmentMatrixTotals = computed(() => {
+    this.summaryPeriodTab();
+    const rows = this.enrollmentMatrixRows();
+    const columns = this.enrollmentMatrixColumns();
+    const columnTotals: Record<string, number> = {};
+    const rowTotals: Record<number, number> = {};
+
+    for (const col of columns) {
+      columnTotals[col.policyId] = 0;
+    }
+
+    let grandTotal = 0;
+    for (const row of rows) {
+      let rowSum = 0;
+      for (const col of columns) {
+        const amount = this.getMatrixCellPeriodAmount(col, row.cells[col.policyId]);
+        rowSum += amount;
+        columnTotals[col.policyId] += amount;
+      }
+      rowTotals[row.driverId] = rowSum;
+      grandTotal += rowSum;
+    }
+
+    return { columnTotals, rowTotals, grandTotal };
+  });
+
   matrixDriverCounts = computed(() => {
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
+    const { start, end } = this.getSummaryPeriodDateRange();
     const all = this.chargingDrivers();
     let active = 0;
     let inactive = 0;
     for (const driver of all) {
+      if (!this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
       const status = this.normalizeDriverStatus(driver.status);
       if (this.isMatrixInactiveDriver(status)) inactive++;
       else if (this.isMatrixActiveDriver(status)) active++;
@@ -733,10 +862,6 @@ export class InsuranceFinancialComponent implements OnInit {
     this.matrixDriverTab.set(tab);
   }
 
-  setMatrixPeriodTab(tab: MatrixPeriodTab): void {
-    this.matrixPeriodTab.set(tab);
-  }
-
   setSummaryPeriodTab(tab: MatrixPeriodTab): void {
     this.summaryPeriodTab.set(tab);
     if (tab === 'daily') {
@@ -761,6 +886,114 @@ export class InsuranceFinancialComponent implements OnInit {
       case 'yearly': return 'Per Year';
       default: return 'Per Month';
     }
+  }
+
+  getFleetCalculationPeriodLabel(): string {
+    return this.getSummaryPeriodColumnLabel().replace('Per ', 'per ').toLowerCase();
+  }
+
+  toggleFleetCostCalculation(): void {
+    this.showFleetCostCalculation.update((open) => !open);
+  }
+
+  getFleetCalculationCategoryLabel(category: FleetCalculationLine['category']): string {
+    return category === 'company' ? 'Company Cost' : 'Driver Charges';
+  }
+
+  private buildFleetCostBreakdown(): FleetCostBreakdownData {
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const activeDriverCount = this.countDriversEmployedDuringPeriod(start, end);
+    const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
+    const periodLabel = this.getFleetCalculationPeriodLabel();
+    const periodTab = this.summaryPeriodTab();
+    const lines: FleetCalculationLine[] = [];
+    let driverChargesAnnual = 0;
+    let companyCostAnnual = 0;
+
+    for (const policy of this.getChargeablePolicies()) {
+      const policyFrequency = this.resolveBillingFrequency(policy);
+      const policyCost = this.getPolicyCost(policy);
+      const policyLabel = this.getChargingPolicyTypeLabel(policy.policyType);
+      const basis = this.resolveExpenseBasis(policy);
+      const isCompanyCost = basis !== 'per_driver' || this.isCompanyExpensePolicy(policy.policyType);
+      const frequencyLabel = this.getBillingFrequencyLabel(policyFrequency).toLowerCase();
+
+      if (isCompanyCost) {
+        const annualAmount = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, 'yearly');
+        const periodAmount = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, periodTab);
+        companyCostAnnual += annualAmount;
+        lines.push({
+          policyLabel,
+          providerName: policy.providerName,
+          category: 'company',
+          formula: `Whole policy — ${this.formatCurrency(policyCost, 2)} ${frequencyLabel} (${this.formatCurrency(annualAmount, 2)} annual)`,
+          annualAmount,
+          periodAmount
+        });
+        continue;
+      }
+
+      const enrollments = (enrollmentsByPolicy[String(policy.id)] || []).filter((e) => e.status === 'active');
+      if (!enrollments.length) {
+        const perDriverAnnual = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, 'yearly');
+        const perDriverPeriod = this.convertMatrixChargeToPeriod(policyCost, policyFrequency, periodTab);
+        const driverCount = Math.max(activeDriverCount, 0);
+        const annualAmount = perDriverAnnual * driverCount;
+        const periodAmount = perDriverPeriod * driverCount;
+        driverChargesAnnual += annualAmount;
+        const driverLabel = driverCount === 1 ? 'driver' : 'drivers';
+        lines.push({
+          policyLabel,
+          providerName: policy.providerName,
+          category: 'driver',
+          formula: `${driverCount} fleet ${driverLabel} × ${this.formatCurrency(perDriverPeriod, 2)} ${periodLabel} each`,
+          annualAmount,
+          periodAmount
+        });
+        continue;
+      }
+
+      let enrolledCount = 0;
+      let annualAmount = 0;
+      let periodAmount = 0;
+      let samplePeriodCharge = 0;
+      for (const enrollment of enrollments) {
+        const driver = this.chargingDrivers().find((d) => Number(d.id) === Number(enrollment.driverId));
+        if (driver && !this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
+
+        enrolledCount++;
+        const amount = Number(enrollment.deductionAmount ?? 0) || policyCost;
+        const frequency = String(enrollment.deductionFrequency || policyFrequency).trim().toLowerCase() || policyFrequency;
+        const enrolledAnnual = this.convertMatrixChargeToPeriod(amount, frequency, 'yearly');
+        const enrolledPeriod = this.convertMatrixChargeToPeriod(amount, frequency, periodTab);
+        annualAmount += enrolledAnnual;
+        periodAmount += enrolledPeriod;
+        if (!samplePeriodCharge) samplePeriodCharge = enrolledPeriod;
+      }
+
+      driverChargesAnnual += annualAmount;
+      const driverLabel = enrolledCount === 1 ? 'driver' : 'drivers';
+      const uniformRate = enrolledCount > 0 && Math.abs(periodAmount - samplePeriodCharge * enrolledCount) < 0.01;
+      const formula = uniformRate && enrolledCount > 0
+        ? `${enrolledCount} enrolled ${driverLabel} × ${this.formatCurrency(samplePeriodCharge, 2)} ${periodLabel} each`
+        : `${enrolledCount} enrolled ${driverLabel} — sum of individual enrollment charges (${this.formatCurrency(annualAmount, 2)} annual)`;
+
+      lines.push({
+        policyLabel,
+        providerName: policy.providerName,
+        category: 'driver',
+        formula,
+        annualAmount,
+        periodAmount
+      });
+    }
+
+    return {
+      activeDriverCount,
+      lines,
+      driverChargesAnnual,
+      companyCostAnnual
+    };
   }
 
   getSummarySpecificPeriodFilterLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
@@ -966,7 +1199,7 @@ export class InsuranceFinancialComponent implements OnInit {
     return day;
   }
 
-  getMatrixPeriodLabel(tab: MatrixPeriodTab = this.matrixPeriodTab()): string {
+  getMatrixPeriodLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
     switch (tab) {
       case 'daily': return 'Daily';
       case 'weekly': return 'Weekly';
@@ -1138,9 +1371,22 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   getMatrixCellDisplayAmount(column: EnrollmentMatrixColumn, cell: MatrixCellCharge | null | undefined): string {
-    if (!cell || cell.amount <= 0) return '—';
-    const converted = this.convertMatrixChargeToPeriod(cell.amount, cell.billingFrequency, this.matrixPeriodTab());
-    return this.formatCurrency(converted, 2);
+    const amount = this.getMatrixCellPeriodAmount(column, cell);
+    if (amount <= 0) return '—';
+    return this.formatCurrency(amount, 2);
+  }
+
+  getMatrixCellPeriodAmount(column: EnrollmentMatrixColumn, cell: MatrixCellCharge | null | undefined): number {
+    if (!cell || cell.amount <= 0) return 0;
+    return this.convertMatrixChargeToPeriod(cell.amount, cell.billingFrequency, this.summaryPeriodTab());
+  }
+
+  getMatrixRowTotal(row: EnrollmentMatrixRow): number {
+    return this.enrollmentMatrixTotals().rowTotals[row.driverId] ?? 0;
+  }
+
+  getMatrixColumnTotal(column: EnrollmentMatrixColumn): number {
+    return this.enrollmentMatrixTotals().columnTotals[column.policyId] ?? 0;
   }
 
   isCompanyExpensePolicy(policyType: string): boolean {

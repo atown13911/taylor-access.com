@@ -19,6 +19,9 @@
         <button class="btn btn-secondary" (click)="openReport()"><i class='bx bx-file'></i> Report</button>
         <button class="btn btn-primary" (click)="openAddPolicy()"><i class='bx bx-plus'></i> Add Policy</button>
       }
+      @if (pageTab() === 'charging') {
+        <button class="btn btn-secondary" (click)="openChargingReport()"><i class='bx bx-file'></i> Generate Report</button>
+      }
     </div>
   </header>
 
@@ -356,6 +359,59 @@
           </tbody>
         </table>
       </div>
+
+      <div class="fleet-calculation-section">
+        <button type="button" class="fleet-calculation-toggle" (click)="toggleFleetCostCalculation()">
+          <i class='bx' [class.bx-chevron-down]="showFleetCostCalculation()" [class.bx-chevron-right]="!showFleetCostCalculation()"></i>
+          How these totals are calculated
+        </button>
+
+        @if (showFleetCostCalculation()) {
+          <div class="data-table-container fleet-calculation-table-wrap">
+            <table class="data-table fleet-calculation-table">
+              <thead>
+                <tr>
+                  <th>Policy</th>
+                  <th>Cost Type</th>
+                  <th>Calculation</th>
+                  <th>{{ getSummaryPeriodColumnLabel() }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (line of chargingFleetCalculationLines(); track line.policyLabel + line.category + line.formula) {
+                  <tr>
+                    <td>
+                      <strong>{{ line.policyLabel }}</strong>
+                      <span class="fleet-calc-provider">{{ line.providerName }}</span>
+                    </td>
+                    <td>
+                      <span class="fleet-calc-category" [class.company]="line.category === 'company'">
+                        {{ getFleetCalculationCategoryLabel(line.category) }}
+                      </span>
+                    </td>
+                    <td class="fleet-calc-formula">{{ line.formula }}</td>
+                    <td class="fleet-calc-amount">{{ formatCurrency(line.periodAmount, 2) }}</td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3"><strong>Driver Charges Subtotal</strong></td>
+                  <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</strong></td>
+                </tr>
+                <tr>
+                  <td colspan="3"><strong>Company Cost Subtotal</strong></td>
+                  <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</strong></td>
+                </tr>
+                <tr class="fleet-calculation-total-row">
+                  <td colspan="3"><strong>Total Fleet Cost</strong></td>
+                  <td class="fleet-calc-amount"><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        }
+      </div>
     </section>
 
     <div class="charging-toolbar">
@@ -471,18 +527,62 @@
           <h2><i class='bx bx-grid-alt'></i> Driver Enrollment Matrix</h2>
           <p class="matrix-subtitle">
             @if (matrixDriverTab() === 'active') {
-              {{ getMatrixPeriodLabel() }} per-driver charges — green = driver expense, blue = company expense
+              {{ getMatrixPeriodLabel() }} per-driver charges — {{ getSummarySpecificPeriodLabel() }} — green = driver expense, blue = company expense
             } @else {
-              {{ getMatrixPeriodLabel() }} inactive driver charges — green = driver expense, blue = company expense
+              {{ getMatrixPeriodLabel() }} inactive driver charges — {{ getSummarySpecificPeriodLabel() }} — green = driver expense, blue = company expense
             }
           </p>
         </div>
-        @if (enrollmentMatrixStats().drivers > 0) {
-          <div class="matrix-legend">
-            <span class="legend-item"><span class="enrollment-dot driver_expense"></span> Driver Expense</span>
-            <span class="legend-item"><span class="enrollment-dot company_expense"></span> Company Expense</span>
+        <div class="matrix-header-actions">
+          @if (enrollmentMatrixStats().drivers > 0) {
+            <div class="matrix-legend">
+              <span class="legend-item"><span class="enrollment-dot driver_expense"></span> Driver Expense</span>
+              <span class="legend-item"><span class="enrollment-dot company_expense"></span> Company Expense</span>
+            </div>
+          }
+          <div class="fleet-period-filters">
+            <div class="fleet-period-filter">
+              <label for="matrixPeriodSelect">Period</label>
+              <select
+                id="matrixPeriodSelect"
+                class="fleet-period-select"
+                [ngModel]="summaryPeriodTab()"
+                (ngModelChange)="setSummaryPeriodTab($event)"
+              >
+                <option value="daily">Day</option>
+                <option value="weekly">Week</option>
+                <option value="monthly">Month</option>
+                <option value="yearly">Year</option>
+              </select>
+            </div>
+            <div class="fleet-period-filter">
+              <label [attr.for]="summaryPeriodTab() === 'daily' ? 'matrixSpecificPeriodDate' : 'matrixSpecificPeriodSelect'">
+                {{ getSummarySpecificPeriodFilterLabel() }}
+              </label>
+              @if (summaryPeriodTab() === 'daily') {
+                <input
+                  id="matrixSpecificPeriodDate"
+                  type="date"
+                  class="fleet-period-select fleet-period-date"
+                  [ngModel]="summarySpecificPeriod()"
+                  (ngModelChange)="setSummarySpecificPeriod($event)"
+                  [max]="getSummaryMaxDate()"
+                />
+              } @else {
+                <select
+                  id="matrixSpecificPeriodSelect"
+                  class="fleet-period-select"
+                  [ngModel]="summarySpecificPeriod()"
+                  (ngModelChange)="setSummarySpecificPeriod($event)"
+                >
+                  @for (option of summarySpecificPeriodOptions(); track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              }
+            </div>
           </div>
-        }
+        </div>
       </div>
 
       <div class="matrix-driver-tabs">
@@ -493,21 +593,6 @@
         <button class="matrix-driver-tab" [class.active]="matrixDriverTab() === 'inactive'" (click)="setMatrixDriverTab('inactive')">
           <i class='bx bx-user-x'></i> Inactive
           <span class="sub-tab-count">{{ matrixDriverCounts().inactive }}</span>
-        </button>
-      </div>
-
-      <div class="matrix-period-tabs">
-        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'daily'" (click)="setMatrixPeriodTab('daily')">
-          Day
-        </button>
-        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'weekly'" (click)="setMatrixPeriodTab('weekly')">
-          Week
-        </button>
-        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'monthly'" (click)="setMatrixPeriodTab('monthly')">
-          Month
-        </button>
-        <button class="matrix-period-tab" [class.active]="matrixPeriodTab() === 'yearly'" (click)="setMatrixPeriodTab('yearly')">
-          Year
         </button>
       </div>
 
@@ -549,6 +634,7 @@
                     </span>
                   </th>
                 }
+                <th class="matrix-total-col sticky-col-right">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -560,9 +646,25 @@
                       <span class="matrix-cost">{{ getMatrixCellDisplayAmount(col, row.cells[col.policyId]) }}</span>
                     </td>
                   }
+                  <td class="matrix-cell matrix-row-total sticky-col-right">
+                    <strong>{{ formatCurrency(getMatrixRowTotal(row), 2) }}</strong>
+                  </td>
                 </tr>
               }
             </tbody>
+            <tfoot>
+              <tr class="matrix-totals-row">
+                <td class="matrix-driver-col sticky-col"><strong>Total</strong></td>
+                @for (col of enrollmentMatrixColumns(); track col.policyId) {
+                  <td class="matrix-cell matrix-col-total">
+                    <strong>{{ formatCurrency(getMatrixColumnTotal(col), 2) }}</strong>
+                  </td>
+                }
+                <td class="matrix-cell matrix-grand-total sticky-col-right">
+                  <strong>{{ formatCurrency(enrollmentMatrixTotals().grandTotal, 2) }}</strong>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       }
@@ -965,6 +1067,105 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" (click)="closeReport()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== CHARGING TABLE REPORT MODAL ========== -->
+@if (showChargingReport()) {
+  <div class="modal-overlay" (click)="closeChargingReport()">
+    <div class="modal modal-wide" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3><i class='bx bx-file'></i> Insurance Charging Report</h3>
+        <div class="report-actions-header">
+          <button class="btn btn-secondary btn-sm" (click)="exportChargingReportCSV()"><i class='bx bx-download'></i> Export CSV</button>
+          <button class="btn btn-secondary btn-sm" (click)="printChargingReport()"><i class='bx bx-printer'></i> Print</button>
+          <button class="close-btn" (click)="closeChargingReport()"><i class='bx bx-x'></i></button>
+        </div>
+      </div>
+      <div class="modal-body report-body" id="charging-report">
+        <div class="report-title">
+          <h2>Insurance Charging Report</h2>
+          <p>Generated: {{ chargingReportDate }}</p>
+          <p>{{ getChargingReportPeriodLabel() }}</p>
+        </div>
+
+        <div class="report-summary">
+          <div class="report-stat">
+            <span class="rs-value">{{ chargingStats().chargeLines }}</span>
+            <span class="rs-label">Charge Lines</span>
+          </div>
+          <div class="report-stat">
+            <span class="rs-value">{{ chargingStats().drivers }}</span>
+            <span class="rs-label">Drivers on Fleet</span>
+          </div>
+          <div class="report-stat">
+            <span class="rs-value">{{ formatCurrency(chargingStats().totalCharges, 2) }}</span>
+            <span class="rs-label">Total Annual Charges</span>
+          </div>
+        </div>
+
+        <h4 class="report-section-title">Fleet Cost vs. Driver Charges — {{ getSummaryPeriodColumnLabel() }}</h4>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Drivers on Fleet</th>
+              <th>Cost Type</th>
+              <th>{{ getSummaryPeriodColumnLabel() }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td rowspan="3"><strong>{{ chargingFleetSummary().activeDrivers }}</strong></td>
+              <td>Driver Charges</td>
+              <td>{{ formatCurrency(chargingFleetSummaryDisplay().driverCharges, 2) }}</td>
+            </tr>
+            <tr>
+              <td>Company Cost</td>
+              <td>{{ formatCurrency(chargingFleetSummaryDisplay().companyCost, 2) }}</td>
+            </tr>
+            <tr>
+              <td><strong>Total Fleet Cost</strong></td>
+              <td><strong>{{ formatCurrency(chargingFleetSummaryDisplay().totalFleetCost, 2) }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4 class="report-section-title">Policy Charge Lines</h4>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Policy Type</th>
+              <th>Provider</th>
+              <th>Policy #</th>
+              <th>Cost Basis</th>
+              <th>Frequency</th>
+              <th>Policy Cost</th>
+              <th>Charge Amount</th>
+              <th>Deductible</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of chargingRows(); track $index) {
+              <tr>
+                <td>{{ getChargingPolicyTypeLabel(row.policyType) }}</td>
+                <td>{{ row.providerName }}</td>
+                <td>{{ row.policyNumber || '—' }}</td>
+                <td>{{ getExpenseBasisLabel(row.expenseBasis) }}</td>
+                <td>{{ getBillingFrequencyLabel(row.billingFrequency) }}</td>
+                <td>{{ formatCurrency(row.policyCost, 2) }}</td>
+                <td>{{ formatCurrency(row.chargeAmount, 2) }}</td>
+                <td>{{ formatCurrency(row.perIncidentDeductible, 2) }}</td>
+                <td>{{ getChargingEnrollmentStatusLabel(row.enrollmentStatus) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeChargingReport()">Close</button>
       </div>
     </div>
   </div>
