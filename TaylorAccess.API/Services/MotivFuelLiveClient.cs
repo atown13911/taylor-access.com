@@ -39,11 +39,11 @@ public sealed class MotivFuelLiveClient
 
         var candidateRoots = new[]
         {
+            _config["MOTIV_FUEL_PURCHASES_PATH"] ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH"),
+            "/v1/fuel_purchases",
             _config["MOTIV_CARD_TRANSACTIONS_PATH"] ?? Environment.GetEnvironmentVariable("MOTIV_CARD_TRANSACTIONS_PATH"),
             "/motive_card/v2/transactions",
-            "/motive_card/v1/transactions",
-            _config["MOTIV_FUEL_PURCHASES_PATH"] ?? Environment.GetEnvironmentVariable("MOTIV_FUEL_PURCHASES_PATH"),
-            "/v1/fuel_purchases"
+            "/motive_card/v1/transactions"
         };
 
         var paths = BuildDateFilteredPaths(candidateRoots, from, to).ToList();
@@ -79,11 +79,92 @@ public sealed class MotivFuelLiveClient
                 break;
         }
 
+        if (records.Count > 0)
+            await EnrichDriverVehicleLookupsAsync(client, creds, records, ct);
+
         return new MotivFuelLiveResult
         {
             Connected = true,
             Records = records
         };
+    }
+
+    private async Task EnrichDriverVehicleLookupsAsync(
+        HttpClient client,
+        MotivCredentials creds,
+        List<MotivFuelLiveRecord> records,
+        CancellationToken ct)
+    {
+        var needDriver = records.Any(r => string.IsNullOrWhiteSpace(r.DriverName) && !string.IsNullOrWhiteSpace(r.DriverId));
+        var needVehicle = records.Any(r => string.IsNullOrWhiteSpace(r.TruckNumber) && !string.IsNullOrWhiteSpace(r.VehicleId));
+        if (!needDriver && !needVehicle)
+            return;
+
+        var driverMap = needDriver
+            ? await BuildUserLookupAsync(client, creds, ct)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var vehicleMap = needVehicle
+            ? await BuildVehicleLookupAsync(client, creds, ct)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var record in records)
+        {
+            if (string.IsNullOrWhiteSpace(record.DriverName)
+                && !string.IsNullOrWhiteSpace(record.DriverId)
+                && driverMap.TryGetValue(record.DriverId, out var driverName))
+            {
+                record.DriverName = driverName;
+            }
+
+            if (string.IsNullOrWhiteSpace(record.TruckNumber)
+                && !string.IsNullOrWhiteSpace(record.VehicleId)
+                && vehicleMap.TryGetValue(record.VehicleId, out var truckNumber))
+            {
+                record.TruckNumber = truckNumber;
+            }
+        }
+    }
+
+    private async Task<Dictionary<string, string>> BuildUserLookupAsync(
+        HttpClient client,
+        MotivCredentials creds,
+        CancellationToken ct)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in await FetchAllPagesAsync(client, creds, "/v1/users", ct))
+        {
+            var user = PickObject(row, "user") ?? row;
+            var id = TryGetString(user, "id");
+            var name = BuildName(
+                TryGetString(user, "first_name"),
+                TryGetString(user, "last_name"),
+                TryGetString(user, "name"));
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
+                map[id] = name;
+        }
+
+        return map;
+    }
+
+    private async Task<Dictionary<string, string>> BuildVehicleLookupAsync(
+        HttpClient client,
+        MotivCredentials creds,
+        CancellationToken ct)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in await FetchAllPagesAsync(client, creds, "/v1/vehicles", ct))
+        {
+            var vehicle = PickObject(row, "vehicle") ?? row;
+            var id = TryGetString(vehicle, "id");
+            var number = FirstNonEmpty(
+                TryGetString(vehicle, "number"),
+                TryGetString(vehicle, "unit_number"),
+                TryGetString(vehicle, "fleet_number"));
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(number))
+                map[id] = number;
+        }
+
+        return map;
     }
 
     private async Task<List<JsonElement>> FetchAllPagesAsync(
@@ -168,16 +249,27 @@ public sealed class MotivFuelLiveClient
                 BuildName(TryGetString(driver, "first_name"), TryGetString(driver, "last_name"), TryGetString(driver, "name")),
                 TryGetString(item, "driver_name")),
             MerchantName = FirstNonEmpty(
+                TryGetString(payload, "vendor"),
                 TryGetString(merchant, "name"),
                 TryGetString(merchant, "merchant_name"),
                 TryGetString(item, "merchant_name")),
             TruckNumber = FirstNonEmpty(
                 TryGetString(vehicle, "number"),
                 TryGetString(vehicle, "unit_number"),
+                TryGetString(driver, "driver_company_id"),
                 TryGetString(item, "vehicle_number"),
                 TryGetString(item, "truck_number"),
                 TryGetString(item, "unit")),
-            Status = FirstNonEmpty(TryGetString(payload, "status"), TryGetString(item, "status")),
+            DriverId = FirstNonEmpty(
+                TryGetString(payload, "driver_id"),
+                TryGetString(driver, "id")),
+            VehicleId = FirstNonEmpty(
+                TryGetString(payload, "vehicle_id"),
+                TryGetString(vehicle, "id")),
+            Status = FirstNonEmpty(
+                TryGetString(payload, "transaction_status"),
+                TryGetString(payload, "status"),
+                TryGetString(item, "status")),
             TransactionDate = transactionTime
         };
     }
@@ -206,7 +298,7 @@ public sealed class MotivFuelLiveClient
         if (payload.ValueKind != JsonValueKind.Object)
             return [];
 
-        foreach (var key in new[] { "transactions", "fuel_purchases", "data", "items", "results" })
+        foreach (var key in new[] { "fuel_purchases", "transactions", "users", "vehicles", "data", "items", "results" })
         {
             if (payload.TryGetProperty(key, out var arr) && arr.ValueKind == JsonValueKind.Array)
                 return arr.EnumerateArray().Select(x => x.Clone()).ToList();
@@ -272,7 +364,7 @@ public sealed class MotivFuelLiveClient
 
     private static decimal ParseAmount(JsonElement item)
     {
-        foreach (var key in new[] { "total_amount", "amount", "total_cost", "authorized_amount" })
+        foreach (var key in new[] { "total_cost", "total_amount", "amount", "authorized_amount" })
         {
             if (!item.TryGetProperty(key, out var value))
                 continue;
@@ -334,9 +426,11 @@ public sealed class MotivFuelLiveRecord
 {
     public string? TransactionId { get; init; }
     public decimal Amount { get; init; }
-    public string? DriverName { get; init; }
+    public string? DriverName { get; set; }
     public string? MerchantName { get; init; }
-    public string? TruckNumber { get; init; }
+    public string? TruckNumber { get; set; }
+    public string? DriverId { get; init; }
+    public string? VehicleId { get; init; }
     public string? Status { get; init; }
     public DateTime? TransactionDate { get; init; }
 }
