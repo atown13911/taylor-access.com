@@ -214,12 +214,15 @@ export class DriverDatabaseComponent implements OnInit {
       const boardDrivers = Array.isArray(payload?.drivers) ? payload.drivers : [];
 
       this.totalDocumentCount.set(Number(res?.stats?.totalDocuments ?? 0));
-      const normalizedDrivers = boardDrivers.map((driver: any) => ({
-        ...driver,
-        _docs: Array.isArray(driver?._docs) ? driver._docs : []
-      }));
+      const allBoardDocs: any[] = [];
+      const normalizedDrivers = boardDrivers.map((driver: any) => {
+        const docs = Array.isArray(driver?._docs) ? driver._docs : [];
+        allBoardDocs.push(...docs);
+        return { ...driver, _docs: docs };
+      });
+      this.allDocs.set(this.mergeDocs(allBoardDocs));
       this.drivers.set(this.deduplicateDrivers(normalizedDrivers));
-      this.syncAllDocsFromDrivers(this.drivers());
+      this.attachDocsToDrivers();
     } catch (err) {
       console.error('Failed to load compliance board:', err);
       await this.loadComplianceBoardFallback();
@@ -788,7 +791,14 @@ export class DriverDatabaseComponent implements OnInit {
   private getDocsForDriver(driver: any): any[] {
     const isSelected = `${this.selectedDriver()?.id ?? ''}` === `${driver?.id ?? ''}`;
     const loaded = isSelected ? this.driverDocs() : [];
-    return this.mergeDocs(Array.isArray(driver?._docs) ? driver._docs : [], loaded);
+    const aliasDocs = this.getDocsForDriverIds(this.getDriverIdKeys(driver));
+    return this.mergeDocs(aliasDocs, Array.isArray(driver?._docs) ? driver._docs : [], loaded);
+  }
+
+  private getDocsForDriverIds(driverIds: string[]): any[] {
+    if (!driverIds.length) return [];
+    const idSet = new Set(driverIds.map((id) => String(id ?? '').trim()).filter(Boolean));
+    return this.allDocs().filter((doc: any) => idSet.has(String(doc?.driverId ?? '').trim()));
   }
 
   private resolveDocComplianceStatus(doc: any): 'compliant' | 'expiring' | 'expired' | 'none' {
@@ -942,6 +952,7 @@ export class DriverDatabaseComponent implements OnInit {
 
   private updateDriverDocsInState(driverId: any, docs: any[]): void {
     const id = `${driverId ?? ''}`;
+    this.allDocs.update((rows) => this.mergeDocs(rows, docs));
     this.drivers.update((rows: any[]) =>
       rows.map((d: any) => {
         if (`${d?.id ?? ''}` !== id) return d;
@@ -1751,13 +1762,18 @@ export class DriverDatabaseComponent implements OnInit {
         // Keep the most recently updated record for duplicate identities.
         const currentTs = this.getRecordTimestamp(driver);
         const winnerTs = this.getRecordTimestamp(winner);
+        const mergedDocs = this.mergeDocs(
+          Array.isArray(winner?._docs) ? winner._docs : [],
+          Array.isArray(driver?._docs) ? driver._docs : []
+        );
         if (currentTs > winnerTs) {
           const idx = unique.indexOf(winner);
-          const replacement = { ...driver, _aliasDriverIds: Array.from(winnerIds) };
+          const replacement = { ...driver, _aliasDriverIds: Array.from(winnerIds), _docs: mergedDocs };
           if (idx >= 0) unique[idx] = replacement;
           winner = replacement;
         } else {
           winner._aliasDriverIds = Array.from(winnerIds);
+          winner._docs = mergedDocs;
         }
       }
 

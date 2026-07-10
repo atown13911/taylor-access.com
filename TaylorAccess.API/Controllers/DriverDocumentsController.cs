@@ -158,6 +158,9 @@ public class DriverDocumentsController : ControllerBase
         _context.DriverDocuments.Add(doc);
         await _context.SaveChangesAsync();
 
+        await SyncDriverProfileFromDocumentAsync(driver, doc);
+        await _context.SaveChangesAsync();
+
         await _auditService.LogAsync(AuditActions.DocumentUploaded, "DriverDocument", doc.Id,
             $"Uploaded {doc.Category}/{doc.SubCategory}: {doc.DocumentName} for driver {driverId}");
 
@@ -174,6 +177,7 @@ public class DriverDocumentsController : ControllerBase
     {
         var doc = await _context.DriverDocuments.FindAsync(id);
         if (doc == null) return NotFound(new { error = "Document not found" });
+        var driver = await _context.Drivers.FindAsync(doc.DriverId);
 
         if (!string.IsNullOrEmpty(documentName)) doc.DocumentName = documentName;
         if (documentNumber != null) doc.DocumentNumber = documentNumber;
@@ -197,6 +201,7 @@ public class DriverDocumentsController : ControllerBase
         }
 
         doc.UpdatedAt = DateTime.UtcNow;
+        if (driver != null) await SyncDriverProfileFromDocumentAsync(driver, doc);
         await _context.SaveChangesAsync();
 
         await _auditService.LogAsync(AuditActions.DocumentUpdated, "DriverDocument", doc.Id,
@@ -341,6 +346,31 @@ public class DriverDocumentsController : ControllerBase
         if (days < 0) return "expired";
         if (days <= 30) return "expiring";
         return "active";
+    }
+
+    private static Task SyncDriverProfileFromDocumentAsync(Driver driver, DriverDocument doc)
+    {
+        var category = (doc.Category ?? string.Empty).Trim().ToLowerInvariant();
+        var subCategory = (doc.SubCategory ?? string.Empty).Trim().ToLowerInvariant();
+        var isCdl = category == "cdl_endorsements" || subCategory == "cdl_license" ||
+                    category.Contains("cdl") || subCategory.Contains("cdl");
+        var isMedical = category == "medical" || subCategory == "medical_card" ||
+                        category.Contains("medical") || subCategory.Contains("medical");
+
+        if (isCdl)
+        {
+            if (doc.ExpiryDate.HasValue)
+                driver.LicenseExpiry = DateOnly.FromDateTime(doc.ExpiryDate.Value.Date);
+            if (!string.IsNullOrWhiteSpace(doc.DocumentNumber))
+                driver.LicenseNumber = doc.DocumentNumber.Trim();
+        }
+        else if (isMedical && doc.ExpiryDate.HasValue)
+        {
+            driver.MedicalCardExpiry = DateOnly.FromDateTime(doc.ExpiryDate.Value.Date);
+        }
+
+        driver.UpdatedAt = DateTime.UtcNow;
+        return Task.CompletedTask;
     }
 }
 

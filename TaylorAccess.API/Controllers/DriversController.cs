@@ -213,6 +213,7 @@ public class DriversController : ControllerBase
                 Category = d.Category,
                 SubCategory = d.SubCategory,
                 DocumentName = d.DocumentName,
+                DocumentNumber = d.DocumentNumber,
                 ExpiryDate = d.ExpiryDate,
                 Status = d.Status,
                 CreatedAt = d.CreatedAt
@@ -1253,6 +1254,7 @@ file sealed class ComplianceBoardDocumentRow
     public string Category { get; set; } = string.Empty;
     public string? SubCategory { get; set; }
     public string DocumentName { get; set; } = string.Empty;
+    public string? DocumentNumber { get; set; }
     public DateTime? ExpiryDate { get; set; }
     public string Status { get; set; } = "active";
     public DateTime CreatedAt { get; set; }
