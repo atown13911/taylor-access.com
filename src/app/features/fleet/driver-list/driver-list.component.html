@@ -180,7 +180,7 @@
                 <th>Phone</th>
                 <th>Email</th>
                 <th>License #</th>
-                <th>License Exp</th>
+                <th>Truck #</th>
                 <th>Type</th>
                 <th>Fleet</th>
                 <th>Hire Date</th>
@@ -199,9 +199,7 @@
                   <td>{{ driver.phone }}</td>
                   <td>{{ driver.email || '—' }}</td>
                   <td class="mono">{{ driver.licenseNumber || '—' }}</td>
-                  <td [class.expiring]="isExpiringSoon(driver.licenseExpiry)" [class.expired]="isExpired(driver.licenseExpiry)">
-                    {{ formatDate(driver.licenseExpiry) }}
-                  </td>
+                  <td class="mono">{{ formatTruckNumber(driver.truckNumber) }}</td>
                   <td><span class="type-badge" [class]="driver.type">{{ formatDriverType(driver.type) }}</span></td>
                   <td>
                     @if (driver.fleetName !== '—') {
@@ -254,10 +252,10 @@
             <th>Phone</th>
             <th>Email</th>
             <th>License #</th>
-            <th>License Exp</th>
+            <th>Truck #</th>
             <th>Type</th>
             <th>Fleet</th>
-            <th>Hire Date</th>
+            <th>{{ getEmploymentDateColumnLabel() }}</th>
             <th>Status</th>
             <th>Dispatcher</th>
             <th>Actions</th>
@@ -273,9 +271,7 @@
               <td>{{ driver.phone }}</td>
               <td>{{ driver.email || '—' }}</td>
               <td class="mono">{{ driver.licenseNumber || '—' }}</td>
-              <td [class.expiring]="isExpiringSoon(driver.licenseExpiry)" [class.expired]="isExpired(driver.licenseExpiry)">
-                {{ formatDate(driver.licenseExpiry) }}
-              </td>
+              <td class="mono">{{ formatTruckNumber(driver.truckNumber) }}</td>
               <td><span class="type-badge" [class]="driver.type">{{ formatDriverType(driver.type) }}</span></td>
               <td>
                 @if (driver.fleetName !== '—') {
@@ -284,7 +280,7 @@
                   <span class="no-fleet">—</span>
                 }
               </td>
-              <td>{{ formatDate(driver.hireDate) }}</td>
+              <td>{{ formatDate(getDriverEmploymentDate(driver)) }}</td>
               <td><span class="status-badge" [class]="driver.status">{{ driver.status }}</span></td>
               <td><span class="dispatcher-display">{{ resolveDispatcherName(driver) }}</span></td>
               <td class="actions-cell">

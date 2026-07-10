@@ -18,6 +18,7 @@ interface DriverRow {
   email: string;
   licenseNumber: string;
   licenseExpiry: string;
+  truckNumber: string;
   status: string;
   fleetId: number | null;
   fleetName: string;
@@ -385,6 +386,7 @@ export class DriverListComponent implements OnInit {
           email: d.email || '',
           licenseNumber: d.licenseNumber || '',
           licenseExpiry: d.licenseExpiry || '',
+          truckNumber: d.truckNumber || '',
           status: this.normalizeStatus(d.status || 'active'),
           fleetId: this.toNullableNumber(
             d.fleetId
@@ -1396,6 +1398,23 @@ export class DriverListComponent implements OnInit {
   formatDate(dateString: string): string {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  showTerminationDateColumn(): boolean {
+    return this.activeTab() !== 'active';
+  }
+
+  getEmploymentDateColumnLabel(): string {
+    return this.showTerminationDateColumn() ? 'Termination Date' : 'Hire Date';
+  }
+
+  getDriverEmploymentDate(driver: DriverRow): string {
+    return this.showTerminationDateColumn() ? driver.terminationDate : driver.hireDate;
+  }
+
+  formatTruckNumber(truckNumber: string): string {
+    const value = String(truckNumber ?? '').trim();
+    return value || '—';
   }
 
   formatDriverType(type: string): string {
