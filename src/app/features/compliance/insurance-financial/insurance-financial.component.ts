@@ -6,7 +6,21 @@ import { ToastService } from '../../../core/services/toast.service';
 import { EventTrackingService } from '../../../core/services/event-tracking.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
 
-type PageTab = 'insurance' | 'financial';
+type PageTab = 'insurance' | 'charging' | 'financial';
+
+interface ChargingRow {
+  driverName: string;
+  policyType: string;
+  providerName: string;
+  policyNumber: string;
+  expenseBasis: string;
+  billingFrequency: string;
+  policyCost: number;
+  chargeAmount: number;
+  perIncidentDeductible: number;
+  enrollmentStatus: string;
+  policyStatus: string;
+}
 
 interface InsuranceRow {
   id: string;
@@ -41,6 +55,11 @@ export class InsuranceFinancialComponent implements OnInit {
   private confirm = inject(ConfirmService);
 
   pageTab = signal<PageTab>('insurance');
+
+  // Charging table state
+  chargingEnrollmentsByPolicy = signal<Record<string, any[]>>({});
+  loadingCharging = signal(false);
+  chargingSearch = '';
 
   // Insurance state
   policies = signal<InsuranceRow[]>([]);
@@ -277,6 +296,135 @@ export class InsuranceFinancialComponent implements OnInit {
     };
   });
 
+  chargingRows = computed((): ChargingRow[] => {
+    const map = this.chargingEnrollmentsByPolicy();
+    const rows: ChargingRow[] = [];
+
+    for (const group of this.groupedByType()) {
+      const policy = group.current;
+      if (policy.status !== 'active' && policy.status !== 'expiring') continue;
+
+      const meta = policy as any;
+      const basis = meta.expenseBasis || 'whole_policy';
+      const policyCost = this.getPolicyCost(policy);
+      const deductible = Number(meta.perIncidentDeductible ?? 0);
+      const frequency = meta.billingFrequency || '';
+      const enrollments = map[String(policy.id)] || [];
+
+      if (basis === 'per_driver') {
+        const activeEnrollments = enrollments.filter((e: any) => e.status === 'active');
+        if (!activeEnrollments.length) {
+          rows.push({
+            driverName: '—',
+            policyType: policy.policyType,
+            providerName: policy.providerName,
+            policyNumber: policy.policyNumber || '',
+            expenseBasis: basis,
+            billingFrequency: frequency,
+            policyCost,
+            chargeAmount: 0,
+            perIncidentDeductible: deductible,
+            enrollmentStatus: 'none',
+            policyStatus: policy.status
+          });
+          continue;
+        }
+
+        for (const enrollment of activeEnrollments) {
+          rows.push({
+            driverName: enrollment.driverName || 'Unknown Driver',
+            policyType: policy.policyType,
+            providerName: policy.providerName,
+            policyNumber: policy.policyNumber || '',
+            expenseBasis: basis,
+            billingFrequency: enrollment.deductionFrequency || frequency,
+            policyCost,
+            chargeAmount: Number(enrollment.deductionAmount ?? 0) || policyCost,
+            perIncidentDeductible: deductible,
+            enrollmentStatus: enrollment.status || 'active',
+            policyStatus: policy.status
+          });
+        }
+        continue;
+      }
+
+      rows.push({
+        driverName: 'Company (Whole Policy)',
+        policyType: policy.policyType,
+        providerName: policy.providerName,
+        policyNumber: policy.policyNumber || '',
+        expenseBasis: basis,
+        billingFrequency: frequency,
+        policyCost,
+        chargeAmount: policyCost,
+        perIncidentDeductible: deductible,
+        enrollmentStatus: 'n/a',
+        policyStatus: policy.status
+      });
+    }
+
+    const term = this.chargingSearch.trim().toLowerCase();
+    const filtered = term
+      ? rows.filter((row) =>
+          row.driverName.toLowerCase().includes(term) ||
+          this.getPolicyTypeLabel(row.policyType).toLowerCase().includes(term) ||
+          row.providerName.toLowerCase().includes(term) ||
+          row.policyNumber.toLowerCase().includes(term)
+        )
+      : rows;
+
+    return filtered.sort((a, b) => {
+      const driverCmp = a.driverName.localeCompare(b.driverName);
+      if (driverCmp !== 0) return driverCmp;
+      return this.getPolicyTypeLabel(a.policyType).localeCompare(this.getPolicyTypeLabel(b.policyType));
+    });
+  });
+
+  chargingStats = computed(() => {
+    const rows = this.chargingRows();
+    const driverNames = new Set(rows.map((r) => r.driverName).filter((n) => n !== '—' && !n.startsWith('Company')));
+    return {
+      chargeLines: rows.length,
+      drivers: driverNames.size,
+      totalCharges: rows.reduce((sum, row) => sum + (row.chargeAmount || 0), 0)
+    };
+  });
+
+  setPageTab(tab: PageTab): void {
+    this.pageTab.set(tab);
+    if (tab === 'charging') {
+      this.loadChargingData();
+    }
+  }
+
+  loadChargingData(): void {
+    if (this.loadingPolicies()) return;
+    this.loadingCharging.set(true);
+
+    const chargeablePolicies = this.groupedByType()
+      .map((group) => group.current)
+      .filter((policy) => policy.status === 'active' || policy.status === 'expiring');
+
+    if (!chargeablePolicies.length) {
+      this.chargingEnrollmentsByPolicy.set({});
+      this.loadingCharging.set(false);
+      return;
+    }
+
+    Promise.all(
+      chargeablePolicies.map((policy) =>
+        this.api.getInsuranceEnrollments(policy.id).toPromise()
+          .then((res: any) => ({ policyId: String(policy.id), rows: res?.data || [] }))
+          .catch(() => ({ policyId: String(policy.id), rows: [] }))
+      )
+    ).then((results) => {
+      const map: Record<string, any[]> = {};
+      for (const result of results) map[result.policyId] = result.rows;
+      this.chargingEnrollmentsByPolicy.set(map);
+      this.loadingCharging.set(false);
+    });
+  }
+
   ngOnInit(): void {
     this.loadPolicies();
     this.loadPayments();
@@ -290,8 +438,13 @@ export class InsuranceFinancialComponent implements OnInit {
       next: (res: any) => {
         this.policies.set(res?.data || []);
         this.loadingPolicies.set(false);
+        if (this.pageTab() === 'charging') this.loadChargingData();
       },
-      error: () => { this.policies.set([]); this.loadingPolicies.set(false); }
+      error: () => {
+        this.policies.set([]);
+        this.loadingPolicies.set(false);
+        if (this.pageTab() === 'charging') this.loadChargingData();
+      }
     });
   }
 
@@ -397,6 +550,7 @@ export class InsuranceFinancialComponent implements OnInit {
         this.savingPolicy.set(false);
         this.closePolicyModal();
         this.loadPolicies();
+        this.refreshChargingIfNeeded();
       },
       error: (err) => {
         this.toast.error(err?.error?.error || 'Failed to save policy', 'Error');
@@ -522,6 +676,7 @@ export class InsuranceFinancialComponent implements OnInit {
         this.savingBilling.set(false);
         this.closeBillingModal();
         this.loadPolicies();
+        this.refreshChargingIfNeeded();
       },
       error: (err) => {
         this.toast.error(err?.error?.error || 'Failed to save billing', 'Error');
@@ -612,6 +767,10 @@ export class InsuranceFinancialComponent implements OnInit {
     this.editingEnrollment.set(null);
   }
 
+  private refreshChargingIfNeeded(): void {
+    if (this.pageTab() === 'charging') this.loadChargingData();
+  }
+
   saveEnrollment(): void {
     if (!this.editingEnrollment() && !this.enrollmentForm.driverId) {
       this.toast.error('Please select a driver', 'Validation');
@@ -635,6 +794,7 @@ export class InsuranceFinancialComponent implements OnInit {
         this.savingEnrollment.set(false);
         this.closeEnrollmentModal();
         this.loadEnrollments(policyId);
+        this.refreshChargingIfNeeded();
       },
       error: (err) => {
         this.toast.error(err?.error?.error || 'Failed to save enrollment', 'Error');
@@ -654,6 +814,7 @@ export class InsuranceFinancialComponent implements OnInit {
       next: () => {
         this.toast.success(`${driver.name} enrolled`, 'Enrolled');
         this.loadEnrollments(policyId);
+        this.refreshChargingIfNeeded();
       },
       error: (err) => this.toast.error(err?.error?.error || 'Failed to enroll driver', 'Error')
     });
@@ -666,6 +827,7 @@ export class InsuranceFinancialComponent implements OnInit {
       next: () => {
         this.toast.success('Driver removed from policy', 'Removed');
         this.loadEnrollments(this.profilePolicy()!.id);
+        this.refreshChargingIfNeeded();
       },
       error: () => this.toast.error('Failed to remove enrollment', 'Error')
     });

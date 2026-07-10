@@ -35,6 +35,23 @@
   i { font-size: 1rem; }
 }
 
+.charging-stats-bar { grid-template-columns: repeat(3, 1fr); }
+
+.charging-toolbar {
+  margin-bottom: 1rem;
+  .search-input {
+    width: 100%;
+    max-width: 420px;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    &:focus { outline: none; border-color: var(--cyan, #00e5ff); }
+  }
+}
+
 // Stats
 .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
 .stat-card { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; }

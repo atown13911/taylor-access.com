@@ -329,21 +329,16 @@ export class VanTacApiService {
   }
 
   // Insurance Enrollments
-  getInsuranceEnrollments(params?: any): Observable<any> {
-    return this.http.get(`${this.baseUrl}/api/v1/insurance-enrollments`, { params });
+  getInsuranceEnrollments(policyId: any): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-policies/${policyId}/enrollments`);
   }
-  createInsuranceEnrollment(policyId: any, data?: any): Observable<any> {
-    const body = data || policyId;
-    const pid = data ? policyId : undefined;
-    return this.http.post(`${this.baseUrl}/api/v1/insurance-enrollments`, pid ? { ...body, policyId: pid } : body);
+  createInsuranceEnrollment(policyId: any, data: any): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/insurance-policies/${policyId}/enrollments`, data);
   }
-  updateInsuranceEnrollment(policyIdOrId: any, idOrData?: any, data?: any): Observable<any> {
-    const id = data ? idOrData : policyIdOrId;
-    const body = data || idOrData;
-    return this.http.put(`${this.baseUrl}/api/v1/insurance-enrollments/${id}`, body);
+  updateInsuranceEnrollment(policyId: any, enrollmentId: any, data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-policies/${policyId}/enrollments/${enrollmentId}`, data);
   }
-  deleteInsuranceEnrollment(policyIdOrId: any, id?: any): Observable<any> {
-    const enrollmentId = id || policyIdOrId;
-    return this.http.delete(`${this.baseUrl}/api/v1/insurance-enrollments/${enrollmentId}`);
+  deleteInsuranceEnrollment(policyId: any, enrollmentId: any): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/api/v1/insurance-policies/${policyId}/enrollments/${enrollmentId}`);
   }
 }

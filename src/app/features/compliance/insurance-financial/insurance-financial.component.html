@@ -2,7 +2,13 @@
   <header class="page-header">
     <div class="header-left">
       <h1><i class='bx bx-shield-alt-2'></i> Insurance</h1>
-      <p class="subtitle">Manage insurance policies</p>
+      <p class="subtitle">
+        @if (pageTab() === 'charging') {
+          Driver and company insurance charge breakdown
+        } @else {
+          Manage insurance policies
+        }
+      </p>
     </div>
     <div class="header-actions">
       @if (pageTab() === 'insurance') {
@@ -14,8 +20,11 @@
 
   <!-- Tabs -->
   <div class="page-tabs">
-    <button class="page-tab active">
+    <button class="page-tab" [class.active]="pageTab() === 'insurance'" (click)="setPageTab('insurance')">
       <i class='bx bx-shield-alt-2'></i> Insurance
+    </button>
+    <button class="page-tab" [class.active]="pageTab() === 'charging'" (click)="setPageTab('charging')">
+      <i class='bx bx-table'></i> Charging Table
     </button>
   </div>
 
@@ -131,6 +140,81 @@
                   </tr>
                 }
               }
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ========== CHARGING TABLE TAB ========== -->
+  @if (pageTab() === 'charging') {
+    <div class="stats-bar charging-stats-bar">
+      <div class="stat-card">
+        <div class="stat-icon total"><i class='bx bx-list-ul'></i></div>
+        <div class="stat-info"><span class="stat-value">{{ chargingStats().chargeLines }}</span><span class="stat-label">Charge Lines</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon active"><i class='bx bx-user'></i></div>
+        <div class="stat-info"><span class="stat-value">{{ chargingStats().drivers }}</span><span class="stat-label">Drivers</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon expiring"><i class='bx bx-dollar'></i></div>
+        <div class="stat-info"><span class="stat-value">{{ formatCurrency(chargingStats().totalCharges, 2) }}</span><span class="stat-label">Total Charges</span></div>
+      </div>
+    </div>
+
+    <div class="charging-toolbar">
+      <input type="text" class="search-input" [(ngModel)]="chargingSearch" placeholder="Search driver, policy type, provider, or policy #...">
+    </div>
+
+    @if (loadingCharging()) {
+      <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading charging table...</p></div>
+    } @else if (chargingRows().length === 0) {
+      <div class="empty-state">
+        <i class='bx bx-table'></i>
+        <h3>No charge lines yet</h3>
+        <p>Add active policies with cost settings, or enroll drivers on per-driver policies.</p>
+      </div>
+    } @else {
+      <div class="data-table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Driver</th>
+              <th>Policy Type</th>
+              <th>Provider</th>
+              <th>Policy #</th>
+              <th>Cost Basis</th>
+              <th>Frequency</th>
+              <th>Policy Cost</th>
+              <th>Charge Amount</th>
+              <th>Deductible</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of chargingRows(); track $index) {
+              <tr [class.row-expired]="row.policyStatus === 'expired'" [class.row-expiring]="row.policyStatus === 'expiring'">
+                <td><strong>{{ row.driverName }}</strong></td>
+                <td>{{ getPolicyTypeLabel(row.policyType) }}</td>
+                <td>{{ row.providerName }}</td>
+                <td class="mono">{{ row.policyNumber || '—' }}</td>
+                <td>{{ getExpenseBasisLabel(row.expenseBasis) }}</td>
+                <td>{{ getBillingFrequencyLabel(row.billingFrequency) }}</td>
+                <td>{{ formatCurrency(row.policyCost, 2) }}</td>
+                <td>{{ formatCurrency(row.chargeAmount, 2) }}</td>
+                <td>{{ formatCurrency(row.perIncidentDeductible, 2) }}</td>
+                <td>
+                  @if (row.enrollmentStatus === 'none') {
+                    <span class="status-badge expired">Not Enrolled</span>
+                  } @else if (row.enrollmentStatus === 'n/a') {
+                    <span class="status-badge active">Whole Policy</span>
+                  } @else {
+                    <span class="status-badge" [class]="row.enrollmentStatus">{{ row.enrollmentStatus }}</span>
+                  }
+                </td>
+              </tr>
             }
           </tbody>
         </table>
