@@ -161,6 +161,17 @@
       border-color: rgba(255, 107, 53, 0.45);
     }
   }
+
+  .fleet-period-date {
+    min-width: 170px;
+    color-scheme: dark;
+    cursor: text;
+
+    &::-webkit-calendar-picker-indicator {
+      filter: invert(0.85);
+      cursor: pointer;
+    }
+  }
 }
 
 .fleet-summary-table {

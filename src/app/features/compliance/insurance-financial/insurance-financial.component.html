@@ -282,7 +282,7 @@
         <div>
           <h3 class="section-title"><i class='bx bx-pie-chart-alt-2'></i> Fleet Cost vs. Driver Charges</h3>
           <p class="fleet-summary-subtitle">
-            {{ chargingFleetSummary().activeDrivers }} active drivers — {{ getSummarySpecificPeriodLabel() }}
+            {{ chargingFleetSummary().activeDrivers }} drivers on fleet — {{ getSummarySpecificPeriodLabel() }}
           </p>
         </div>
         <div class="fleet-period-filters">
@@ -301,17 +301,30 @@
             </select>
           </div>
           <div class="fleet-period-filter">
-            <label for="summarySpecificPeriodSelect">{{ getSummarySpecificPeriodFilterLabel() }}</label>
-            <select
-              id="summarySpecificPeriodSelect"
-              class="fleet-period-select"
-              [ngModel]="summarySpecificPeriod()"
-              (ngModelChange)="setSummarySpecificPeriod($event)"
-            >
-              @for (option of summarySpecificPeriodOptions(); track option.value) {
-                <option [value]="option.value">{{ option.label }}</option>
-              }
-            </select>
+            <label [attr.for]="summaryPeriodTab() === 'daily' ? 'summarySpecificPeriodDate' : 'summarySpecificPeriodSelect'">
+              {{ getSummarySpecificPeriodFilterLabel() }}
+            </label>
+            @if (summaryPeriodTab() === 'daily') {
+              <input
+                id="summarySpecificPeriodDate"
+                type="date"
+                class="fleet-period-select fleet-period-date"
+                [ngModel]="summarySpecificPeriod()"
+                (ngModelChange)="setSummarySpecificPeriod($event)"
+                [max]="getSummaryMaxDate()"
+              />
+            } @else {
+              <select
+                id="summarySpecificPeriodSelect"
+                class="fleet-period-select"
+                [ngModel]="summarySpecificPeriod()"
+                (ngModelChange)="setSummarySpecificPeriod($event)"
+              >
+                @for (option of summarySpecificPeriodOptions(); track option.value) {
+                  <option [value]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            }
           </div>
         </div>
       </div>
@@ -319,7 +332,7 @@
         <table class="data-table fleet-summary-table">
           <thead>
             <tr>
-              <th>Active Drivers</th>
+              <th>Drivers on Fleet</th>
               <th>Cost Type</th>
               <th>{{ getSummaryPeriodColumnLabel() }}</th>
             </tr>

@@ -484,7 +484,10 @@ export class InsuranceFinancialComponent implements OnInit {
   });
 
   chargingFleetSummary = computed((): ChargingFleetSummary => {
-    const activeDriverCount = this.matrixDriverCounts().active;
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const activeDriverCount = this.countDriversEmployedDuringPeriod(start, end);
     const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
     let driverChargesAnnual = 0;
     let companyCostAnnual = 0;
@@ -511,6 +514,9 @@ export class InsuranceFinancialComponent implements OnInit {
       }
 
       for (const enrollment of enrollments) {
+        const driver = this.chargingDrivers().find((d) => Number(d.id) === Number(enrollment.driverId));
+        if (driver && !this.wasDriverEmployedDuringPeriod(driver, start, end)) continue;
+
         const amount = Number(enrollment.deductionAmount ?? 0) || this.getPolicyCost(policy);
         const frequency = String(enrollment.deductionFrequency || policyFrequency).trim().toLowerCase() || policyFrequency;
         driverChargesAnnual += this.convertMatrixChargeToPeriod(amount, frequency, 'yearly');
@@ -733,11 +739,19 @@ export class InsuranceFinancialComponent implements OnInit {
 
   setSummaryPeriodTab(tab: MatrixPeriodTab): void {
     this.summaryPeriodTab.set(tab);
+    if (tab === 'daily') {
+      this.summarySpecificPeriod.set(this.formatSummaryDateKey(new Date()));
+      return;
+    }
     this.summarySpecificPeriod.set(this.buildSummarySpecificPeriodOptions(tab)[0]?.value || '');
   }
 
   setSummarySpecificPeriod(value: string): void {
-    this.summarySpecificPeriod.set(value);
+    this.summarySpecificPeriod.set(value || this.formatSummaryDateKey(new Date()));
+  }
+
+  getSummaryMaxDate(): string {
+    return this.formatSummaryDateKey(new Date());
   }
 
   getSummaryPeriodColumnLabel(tab: MatrixPeriodTab = this.summaryPeriodTab()): string {
@@ -760,14 +774,39 @@ export class InsuranceFinancialComponent implements OnInit {
 
   getSummarySpecificPeriodLabel(): string {
     const value = this.summarySpecificPeriod();
+    if (this.summaryPeriodTab() === 'daily') {
+      return this.formatSummaryDayLabel(value);
+    }
+    if (this.summaryPeriodTab() === 'weekly') {
+      const date = this.parseSummaryDateKey(value);
+      return date ? this.formatSummaryWeekLabel(date) : value || '—';
+    }
     return this.summarySpecificPeriodOptions().find((option) => option.value === value)?.label || value || '—';
+  }
+
+  private formatSummaryDayLabel(value: string): string {
+    const date = this.parseSummaryDateKey(value);
+    if (!date) return value || '—';
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }
+
+  private parseSummaryDateKey(value: string): Date | null {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+    if (!match) return null;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private buildSummarySpecificPeriodOptions(tab: MatrixPeriodTab): SummaryPeriodOption[] {
     const now = new Date();
     switch (tab) {
       case 'daily':
-        return this.buildSummaryDayOptions(now);
+        return [];
       case 'weekly':
         return this.buildSummaryWeekOptions(now);
       case 'yearly':
@@ -775,19 +814,6 @@ export class InsuranceFinancialComponent implements OnInit {
       default:
         return this.buildSummaryMonthOptions(now);
     }
-  }
-
-  private buildSummaryDayOptions(now: Date): SummaryPeriodOption[] {
-    const options: SummaryPeriodOption[] = [];
-    for (let i = 0; i < 90; i++) {
-      const date = new Date(now);
-      date.setDate(now.getDate() - i);
-      options.push({
-        value: this.formatSummaryDateKey(date),
-        label: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-      });
-    }
-    return options;
   }
 
   private buildSummaryWeekOptions(now: Date): SummaryPeriodOption[] {
@@ -798,10 +824,30 @@ export class InsuranceFinancialComponent implements OnInit {
       weekStart.setDate(currentWeekStart.getDate() - i * 7);
       options.push({
         value: this.formatSummaryDateKey(weekStart),
-        label: `Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        label: this.formatSummaryWeekLabel(weekStart)
       });
     }
     return options;
+  }
+
+  private formatSummaryWeekLabel(date: Date): string {
+    const { week, year } = this.getSummaryWeekInfo(date);
+    return `Week ${week}, ${year}`;
+  }
+
+  private getSummaryWeekInfo(date: Date): { week: number; year: number } {
+    const weekStart = this.startOfSummaryWeek(date);
+    let year = weekStart.getFullYear();
+    let yearStart = this.startOfSummaryWeek(new Date(year, 0, 1));
+    let week = 1 + Math.floor((weekStart.getTime() - yearStart.getTime()) / (7 * 86400000));
+
+    if (week < 1) {
+      year -= 1;
+      yearStart = this.startOfSummaryWeek(new Date(year, 0, 1));
+      week = 1 + Math.floor((weekStart.getTime() - yearStart.getTime()) / (7 * 86400000));
+    }
+
+    return { week, year };
   }
 
   private buildSummaryMonthOptions(now: Date): SummaryPeriodOption[] {
@@ -837,6 +883,82 @@ export class InsuranceFinancialComponent implements OnInit {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  private getSummaryPeriodDateRange(): { start: Date; end: Date } {
+    const tab = this.summaryPeriodTab();
+    const value = this.summarySpecificPeriod();
+    const now = new Date();
+
+    switch (tab) {
+      case 'daily': {
+        const date = this.parseSummaryDateKey(value) || now;
+        return { start: this.startOfSummaryDay(date), end: this.endOfSummaryDay(date) };
+      }
+      case 'weekly': {
+        const weekStart = this.parseSummaryDateKey(value) || this.startOfSummaryWeek(now);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        return { start: this.startOfSummaryDay(weekStart), end: this.endOfSummaryDay(weekEnd) };
+      }
+      case 'yearly': {
+        const year = Number(value) || now.getFullYear();
+        return {
+          start: this.startOfSummaryDay(new Date(year, 0, 1)),
+          end: this.endOfSummaryDay(new Date(year, 11, 31))
+        };
+      }
+      default: {
+        const match = /^(\d{4})-(\d{2})$/.exec(String(value || '').trim());
+        const year = match ? Number(match[1]) : now.getFullYear();
+        const month = match ? Number(match[2]) - 1 : now.getMonth();
+        return {
+          start: this.startOfSummaryDay(new Date(year, month, 1)),
+          end: this.endOfSummaryDay(new Date(year, month + 1, 0))
+        };
+      }
+    }
+  }
+
+  private countDriversEmployedDuringPeriod(start: Date, end: Date): number {
+    let count = 0;
+    for (const driver of this.chargingDrivers()) {
+      if (this.wasDriverEmployedDuringPeriod(driver, start, end)) count++;
+    }
+    return count;
+  }
+
+  private wasDriverEmployedDuringPeriod(driver: any, start: Date, end: Date): boolean {
+    const hireDate = this.parseDriverEmploymentDate(driver?.hireDate || driver?.HireDate);
+    const fallbackHireDate = hireDate || this.parseDriverEmploymentDate(driver?.createdAt || driver?.CreatedAt);
+    const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
+
+    if (fallbackHireDate && fallbackHireDate > end) return false;
+    if (terminationDate && terminationDate < start) return false;
+
+    if (!fallbackHireDate) {
+      return this.isMatrixActiveDriver(this.normalizeDriverStatus(driver?.status));
+    }
+
+    return true;
+  }
+
+  private parseDriverEmploymentDate(value: unknown): Date | null {
+    if (!value) return null;
+    const dateOnly = String(value).trim().split('T')[0];
+    return this.parseSummaryDateKey(dateOnly);
+  }
+
+  private startOfSummaryDay(date: Date): Date {
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    return day;
+  }
+
+  private endOfSummaryDay(date: Date): Date {
+    const day = new Date(date);
+    day.setHours(23, 59, 59, 999);
+    return day;
   }
 
   getMatrixPeriodLabel(tab: MatrixPeriodTab = this.matrixPeriodTab()): string {
