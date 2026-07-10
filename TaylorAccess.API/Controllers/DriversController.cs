@@ -206,25 +206,16 @@ public class DriversController : ControllerBase
             docQuery = docQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
 
         var documents = await docQuery
-            .OrderByDescending(d => d.CreatedAt)
             .Select(d => new ComplianceBoardDocumentRow
             {
                 Id = d.Id,
                 DriverId = d.DriverId,
-                OrganizationId = d.OrganizationId,
                 Category = d.Category,
                 SubCategory = d.SubCategory,
                 DocumentName = d.DocumentName,
-                DocumentNumber = d.DocumentNumber,
-                IssueDate = d.IssueDate,
                 ExpiryDate = d.ExpiryDate,
                 Status = d.Status,
-                Notes = d.Notes,
-                FileName = d.FileName,
-                FileSize = d.FileSize,
-                CreatedAt = d.CreatedAt,
-                UpdatedAt = d.UpdatedAt,
-                HasFile = d.FileContent != null
+                CreatedAt = d.CreatedAt
             })
             .ToListAsync();
 
@@ -325,8 +316,7 @@ public class DriversController : ControllerBase
         {
             data = new
             {
-                drivers = payloadDrivers,
-                documents
+                drivers = payloadDrivers
             },
             total = payloadDrivers.Count,
             stats = new
@@ -1260,18 +1250,10 @@ file sealed class ComplianceBoardDocumentRow
 {
     public int Id { get; set; }
     public int DriverId { get; set; }
-    public int OrganizationId { get; set; }
     public string Category { get; set; } = string.Empty;
     public string? SubCategory { get; set; }
     public string DocumentName { get; set; } = string.Empty;
-    public string? DocumentNumber { get; set; }
-    public DateTime? IssueDate { get; set; }
     public DateTime? ExpiryDate { get; set; }
     public string Status { get; set; } = "active";
-    public string? Notes { get; set; }
-    public string? FileName { get; set; }
-    public long? FileSize { get; set; }
     public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
-    public bool HasFile { get; set; }
 }

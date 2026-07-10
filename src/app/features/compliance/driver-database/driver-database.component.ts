@@ -50,8 +50,20 @@ export class DriverDatabaseComponent implements OnInit {
   selectedDriver = signal<any | null>(null);
   driverDocs = signal<any[]>([]);
   allDocs = signal<any[]>([]);
+  totalDocumentCount = signal(0);
+  loadingOnboardingApplicants = signal(false);
   showDetailsModal = signal(false);
   
+  private onboardingApplicantsLoaded = false;
+  private readonly complianceMatrixKeys = [
+    'cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance',
+    'vehicle', 'permits', 'ifta', 'irp', 'safety', 'violations', 'contract',
+    'i9', 'w9', 'directDeposit', 'deduction'
+  ];
+  private readonly complianceStatsKeys = [
+    'cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training',
+    'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'
+  ];
   // Filters
   searchTerm = '';
   statusFilter = 'all';
@@ -80,14 +92,14 @@ export class DriverDatabaseComponent implements OnInit {
 
   complianceStats = computed(() => {
     const drivers = this.filteredDrivers();
-    const requiredItems = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'];
+    const requiredItems = this.complianceStatsKeys;
     const totalSlots = drivers.length * requiredItems.length;
 
     let uploaded = 0, expiring = 0, expired = 0;
 
     for (const driver of drivers) {
       for (const item of requiredItems) {
-        const status = this.getItemStatus(driver, item);
+        const status = driver._statusCache?.[item] ?? this.computeItemStatus(driver, item);
         if (status !== 'none') {
           uploaded++;
           if (status === 'expired') expired++;
@@ -160,12 +172,37 @@ export class DriverDatabaseComponent implements OnInit {
   refreshComplianceData(): void {
     this.loading.set(true);
     this.docsReady.set(false);
+    this.onboardingApplicantsLoaded = false;
     this.loadComplianceBoard()
-      .then(() => this.mergeOnboardingApplicants())
+      .then(async () => {
+        this.rebuildComplianceCaches();
+        if (this.activeStatusTab() === 'onboarding') {
+          await this.loadOnboardingApplicantsLazy();
+        }
+      })
       .finally(() => {
         this.loading.set(false);
         this.docsReady.set(true);
       });
+  }
+
+  setStatusTab(tab: 'current' | 'onboarding' | 'closeout' | 'archived'): void {
+    this.activeStatusTab.set(tab);
+    if (tab === 'onboarding') {
+      void this.loadOnboardingApplicantsLazy();
+    }
+  }
+
+  private async loadOnboardingApplicantsLazy(): Promise<void> {
+    if (this.onboardingApplicantsLoaded || this.loadingOnboardingApplicants()) return;
+    this.loadingOnboardingApplicants.set(true);
+    try {
+      await this.mergeOnboardingApplicants();
+      this.onboardingApplicantsLoaded = true;
+      this.rebuildComplianceCaches();
+    } finally {
+      this.loadingOnboardingApplicants.set(false);
+    }
   }
 
   private async loadComplianceBoard(): Promise<void> {
@@ -175,13 +212,14 @@ export class DriverDatabaseComponent implements OnInit {
         .toPromise();
       const payload = res?.data ?? res;
       const boardDrivers = Array.isArray(payload?.drivers) ? payload.drivers : [];
-      const documents = Array.isArray(payload?.documents) ? payload.documents : [];
 
-      this.allDocs.set(documents);
-      this.drivers.set(this.deduplicateDrivers(boardDrivers.map((driver: any) => ({
+      this.totalDocumentCount.set(Number(res?.stats?.totalDocuments ?? 0));
+      const normalizedDrivers = boardDrivers.map((driver: any) => ({
         ...driver,
         _docs: Array.isArray(driver?._docs) ? driver._docs : []
-      }))));
+      }));
+      this.drivers.set(this.deduplicateDrivers(normalizedDrivers));
+      this.syncAllDocsFromDrivers(this.drivers());
     } catch (err) {
       console.error('Failed to load compliance board:', err);
       await this.loadComplianceBoardFallback();
@@ -194,18 +232,94 @@ export class DriverDatabaseComponent implements OnInit {
       this.loadAllDocsAsync()
     ]);
     this.attachDocsToDrivers();
+    this.syncAllDocsFromDrivers(this.drivers());
+    this.rebuildComplianceCaches();
   }
 
   private async mergeOnboardingApplicants(): Promise<void> {
-    try {
-      const hiredApplicants = await this.loadHiredApplicants();
-      if (!hiredApplicants.length) return;
-      const linkedApplicants = this.linkOnboardingApplicants(this.drivers(), hiredApplicants);
-      this.drivers.set(this.deduplicateDrivers([...this.drivers(), ...linkedApplicants]));
-      this.attachDocsToDrivers();
-    } catch {
-      // Keep compliance board data when applicant enrichment fails.
+    const hiredApplicants = await this.loadHiredApplicants();
+    if (!hiredApplicants.length) return;
+    const linkedApplicants = this.linkOnboardingApplicants(this.drivers(), hiredApplicants);
+    this.drivers.set(this.deduplicateDrivers([...this.drivers(), ...linkedApplicants]));
+    this.attachDocsToDrivers();
+    this.syncAllDocsFromDrivers(this.drivers());
+  }
+
+  private syncAllDocsFromDrivers(drivers: any[]): void {
+    const map = new Map<number, any>();
+    for (const driver of drivers) {
+      for (const doc of driver?._docs || []) {
+        if (doc?.id != null) map.set(doc.id, doc);
+      }
     }
+    this.allDocs.set(Array.from(map.values()));
+    this.totalDocumentCount.set(this.allDocs().length);
+  }
+
+  private rebuildComplianceCaches(): void {
+    this.drivers.update((rows) => rows.map((driver) => this.enrichDriverWithComplianceCache(driver)));
+  }
+
+  private enrichDriverWithComplianceCache(driver: any): any {
+    const statusCache: Record<string, 'compliant' | 'expiring' | 'expired' | 'none'> = {};
+    for (const key of this.complianceMatrixKeys) {
+      statusCache[key] = this.computeItemStatus(driver, key);
+    }
+
+    const overallStatus = this.computeOverallStatusFromCache(statusCache);
+    return {
+      ...driver,
+      _statusCache: statusCache,
+      _overallStatus: overallStatus,
+      _overallLabel: overallStatus === 'non-compliant' ? 'non' : overallStatus,
+      _displayStatus: overallStatus === 'non-compliant'
+        ? 'inactive'
+        : (this.isActiveStatus(driver?.status) ? 'active' : 'inactive'),
+      _otherStatus: this.computeOtherStatusFromCache(statusCache)
+    };
+  }
+
+  private computeOverallStatusFromCache(
+    statusCache: Record<string, 'compliant' | 'expiring' | 'expired' | 'none'>
+  ): string {
+    const redExceptionItems = new Set(['training', 'permits', 'irp']);
+    let hasBlockingRed = false;
+    let hasExpiring = false;
+    let compliantCount = 0;
+
+    for (const item of this.complianceMatrixKeys) {
+      const status = statusCache[item] ?? 'none';
+      const isRed = status === 'expired' || status === 'none';
+      if (isRed && !redExceptionItems.has(item)) hasBlockingRed = true;
+      if (status === 'expiring') hasExpiring = true;
+      if (status === 'compliant') compliantCount++;
+    }
+
+    if (hasBlockingRed) return 'non-compliant';
+    if (hasExpiring) return 'warning';
+    if (compliantCount >= 5) return 'good';
+    return 'pending';
+  }
+
+  private computeOtherStatusFromCache(
+    statusCache: Record<string, 'compliant' | 'expiring' | 'expired' | 'none'>
+  ): 'compliant' | 'expiring' | 'expired' | 'none' {
+    const items = ['i9', 'w9', 'directDeposit', 'deduction'];
+    let hasExpiring = false;
+    let hasExpired = false;
+    let hasMissing = false;
+
+    for (const item of items) {
+      const status = statusCache[item] ?? 'none';
+      if (status === 'expired') hasExpired = true;
+      else if (status === 'expiring') hasExpiring = true;
+      else if (status === 'none') hasMissing = true;
+    }
+
+    if (hasExpired) return 'expired';
+    if (hasExpiring) return 'expiring';
+    if (hasMissing) return 'none';
+    return 'compliant';
   }
   
   async loadDrivers() {
@@ -256,7 +370,7 @@ export class DriverDatabaseComponent implements OnInit {
   private async loadHiredApplicants(): Promise<any[]> {
     try {
       const [recordsResponse, positionsResponse] = await Promise.all([
-        this.http.get(`${environment.apiUrl}/api/v1/applicants/records?includeCv=true`).toPromise(),
+        this.http.get(`${environment.apiUrl}/api/v1/applicants/records?includeCv=false`).toPromise(),
         this.http.get(`${environment.apiUrl}/api/v1/applicants/positions`).toPromise()
       ]);
 
@@ -1005,6 +1119,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getOtherStatus(driver: any): 'compliant' | 'expiring' | 'expired' | 'none' {
+    if (driver?._otherStatus) return driver._otherStatus;
     const items = ['i9', 'w9', 'directDeposit', 'deduction'];
     let hasExpiring = false;
     let hasExpired = false;
@@ -1062,6 +1177,7 @@ export class DriverDatabaseComponent implements OnInit {
     }
 
     this.drivers.set([...drivers]);
+    this.rebuildComplianceCaches();
   }
 
   private findDocInList(docs: any[], key: string): any {
@@ -1135,6 +1251,12 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
+    const cached = driver?._statusCache?.[item];
+    if (cached) return cached;
+    return this.computeItemStatus(driver, item);
+  }
+
+  private computeItemStatus(driver: any, item: string): 'compliant' | 'expiring' | 'expired' | 'none' {
     // 1. Check driver record fields (fast path for CDL/Medical/etc.)
     switch (item) {
       case 'cdl': {
@@ -1176,6 +1298,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getOverallStatus(driver: any): string {
+    if (driver?._overallStatus) return driver._overallStatus;
     const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'irp', 'safety', 'violations', 'i9', 'w9', 'directDeposit', 'deduction'];
     const redExceptionItems = new Set(['training', 'permits', 'irp']);
     let hasBlockingRed = false;
@@ -1197,12 +1320,14 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   getOverallLabel(driver: any): string {
+    if (driver?._overallLabel) return driver._overallLabel;
     const status = this.getOverallStatus(driver);
     if (status === 'non-compliant') return 'non';
     return status;
   }
 
   getDisplayStatus(driver: any): string {
+    if (driver?._displayStatus) return driver._displayStatus;
     // Compliance override for matrix status badge display.
     if (this.getOverallStatus(driver) === 'non-compliant') {
       return 'inactive';
