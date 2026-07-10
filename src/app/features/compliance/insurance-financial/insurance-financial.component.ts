@@ -162,6 +162,21 @@ interface AccountingVendorInvoice {
   fileUrl?: string;
 }
 
+type FleetDriverOverrideState = 'included' | 'excluded';
+
+interface FleetDriverSettingsRow {
+  driverId: number;
+  driverName: string;
+  truckNumber: string;
+  status: string;
+  statusLabel: string;
+  hireDate: string;
+  terminationDate: string;
+  autoEligible: boolean;
+  included: boolean;
+  hasOverride: boolean;
+}
+
 
 @Component({
   selector: 'app-insurance-financial',
@@ -265,8 +280,10 @@ export class InsuranceFinancialComponent implements OnInit {
   showAccountingInvoiceModal = signal(false);
   loadingAccountingInvoices = signal(false);
   accountingInvoices = signal<AccountingVendorInvoice[]>([]);
-
-  // Collapsed-by-type view
+  showFleetDriverSettingsModal = signal(false);
+  fleetDriverSettingsSearch = signal('');
+  fleetDriverOverrides = signal<Record<string, Record<string, FleetDriverOverrideState>>>({});
+  private readonly fleetDriverOverridesStorageKey = 'insurance_fleet_driver_overrides_v1';
   expandedTypes = signal<Set<string>>(new Set());
 
   toggleTypeExpand(type: string): void {
@@ -817,8 +834,66 @@ export class InsuranceFinancialComponent implements OnInit {
     this.summarySpecificPeriod();
     this.chargingEnrollmentsByPolicy();
     this.chargingDrivers();
+    this.fleetDriverOverrides();
     this.policies();
     return this.buildFleetCostBreakdown();
+  });
+
+  fleetDriverSettingsRows = computed((): FleetDriverSettingsRow[] => {
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
+    this.chargingDrivers();
+    this.fleetDriverOverrides();
+    this.fleetDriverSettingsSearch();
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const term = this.fleetDriverSettingsSearch().trim().toLowerCase();
+
+    return this.chargingDrivers()
+      .map((driver) => {
+        const driverId = Number(driver.id);
+        const status = this.normalizeDriverStatus(driver.status);
+        const autoEligible = this.isDriverAutoEligibleForPeriod(driver, start, end);
+        const included = this.isDriverIncludedForPeriod(driver, start, end);
+        const truckNumber = this.formatDriverTruckNumber(driver);
+        const driverName = String(driver.name || 'Unknown Driver').trim();
+
+        return {
+          driverId,
+          driverName,
+          truckNumber,
+          status,
+          statusLabel: this.formatDriverStatusLabel(status),
+          hireDate: this.formatDriverEmploymentDate(driver.hireDate || driver.HireDate),
+          terminationDate: this.formatDriverEmploymentDate(driver.terminationDate || driver.TerminationDate),
+          autoEligible,
+          included,
+          hasOverride: this.getFleetDriverOverride(driverId) !== null
+        };
+      })
+      .filter((row) => {
+        if (!term) return true;
+        return row.driverName.toLowerCase().includes(term) ||
+          row.truckNumber.toLowerCase().includes(term) ||
+          row.statusLabel.toLowerCase().includes(term);
+      })
+      .sort((a, b) => {
+        if (a.included !== b.included) return a.included ? -1 : 1;
+        return a.driverName.localeCompare(b.driverName);
+      });
+  });
+
+  fleetDriverSettingsCounts = computed(() => {
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
+    this.chargingDrivers();
+    this.fleetDriverOverrides();
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const includedDrivers = this.getFleetEligibleDriversDuringPeriod(start, end);
+    return {
+      drivers: includedDrivers.length,
+      trucks: this.countUniqueTruckBillingUnits(includedDrivers),
+      overrides: Object.keys(this.getFleetDriverOverridesForCurrentPeriod()).length
+    };
   });
 
   chargingFleetCalculationLines = computed(() => this.fleetCostBreakdownData().lines);
@@ -1065,11 +1140,142 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.loadFleetDriverOverrides();
     this.loadPolicies();
     this.loadPayments();
     this.summarySpecificPeriod.set(
       this.buildSummarySpecificPeriodOptions(this.summaryPeriodTab())[0]?.value || ''
     );
+  }
+
+  openFleetDriverSettingsModal(): void {
+    this.fleetDriverSettingsSearch.set('');
+    this.showFleetDriverSettingsModal.set(true);
+  }
+
+  setFleetDriverSettingsSearch(value: string): void {
+    this.fleetDriverSettingsSearch.set(value);
+  }
+
+  closeFleetDriverSettingsModal(): void {
+    this.showFleetDriverSettingsModal.set(false);
+  }
+
+  setFleetDriverIncluded(driverId: number, included: boolean): void {
+    const driver = this.chargingDrivers().find((row) => Number(row.id) === driverId);
+    if (!driver) return;
+
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const autoEligible = this.isDriverAutoEligibleForPeriod(driver, start, end);
+    const periodKey = this.getFleetOverridePeriodKey();
+    const driverKey = String(driverId);
+    const nextPeriodOverrides = { ...this.getFleetDriverOverridesForCurrentPeriod() };
+
+    if (included === autoEligible) {
+      delete nextPeriodOverrides[driverKey];
+    } else {
+      nextPeriodOverrides[driverKey] = included ? 'included' : 'excluded';
+    }
+
+    const nextOverrides = {
+      ...this.fleetDriverOverrides(),
+      [periodKey]: nextPeriodOverrides
+    };
+
+    if (!Object.keys(nextPeriodOverrides).length) {
+      delete nextOverrides[periodKey];
+    }
+
+    this.fleetDriverOverrides.set(nextOverrides);
+    this.persistFleetDriverOverrides(nextOverrides);
+  }
+
+  resetFleetDriverOverridesForPeriod(): void {
+    const periodKey = this.getFleetOverridePeriodKey();
+    const nextOverrides = { ...this.fleetDriverOverrides() };
+    delete nextOverrides[periodKey];
+    this.fleetDriverOverrides.set(nextOverrides);
+    this.persistFleetDriverOverrides(nextOverrides);
+    this.toast.success('Fleet driver selections reset to automatic rules.', 'Reset');
+  }
+
+  getFleetDriverSettingsModalTitle(): string {
+    return `Fleet Drivers — ${this.getSummarySpecificPeriodLabel()}`;
+  }
+
+  private loadFleetDriverOverrides(): void {
+    try {
+      const raw = localStorage.getItem(this.fleetDriverOverridesStorageKey);
+      if (!raw) {
+        this.fleetDriverOverrides.set({});
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      this.fleetDriverOverrides.set(parsed && typeof parsed === 'object' ? parsed : {});
+    } catch {
+      this.fleetDriverOverrides.set({});
+    }
+  }
+
+  private persistFleetDriverOverrides(overrides: Record<string, Record<string, FleetDriverOverrideState>>): void {
+    localStorage.setItem(this.fleetDriverOverridesStorageKey, JSON.stringify(overrides));
+  }
+
+  private getFleetOverridePeriodKey(): string {
+    return `${this.summaryPeriodTab()}:${this.summarySpecificPeriod()}`;
+  }
+
+  private getFleetDriverOverridesForCurrentPeriod(): Record<string, FleetDriverOverrideState> {
+    return this.fleetDriverOverrides()[this.getFleetOverridePeriodKey()] || {};
+  }
+
+  private getFleetDriverOverride(driverId: number): FleetDriverOverrideState | null {
+    return this.getFleetDriverOverridesForCurrentPeriod()[String(driverId)] || null;
+  }
+
+  private isDriverAutoEligibleForPeriod(driver: any, start: Date, end: Date): boolean {
+    const status = this.normalizeDriverStatus(driver?.status);
+    if (this.isMatrixOnboardingDriver(status)) return false;
+    return this.wasDriverEmployedDuringPeriod(driver, start, end);
+  }
+
+  private isDriverIncludedForPeriod(driver: any, start: Date, end: Date): boolean {
+    const override = this.getFleetDriverOverride(Number(driver.id));
+    if (override === 'included') return true;
+    if (override === 'excluded') return false;
+    return this.isDriverAutoEligibleForPeriod(driver, start, end);
+  }
+
+  private formatDriverTruckNumber(driver: any): string {
+    const value = String(driver?.truckNumber ?? driver?.TruckNumber ?? driver?.truckTag ?? '').trim();
+    return value || '—';
+  }
+
+  private formatDriverEmploymentDate(value: unknown): string {
+    const raw = String(value ?? '').trim().split('T')[0];
+    return raw || '—';
+  }
+
+  private formatDriverStatusLabel(status: string): string {
+    switch (status) {
+      case 'available':
+      case 'dispatched':
+      case 'en-route':
+      case 'at-location':
+      case 'online':
+        return 'Active';
+      case 'archived':
+        return 'Archived';
+      case 'inactive':
+      case 'terminated':
+      case 'off-duty':
+        return 'Inactive';
+      case 'onboarding':
+      case 'pending':
+        return 'Onboarding';
+      default:
+        return status.replace(/-/g, ' ').replace(/_/g, ' ') || '—';
+    }
   }
 
   setMatrixDriverTab(tab: 'active' | 'inactive'): void {
@@ -1235,10 +1441,13 @@ export class InsuranceFinancialComponent implements OnInit {
     const drivers = summary.activeDriverHeadcount;
     const truckLabel = trucks === 1 ? 'truck' : 'trucks';
     const period = this.getSummarySpecificPeriodLabel();
+    const overrideNote = this.fleetDriverSettingsCounts().overrides
+      ? ' · manual driver adjustments'
+      : '';
     if (drivers > trucks) {
-      return `${trucks} ${truckLabel} (${drivers} drivers) on fleet — ${period}`;
+      return `${trucks} ${truckLabel} (${drivers} drivers) on fleet — ${period}${overrideNote}`;
     }
-    return `${trucks} ${truckLabel} on fleet — ${period}`;
+    return `${trucks} ${truckLabel} on fleet — ${period}${overrideNote}`;
   }
 
   getChargingFleetCountLabel(): string {
@@ -1408,14 +1617,12 @@ export class InsuranceFinancialComponent implements OnInit {
 
   private getFleetEligibleDriversDuringPeriod(start: Date, end: Date): any[] {
     return this.chargingDrivers().filter((driver) =>
-      this.wasDriverBillableOnFleetDuringPeriod(driver, start, end)
+      this.isDriverIncludedForPeriod(driver, start, end)
     );
   }
 
   private wasDriverBillableOnFleetDuringPeriod(driver: any, start: Date, end: Date): boolean {
-    const status = this.normalizeDriverStatus(driver?.status);
-    if (this.isMatrixOnboardingDriver(status)) return false;
-    return this.wasDriverEmployedDuringPeriod(driver, start, end);
+    return this.isDriverIncludedForPeriod(driver, start, end);
   }
 
   private isSelectedPeriodCurrentMonth(start: Date, end: Date): boolean {

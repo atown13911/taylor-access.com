@@ -21,6 +21,14 @@
       }
       @if (pageTab() === 'charging') {
         <button class="btn btn-secondary" (click)="openChargingReport()"><i class='bx bx-file'></i> Generate Report</button>
+        <button
+          class="btn btn-secondary fleet-settings-btn"
+          (click)="openFleetDriverSettingsModal()"
+          [title]="'Manage fleet drivers for ' + getSummarySpecificPeriodLabel()"
+          aria-label="Manage fleet drivers for selected period"
+        >
+          <i class='bx bx-cog'></i>
+        </button>
       }
     </div>
   </header>
@@ -1086,6 +1094,89 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" (click)="closeReport()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========== FLEET DRIVER SETTINGS MODAL ========== -->
+@if (showFleetDriverSettingsModal()) {
+  <div class="modal-overlay" (click)="closeFleetDriverSettingsModal()">
+    <div class="modal modal-wide fleet-driver-settings-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h3><i class='bx bx-cog'></i> {{ getFleetDriverSettingsModalTitle() }}</h3>
+          <p class="modal-subtitle">
+            Include or exclude drivers for this period. Billing uses unique truck numbers, so team drivers sharing a truck count once.
+          </p>
+        </div>
+        <button class="close-btn" (click)="closeFleetDriverSettingsModal()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="fleet-driver-settings-toolbar">
+          <div class="fleet-driver-settings-summary">
+            <strong>{{ fleetDriverSettingsCounts().trucks }}</strong> trucks
+            <span>({{ fleetDriverSettingsCounts().drivers }} drivers)</span>
+            @if (fleetDriverSettingsCounts().overrides) {
+              <span class="fleet-driver-settings-override-badge">{{ fleetDriverSettingsCounts().overrides }} manual</span>
+            }
+          </div>
+          <div class="fleet-driver-settings-actions">
+            <input
+              type="text"
+              class="fleet-driver-settings-search"
+              placeholder="Search driver, truck, or status..."
+              [ngModel]="fleetDriverSettingsSearch()"
+              (ngModelChange)="setFleetDriverSettingsSearch($event)"
+            />
+            <button class="btn btn-secondary btn-sm" (click)="resetFleetDriverOverridesForPeriod()">
+              Reset to Automatic
+            </button>
+          </div>
+        </div>
+
+        <table class="data-table fleet-driver-settings-table">
+          <thead>
+            <tr>
+              <th>Include</th>
+              <th>Driver</th>
+              <th>Truck #</th>
+              <th>Status</th>
+              <th>Hire Date</th>
+              <th>Termination</th>
+              <th>Automatic</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of fleetDriverSettingsRows(); track row.driverId) {
+              <tr [class.fleet-driver-excluded]="!row.included" [class.fleet-driver-override]="row.hasOverride">
+                <td>
+                  <label class="fleet-driver-toggle">
+                    <input
+                      type="checkbox"
+                      [checked]="row.included"
+                      (change)="setFleetDriverIncluded(row.driverId, $any($event.target).checked)"
+                    />
+                    <span>{{ row.included ? 'Included' : 'Excluded' }}</span>
+                  </label>
+                </td>
+                <td>{{ row.driverName }}</td>
+                <td class="mono">{{ row.truckNumber }}</td>
+                <td>{{ row.statusLabel }}</td>
+                <td>{{ row.hireDate }}</td>
+                <td>{{ row.terminationDate }}</td>
+                <td>{{ row.autoEligible ? 'Yes' : 'No' }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="7" class="fleet-driver-settings-empty">No drivers match your search.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeFleetDriverSettingsModal()">Done</button>
       </div>
     </div>
   </div>

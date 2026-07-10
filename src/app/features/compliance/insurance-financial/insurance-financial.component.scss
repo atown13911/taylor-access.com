@@ -13,6 +13,18 @@
     }
     .subtitle { color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.25rem; }
   }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+.fleet-settings-btn {
+  padding-inline: 0.75rem;
+
+  i { font-size: 1.05rem; }
 }
 
 .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
@@ -227,6 +239,96 @@
 
 .accounting-invoice-actions {
   text-align: right;
+}
+
+.fleet-driver-settings-modal {
+  max-width: 980px;
+}
+
+.fleet-driver-settings-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.fleet-driver-settings-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+
+  strong {
+    color: #ff8a50;
+    font-size: 1.2rem;
+  }
+}
+
+.fleet-driver-settings-override-badge {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 107, 53, 0.12);
+  color: #ffb089;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.fleet-driver-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.fleet-driver-settings-search {
+  min-width: 240px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary, #010409);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.fleet-driver-settings-table {
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .fleet-driver-excluded td {
+    opacity: 0.55;
+  }
+
+  .fleet-driver-override td:first-child span {
+    color: #ffb089;
+  }
+}
+
+.fleet-driver-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+
+  input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: #ff8a50;
+  }
+}
+
+.fleet-driver-settings-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 1.5rem;
 }
 
 .fleet-summary-section {
