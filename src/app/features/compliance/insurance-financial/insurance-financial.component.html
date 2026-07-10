@@ -220,6 +220,72 @@
         </table>
       </div>
     }
+
+    <!-- Driver enrollment matrix -->
+    <section class="enrollment-matrix-section">
+      <div class="matrix-section-header">
+        <div>
+          <h2><i class='bx bx-grid-alt'></i> Driver Enrollment Matrix</h2>
+          <p class="matrix-subtitle">All active policies — green = enrolled (or whole-company coverage), red = not enrolled</p>
+        </div>
+        @if (enrollmentMatrixStats().drivers > 0) {
+          <div class="matrix-legend">
+            <span class="legend-item"><span class="enrollment-dot enrolled"></span> Enrolled</span>
+            <span class="legend-item"><span class="enrollment-dot not_enrolled"></span> Not Enrolled</span>
+          </div>
+        }
+      </div>
+
+      <div class="charging-toolbar">
+        <input type="text" class="search-input" [(ngModel)]="matrixSearch" placeholder="Search drivers...">
+      </div>
+
+      @if (loadingCharging()) {
+        <div class="loading-state compact"><i class='bx bx-loader-alt bx-spin'></i><p>Loading enrollment matrix...</p></div>
+      } @else if (enrollmentMatrixColumns().length === 0) {
+        <div class="empty-state compact">
+          <i class='bx bx-grid-alt'></i>
+          <p>No active policies to display.</p>
+        </div>
+      } @else if (enrollmentMatrixRows().length === 0) {
+        <div class="empty-state compact">
+          <i class='bx bx-user-x'></i>
+          <p>No active drivers found.</p>
+        </div>
+      } @else {
+        <div class="data-table-container enrollment-matrix-scroll">
+          <table class="data-table enrollment-matrix-table">
+            <thead>
+              <tr>
+                <th class="matrix-driver-col sticky-col">Driver</th>
+                @for (col of enrollmentMatrixColumns(); track col.policyId) {
+                  <th class="matrix-policy-col" [title]="col.expenseBasis === 'whole_policy' ? 'Whole company policy' : 'Per driver enrollment'">
+                    <span class="matrix-col-label">{{ col.label }}</span>
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of enrollmentMatrixRows(); track row.driverId) {
+                <tr>
+                  <td class="matrix-driver-col sticky-col"><strong>{{ row.driverName }}</strong></td>
+                  @for (col of enrollmentMatrixColumns(); track col.policyId) {
+                    <td class="matrix-cell">
+                      <span
+                        class="enrollment-dot"
+                        [class.enrolled]="row.cells[col.policyId] === 'enrolled'"
+                        [class.not_enrolled]="row.cells[col.policyId] === 'not_enrolled'"
+                        [title]="row.cells[col.policyId] === 'enrolled' ? 'Enrolled' : 'Not enrolled'"
+                      ></span>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
   }
 
   <!-- ========== FINANCIAL TAB ========== -->

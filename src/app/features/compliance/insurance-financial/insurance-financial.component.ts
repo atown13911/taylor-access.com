@@ -22,6 +22,19 @@ interface ChargingRow {
   policyStatus: string;
 }
 
+interface EnrollmentMatrixColumn {
+  policyId: string;
+  policyType: string;
+  label: string;
+  expenseBasis: string;
+}
+
+interface EnrollmentMatrixRow {
+  driverId: number;
+  driverName: string;
+  cells: Record<string, 'enrolled' | 'not_enrolled'>;
+}
+
 interface InsuranceRow {
   id: string;
   policyType: string;
@@ -58,8 +71,10 @@ export class InsuranceFinancialComponent implements OnInit {
 
   // Charging table state
   chargingEnrollmentsByPolicy = signal<Record<string, any[]>>({});
+  chargingDrivers = signal<any[]>([]);
   loadingCharging = signal(false);
   chargingSearch = '';
+  matrixSearch = '';
 
   // Insurance state
   policies = signal<InsuranceRow[]>([]);
@@ -390,6 +405,79 @@ export class InsuranceFinancialComponent implements OnInit {
     };
   });
 
+  enrollmentMatrixColumns = computed((): EnrollmentMatrixColumn[] => {
+    return this.groupedByType()
+      .map((group) => group.current)
+      .filter((policy) => policy.status === 'active' || policy.status === 'expiring')
+      .map((policy) => ({
+        policyId: String(policy.id),
+        policyType: policy.policyType,
+        label: this.getPolicyTypeLabel(policy.policyType),
+        expenseBasis: (policy as any).expenseBasis || 'whole_policy'
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  enrollmentMatrixRows = computed((): EnrollmentMatrixRow[] => {
+    const columns = this.enrollmentMatrixColumns();
+    if (!columns.length) return [];
+
+    const enrollmentsByPolicy = this.chargingEnrollmentsByPolicy();
+    const enrolledDriverIdsByPolicy = new Map<string, Set<number>>();
+
+    for (const column of columns) {
+      const enrolled = new Set<number>();
+      for (const enrollment of enrollmentsByPolicy[column.policyId] || []) {
+        if (enrollment.status !== 'active') continue;
+        const driverId = Number(enrollment.driverId);
+        if (driverId > 0) enrolled.add(driverId);
+      }
+      enrolledDriverIdsByPolicy.set(column.policyId, enrolled);
+    }
+
+    const term = this.matrixSearch.trim().toLowerCase();
+    return this.chargingDrivers()
+      .filter((driver) => {
+        if (!term) return true;
+        const name = String(driver.name || '').toLowerCase();
+        const email = String(driver.email || '').toLowerCase();
+        return name.includes(term) || email.includes(term);
+      })
+      .map((driver) => {
+        const driverId = Number(driver.id);
+        const cells: Record<string, 'enrolled' | 'not_enrolled'> = {};
+        for (const column of columns) {
+          if (column.expenseBasis === 'per_driver') {
+            cells[column.policyId] = enrolledDriverIdsByPolicy.get(column.policyId)?.has(driverId)
+              ? 'enrolled'
+              : 'not_enrolled';
+          } else {
+            cells[column.policyId] = 'enrolled';
+          }
+        }
+        return {
+          driverId,
+          driverName: driver.name || 'Unknown Driver',
+          cells
+        };
+      })
+      .sort((a, b) => a.driverName.localeCompare(b.driverName));
+  });
+
+  enrollmentMatrixStats = computed(() => {
+    const rows = this.enrollmentMatrixRows();
+    const perDriverColumns = this.enrollmentMatrixColumns().filter((c) => c.expenseBasis === 'per_driver');
+    let enrolled = 0;
+    let missing = 0;
+    for (const row of rows) {
+      for (const column of perDriverColumns) {
+        if (row.cells[column.policyId] === 'enrolled') enrolled++;
+        else missing++;
+      }
+    }
+    return { drivers: rows.length, policies: perDriverColumns.length, enrolled, missing };
+  });
+
   setPageTab(tab: PageTab): void {
     this.pageTab.set(tab);
     if (tab === 'charging') {
@@ -405,22 +493,25 @@ export class InsuranceFinancialComponent implements OnInit {
       .map((group) => group.current)
       .filter((policy) => policy.status === 'active' || policy.status === 'expiring');
 
-    if (!chargeablePolicies.length) {
-      this.chargingEnrollmentsByPolicy.set({});
-      this.loadingCharging.set(false);
-      return;
-    }
+    const enrollmentPromise = !chargeablePolicies.length
+      ? Promise.resolve([] as { policyId: string; rows: any[] }[])
+      : Promise.all(
+          chargeablePolicies.map((policy) =>
+            this.api.getInsuranceEnrollments(policy.id).toPromise()
+              .then((res: any) => ({ policyId: String(policy.id), rows: res?.data || [] }))
+              .catch(() => ({ policyId: String(policy.id), rows: [] }))
+          )
+        );
 
-    Promise.all(
-      chargeablePolicies.map((policy) =>
-        this.api.getInsuranceEnrollments(policy.id).toPromise()
-          .then((res: any) => ({ policyId: String(policy.id), rows: res?.data || [] }))
-          .catch(() => ({ policyId: String(policy.id), rows: [] }))
-      )
-    ).then((results) => {
+    const driversPromise = this.api.getDrivers({ status: 'active', limit: 1000 }).toPromise()
+      .then((res: any) => res?.data || [])
+      .catch(() => [] as any[]);
+
+    Promise.all([enrollmentPromise, driversPromise]).then(([results, drivers]) => {
       const map: Record<string, any[]> = {};
       for (const result of results) map[result.policyId] = result.rows;
       this.chargingEnrollmentsByPolicy.set(map);
+      this.chargingDrivers.set(drivers);
       this.loadingCharging.set(false);
     });
   }

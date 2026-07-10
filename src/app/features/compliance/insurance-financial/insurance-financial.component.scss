@@ -52,6 +52,143 @@
   }
 }
 
+.enrollment-matrix-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.matrix-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    i { color: var(--cyan, #00e5ff); }
+  }
+}
+
+.matrix-subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.enrollment-matrix-scroll {
+  overflow-x: auto;
+}
+
+.enrollment-matrix-table {
+  min-width: max-content;
+
+  .matrix-driver-col {
+    min-width: 180px;
+    max-width: 220px;
+    white-space: nowrap;
+  }
+
+  .matrix-policy-col {
+    min-width: 88px;
+    text-align: center;
+    vertical-align: bottom;
+    padding: 0.65rem 0.4rem;
+  }
+
+  .matrix-col-label {
+    display: block;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .matrix-col-tag {
+    display: inline-block;
+    margin-top: 0.2rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.58rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #00e5ff;
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+  }
+
+  .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--bg-card, #0d1117);
+    box-shadow: 4px 0 8px rgba(0, 0, 0, 0.25);
+  }
+
+  thead .sticky-col {
+    z-index: 3;
+  }
+
+  .matrix-cell {
+    text-align: center;
+    padding: 0.55rem 0.35rem;
+  }
+}
+
+.enrollment-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  vertical-align: middle;
+
+  &.enrolled {
+    background: #00ff88;
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.45);
+  }
+
+  &.not_enrolled {
+    background: #ff4444;
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.35);
+  }
+
+  &.company {
+    background: rgba(0, 229, 255, 0.35);
+    border: 1px solid rgba(0, 229, 255, 0.55);
+    box-shadow: none;
+  }
+}
+
+.loading-state.compact,
+.empty-state.compact {
+  padding: 1.5rem;
+  i { font-size: 1.5rem; }
+}
+
 // Stats
 .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
 .stat-card { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.25rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; }
