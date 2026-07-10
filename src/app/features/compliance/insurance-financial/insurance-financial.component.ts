@@ -695,10 +695,19 @@ export class InsuranceFinancialComponent implements OnInit {
     policy: InsuranceRow,
     enrollmentsByPolicy: Record<string, any[]>
   ): MatrixCellCharge | null {
-    if (column.expenseType === 'company_expense') return null;
-
     const policyCost = this.getPolicyCost(policy);
     const policyFrequency = this.resolveBillingFrequency(policy);
+
+    if (column.expenseType === 'company_expense') {
+      if (!this.isMatrixActiveDriver(driverStatus) || policyCost <= 0) return null;
+      const activeCount = this.matrixDriverCounts().active;
+      if (activeCount <= 0) return null;
+      return {
+        amount: policyCost / activeCount,
+        billingFrequency: policyFrequency
+      };
+    }
+
     const enrollments = enrollmentsByPolicy[column.policyId] || [];
     const activeEnrollments = enrollments.filter((e) => e.status === 'active');
 
@@ -745,8 +754,7 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   getMatrixCellDisplayAmount(column: EnrollmentMatrixColumn, cell: MatrixCellCharge | null | undefined): string {
-    if (column.expenseType === 'company_expense') return '—';
-    if (!cell || cell.amount <= 0) return this.formatCurrency(0, 2);
+    if (!cell || cell.amount <= 0) return '—';
     const converted = this.convertMatrixChargeToPeriod(cell.amount, cell.billingFrequency, this.matrixPeriodTab());
     return this.formatCurrency(converted, 2);
   }
