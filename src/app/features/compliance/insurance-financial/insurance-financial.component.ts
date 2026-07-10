@@ -17,6 +17,7 @@ interface InsuranceRow {
   premiumCost?: number;
   expenseBasis?: string;
   perIncidentDeductible?: number;
+  billingFrequency?: string;
   effectiveDate: string;
   expiryDate: string;
   status: string;
@@ -56,6 +57,7 @@ export class InsuranceFinancialComponent implements OnInit {
     premiumCost: 0,
     expenseBasis: 'whole_policy',
     perIncidentDeductible: 0,
+    billingFrequency: 'monthly',
     effectiveDate: '',
     expiryDate: '',
     notes: '',
@@ -69,6 +71,13 @@ export class InsuranceFinancialComponent implements OnInit {
   readonly expenseBasisOptions = [
     { value: 'whole_policy', label: 'One Whole Policy' },
     { value: 'per_driver', label: 'Per Driver' }
+  ];
+
+  readonly billingFrequencyOptions = [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'semi_annual', label: 'Semi-Annual' },
+    { value: 'annual', label: 'Annual' }
   ];
 
   readonly policyTypes = [
@@ -300,6 +309,7 @@ export class InsuranceFinancialComponent implements OnInit {
       premiumCost: 0,
       expenseBasis: 'whole_policy',
       perIncidentDeductible: 0,
+      billingFrequency: 'monthly',
       effectiveDate: '',
       expiryDate: '',
       notes: '',
@@ -324,6 +334,7 @@ export class InsuranceFinancialComponent implements OnInit {
       premiumCost: p.premiumCost || 0,
       expenseBasis: p.expenseBasis || 'whole_policy',
       perIncidentDeductible: p.perIncidentDeductible || 0,
+      billingFrequency: p.billingFrequency || 'monthly',
       effectiveDate: policy.effectiveDate ? new Date(policy.effectiveDate).toISOString().split('T')[0] : '',
       expiryDate: policy.expiryDate ? new Date(policy.expiryDate).toISOString().split('T')[0] : '',
       notes: policy.notes || '',
@@ -365,6 +376,7 @@ export class InsuranceFinancialComponent implements OnInit {
     fd.append('premiumCost', String(this.policyForm.premiumCost ?? 0));
     fd.append('expenseBasis', this.policyForm.expenseBasis || 'whole_policy');
     fd.append('perIncidentDeductible', String(this.policyForm.perIncidentDeductible ?? 0));
+    fd.append('billingFrequency', this.policyForm.billingFrequency || 'monthly');
     if (this.policyForm.effectiveDate) fd.append('effectiveDate', this.policyForm.effectiveDate);
     if (this.policyForm.expiryDate) fd.append('expiryDate', this.policyForm.expiryDate);
     fd.append('notes', this.policyForm.notes);
@@ -427,6 +439,10 @@ export class InsuranceFinancialComponent implements OnInit {
 
   getExpenseBasisLabel(basis: string): string {
     return this.expenseBasisOptions.find(o => o.value === basis)?.label || basis || '—';
+  }
+
+  getBillingFrequencyLabel(frequency: string): string {
+    return this.billingFrequencyOptions.find(o => o.value === frequency)?.label || frequency || '—';
   }
 
   getPolicyCost(policy: InsuranceRow | any): number {

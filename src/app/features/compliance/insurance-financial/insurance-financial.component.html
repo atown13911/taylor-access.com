@@ -45,6 +45,7 @@
               <th>Coverage</th>
               <th>Cost</th>
               <th>Cost Basis</th>
+              <th>Frequency</th>
               <th>Effective</th>
               <th>Expiry</th>
               <th>Document</th>
@@ -74,6 +75,7 @@
                 <td>{{ formatCurrency(group.current.coverageAmount) }}</td>
                 <td>{{ formatCurrency(getPolicyCost(group.current), 2) }}</td>
                 <td>{{ getExpenseBasisLabel(group.current.expenseBasis || '') }}</td>
+                <td>{{ getBillingFrequencyLabel(group.current.billingFrequency || '') }}</td>
                 <td>{{ formatDate(group.current.effectiveDate) }}</td>
                 <td>{{ formatDate(group.current.expiryDate) }}</td>
                 <td>
@@ -108,6 +110,7 @@
                     <td class="history-muted">{{ formatCurrency(policy.coverageAmount) }}</td>
                     <td class="history-muted">{{ formatCurrency(getPolicyCost(policy), 2) }}</td>
                     <td class="history-muted">{{ getExpenseBasisLabel(policy.expenseBasis || '') }}</td>
+                    <td class="history-muted">{{ getBillingFrequencyLabel(policy.billingFrequency || '') }}</td>
                     <td class="history-muted">{{ formatDate(policy.effectiveDate) }}</td>
                     <td class="history-muted">{{ formatDate(policy.expiryDate) }}</td>
                     <td>
@@ -239,6 +242,14 @@
           <div class="form-group">
             <label>Per Incident Deductible ($)</label>
             <input type="number" [(ngModel)]="policyForm.perIncidentDeductible" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label>Frequency</label>
+            <select [(ngModel)]="policyForm.billingFrequency">
+              @for (opt of billingFrequencyOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
           </div>
         </div>
         <div class="form-group">

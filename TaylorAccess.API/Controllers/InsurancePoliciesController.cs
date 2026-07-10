@@ -79,6 +79,7 @@ public class InsurancePoliciesController : ControllerBase
         [FromForm] DateTime? effectiveDate, [FromForm] DateTime? expiryDate,
         [FromForm] string? notes,
         [FromForm] decimal? premiumCost, [FromForm] string? expenseBasis, [FromForm] decimal? perIncidentDeductible,
+        [FromForm] string? billingFrequency,
         [FromForm] bool? remind3Months, [FromForm] bool? remind30Days, [FromForm] bool? remind15Days,
         [FromForm] bool? remindDayOf, [FromForm] bool? remindDailyPastDue,
         IFormFile? file)
@@ -108,6 +109,7 @@ public class InsurancePoliciesController : ControllerBase
             PremiumCost = premiumCost,
             ExpenseBasis = NormalizeExpenseBasis(expenseBasis),
             PerIncidentDeductible = perIncidentDeductible,
+            BillingFrequency = NormalizeBillingFrequency(billingFrequency),
             Remind3Months = remind3Months ?? false,
             Remind30Days = remind30Days ?? true,
             Remind15Days = remind15Days ?? true,
@@ -141,6 +143,7 @@ public class InsurancePoliciesController : ControllerBase
         [FromForm] DateTime? effectiveDate, [FromForm] DateTime? expiryDate,
         [FromForm] string? notes, [FromForm] string? status,
         [FromForm] decimal? premiumCost, [FromForm] string? expenseBasis, [FromForm] decimal? perIncidentDeductible,
+        [FromForm] string? billingFrequency,
         [FromForm] bool? remind3Months, [FromForm] bool? remind30Days, [FromForm] bool? remind15Days,
         [FromForm] bool? remindDayOf, [FromForm] bool? remindDailyPastDue,
         IFormFile? file)
@@ -158,6 +161,7 @@ public class InsurancePoliciesController : ControllerBase
         if (premiumCost.HasValue) policy.PremiumCost = premiumCost;
         if (expenseBasis != null) policy.ExpenseBasis = NormalizeExpenseBasis(expenseBasis);
         if (perIncidentDeductible.HasValue) policy.PerIncidentDeductible = perIncidentDeductible;
+        if (billingFrequency != null) policy.BillingFrequency = NormalizeBillingFrequency(billingFrequency);
         if (remind3Months.HasValue) policy.Remind3Months = remind3Months.Value;
         if (remind30Days.HasValue) policy.Remind30Days = remind30Days.Value;
         if (remind15Days.HasValue) policy.Remind15Days = remind15Days.Value;
@@ -350,6 +354,13 @@ public class InsurancePoliciesController : ControllerBase
         if (string.IsNullOrWhiteSpace(value)) return null;
         var normalized = value.Trim().ToLowerInvariant();
         return normalized is "whole_policy" or "per_driver" ? normalized : null;
+    }
+
+    private static string? NormalizeBillingFrequency(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized is "monthly" or "quarterly" or "semi_annual" or "annual" ? normalized : null;
     }
 }
 
