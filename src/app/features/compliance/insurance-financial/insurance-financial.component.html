@@ -1113,7 +1113,7 @@
         } @else if (!accountingInvoices().length) {
           <div class="accounting-invoice-empty">
             <i class='bx bx-receipt'></i>
-            <p>No insurance vendor invoices were found for {{ getSummarySpecificPeriodLabel() }}.</p>
+            <p>No insurance vendor invoices with month applicable {{ getSummarySpecificPeriodLabel() }} were found.</p>
             <button class="btn btn-secondary btn-sm" (click)="openTaylorAccountingInsuranceInvoices()">
               <i class='bx bx-link-external'></i> Open Vendor Invoicing
             </button>
@@ -1124,6 +1124,7 @@
               <tr>
                 <th>Vendor</th>
                 <th>Invoice #</th>
+                <th>Month Applicable</th>
                 <th>Invoice Date</th>
                 <th>Due Date</th>
                 <th>Amount</th>
@@ -1136,6 +1137,7 @@
                 <tr>
                   <td>{{ invoice.vendorName || '—' }}</td>
                   <td>{{ invoice.invoiceNumber || invoice.vendorInvoiceNumber || '—' }}</td>
+                  <td>{{ formatMonthApplicable(invoice.monthApplicable) }}</td>
                   <td>{{ invoice.invoiceDate || '—' }}</td>
                   <td>{{ invoice.dueDate || '—' }}</td>
                   <td>{{ formatCurrency(invoice.amount, 2) }}</td>

@@ -154,6 +154,7 @@ interface AccountingVendorInvoice {
   invoiceNumber: string;
   invoiceDate: string;
   dueDate?: string;
+  monthApplicable?: string;
   amount: number;
   category?: string;
   status?: string;
@@ -489,11 +490,24 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   getAccountingInvoiceButtonTitle(): string {
-    return `View Taylor Accounting insurance invoices for ${this.getSummarySpecificPeriodLabel()}`;
+    return `View Taylor Accounting insurance invoices for month applicable ${this.getSummarySpecificPeriodLabel()}`;
   }
 
   getAccountingInvoiceModalTitle(): string {
-    return `Taylor Accounting Insurance Invoices — ${this.getSummarySpecificPeriodLabel()}`;
+    return `Taylor Accounting Insurance Invoices — Month Applicable ${this.getSummarySpecificPeriodLabel()}`;
+  }
+
+  formatMonthApplicable(value?: string | null): string {
+    if (!value) return '—';
+    const normalized = String(value).trim().split('T')[0].substring(0, 7);
+    const [year, month] = normalized.split('-');
+    const monthIndex = Number(month) - 1;
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    if (!year || monthIndex < 0 || monthIndex > 11) return normalized || '—';
+    return `${monthNames[monthIndex]} ${year}`;
   }
 
   async openAccountingInvoicesModal(): Promise<void> {
@@ -560,16 +574,15 @@ export class InsuranceFinancialComponent implements OnInit {
       );
 
       const rows = Array.isArray(response?.data) ? response.data : [];
-      const { start, end } = this.getSummaryPeriodDateRange();
       const filtered = rows
-        .filter((invoice: AccountingVendorInvoice) => this.invoiceMatchesSelectedPeriod(invoice.invoiceDate, start, end))
+        .filter((invoice: AccountingVendorInvoice) => this.invoiceMatchesSelectedPeriod(invoice))
         .sort((a: AccountingVendorInvoice, b: AccountingVendorInvoice) =>
-          String(b.invoiceDate || '').localeCompare(String(a.invoiceDate || ''))
+          String(b.monthApplicable || b.invoiceDate || '').localeCompare(String(a.monthApplicable || a.invoiceDate || ''))
         );
 
       this.accountingInvoices.set(filtered);
       if (!filtered.length) {
-        this.toast.info(`No insurance vendor invoices found for ${this.getSummarySpecificPeriodLabel()}.`, 'No Invoices');
+        this.toast.info(`No insurance vendor invoices with month applicable ${this.getSummarySpecificPeriodLabel()} were found.`, 'No Invoices');
       }
     } catch {
       this.toast.error('Failed to load insurance invoices from Taylor Accounting.', 'Error');
@@ -578,10 +591,46 @@ export class InsuranceFinancialComponent implements OnInit {
     }
   }
 
-  private invoiceMatchesSelectedPeriod(invoiceDate: string, start: Date, end: Date): boolean {
-    const date = this.parseSummaryDateKey(String(invoiceDate || '').trim().split('T')[0]);
+  private invoiceMatchesSelectedPeriod(invoice: AccountingVendorInvoice): boolean {
+    const monthApplicable = this.normalizeMonthApplicable(invoice.monthApplicable);
+    if (monthApplicable) {
+      return this.monthApplicableMatchesSelectedPeriod(monthApplicable);
+    }
+
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const date = this.parseSummaryDateKey(String(invoice.invoiceDate || '').trim().split('T')[0]);
     if (!date) return false;
     return date >= start && date <= end;
+  }
+
+  private normalizeMonthApplicable(value: unknown): string {
+    const raw = String(value ?? '').trim().split('T')[0];
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}$/.test(raw)) return raw;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw.substring(0, 7);
+    return '';
+  }
+
+  private monthApplicableMatchesSelectedPeriod(monthApplicable: string): boolean {
+    const tab = this.summaryPeriodTab();
+
+    if (tab === 'monthly') {
+      const selected = String(this.summarySpecificPeriod() || '').trim().substring(0, 7);
+      return !!selected && monthApplicable === selected;
+    }
+
+    if (tab === 'yearly') {
+      const year = String(this.summarySpecificPeriod() || '').trim();
+      return !!year && monthApplicable.startsWith(`${year}-`);
+    }
+
+    const applicableDate = this.parseSummaryDateKey(`${monthApplicable}-01`);
+    if (!applicableDate) return false;
+
+    const { start, end } = this.getSummaryPeriodDateRange();
+    const monthStart = new Date(applicableDate.getFullYear(), applicableDate.getMonth(), 1);
+    const monthEnd = new Date(applicableDate.getFullYear(), applicableDate.getMonth() + 1, 0, 23, 59, 59, 999);
+    return monthStart <= end && monthEnd >= start;
   }
 
   private getAccountingApiBaseUrl(): string {
@@ -1358,11 +1407,27 @@ export class InsuranceFinancialComponent implements OnInit {
   }
 
   private getFleetEligibleDriversDuringPeriod(start: Date, end: Date): any[] {
-    return this.chargingDrivers().filter((driver) => {
-      const status = this.normalizeDriverStatus(driver.status);
-      if (!this.isMatrixActiveDriver(status)) return false;
-      return this.wasDriverEmployedDuringPeriod(driver, start, end);
-    });
+    return this.chargingDrivers().filter((driver) =>
+      this.wasDriverBillableOnFleetDuringPeriod(driver, start, end)
+    );
+  }
+
+  private wasDriverBillableOnFleetDuringPeriod(driver: any, start: Date, end: Date): boolean {
+    const status = this.normalizeDriverStatus(driver?.status);
+    if (this.isMatrixOnboardingDriver(status)) return false;
+    return this.wasDriverEmployedDuringPeriod(driver, start, end);
+  }
+
+  private getDriverEmploymentEndDate(driver: any, status: string): Date | null {
+    const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
+    if (terminationDate) return terminationDate;
+
+    if (this.isMatrixArchivedDriver(status) || this.isMatrixInactiveDriver(status)) {
+      const updatedAt = this.parseDriverEmploymentDate(driver?.updatedAt || driver?.UpdatedAt);
+      if (updatedAt) return updatedAt;
+    }
+
+    return null;
   }
 
   private normalizeTruckNumberForBilling(value: unknown): string {
@@ -1416,21 +1481,23 @@ export class InsuranceFinancialComponent implements OnInit {
   private wasDriverEmployedDuringPeriod(driver: any, start: Date, end: Date): boolean {
     const status = this.normalizeDriverStatus(driver?.status);
 
-    if (this.isMatrixArchivedDriver(status) || driver?.isDeleted || driver?.IsDeleted) {
-      return false;
-    }
+    if (driver?.isDeleted || driver?.IsDeleted) return false;
+    if (this.isMatrixOnboardingDriver(status)) return false;
 
     const hireDate = this.parseDriverEmploymentDate(driver?.hireDate || driver?.HireDate);
-    const terminationDate = this.parseDriverEmploymentDate(driver?.terminationDate || driver?.TerminationDate);
-
     if (hireDate && hireDate > end) return false;
 
     if (this.isMatrixActiveDriver(status)) {
       return true;
     }
 
-    if (!terminationDate || terminationDate < start) return false;
-    return (hireDate ?? terminationDate) <= end;
+    const employmentEnd = this.getDriverEmploymentEndDate(driver, status);
+    if (!employmentEnd) {
+      return !hireDate || hireDate <= end;
+    }
+
+    if (employmentEnd < start) return false;
+    return (hireDate ?? employmentEnd) <= end;
   }
 
   private parseDriverEmploymentDate(value: unknown): Date | null {
@@ -1579,9 +1646,10 @@ export class InsuranceFinancialComponent implements OnInit {
     if (billingDriverId !== driverId) return null;
 
     const truckCount = this.countUniqueTruckBillingUnits(this.getFleetEligibleDriversDuringPeriod(start, end));
+    const billableDuringPeriod = this.wasDriverBillableOnFleetDuringPeriod(driver, start, end);
 
     if (column.expenseType === 'company_expense') {
-      if (!this.isMatrixActiveDriver(driverStatus) || policyCost <= 0) return null;
+      if (!billableDuringPeriod || policyCost <= 0) return null;
       if (truckCount <= 0) return null;
       return {
         amount: policyCost / truckCount,
@@ -1593,7 +1661,7 @@ export class InsuranceFinancialComponent implements OnInit {
     const activeEnrollments = enrollments.filter((e) => e.status === 'active');
 
     if (!activeEnrollments.length) {
-      if (!this.isMatrixActiveDriver(driverStatus)) return null;
+      if (!billableDuringPeriod) return null;
       return { amount: policyCost, billingFrequency: policyFrequency };
     }
 
