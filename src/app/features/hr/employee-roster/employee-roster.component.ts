@@ -1,4 +1,4 @@
-import { Component, signal, computed, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, signal, computed, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -2887,23 +2887,34 @@ import {
     }
 
     .modal-overlay--edit-fullscreen {
+      top: 64px;
+      left: 260px;
+      right: 0;
+      bottom: 0;
       padding: 0;
       align-items: stretch;
       justify-content: stretch;
       overflow: hidden;
-      z-index: 1000000;
+      z-index: 1000;
+    }
+
+    :host-context(.app-shell.sidebar-collapsed) .modal-overlay--edit-fullscreen {
+      left: 64px;
+    }
+
+    @media (max-width: 768px) {
+      .modal-overlay--edit-fullscreen {
+        left: 0;
+      }
     }
 
     .modal-edit-employee {
-      width: 100vw;
+      width: 100%;
       max-width: none;
-      height: 100vh;
-      max-height: 100vh;
+      height: 100%;
+      max-height: none;
       margin: 0;
       border-radius: 0;
-      border-left: none;
-      border-right: none;
-      border-top: none;
     }
 
     .modal-edit-employee .modal-header {
@@ -4654,7 +4665,7 @@ import {
     .error-line { color: #fca5a5; font-size: 0.8rem; padding: 2px 0; font-family: monospace; }
   `]
 })
-export class EmployeeRosterComponent implements OnInit, OnDestroy {
+export class EmployeeRosterComponent implements OnInit {
   private http = inject(HttpClient);
   router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -5334,7 +5345,6 @@ export class EmployeeRosterComponent implements OnInit, OnDestroy {
 
   private setEditModalOpen(open: boolean): void {
     this.showEditModal = open;
-    document.body.classList.toggle('ta-edit-employee-fullscreen', open);
   }
 
   closeEditModal(): void {
@@ -5344,10 +5354,6 @@ export class EmployeeRosterComponent implements OnInit, OnDestroy {
     this.employeeAccounts.set([]);
     this.showBankForm.set(false);
     this.satelliteDetails.set(null);
-  }
-
-  ngOnDestroy(): void {
-    document.body.classList.remove('ta-edit-employee-fullscreen');
   }
 
   onEditEntityTypeChange() {
