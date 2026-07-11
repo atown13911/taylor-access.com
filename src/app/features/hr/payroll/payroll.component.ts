@@ -456,14 +456,7 @@ import { environment } from '../../../../environments/environment';
               }
 
               <label class="payroll-modal-field" [class.payroll-modal-field--full]="payrollDetailsForm().payType === 'salary'">
-                <span>Period deductions</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  [ngModel]="payrollDetailsForm().defaultDeductions"
-                  (ngModelChange)="updatePayrollFormNumberField('defaultDeductions', $event)"
-                >
+                <span class="payroll-modal-hint">Use payroll setup below for taxes and deductions</span>
               </label>
             </div>
           } @else {
@@ -539,18 +532,271 @@ import { environment } from '../../../../environments/environment';
                 >
               </label>
             </div>
+          }
+        </section>
 
+        <section class="payroll-modal-section payroll-modal-section--setup">
+          <div class="payroll-modal-section-head">
+            <h4>Payroll setup</h4>
+            <p>Taxes, benefits, and payment</p>
+          </div>
+          <div class="payroll-modal-grid">
             <label class="payroll-modal-field">
-              <span>Period deductions</span>
+              <span>Employment type</span>
+              <select
+                [ngModel]="payrollDetailsForm().employmentType"
+                (ngModelChange)="updatePayrollFormField('employmentType', $event)"
+              >
+                @for (item of employmentTypeOptions; track item.value) {
+                  <option [value]="item.value">{{ item.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="payroll-modal-field">
+              <span>Payment method</span>
+              <select
+                [ngModel]="payrollDetailsForm().paymentMethod"
+                (ngModelChange)="updatePayrollFormField('paymentMethod', $event)"
+              >
+                @for (item of paymentMethodOptions; track item.value) {
+                  <option [value]="item.value">{{ item.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="payroll-modal-field payroll-modal-field--checkbox">
+              <input
+                type="checkbox"
+                [ngModel]="payrollDetailsForm().w4OnFile"
+                (ngModelChange)="updatePayrollFormBooleanField('w4OnFile', $event)"
+              >
+              <span>W-4 on file</span>
+            </label>
+            <label class="payroll-modal-field">
+              <span>W-4 signed date</span>
+              <input
+                type="date"
+                [ngModel]="payrollDetailsForm().w4SignedDate"
+                (ngModelChange)="updatePayrollFormField('w4SignedDate', $event)"
+              >
+            </label>
+          </div>
+        </section>
+
+        <section class="payroll-modal-section payroll-modal-section--tax">
+          <div class="payroll-modal-section-head">
+            <h4>Federal withholding</h4>
+            <p>W-4 settings</p>
+          </div>
+          <div class="payroll-modal-grid">
+            <label class="payroll-modal-field">
+              <span>Filing status</span>
+              <select
+                [ngModel]="payrollDetailsForm().federalFilingStatus"
+                (ngModelChange)="updatePayrollFormField('federalFilingStatus', $event)"
+              >
+                @for (item of federalFilingStatusOptions; track item.value) {
+                  <option [value]="item.value">{{ item.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="payroll-modal-field payroll-modal-field--checkbox">
+              <input
+                type="checkbox"
+                [ngModel]="payrollDetailsForm().federalExempt"
+                (ngModelChange)="updatePayrollFormBooleanField('federalExempt', $event)"
+              >
+              <span>Exempt from federal withholding</span>
+            </label>
+            <label class="payroll-modal-field">
+              <span>Extra federal withholding / period</span>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                [ngModel]="payrollDetailsForm().defaultDeductions"
-                (ngModelChange)="updatePayrollFormNumberField('defaultDeductions', $event)"
+                [ngModel]="payrollDetailsForm().extraFederalWithholding"
+                (ngModelChange)="updatePayrollFormNumberField('extraFederalWithholding', $event)"
               >
             </label>
-          }
+            <label class="payroll-modal-field">
+              <span>Dependents credit (annual)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().w4DependentsCredit"
+                (ngModelChange)="updatePayrollFormNumberField('w4DependentsCredit', $event)"
+              >
+            </label>
+            <label class="payroll-modal-field">
+              <span>Other income (annual)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().w4OtherIncome"
+                (ngModelChange)="updatePayrollFormNumberField('w4OtherIncome', $event)"
+              >
+            </label>
+            <label class="payroll-modal-field">
+              <span>Deductions (annual)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().w4Deductions"
+                (ngModelChange)="updatePayrollFormNumberField('w4Deductions', $event)"
+              >
+            </label>
+            <label class="payroll-modal-field payroll-modal-field--checkbox">
+              <input
+                type="checkbox"
+                [ngModel]="payrollDetailsForm().w4TwoJobs"
+                (ngModelChange)="updatePayrollFormBooleanField('w4TwoJobs', $event)"
+              >
+              <span>Multiple jobs (W-4 step 2c)</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="payroll-modal-section payroll-modal-section--tax">
+          <div class="payroll-modal-section-head">
+            <h4>State withholding</h4>
+            <p>Work and residence</p>
+          </div>
+          <div class="payroll-modal-grid">
+            <label class="payroll-modal-field">
+              <span>Work state</span>
+              <select
+                [ngModel]="payrollDetailsForm().workState"
+                (ngModelChange)="updatePayrollFormField('workState', $event)"
+              >
+                @for (item of usStateOptions; track item.value) {
+                  <option [value]="item.value">{{ item.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="payroll-modal-field">
+              <span>Residence state</span>
+              <select
+                [ngModel]="payrollDetailsForm().residenceState"
+                (ngModelChange)="updatePayrollFormField('residenceState', $event)"
+              >
+                @for (item of usStateOptions; track item.value) {
+                  <option [value]="item.value">{{ item.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="payroll-modal-field">
+              <span>State filing status</span>
+              <select
+                [ngModel]="payrollDetailsForm().stateFilingStatus"
+                (ngModelChange)="updatePayrollFormField('stateFilingStatus', $event)"
+              >
+                @for (item of federalFilingStatusOptions; track item.value) {
+                  <option [value]="item.value">{{ item.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="payroll-modal-field">
+              <span>State withholding %</span>
+              <input
+                type="number"
+                min="0"
+                max="15"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().stateWithholdingPercent"
+                (ngModelChange)="updatePayrollFormNumberField('stateWithholdingPercent', $event)"
+              >
+            </label>
+            <label class="payroll-modal-field">
+              <span>Extra state withholding / period</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().extraStateWithholding"
+                (ngModelChange)="updatePayrollFormNumberField('extraStateWithholding', $event)"
+              >
+            </label>
+            <label class="payroll-modal-field payroll-modal-field--checkbox">
+              <input
+                type="checkbox"
+                [ngModel]="payrollDetailsForm().stateExempt"
+                (ngModelChange)="updatePayrollFormBooleanField('stateExempt', $event)"
+              >
+              <span>Exempt from state withholding</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="payroll-modal-section">
+          <div class="payroll-modal-section-head">
+            <h4>Pre-tax deductions</h4>
+            <p>Benefits per pay period</p>
+          </div>
+          <div class="payroll-modal-grid">
+            <label class="payroll-modal-field">
+              <span>Health insurance</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().healthInsurance" (ngModelChange)="updatePayrollFormNumberField('healthInsurance', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>Dental insurance</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().dentalInsurance" (ngModelChange)="updatePayrollFormNumberField('dentalInsurance', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>Vision insurance</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().visionInsurance" (ngModelChange)="updatePayrollFormNumberField('visionInsurance', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>401(k) amount / period</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().retirement401kAmount" (ngModelChange)="updatePayrollFormNumberField('retirement401kAmount', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>401(k) % of gross</span>
+              <input type="number" min="0" max="100" step="0.01" [ngModel]="payrollDetailsForm().retirement401kPercent" (ngModelChange)="updatePayrollFormNumberField('retirement401kPercent', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>HSA / period</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().hsaContribution" (ngModelChange)="updatePayrollFormNumberField('hsaContribution', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>FSA / period</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().fsaContribution" (ngModelChange)="updatePayrollFormNumberField('fsaContribution', $event)">
+            </label>
+          </div>
+        </section>
+
+        <section class="payroll-modal-section">
+          <div class="payroll-modal-section-head">
+            <h4>Taxes & post-tax deductions</h4>
+            <p>FICA and other withholdings</p>
+          </div>
+          <div class="payroll-modal-grid">
+            <label class="payroll-modal-field payroll-modal-field--checkbox">
+              <input type="checkbox" [ngModel]="payrollDetailsForm().exemptSocialSecurity" (ngModelChange)="updatePayrollFormBooleanField('exemptSocialSecurity', $event)">
+              <span>Exempt from Social Security</span>
+            </label>
+            <label class="payroll-modal-field payroll-modal-field--checkbox">
+              <input type="checkbox" [ngModel]="payrollDetailsForm().exemptMedicare" (ngModelChange)="updatePayrollFormBooleanField('exemptMedicare', $event)">
+              <span>Exempt from Medicare</span>
+            </label>
+            <label class="payroll-modal-field">
+              <span>Garnishment / period</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().garnishment" (ngModelChange)="updatePayrollFormNumberField('garnishment', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>Union dues / period</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().unionDues" (ngModelChange)="updatePayrollFormNumberField('unionDues', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>Other post-tax / period</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().otherPostTaxDeductions" (ngModelChange)="updatePayrollFormNumberField('otherPostTaxDeductions', $event)">
+            </label>
+            <label class="payroll-modal-field">
+              <span>Legacy period deductions</span>
+              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().defaultDeductions" (ngModelChange)="updatePayrollFormNumberField('defaultDeductions', $event)">
+            </label>
+          </div>
         </section>
 
         @if (showAnnualSalarySection()) {
@@ -1529,8 +1775,8 @@ import { environment } from '../../../../environments/environment';
       border: 1px solid rgba(255,255,255,0.12); z-index: 501; padding: 1rem 1rem 0.9rem;
       box-shadow: 0 20px 55px rgba(0,0,0,0.55);
       &--details {
-        width: min(720px, calc(100vw - 2rem));
-        max-height: min(90vh, 920px);
+        width: min(820px, calc(100vw - 2rem));
+        max-height: min(92vh, 960px);
         overflow-y: auto;
       }
     }
@@ -1634,6 +1880,38 @@ import { environment } from '../../../../environments/environment';
     }
     .payroll-modal-field--full {
       grid-column: 1 / -1;
+    }
+    .payroll-modal-field--checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0;
+      input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+        accent-color: #22d3ee;
+      }
+      span {
+        text-transform: none;
+        letter-spacing: normal;
+        font-size: 0.8rem;
+        color: var(--text-primary);
+      }
+    }
+    .payroll-modal-hint {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      text-transform: none;
+      letter-spacing: normal;
+      font-style: italic;
+    }
+    .payroll-modal-section--setup {
+      border-color: rgba(34, 211, 238, 0.18);
+      background: rgba(34, 211, 238, 0.03);
+    }
+    .payroll-modal-section--tax {
+      border-color: rgba(251, 191, 36, 0.18);
+      background: rgba(251, 191, 36, 0.03);
     }
     .payroll-modal-actions {
       display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.35rem;
@@ -1758,6 +2036,40 @@ export class PayrollComponent implements OnInit {
     { value: 'gross_profit', label: 'Gross profit' },
     { value: 'load', label: 'Load / shipment' },
     { value: 'custom', label: 'Custom basis' }
+  ];
+  readonly employmentTypeOptions = [
+    { value: 'w2', label: 'W-2 Employee' },
+    { value: '1099', label: '1099 Contractor' }
+  ];
+  readonly paymentMethodOptions = [
+    { value: 'direct_deposit', label: 'Direct deposit' },
+    { value: 'check', label: 'Paper check' }
+  ];
+  readonly federalFilingStatusOptions = [
+    { value: 'single', label: 'Single' },
+    { value: 'married_joint', label: 'Married filing jointly' },
+    { value: 'married_separate', label: 'Married filing separately' },
+    { value: 'head_of_household', label: 'Head of household' }
+  ];
+  readonly usStateOptions = [
+    { value: '', label: '— Select state —' },
+    { value: 'AL', label: 'Alabama' }, { value: 'AK', label: 'Alaska' }, { value: 'AZ', label: 'Arizona' },
+    { value: 'AR', label: 'Arkansas' }, { value: 'CA', label: 'California' }, { value: 'CO', label: 'Colorado' },
+    { value: 'CT', label: 'Connecticut' }, { value: 'DE', label: 'Delaware' }, { value: 'FL', label: 'Florida' },
+    { value: 'GA', label: 'Georgia' }, { value: 'HI', label: 'Hawaii' }, { value: 'ID', label: 'Idaho' },
+    { value: 'IL', label: 'Illinois' }, { value: 'IN', label: 'Indiana' }, { value: 'IA', label: 'Iowa' },
+    { value: 'KS', label: 'Kansas' }, { value: 'KY', label: 'Kentucky' }, { value: 'LA', label: 'Louisiana' },
+    { value: 'ME', label: 'Maine' }, { value: 'MD', label: 'Maryland' }, { value: 'MA', label: 'Massachusetts' },
+    { value: 'MI', label: 'Michigan' }, { value: 'MN', label: 'Minnesota' }, { value: 'MS', label: 'Mississippi' },
+    { value: 'MO', label: 'Missouri' }, { value: 'MT', label: 'Montana' }, { value: 'NE', label: 'Nebraska' },
+    { value: 'NV', label: 'Nevada' }, { value: 'NH', label: 'New Hampshire' }, { value: 'NJ', label: 'New Jersey' },
+    { value: 'NM', label: 'New Mexico' }, { value: 'NY', label: 'New York' }, { value: 'NC', label: 'North Carolina' },
+    { value: 'ND', label: 'North Dakota' }, { value: 'OH', label: 'Ohio' }, { value: 'OK', label: 'Oklahoma' },
+    { value: 'OR', label: 'Oregon' }, { value: 'PA', label: 'Pennsylvania' }, { value: 'RI', label: 'Rhode Island' },
+    { value: 'SC', label: 'South Carolina' }, { value: 'SD', label: 'South Dakota' }, { value: 'TN', label: 'Tennessee' },
+    { value: 'TX', label: 'Texas' }, { value: 'UT', label: 'Utah' }, { value: 'VT', label: 'Vermont' },
+    { value: 'VA', label: 'Virginia' }, { value: 'WA', label: 'Washington' }, { value: 'WV', label: 'West Virginia' },
+    { value: 'WI', label: 'Wisconsin' }, { value: 'WY', label: 'Wyoming' }
   ];
   payDetailsBreakdown = computed(() => this.buildPayDetailsBreakdown(this.payrollDetailsForm()));
   annualSalaryBreakdown = computed(() => this.buildAnnualSalaryBreakdown(this.payrollDetailsForm()));
@@ -2225,7 +2537,7 @@ export class PayrollComponent implements OnInit {
             invoicedAmount,
             hours: this.resolveStandardHours(payType, payroll),
             grossPay,
-            deductions: this.toNumberOrDefault(payroll['defaultDeductions'], payroll['periodDeductions'], 0),
+            deductions: this.resolveEmployeePeriodDeductions(payroll, payType, payFrequency, u),
             netPay: 0,
             payrollStatus,
             invoiceNumber: this.pickFirstText(
@@ -2243,10 +2555,22 @@ export class PayrollComponent implements OnInit {
             )
           };
         });
-        this.employees.set(users.map((emp: any) => ({
-          ...emp,
-          netPay: Number(Math.max(0, (Number(emp.grossPay) || 0) - (Number(emp.deductions) || 0)).toFixed(2))
-        })));
+        this.employees.set(users.map((emp: any) => {
+          const prefs = this.parsePreferences(emp?.preferences ?? emp?.Preferences);
+          const payroll = prefs?.['payroll'] && typeof prefs['payroll'] === 'object'
+            ? prefs['payroll'] as Record<string, unknown>
+            : {};
+          const storedNet = this.toNumberOrDefault(payroll['periodNetAmount'], -1);
+          const grossPay = Number(emp.grossPay) || 0;
+          const deductions = Number(emp.deductions) || 0;
+          const netPay = storedNet >= 0
+            ? storedNet
+            : Math.max(0, grossPay - deductions);
+          return {
+            ...emp,
+            netPay: Number(netPay.toFixed(2))
+          };
+        }));
       },
       error: () => this.employees.set([])
     });
@@ -2314,6 +2638,13 @@ export class PayrollComponent implements OnInit {
     this.payrollDetailsForm.update((current) => ({
       ...current,
       [field]: this.toNumberOrDefault(value, 0)
+    }));
+  }
+
+  updatePayrollFormBooleanField(field: PayrollDetailsBooleanField, value: boolean): void {
+    this.payrollDetailsForm.update((current) => ({
+      ...current,
+      [field]: !!value
     }));
   }
 
@@ -2805,7 +3136,36 @@ export class PayrollComponent implements OnInit {
       commissionTarget: 0,
       commissionCap: 0,
       bonusPerPeriod: 0,
-      contractNotes: ''
+      contractNotes: '',
+      employmentType: 'w2',
+      paymentMethod: 'direct_deposit',
+      w4OnFile: false,
+      w4SignedDate: '',
+      federalFilingStatus: 'single',
+      federalExempt: false,
+      extraFederalWithholding: 0,
+      w4DependentsCredit: 0,
+      w4OtherIncome: 0,
+      w4Deductions: 0,
+      w4TwoJobs: false,
+      workState: '',
+      residenceState: '',
+      stateFilingStatus: 'single',
+      stateWithholdingPercent: 0,
+      extraStateWithholding: 0,
+      stateExempt: false,
+      exemptSocialSecurity: false,
+      exemptMedicare: false,
+      healthInsurance: 0,
+      dentalInsurance: 0,
+      visionInsurance: 0,
+      retirement401kAmount: 0,
+      retirement401kPercent: 0,
+      hsaContribution: 0,
+      fsaContribution: 0,
+      garnishment: 0,
+      unionDues: 0,
+      otherPostTaxDeductions: 0
     };
   }
 
@@ -2834,7 +3194,36 @@ export class PayrollComponent implements OnInit {
       commissionTarget: this.toNumberOrDefault(payroll['commissionTarget'], payroll['commissionVolume'], 0),
       commissionCap: this.toNumberOrDefault(payroll['commissionCap'], 0),
       bonusPerPeriod: this.toNumberOrDefault(payroll['bonusPerPeriod'], payroll['bonusAmount'], 0),
-      contractNotes: this.pickFirstText(payroll['contractNotes'], payroll['compensationNotes'], emp?.contractNotes)
+      contractNotes: this.pickFirstText(payroll['contractNotes'], payroll['compensationNotes'], emp?.contractNotes),
+      employmentType: this.normalizeEmploymentType(this.pickFirstText(payroll['employmentType'], emp?.employmentType)),
+      paymentMethod: this.normalizePaymentMethod(this.pickFirstText(payroll['paymentMethod'])),
+      w4OnFile: this.toBooleanOrDefault(payroll['w4OnFile'], emp?.w4OnFile, false),
+      w4SignedDate: this.pickFirstText(payroll['w4SignedDate'], ''),
+      federalFilingStatus: this.normalizeFederalFilingStatus(this.pickFirstText(payroll['federalFilingStatus'])),
+      federalExempt: this.toBooleanOrDefault(payroll['federalExempt'], false),
+      extraFederalWithholding: this.toNumberOrDefault(payroll['extraFederalWithholding'], 0),
+      w4DependentsCredit: this.toNumberOrDefault(payroll['w4DependentsCredit'], 0),
+      w4OtherIncome: this.toNumberOrDefault(payroll['w4OtherIncome'], 0),
+      w4Deductions: this.toNumberOrDefault(payroll['w4Deductions'], 0),
+      w4TwoJobs: this.toBooleanOrDefault(payroll['w4TwoJobs'], false),
+      workState: this.pickFirstText(payroll['workState'], emp?.workState, '').toUpperCase(),
+      residenceState: this.pickFirstText(payroll['residenceState'], emp?.residenceState, '').toUpperCase(),
+      stateFilingStatus: this.normalizeFederalFilingStatus(this.pickFirstText(payroll['stateFilingStatus'])),
+      stateWithholdingPercent: this.toNumberOrDefault(payroll['stateWithholdingPercent'], 0),
+      extraStateWithholding: this.toNumberOrDefault(payroll['extraStateWithholding'], 0),
+      stateExempt: this.toBooleanOrDefault(payroll['stateExempt'], false),
+      exemptSocialSecurity: this.toBooleanOrDefault(payroll['exemptSocialSecurity'], false),
+      exemptMedicare: this.toBooleanOrDefault(payroll['exemptMedicare'], false),
+      healthInsurance: this.toNumberOrDefault(payroll['healthInsurance'], 0),
+      dentalInsurance: this.toNumberOrDefault(payroll['dentalInsurance'], 0),
+      visionInsurance: this.toNumberOrDefault(payroll['visionInsurance'], 0),
+      retirement401kAmount: this.toNumberOrDefault(payroll['retirement401kAmount'], 0),
+      retirement401kPercent: this.toNumberOrDefault(payroll['retirement401kPercent'], 0),
+      hsaContribution: this.toNumberOrDefault(payroll['hsaContribution'], 0),
+      fsaContribution: this.toNumberOrDefault(payroll['fsaContribution'], 0),
+      garnishment: this.toNumberOrDefault(payroll['garnishment'], 0),
+      unionDues: this.toNumberOrDefault(payroll['unionDues'], 0),
+      otherPostTaxDeductions: this.toNumberOrDefault(payroll['otherPostTaxDeductions'], 0)
     };
   }
 
@@ -2870,16 +3259,28 @@ export class PayrollComponent implements OnInit {
       lines.push({ label: `${frequencyLabel} gross`, value: periodGross });
     }
 
-    const periodDeductions = Math.max(0, form.defaultDeductions);
-    const periodNet = Math.max(0, periodGross - periodDeductions);
-    const annualizedGross = periodGross * periodsPerYear;
-
-    if (periodDeductions > 0) {
-      lines.push({ label: 'Deductions', value: periodDeductions });
+    const estimate = this.estimatePeriodPayroll(form, periodGross);
+    if (estimate.preTaxDeductions > 0) {
+      lines.push({ label: 'Pre-tax deductions', value: estimate.preTaxDeductions });
     }
-    lines.push({ label: `${frequencyLabel} net`, value: periodNet, emphasis: true });
+    if (estimate.federalTax > 0) {
+      lines.push({ label: 'Federal income tax', value: estimate.federalTax });
+    }
+    if (estimate.stateTax > 0) {
+      lines.push({ label: 'State income tax', value: estimate.stateTax });
+    }
+    if (estimate.socialSecurity > 0) {
+      lines.push({ label: 'Social Security', value: estimate.socialSecurity });
+    }
+    if (estimate.medicare > 0) {
+      lines.push({ label: 'Medicare', value: estimate.medicare });
+    }
+    if (estimate.postTaxDeductions > 0) {
+      lines.push({ label: 'Post-tax deductions', value: estimate.postTaxDeductions });
+    }
+    lines.push({ label: `${frequencyLabel} net`, value: estimate.periodNet, emphasis: true });
     if (!(form.compensationModel === 'contract' && form.payType === 'salary')) {
-      lines.push({ label: 'Annualized gross', value: annualizedGross });
+      lines.push({ label: 'Annualized gross', value: periodGross * periodsPerYear });
     }
 
     const payStructureLabel = form.compensationModel === 'contract'
@@ -2891,9 +3292,10 @@ export class PayrollComponent implements OnInit {
       periodLabel: `${frequencyLabel} attachment`,
       lines,
       periodGross: Number(periodGross.toFixed(2)),
-      periodDeductions: Number(periodDeductions.toFixed(2)),
-      periodNet: Number(periodNet.toFixed(2)),
-      annualizedGross: Number(annualizedGross.toFixed(2))
+      periodDeductions: estimate.totalDeductions,
+      periodNet: estimate.periodNet,
+      annualizedGross: Number((periodGross * periodsPerYear).toFixed(2)),
+      payrollEstimate: estimate
     };
   }
 
@@ -2911,9 +3313,9 @@ export class PayrollComponent implements OnInit {
     const periodsPerYear = this.getPayPeriodsPerYear(form.payFrequency);
     const annualGross = Math.max(0, form.annualSalary);
     const periodGross = periodsPerYear > 0 ? annualGross / periodsPerYear : 0;
-    const annualDeductions = Math.max(0, form.defaultDeductions) * periodsPerYear;
+    const estimate = this.estimatePeriodPayroll(form, periodGross);
+    const annualDeductions = estimate.totalDeductions * periodsPerYear;
     const annualNet = Math.max(0, annualGross - annualDeductions);
-    const periodNet = Math.max(0, periodGross - Math.max(0, form.defaultDeductions));
 
     const frequencyEquivalents = this.payFrequencyOptions.map((option) => ({
       label: option.label,
@@ -2924,10 +3326,10 @@ export class PayrollComponent implements OnInit {
     const lines: PayDetailsBreakdownLine[] = [
       { label: 'Annual gross', value: annualGross },
       { label: `${frequencyLabel} gross (selected)`, value: periodGross },
-      { label: `${frequencyLabel} net (selected)`, value: periodNet }
+      { label: `${frequencyLabel} net (selected)`, value: estimate.periodNet }
     ];
     if (annualDeductions > 0) {
-      lines.push({ label: 'Annual deductions', value: annualDeductions });
+      lines.push({ label: 'Annual deductions (est.)', value: annualDeductions });
     }
     lines.push({ label: 'Annual net (est.)', value: annualNet, emphasis: true });
 
@@ -2938,10 +3340,156 @@ export class PayrollComponent implements OnInit {
     };
   }
 
+  private estimatePeriodPayroll(form: PayrollDetailsForm, periodGross: number): PeriodPayrollEstimate {
+    const gross = Math.max(0, Number(periodGross) || 0);
+    const retirement401k = form.retirement401kAmount > 0
+      ? form.retirement401kAmount
+      : gross * (Math.max(0, form.retirement401kPercent) / 100);
+    const preTaxDeductions = Number((
+      Math.max(0, form.healthInsurance)
+      + Math.max(0, form.dentalInsurance)
+      + Math.max(0, form.visionInsurance)
+      + Math.max(0, form.hsaContribution)
+      + Math.max(0, form.fsaContribution)
+      + Math.max(0, retirement401k)
+    ).toFixed(2));
+    const taxableWages = Math.max(0, Number((gross - preTaxDeductions).toFixed(2)));
+    const periodsPerYear = this.getPayPeriodsPerYear(form.payFrequency);
+
+    let federalTax = 0;
+    let stateTax = 0;
+    let socialSecurity = 0;
+    let medicare = 0;
+
+    if (!form.federalExempt) {
+      let federalBase = taxableWages * this.getFederalWithholdingRate(form.federalFilingStatus);
+      if (form.w4TwoJobs) federalBase *= 1.1;
+      if (form.w4OtherIncome > 0 && periodsPerYear > 0) {
+        federalBase += form.w4OtherIncome / periodsPerYear * 0.12;
+      }
+      if (form.w4Deductions > 0 && periodsPerYear > 0) {
+        federalBase = Math.max(0, federalBase - (form.w4Deductions / periodsPerYear) * 0.12);
+      }
+      if (form.w4DependentsCredit > 0 && periodsPerYear > 0) {
+        federalBase = Math.max(0, federalBase - form.w4DependentsCredit / periodsPerYear);
+      }
+      federalTax = Math.max(0, federalBase + Math.max(0, form.extraFederalWithholding));
+    }
+
+    if (!form.stateExempt && form.workState) {
+      const stateRate = form.stateWithholdingPercent > 0
+        ? form.stateWithholdingPercent / 100
+        : 0.05;
+      stateTax = Math.max(0, taxableWages * stateRate + Math.max(0, form.extraStateWithholding));
+    }
+
+    if (form.employmentType === 'w2') {
+      if (!form.exemptSocialSecurity) {
+        socialSecurity = taxableWages * 0.062;
+      }
+      if (!form.exemptMedicare) {
+        medicare = taxableWages * 0.0145;
+      }
+    }
+
+    const postTaxDeductions = Number((
+      Math.max(0, form.garnishment)
+      + Math.max(0, form.unionDues)
+      + Math.max(0, form.otherPostTaxDeductions)
+      + Math.max(0, form.defaultDeductions)
+    ).toFixed(2));
+
+    federalTax = Number(federalTax.toFixed(2));
+    stateTax = Number(stateTax.toFixed(2));
+    socialSecurity = Number(socialSecurity.toFixed(2));
+    medicare = Number(medicare.toFixed(2));
+
+    const totalDeductions = Number((
+      preTaxDeductions + federalTax + stateTax + socialSecurity + medicare + postTaxDeductions
+    ).toFixed(2));
+    const periodNet = Math.max(0, Number((gross - totalDeductions).toFixed(2)));
+
+    return {
+      preTaxDeductions,
+      taxableWages,
+      federalTax,
+      stateTax,
+      socialSecurity,
+      medicare,
+      postTaxDeductions,
+      totalDeductions,
+      periodNet
+    };
+  }
+
+  private resolveEmployeePeriodDeductions(
+    payroll: Record<string, unknown>,
+    payType: string,
+    payFrequency: string,
+    user: any
+  ): number {
+    const stored = this.toNumberOrDefault(payroll['totalPeriodDeductions'], -1);
+    if (stored >= 0) return stored;
+
+    const storedNet = this.toNumberOrDefault(payroll['periodNetAmount'], -1);
+    const gross = this.calculatePeriodGrossFromPayroll(payroll, payType, payFrequency, user);
+    if (storedNet >= 0 && gross > 0) {
+      return Number(Math.max(0, gross - storedNet).toFixed(2));
+    }
+
+    const form = this.buildPayrollDetailsForm(user, payroll);
+    const breakdown = this.buildPayDetailsBreakdown(form);
+    return breakdown.periodDeductions;
+  }
+
+  private getFederalWithholdingRate(status: PayrollDetailsForm['federalFilingStatus']): number {
+    switch (status) {
+      case 'married_joint':
+        return 0.10;
+      case 'head_of_household':
+        return 0.11;
+      case 'married_separate':
+      case 'single':
+      default:
+        return 0.12;
+    }
+  }
+
+  private normalizeEmploymentType(value: string): PayrollDetailsForm['employmentType'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.includes('1099') || normalized.includes('contractor')) return '1099';
+    return 'w2';
+  }
+
+  private normalizePaymentMethod(value: string): PayrollDetailsForm['paymentMethod'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.includes('check')) return 'check';
+    return 'direct_deposit';
+  }
+
+  private normalizeFederalFilingStatus(value: string): PayrollDetailsForm['federalFilingStatus'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.includes('married') && normalized.includes('joint')) return 'married_joint';
+    if (normalized.includes('married') && normalized.includes('separate')) return 'married_separate';
+    if (normalized.includes('head')) return 'head_of_household';
+    return 'single';
+  }
+
+  private toBooleanOrDefault(...values: unknown[]): boolean {
+    for (const value of values) {
+      if (typeof value === 'boolean') return value;
+      const normalized = String(value ?? '').trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1' || normalized === 'yes') return true;
+      if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+    }
+    return false;
+  }
+
   private serializePayrollDetails(form: PayrollDetailsForm, breakdown: PayDetailsBreakdown): Record<string, unknown> {
     const payRate = form.compensationModel === 'contract'
       ? (form.payType === 'salary' ? form.annualSalary : form.hourlyRate)
       : breakdown.periodGross;
+    const estimate = breakdown.payrollEstimate;
 
     return {
       payFrequency: form.payFrequency,
@@ -2953,16 +3501,57 @@ export class PayrollComponent implements OnInit {
       payRate,
       standardHoursPerWeek: form.standardHoursPerWeek,
       defaultDeductions: form.defaultDeductions,
-      periodDeductions: form.defaultDeductions,
+      periodDeductions: breakdown.periodDeductions,
+      totalPeriodDeductions: breakdown.periodDeductions,
       commissionBasis: form.commissionBasis,
       commissionRate: form.commissionRate,
       baseDraw: form.baseDraw,
       commissionTarget: form.commissionTarget,
       commissionCap: form.commissionCap,
       bonusPerPeriod: form.bonusPerPeriod,
+      employmentType: form.employmentType,
+      paymentMethod: form.paymentMethod,
+      w4OnFile: form.w4OnFile,
+      w4SignedDate: form.w4SignedDate,
+      federalFilingStatus: form.federalFilingStatus,
+      federalExempt: form.federalExempt,
+      extraFederalWithholding: form.extraFederalWithholding,
+      w4DependentsCredit: form.w4DependentsCredit,
+      w4OtherIncome: form.w4OtherIncome,
+      w4Deductions: form.w4Deductions,
+      w4TwoJobs: form.w4TwoJobs,
+      workState: form.workState,
+      residenceState: form.residenceState,
+      stateFilingStatus: form.stateFilingStatus,
+      stateWithholdingPercent: form.stateWithholdingPercent,
+      extraStateWithholding: form.extraStateWithholding,
+      stateExempt: form.stateExempt,
+      exemptSocialSecurity: form.exemptSocialSecurity,
+      exemptMedicare: form.exemptMedicare,
+      healthInsurance: form.healthInsurance,
+      dentalInsurance: form.dentalInsurance,
+      visionInsurance: form.visionInsurance,
+      retirement401kAmount: form.retirement401kAmount,
+      retirement401kPercent: form.retirement401kPercent,
+      hsaContribution: form.hsaContribution,
+      fsaContribution: form.fsaContribution,
+      garnishment: form.garnishment,
+      unionDues: form.unionDues,
+      otherPostTaxDeductions: form.otherPostTaxDeductions,
       periodGrossAmount: breakdown.periodGross,
       periodNetAmount: breakdown.periodNet,
       annualizedGrossAmount: breakdown.annualizedGross,
+      payrollWithholding: estimate ? {
+        preTaxDeductions: estimate.preTaxDeductions,
+        taxableWages: estimate.taxableWages,
+        federalTax: estimate.federalTax,
+        stateTax: estimate.stateTax,
+        socialSecurity: estimate.socialSecurity,
+        medicare: estimate.medicare,
+        postTaxDeductions: estimate.postTaxDeductions,
+        totalDeductions: estimate.totalDeductions,
+        periodNet: estimate.periodNet
+      } : undefined,
       payDetailsAttachment: {
         profileLabel: breakdown.profileLabel,
         periodLabel: breakdown.periodLabel,
@@ -2971,6 +3560,7 @@ export class PayrollComponent implements OnInit {
         periodDeductions: breakdown.periodDeductions,
         periodNet: breakdown.periodNet,
         annualizedGross: breakdown.annualizedGross,
+        payrollWithholding: estimate,
         annualSalaryAttachment: form.compensationModel === 'contract' && form.payType === 'salary'
           ? {
               ...this.buildAnnualSalaryBreakdown(form),
@@ -3249,6 +3839,35 @@ type PayrollDetailsForm = {
   commissionCap: number;
   bonusPerPeriod: number;
   contractNotes: string;
+  employmentType: 'w2' | '1099';
+  paymentMethod: 'direct_deposit' | 'check';
+  w4OnFile: boolean;
+  w4SignedDate: string;
+  federalFilingStatus: 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
+  federalExempt: boolean;
+  extraFederalWithholding: number;
+  w4DependentsCredit: number;
+  w4OtherIncome: number;
+  w4Deductions: number;
+  w4TwoJobs: boolean;
+  workState: string;
+  residenceState: string;
+  stateFilingStatus: 'single' | 'married_joint' | 'married_separate' | 'head_of_household';
+  stateWithholdingPercent: number;
+  extraStateWithholding: number;
+  stateExempt: boolean;
+  exemptSocialSecurity: boolean;
+  exemptMedicare: boolean;
+  healthInsurance: number;
+  dentalInsurance: number;
+  visionInsurance: number;
+  retirement401kAmount: number;
+  retirement401kPercent: number;
+  hsaContribution: number;
+  fsaContribution: number;
+  garnishment: number;
+  unionDues: number;
+  otherPostTaxDeductions: number;
 };
 
 type PayrollDetailsNumericField =
@@ -3260,7 +3879,31 @@ type PayrollDetailsNumericField =
   | 'baseDraw'
   | 'commissionTarget'
   | 'commissionCap'
-  | 'bonusPerPeriod';
+  | 'bonusPerPeriod'
+  | 'extraFederalWithholding'
+  | 'w4DependentsCredit'
+  | 'w4OtherIncome'
+  | 'w4Deductions'
+  | 'stateWithholdingPercent'
+  | 'extraStateWithholding'
+  | 'healthInsurance'
+  | 'dentalInsurance'
+  | 'visionInsurance'
+  | 'retirement401kAmount'
+  | 'retirement401kPercent'
+  | 'hsaContribution'
+  | 'fsaContribution'
+  | 'garnishment'
+  | 'unionDues'
+  | 'otherPostTaxDeductions';
+
+type PayrollDetailsBooleanField =
+  | 'w4OnFile'
+  | 'federalExempt'
+  | 'w4TwoJobs'
+  | 'stateExempt'
+  | 'exemptSocialSecurity'
+  | 'exemptMedicare';
 
 type PayDetailsBreakdownLine = {
   label: string;
@@ -3277,6 +3920,19 @@ type PayDetailsBreakdown = {
   periodDeductions: number;
   periodNet: number;
   annualizedGross: number;
+  payrollEstimate?: PeriodPayrollEstimate;
+};
+
+type PeriodPayrollEstimate = {
+  preTaxDeductions: number;
+  taxableWages: number;
+  federalTax: number;
+  stateTax: number;
+  socialSecurity: number;
+  medicare: number;
+  postTaxDeductions: number;
+  totalDeductions: number;
+  periodNet: number;
 };
 
 type AnnualSalaryFrequencyEquivalent = {
