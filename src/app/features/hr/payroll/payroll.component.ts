@@ -147,51 +147,43 @@ import { environment } from '../../../../environments/environment';
             }
           </tbody>
         </table>
-
-        <table class="payroll-filter-table payroll-filter-table--below-positions" aria-label="Payroll table filters">
-          <tbody>
-            <tr>
-              <th scope="row">Filter</th>
-              <td>
-                <div class="payroll-search">
-                  <select
-                    class="payroll-search-field"
-                    [ngModel]="selectedStructureFilterField()"
-                    (ngModelChange)="setStructureFilterField($event)"
-                    aria-label="Payroll table filter field"
-                  >
-                    @for (item of structureFilterFieldOptions; track item.value) {
-                      <option [value]="item.value">{{ item.label }}</option>
-                    }
-                  </select>
-                  <select
-                    class="payroll-search-field"
-                    [ngModel]="selectedStructureFilterValue()"
-                    (ngModelChange)="onStructureFilterValueChange($event)"
-                    [disabled]="selectedStructureFilterField() === 'all'"
-                    aria-label="Payroll table filter value"
-                  >
-                    @for (item of structureFilterValueOptions(); track item) {
-                      <option [value]="item">{{ item }}</option>
-                    }
-                  </select>
-                  <div class="payroll-search-input-wrap">
-                    <i class="bx bx-search"></i>
-                    <input
-                      type="text"
-                      placeholder="Search filtered table..."
-                      [ngModel]="searchTerm()"
-                      (ngModelChange)="onSearchTermChange($event)"
-                    >
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
         </div>
 
         <div class="payroll-table-stack payroll-table-stack--employees">
+        <div class="payroll-employee-toolbar">
+          <div class="payroll-search">
+            <div class="payroll-search-input-wrap">
+              <i class="bx bx-search"></i>
+              <input
+                type="text"
+                placeholder="Search filtered table..."
+                [ngModel]="searchTerm()"
+                (ngModelChange)="onSearchTermChange($event)"
+              >
+            </div>
+            <select
+              class="payroll-search-field"
+              [ngModel]="selectedStructureFilterField()"
+              (ngModelChange)="setStructureFilterField($event)"
+              aria-label="Payroll table filter field"
+            >
+              @for (item of structureFilterFieldOptions; track item.value) {
+                <option [value]="item.value">{{ item.label }}</option>
+              }
+            </select>
+            <select
+              class="payroll-search-field"
+              [ngModel]="selectedStructureFilterValue()"
+              (ngModelChange)="onStructureFilterValueChange($event)"
+              [disabled]="selectedStructureFilterField() === 'all'"
+              aria-label="Payroll table filter value"
+            >
+              @for (item of structureFilterValueOptions(); track item) {
+                <option [value]="item">{{ item }}</option>
+              }
+            </select>
+          </div>
+        </div>
         <div class="payroll-table-wrap">
           <table class="payroll-table">
           <thead>
@@ -519,6 +511,12 @@ import { environment } from '../../../../environments/environment';
     .payroll-stat-lbl { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
     .payroll-search {
       display: flex; align-items: center; gap: 0.6rem;
+      width: 100%;
+    }
+    .payroll-employee-toolbar {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,212,255,0.02);
     }
     .payroll-search-field {
       min-width: 150px; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.03);
@@ -647,11 +645,7 @@ import { environment } from '../../../../environments/environment';
       td { background: rgba(255,255,255,0.01); }
       tbody tr:last-child th,
       tbody tr:last-child td {
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-      }
-      &--below-positions tbody tr:last-child th,
-      &--below-positions tbody tr:last-child td {
-        border-bottom: 1px solid rgba(255,255,255,0.1);
+        border-bottom: none;
       }
     }
     .payroll-table-wrap {
