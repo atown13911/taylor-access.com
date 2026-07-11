@@ -53,6 +53,17 @@ public class LocalIntegrationStatusService
             };
         }
 
+        if (HasGoogleDomainEnvCredentials())
+        {
+            return new IntegrationStatusProbeResult
+            {
+                Connected = true,
+                Status = "connected",
+                Message = "Gmail domain-wide credentials available from environment.",
+                Source = "environment"
+            };
+        }
+
         var gmailConfig = await FindConfigAsync("gmail", orgId, cancellationToken);
         if (gmailConfig?.EncryptedAccessToken == null)
         {
@@ -107,6 +118,16 @@ public class LocalIntegrationStatusService
     public async Task<IntegrationStatusProbeResult> GetZoomStatusAsync(int? orgId = null, CancellationToken cancellationToken = default)
     {
         var config = await FindZoomConfigAsync(orgId, cancellationToken);
+        if (config == null && HasZoomEnvCredentials())
+        {
+            config = new IntegrationConfig
+            {
+                IntegrationType = "zoom",
+                Status = "connected",
+                OAuthScope = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID")
+            };
+        }
+
         if (config == null)
         {
             return new IntegrationStatusProbeResult
@@ -141,6 +162,9 @@ public class LocalIntegrationStatusService
 
     public async Task<bool> HasLocalCredentialsAsync(int? orgId = null, CancellationToken cancellationToken = default)
     {
+        if (HasGoogleDomainEnvCredentials() || HasZoomEnvCredentials())
+            return true;
+
         var domain = await FindConfigAsync("gmail-domain", orgId, cancellationToken);
         if (domain != null && IsDomainConfigured(domain)) return true;
 
@@ -188,11 +212,22 @@ public class LocalIntegrationStatusService
 
     private static bool IsDomainConfigured(IntegrationConfig config)
     {
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_KEY"))
-            || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_KEY_B64")))
-            return true;
-
+        if (HasGoogleDomainEnvCredentials()) return true;
         return config.EncryptedApiKey != null;
+    }
+
+    private static bool HasGoogleDomainEnvCredentials() =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_KEY"))
+        || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GOOGLE_SERVICE_ACCOUNT_KEY_B64"));
+
+    private static bool HasZoomEnvCredentials()
+    {
+        var envId = Environment.GetEnvironmentVariable("ZOOM_CLIENT_ID");
+        var envSecret = Environment.GetEnvironmentVariable("ZOOM_CLIENT_SECRET");
+        var envAccount = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID");
+        return !string.IsNullOrWhiteSpace(envId)
+            && !string.IsNullOrWhiteSpace(envSecret)
+            && !string.IsNullOrWhiteSpace(envAccount);
     }
 
     private async Task<string> GetValidGmailAccessTokenAsync(IntegrationConfig config, CancellationToken cancellationToken)
@@ -335,7 +370,10 @@ public class LocalIntegrationStatusService
             var accessToken = doc.RootElement.GetProperty("access_token").GetString()!;
             var expiresIn = doc.RootElement.TryGetProperty("expires_in", out var ei) ? ei.GetInt32() : 3600;
 
-            var tracked = await _context.IntegrationConfigs.FirstOrDefaultAsync(c => c.Id == config.Id, cancellationToken);
+            var tracked = config.Id > 0
+                ? await _context.IntegrationConfigs.FirstOrDefaultAsync(c => c.Id == config.Id, cancellationToken)
+                : await _context.IntegrationConfigs.FirstOrDefaultAsync(c => c.IntegrationType == "zoom", cancellationToken);
+
             if (tracked != null && _encryption.IsConfigured)
             {
                 tracked.EncryptedAccessToken = _encryption.Encrypt(accessToken);
@@ -346,13 +384,48 @@ public class LocalIntegrationStatusService
                 tracked.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync(cancellationToken);
             }
+            else if (_encryption.IsConfigured)
+            {
+                var persisted = new IntegrationConfig
+                {
+                    OrganizationId = config.OrganizationId > 0 ? config.OrganizationId : 1,
+                    IntegrationType = "zoom",
+                    Provider = "zoom",
+                    DisplayName = "Zoom Video",
+                    EncryptedAccessToken = _encryption.Encrypt(accessToken),
+                    TokenExpiresAt = DateTime.UtcNow.AddSeconds(expiresIn),
+                    Status = "connected",
+                    OAuthScope = creds.Value.AccountId,
+                    ConnectedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.IntegrationConfigs.Add(persisted);
+                await _context.SaveChangesAsync(cancellationToken);
+                tracked = persisted;
+            }
+
+            var verifyClient = _httpClientFactory.CreateClient();
+            verifyClient.Timeout = TimeSpan.FromSeconds(8);
+            verifyClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var usersResponse = await verifyClient.GetAsync("https://api.zoom.us/v2/users?page_size=1&status=active", cancellationToken);
+            if (usersResponse.IsSuccessStatusCode)
+            {
+                return new IntegrationStatusProbeResult
+                {
+                    Connected = true,
+                    Status = "connected",
+                    Message = tracked != null ? "Zoom S2S token refreshed locally." : "Zoom S2S credentials verified from environment.",
+                    Source = tracked != null ? "local-db" : "environment"
+                };
+            }
 
             var verify = await TryQuickZoomVerifyAsync(tracked ?? config, cancellationToken);
             return new IntegrationStatusProbeResult
             {
                 Connected = verify.Connected,
                 Status = verify.Status,
-                Message = "Zoom S2S token refreshed locally.",
+                Message = verify.Message ?? "Zoom S2S token refreshed locally.",
                 Source = verify.Source
             };
         }

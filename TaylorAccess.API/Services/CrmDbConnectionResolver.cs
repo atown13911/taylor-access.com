@@ -7,9 +7,7 @@ public static class CrmDbConnectionResolver
         var raw = configuration.GetConnectionString("CrmDbConnection")
             ?? Environment.GetEnvironmentVariable("CRM_DB_CONNECTION")
             ?? Environment.GetEnvironmentVariable("CRM_DATABASE_URL")
-            ?? configuration.GetConnectionString("PortalDbConnection")
-            ?? Environment.GetEnvironmentVariable("PORTAL_DB_CONNECTION")
-            ?? Environment.GetEnvironmentVariable("PORTAL_DATABASE_URL");
+            ?? Environment.GetEnvironmentVariable("TAYLOR_CRM_DATABASE_URL");
 
         if (string.IsNullOrWhiteSpace(raw)) return null;
 
