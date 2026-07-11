@@ -27,209 +27,110 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-      <div class="payroll-info-grid">
-          <article class="payroll-info-card payroll-info-card--workforce">
-            <header class="payroll-info-card-head">
-              <div>
-                <span class="payroll-info-eyebrow">Workforce</span>
-                <h2>Active headcount</h2>
-                <p class="payroll-info-sub">{{ periodLabel() }} · {{ selectedOrganization() }}</p>
-              </div>
-              <div class="payroll-info-hero-metric">
-                <strong class="payroll-info-value">{{ tabScopedEmployees().length }}</strong>
-                <span class="payroll-info-caption">employees in scope</span>
-              </div>
+      <div class="payroll-kpi-row">
+          <article class="payroll-info-card payroll-info-card--compact payroll-info-card--workforce">
+            <header class="payroll-info-compact-head">
+              <span class="payroll-info-eyebrow">Workforce</span>
+              <strong class="payroll-info-compact-value">{{ tabScopedEmployees().length }}</strong>
             </header>
-
-            <div class="payroll-info-kpi-strip">
-              <div class="payroll-info-kpi">
-                <span>Organizations</span>
-                <strong>{{ organizationTabs().length - 1 }}</strong>
-              </div>
-              <div class="payroll-info-kpi">
-                <span>Positions</span>
-                <strong>{{ positionTabs().length - 1 }}</strong>
-              </div>
-              <div class="payroll-info-kpi">
-                <span>With payroll</span>
-                <strong>{{ employeesWithPayCount() }}</strong>
-              </div>
-            </div>
-
-            <div class="payroll-info-metric-table-wrap">
-              <div class="payroll-info-metric-table-head">
-                <span>Organization</span>
-                <span>Headcount</span>
-                <span>Share</span>
-              </div>
+            <p class="payroll-info-compact-meta">{{ organizationTabs().length - 1 }} orgs · {{ positionTabs().length - 1 }} roles · {{ employeesWithPayCount() }} w/ pay</p>
+            <div class="payroll-info-compact-scroll">
               @for (row of orgBreakdownRows(); track row.name) {
-                <div class="payroll-info-metric-table-row">
-                  <span class="payroll-info-metric-label">{{ row.name }}</span>
-                  <span class="payroll-info-metric-value">{{ row.count }}</span>
-                  <span class="payroll-info-metric-pct">{{ row.sharePct | number:'1.0-0' }}%</span>
-                  <div class="payroll-info-bar-track payroll-info-bar-track--inline">
+                <div class="payroll-info-compact-item">
+                  <div class="payroll-info-compact-line">
+                    <span>{{ row.name }}</span>
+                    <strong>{{ row.count }} <small>({{ row.sharePct | number:'1.0-0' }}%)</small></strong>
+                  </div>
+                  <div class="payroll-info-bar-track">
                     <div class="payroll-info-bar-fill tone-cyan" [style.width.%]="row.widthPct"></div>
                   </div>
                 </div>
               } @empty {
-                <div class="payroll-info-empty">No organization data</div>
+                <div class="payroll-info-empty">No org data</div>
               }
             </div>
           </article>
 
-          <article class="payroll-info-card payroll-info-card--payroll">
-            <header class="payroll-info-card-head">
-              <div>
-                <span class="payroll-info-eyebrow">Payroll Volume</span>
-                <h2>Compensation summary</h2>
-                <p class="payroll-info-sub">{{ periodLabel() }} snapshot</p>
-              </div>
-              <div class="payroll-info-hero-metric">
-                <strong class="payroll-info-value payroll-mono">\${{ totalPayroll() | number:'1.2-2' }}</strong>
-                <span class="payroll-info-caption">total gross pay</span>
-              </div>
+          <article class="payroll-info-card payroll-info-card--compact payroll-info-card--payroll">
+            <header class="payroll-info-compact-head">
+              <span class="payroll-info-eyebrow">Payroll</span>
+              <strong class="payroll-info-compact-value payroll-mono">\${{ totalPayroll() | number:'1.0-0' }}</strong>
             </header>
-
-            <div class="payroll-info-kpi-strip payroll-info-kpi-strip--4">
-              <div class="payroll-info-kpi">
-                <span>Net pay</span>
+            <p class="payroll-info-compact-meta">Gross · {{ totalHours() | number:'1.0-0' }} hrs · avg \${{ averageGrossPay() | number:'1.0-0' }}</p>
+            <div class="payroll-info-compact-stats">
+              <div class="payroll-info-compact-stat">
+                <span>Net</span>
                 <strong class="payroll-mono">\${{ totalNetPay() | number:'1.0-0' }}</strong>
               </div>
-              <div class="payroll-info-kpi">
-                <span>Invoiced</span>
-                <strong class="payroll-mono">\${{ totalInvoiced() | number:'1.0-0' }}</strong>
-              </div>
-              <div class="payroll-info-kpi">
-                <span>Hours</span>
-                <strong>{{ totalHours() | number:'1.0-0' }}</strong>
-              </div>
-              <div class="payroll-info-kpi">
+              <div class="payroll-info-compact-stat">
                 <span>Deductions</span>
                 <strong class="payroll-mono">\${{ totalDeductions() | number:'1.0-0' }}</strong>
               </div>
             </div>
-
-            <div class="payroll-info-split">
-              <div class="payroll-info-split-block">
-                <span class="payroll-info-split-label">Avg gross / employee</span>
-                <strong class="payroll-mono">\${{ averageGrossPay() | number:'1.2-2' }}</strong>
-                <div class="payroll-info-bar-track">
-                  <div class="payroll-info-bar-fill tone-blue" [style.width.%]="payrollCapturePct()"></div>
-                </div>
-                <small>{{ payrollCapturePct() | number:'1.0-0' }}% of employees have recorded gross pay</small>
+            <div class="payroll-info-compact-item">
+              <div class="payroll-info-compact-line">
+                <span>Payroll captured</span>
+                <strong>{{ payrollCapturePct() | number:'1.0-0' }}%</strong>
               </div>
-              <div class="payroll-info-split-block">
-                <span class="payroll-info-split-label">Pay type mix</span>
-                @for (row of payTypeBreakdownRows(); track row.label) {
-                  <div class="payroll-info-mini-line">
-                    <span>{{ row.label }}</span>
-                    <strong>{{ row.count }}</strong>
-                  </div>
-                } @empty {
-                  <small>No pay type data</small>
-                }
+              <div class="payroll-info-bar-track">
+                <div class="payroll-info-bar-fill tone-blue" [style.width.%]="payrollCapturePct()"></div>
               </div>
             </div>
-          </article>
-
-          <article class="payroll-info-card payroll-info-card--processed">
-            <header class="payroll-info-card-head">
-              <div>
-                <span class="payroll-info-eyebrow">Processed</span>
-                <h2>Payroll completion</h2>
-                <p class="payroll-info-sub">Processed and paid records</p>
-              </div>
-              <div class="payroll-info-hero-metric">
-                <strong class="payroll-info-value">{{ processedCount() + paidCount() }}</strong>
-                <span class="payroll-info-caption">closed records</span>
-              </div>
-            </header>
-
-            <div class="payroll-info-status-panel">
-              <div class="payroll-info-donut" [style.background]="statusRingStyle()">
-                <div class="payroll-info-donut-core">
-                  <strong>{{ processedPct() | number:'1.0-0' }}%</strong>
-                  <small>Complete</small>
+            <div class="payroll-info-compact-scroll">
+              @for (row of payTypeBreakdownRows(); track row.label) {
+                <div class="payroll-info-compact-line">
+                  <span>{{ row.label }}</span>
+                  <strong>{{ row.count }}</strong>
                 </div>
-              </div>
-              <div class="payroll-info-status-stats">
-                <div class="payroll-info-status-line">
-                  <span><span class="dot tone-green"></span> Processed</span>
-                  <strong>{{ processedCount() }}</strong>
-                </div>
-                <div class="payroll-info-status-line">
-                  <span><span class="dot tone-blue"></span> Paid</span>
-                  <strong>{{ paidCount() }}</strong>
-                </div>
-                <div class="payroll-info-status-line">
-                  <span><span class="dot tone-amber"></span> Pending</span>
-                  <strong>{{ pendingCount() }}</strong>
-                </div>
-                <div class="payroll-info-status-line highlight">
-                  <span>Gross completed</span>
-                  <strong class="payroll-mono">\${{ completedPayrollAmount() | number:'1.0-0' }}</strong>
-                </div>
-              </div>
-            </div>
-
-            <p class="payroll-info-footnote">
-              @if (processedPct() >= 100) {
-                All in-scope employees are processed or paid for this period.
-              } @else {
-                {{ pendingCount() }} employee{{ pendingCount() === 1 ? '' : 's' }} still need payroll action.
               }
-            </p>
+            </div>
           </article>
 
-          <article class="payroll-info-card payroll-info-card--pending">
-            <header class="payroll-info-card-head">
-              <div>
-                <span class="payroll-info-eyebrow">Pending</span>
-                <h2>Action queue</h2>
-                <p class="payroll-info-sub">Outstanding payroll workload</p>
-              </div>
-              <div class="payroll-info-hero-metric">
-                <strong class="payroll-info-value">{{ pendingCount() }}</strong>
-                <span class="payroll-info-caption">awaiting processing</span>
-              </div>
+          <article class="payroll-info-card payroll-info-card--compact payroll-info-card--processed">
+            <header class="payroll-info-compact-head">
+              <span class="payroll-info-eyebrow">Processed</span>
+              <strong class="payroll-info-compact-value">{{ processedCount() + paidCount() }}</strong>
             </header>
-
-            <div class="payroll-info-kpi-strip">
-              <div class="payroll-info-kpi">
-                <span>Pending gross</span>
-                <strong class="payroll-mono">\${{ pendingPayrollAmount() | number:'1.0-0' }}</strong>
+            <p class="payroll-info-compact-meta">{{ processedPct() | number:'1.0-0' }}% complete · \${{ completedPayrollAmount() | number:'1.0-0' }} gross</p>
+            <div class="payroll-info-compact-status">
+              <div class="payroll-info-donut payroll-info-donut--compact" [style.background]="statusRingStyle()">
+                <div class="payroll-info-donut-core payroll-info-donut-core--compact">
+                  <strong>{{ processedPct() | number:'1.0-0' }}%</strong>
+                </div>
               </div>
-              <div class="payroll-info-kpi">
-                <span>Pending hours</span>
-                <strong>{{ pendingHours() | number:'1.0-0' }}</strong>
-              </div>
-              <div class="payroll-info-kpi">
-                <span>Queue share</span>
-                <strong>{{ pendingPct() | number:'1.0-0' }}%</strong>
+              <div class="payroll-info-compact-scroll">
+                <div class="payroll-info-compact-line"><span>Processed</span><strong>{{ processedCount() }}</strong></div>
+                <div class="payroll-info-compact-line"><span>Paid</span><strong>{{ paidCount() }}</strong></div>
+                <div class="payroll-info-compact-line"><span>Pending</span><strong>{{ pendingCount() }}</strong></div>
               </div>
             </div>
+          </article>
 
-            <div class="payroll-info-metric-table-wrap">
-              <div class="payroll-info-metric-table-head">
-                <span>Top pending roles</span>
-                <span>Count</span>
-                <span>Gross</span>
-              </div>
+          <article class="payroll-info-card payroll-info-card--compact payroll-info-card--pending">
+            <header class="payroll-info-compact-head">
+              <span class="payroll-info-eyebrow">Pending</span>
+              <strong class="payroll-info-compact-value">{{ pendingCount() }}</strong>
+            </header>
+            <p class="payroll-info-compact-meta">\${{ pendingPayrollAmount() | number:'1.0-0' }} gross · {{ pendingHours() | number:'1.0-0' }} hrs · {{ pendingPct() | number:'1.0-0' }}%</p>
+            <div class="payroll-info-compact-scroll">
               @for (row of topPendingPositionRows(); track row.position) {
-                <div class="payroll-info-metric-table-row">
-                  <span class="payroll-info-metric-label">{{ row.position }}</span>
-                  <span class="payroll-info-metric-value">{{ row.pending }}</span>
-                  <span class="payroll-info-metric-pct payroll-mono">\${{ row.gross | number:'1.0-0' }}</span>
-                  <div class="payroll-info-bar-track payroll-info-bar-track--inline">
+                <div class="payroll-info-compact-item">
+                  <div class="payroll-info-compact-line">
+                    <span>{{ row.position }}</span>
+                    <strong>{{ row.pending }} · \${{ row.gross | number:'1.0-0' }}</strong>
+                  </div>
+                  <div class="payroll-info-bar-track">
                     <div class="payroll-info-bar-fill tone-amber" [style.width.%]="row.widthPct"></div>
                   </div>
                 </div>
               } @empty {
-                <div class="payroll-info-empty">No pending payroll by role</div>
+                <div class="payroll-info-empty">No pending roles</div>
               }
             </div>
           </article>
+      </div>
 
+      <div class="payroll-info-grid payroll-info-grid--positions">
           <article class="payroll-info-card payroll-info-card--positions payroll-info-card--wide">
             <header class="payroll-info-card-head">
               <div>
@@ -571,11 +472,18 @@ import { environment } from '../../../../environments/environment';
       color: var(--text-primary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
       &:hover { border-color: var(--cyan); background: rgba(0,212,255,0.08); }
     }
+    .payroll-kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
     .payroll-info-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: 1rem;
       margin-bottom: 1.35rem;
+      &--positions { margin-bottom: 1.35rem; }
     }
     .payroll-info-card {
       display: flex;
@@ -612,6 +520,109 @@ import { environment } from '../../../../environments/environment';
         border-color: rgba(0, 212, 255, 0.22);
         box-shadow: 0 0 48px rgba(0, 212, 255, 0.12);
       }
+      &--compact {
+        padding: 0.72rem 0.78rem;
+        gap: 0.45rem;
+        height: 210px;
+        min-height: 210px;
+        max-height: 210px;
+        overflow: hidden;
+      }
+    }
+    .payroll-info-compact-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .payroll-info-compact-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+    .payroll-info-compact-meta {
+      margin: 0;
+      font-size: 0.64rem;
+      line-height: 1.35;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .payroll-info-compact-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: grid;
+      gap: 0.32rem;
+      padding-right: 0.1rem;
+    }
+    .payroll-info-compact-item {
+      display: grid;
+      gap: 0.22rem;
+    }
+    .payroll-info-compact-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.35rem;
+      font-size: 0.66rem;
+      color: var(--text-secondary);
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      strong {
+        color: var(--text-primary);
+        font-size: 0.68rem;
+        font-weight: 600;
+        white-space: nowrap;
+        small {
+          font-size: 0.62rem;
+          font-weight: 500;
+          color: var(--text-secondary);
+        }
+      }
+    }
+    .payroll-info-compact-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.35rem;
+    }
+    .payroll-info-compact-stat {
+      display: grid;
+      gap: 0.1rem;
+      padding: 0.35rem 0.45rem;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      span {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-secondary);
+      }
+      strong { font-size: 0.72rem; color: var(--text-primary); }
+    }
+    .payroll-info-compact-status {
+      display: grid;
+      grid-template-columns: 56px minmax(0, 1fr);
+      gap: 0.55rem;
+      align-items: start;
+      flex: 1;
+      min-height: 0;
+    }
+    .payroll-info-donut--compact {
+      width: 56px;
+      height: 56px;
+    }
+    .payroll-info-donut-core--compact {
+      width: 40px;
+      height: 40px;
+      strong { font-size: 0.72rem; }
+      small { display: none; }
     }
     .payroll-info-card-head {
       display: flex;
@@ -1214,8 +1225,16 @@ import { environment } from '../../../../environments/environment';
       background: rgba(0,212,255,0.18);
       color: #dff8ff;
     }
+    @media (max-width: 1200px) {
+      .payroll-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 768px) {
-      .payroll-info-grid { grid-template-columns: 1fr; }
+      .payroll-kpi-row { grid-template-columns: 1fr; }
+      .payroll-info-card--compact {
+        height: auto;
+        min-height: 180px;
+        max-height: 220px;
+      }
       .payroll-info-kpi-strip--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .payroll-info-split { grid-template-columns: 1fr; }
       .payroll-info-status-panel { grid-template-columns: 1fr; justify-items: center; }
