@@ -442,18 +442,7 @@ import { environment } from '../../../../environments/environment';
             </div>
 
             <div class="payroll-modal-grid">
-              @if (payrollDetailsForm().payType === 'salary') {
-                <label class="payroll-modal-field">
-                  <span>Annual salary</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    [ngModel]="payrollDetailsForm().annualSalary"
-                    (ngModelChange)="updatePayrollFormNumberField('annualSalary', $event)"
-                  >
-                </label>
-              } @else {
+              @if (payrollDetailsForm().payType === 'hourly') {
                 <label class="payroll-modal-field">
                   <span>Hourly rate</span>
                   <input
@@ -466,7 +455,7 @@ import { environment } from '../../../../environments/environment';
                 </label>
               }
 
-              <label class="payroll-modal-field">
+              <label class="payroll-modal-field" [class.payroll-modal-field--full]="payrollDetailsForm().payType === 'salary'">
                 <span>Period deductions</span>
                 <input
                   type="number"
@@ -563,6 +552,44 @@ import { environment } from '../../../../environments/environment';
             </label>
           }
         </section>
+
+        @if (showAnnualSalarySection()) {
+          <section class="payroll-modal-section payroll-modal-section--annual">
+            <div class="payroll-modal-section-head">
+              <h4>Annual salary</h4>
+              <p>{{ annualSalaryBreakdown().periodsPerYear }} pay periods / year</p>
+            </div>
+
+            <label class="payroll-modal-field">
+              <span>Annual salary amount</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().annualSalary"
+                (ngModelChange)="updatePayrollFormNumberField('annualSalary', $event)"
+              >
+            </label>
+
+            <div class="payroll-modal-annual-grid">
+              @for (item of annualSalaryBreakdown().frequencyEquivalents; track item.label) {
+                <div class="payroll-modal-annual-card" [class.active]="item.active">
+                  <span>{{ item.label }}</span>
+                  <strong class="payroll-mono">{{ formatCurrency(item.value) }}</strong>
+                </div>
+              }
+            </div>
+
+            <div class="payroll-modal-breakdown">
+              @for (line of annualSalaryBreakdown().lines; track line.label) {
+                <div class="payroll-modal-breakdown-row" [class.emphasis]="line.emphasis">
+                  <span>{{ line.label }}</span>
+                  <strong class="payroll-mono">{{ formatCurrency(line.value) }}</strong>
+                </div>
+              }
+            </div>
+          </section>
+        }
 
         <section class="payroll-modal-section">
           <div class="payroll-modal-section-head">
@@ -1575,6 +1602,39 @@ import { environment } from '../../../../environments/environment';
         strong { color: #8be9fd; font-size: 0.86rem; }
       }
     }
+    .payroll-modal-section--annual {
+      border-color: rgba(96, 165, 250, 0.22);
+      background: rgba(96, 165, 250, 0.04);
+    }
+    .payroll-modal-annual-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem;
+      margin-bottom: 0.75rem;
+    }
+    .payroll-modal-annual-card {
+      display: grid;
+      gap: 0.2rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02);
+      span {
+        font-size: 0.68rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      strong { font-size: 0.82rem; color: var(--text-primary); }
+      &.active {
+        border-color: rgba(96, 165, 250, 0.45);
+        background: rgba(96, 165, 250, 0.1);
+        strong { color: #93c5fd; }
+      }
+    }
+    .payroll-modal-field--full {
+      grid-column: 1 / -1;
+    }
     .payroll-modal-actions {
       display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.35rem;
     }
@@ -1700,6 +1760,11 @@ export class PayrollComponent implements OnInit {
     { value: 'custom', label: 'Custom basis' }
   ];
   payDetailsBreakdown = computed(() => this.buildPayDetailsBreakdown(this.payrollDetailsForm()));
+  annualSalaryBreakdown = computed(() => this.buildAnnualSalaryBreakdown(this.payrollDetailsForm()));
+  showAnnualSalarySection = computed(() => {
+    const form = this.payrollDetailsForm();
+    return form.compensationModel === 'contract' && form.payType === 'salary';
+  });
   invoiceForm = signal<InvoiceCreateForm>({
     weekFilter: 'current',
     dueDate: '',
@@ -2784,7 +2849,6 @@ export class PayrollComponent implements OnInit {
     if (form.compensationModel === 'contract') {
       if (form.payType === 'salary') {
         periodGross = periodsPerYear > 0 ? form.annualSalary / periodsPerYear : 0;
-        lines.push({ label: 'Annual salary', value: form.annualSalary });
         lines.push({ label: `${frequencyLabel} gross`, value: periodGross });
       } else {
         periodGross = form.hourlyRate * hoursPerPeriod;
@@ -2814,7 +2878,9 @@ export class PayrollComponent implements OnInit {
       lines.push({ label: 'Deductions', value: periodDeductions });
     }
     lines.push({ label: `${frequencyLabel} net`, value: periodNet, emphasis: true });
-    lines.push({ label: 'Annualized gross', value: annualizedGross });
+    if (!(form.compensationModel === 'contract' && form.payType === 'salary')) {
+      lines.push({ label: 'Annualized gross', value: annualizedGross });
+    }
 
     const payStructureLabel = form.compensationModel === 'contract'
       ? (form.payType === 'salary' ? 'Salary' : 'Hourly')
@@ -2828,6 +2894,47 @@ export class PayrollComponent implements OnInit {
       periodDeductions: Number(periodDeductions.toFixed(2)),
       periodNet: Number(periodNet.toFixed(2)),
       annualizedGross: Number(annualizedGross.toFixed(2))
+    };
+  }
+
+  private buildAnnualSalaryBreakdown(form: PayrollDetailsForm): AnnualSalaryBreakdown {
+    const empty: AnnualSalaryBreakdown = {
+      periodsPerYear: 0,
+      frequencyEquivalents: [],
+      lines: []
+    };
+    if (form.compensationModel !== 'contract' || form.payType !== 'salary') {
+      return empty;
+    }
+
+    const frequencyLabel = this.payFrequencyOptions.find((item) => item.value === form.payFrequency)?.label ?? 'Period';
+    const periodsPerYear = this.getPayPeriodsPerYear(form.payFrequency);
+    const annualGross = Math.max(0, form.annualSalary);
+    const periodGross = periodsPerYear > 0 ? annualGross / periodsPerYear : 0;
+    const annualDeductions = Math.max(0, form.defaultDeductions) * periodsPerYear;
+    const annualNet = Math.max(0, annualGross - annualDeductions);
+    const periodNet = Math.max(0, periodGross - Math.max(0, form.defaultDeductions));
+
+    const frequencyEquivalents = this.payFrequencyOptions.map((option) => ({
+      label: option.label,
+      value: annualGross / this.getPayPeriodsPerYear(option.value as PayrollDetailsForm['payFrequency']),
+      active: option.value === form.payFrequency
+    }));
+
+    const lines: PayDetailsBreakdownLine[] = [
+      { label: 'Annual gross', value: annualGross },
+      { label: `${frequencyLabel} gross (selected)`, value: periodGross },
+      { label: `${frequencyLabel} net (selected)`, value: periodNet }
+    ];
+    if (annualDeductions > 0) {
+      lines.push({ label: 'Annual deductions', value: annualDeductions });
+    }
+    lines.push({ label: 'Annual net (est.)', value: annualNet, emphasis: true });
+
+    return {
+      periodsPerYear,
+      frequencyEquivalents,
+      lines
     };
   }
 
@@ -2864,6 +2971,12 @@ export class PayrollComponent implements OnInit {
         periodDeductions: breakdown.periodDeductions,
         periodNet: breakdown.periodNet,
         annualizedGross: breakdown.annualizedGross,
+        annualSalaryAttachment: form.compensationModel === 'contract' && form.payType === 'salary'
+          ? {
+              ...this.buildAnnualSalaryBreakdown(form),
+              updatedAt: new Date().toISOString()
+            }
+          : undefined,
         updatedAt: new Date().toISOString()
       }
     };
@@ -3164,6 +3277,18 @@ type PayDetailsBreakdown = {
   periodDeductions: number;
   periodNet: number;
   annualizedGross: number;
+};
+
+type AnnualSalaryFrequencyEquivalent = {
+  label: string;
+  value: number;
+  active: boolean;
+};
+
+type AnnualSalaryBreakdown = {
+  periodsPerYear: number;
+  frequencyEquivalents: AnnualSalaryFrequencyEquivalent[];
+  lines: PayDetailsBreakdownLine[];
 };
 
 type PayrollInvoiceEntry = {
