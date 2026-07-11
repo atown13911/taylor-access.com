@@ -104,8 +104,33 @@ public class CrmIntegrationCopyService
 
         var baseUrl = Environment.GetEnvironmentVariable("TAYLOR_CRM_INTERNAL_URL")
             ?? "http://taylor-crm.railway.internal:8080";
-        var url = $"{baseUrl.TrimEnd('/')}/api/v1/internal/integrations/export";
+        var exportPaths = new[]
+        {
+            "/api/v1/internal/integrations/export",
+            "/api/v1/integration-config/internal-export"
+        };
 
+        foreach (var exportPath in exportPaths)
+        {
+            var url = $"{baseUrl.TrimEnd('/')}{exportPath}";
+            var result = await TryCopyFromExportUrlAsync(url, internalKey, cancellationToken);
+            if (result.Success)
+                return result;
+        }
+
+        return new CrmIntegrationCopyResult
+        {
+            Success = false,
+            Error = "CRM integration export failed on all known endpoints.",
+            Source = "crm-http"
+        };
+    }
+
+    private async Task<CrmIntegrationCopyResult> TryCopyFromExportUrlAsync(
+        string url,
+        string internalKey,
+        CancellationToken cancellationToken)
+    {
         try
         {
             var client = _httpClientFactory.CreateClient();
@@ -120,7 +145,17 @@ public class CrmIntegrationCopyService
                 return new CrmIntegrationCopyResult
                 {
                     Success = false,
-                    Error = $"CRM integration export returned HTTP {(int)response.StatusCode}: {body[..Math.Min(body.Length, 180)]}",
+                    Error = $"CRM integration export returned HTTP {(int)response.StatusCode} from {url}: {body[..Math.Min(body.Length, 180)]}",
+                    Source = "crm-http"
+                };
+            }
+
+            if (body.TrimStart().StartsWith('<') || body.TrimStart().StartsWith("<!"))
+            {
+                return new CrmIntegrationCopyResult
+                {
+                    Success = false,
+                    Error = $"CRM integration export returned HTML instead of JSON from {url}.",
                     Source = "crm-http"
                 };
             }
@@ -155,7 +190,7 @@ public class CrmIntegrationCopyService
             return new CrmIntegrationCopyResult
             {
                 Success = false,
-                Error = $"CRM integration export failed: {ex.Message}",
+                Error = $"CRM integration export failed for {url}: {ex.Message}",
                 Source = "crm-http"
             };
         }
