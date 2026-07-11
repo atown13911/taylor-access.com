@@ -1190,7 +1190,7 @@ import {
       </div>
 
       <!-- Edit Employee Modal -->
-      <div *ngIf="showEditModal" class="modal-overlay" (click)="showEditModal = false">
+      <div *ngIf="showEditModal" class="modal-overlay modal-overlay--edit-fullscreen" (click)="showEditModal = false">
         <div class="modal-content modal-edit-employee" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <h2><i class="bx bx-edit"></i> Edit Employee</h2>
@@ -2886,11 +2886,23 @@ import {
       flex-direction: column;
     }
 
+    .modal-overlay--edit-fullscreen {
+      padding: 0;
+      align-items: stretch;
+      justify-content: stretch;
+      overflow: hidden;
+    }
+
     .modal-edit-employee {
-      width: min(860px, calc(100vw - 48px));
-      max-width: 860px;
-      max-height: calc(100vh - 110px);
-      margin-top: 0;
+      width: 100vw;
+      max-width: none;
+      height: 100vh;
+      max-height: 100vh;
+      margin: 0;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+      border-top: none;
     }
 
     .modal-edit-employee .modal-header {
