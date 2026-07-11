@@ -27,46 +27,24 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-      <div class="payroll-upper-toolbar">
-        <div class="payroll-mode-tabs">
-          <button
-            class="payroll-mode-tab"
-            [class.active]="payrollMode() === 'accumulation'"
-            (click)="setPayrollMode('accumulation')"
-          >
-            Accumulation
-          </button>
-          <button
-            class="payroll-mode-tab"
-            [class.active]="payrollMode() === 'invoiced'"
-            (click)="setPayrollMode('invoiced')"
-          >
-            Invoiced
-          </button>
-        </div>
-
-        <div class="payroll-upper-view-tabs">
-          <button
-            type="button"
-            class="payroll-upper-view-tab"
-            [class.active]="upperViewMode() === 'infographic'"
-            (click)="upperViewMode.set('infographic')"
-          >
-            <i class="bx bx-pie-chart-alt-2"></i> Infographic
-          </button>
-          <button
-            type="button"
-            class="payroll-upper-view-tab"
-            [class.active]="upperViewMode() === 'table'"
-            (click)="upperViewMode.set('table')"
-          >
-            <i class="bx bx-table"></i> Table
-          </button>
-        </div>
+      <div class="payroll-mode-tabs">
+        <button
+          class="payroll-mode-tab"
+          [class.active]="payrollMode() === 'accumulation'"
+          (click)="setPayrollMode('accumulation')"
+        >
+          Accumulation
+        </button>
+        <button
+          class="payroll-mode-tab"
+          [class.active]="payrollMode() === 'invoiced'"
+          (click)="setPayrollMode('invoiced')"
+        >
+          Invoiced
+        </button>
       </div>
 
-      @if (upperViewMode() === 'infographic') {
-        <div class="payroll-info-grid">
+      <div class="payroll-info-grid">
           <article class="payroll-info-card payroll-info-card--workforce">
             <header class="payroll-info-card-head">
               <div>
@@ -322,112 +300,6 @@ import { environment } from '../../../../environments/environment';
             </div>
           </article>
         </div>
-      } @else {
-      <!-- Stats -->
-      <div class="payroll-stats">
-        <div class="payroll-stat">
-          <i class="bx bx-group"></i>
-          <div class="payroll-stat-info">
-            <span class="payroll-stat-val">{{ tabScopedEmployees().length }}</span>
-            <span class="payroll-stat-lbl">Employees</span>
-          </div>
-        </div>
-        <div class="payroll-stat">
-          <i class="bx bx-dollar"></i>
-          <div class="payroll-stat-info">
-            <span class="payroll-stat-val">\${{ totalPayroll() | number:'1.2-2' }}</span>
-            <span class="payroll-stat-lbl">Total Payroll</span>
-          </div>
-        </div>
-        <div class="payroll-stat">
-          <i class="bx bx-check-circle"></i>
-          <div class="payroll-stat-info">
-            <span class="payroll-stat-val">{{ processedCount() + paidCount() }}</span>
-            <span class="payroll-stat-lbl">Processed</span>
-          </div>
-        </div>
-        <div class="payroll-stat">
-          <i class="bx bx-time-five"></i>
-          <div class="payroll-stat-info">
-            <span class="payroll-stat-val">{{ pendingCount() }}</span>
-            <span class="payroll-stat-lbl">Pending</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="payroll-layout">
-        <div class="payroll-table-stack payroll-table-stack--filters">
-          <table class="payroll-filter-table" aria-label="Payroll filters">
-            <tbody>
-              <tr>
-                <th scope="row">Organization</th>
-                <td>
-                  <div class="payroll-org-tabs">
-                    @for (item of organizationTabs(); track item) {
-                      <button
-                        type="button"
-                        class="payroll-org-tab"
-                        [class.active]="selectedOrganization() === item"
-                        (click)="setOrganization(item)"
-                      >
-                        {{ item }}
-                      </button>
-                    }
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <table class="payroll-position-table" aria-label="Position filters">
-            <thead>
-              <tr>
-                <th class="col-position">Position</th>
-                <th class="col-count">Employees</th>
-                <th class="col-gross">Total Gross</th>
-                <th class="col-processed">Processed</th>
-                <th class="col-pending">Pending</th>
-                <th class="col-status">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (item of positionTabs(); track item) {
-                <tr
-                  class="payroll-position-row"
-                  [class.active]="selectedPositionTab() === item"
-                  (click)="setPositionTab(item)"
-                  (keydown.enter)="setPositionTab(item); $event.preventDefault()"
-                  (keydown.space)="setPositionTab(item); $event.preventDefault()"
-                  role="button"
-                  tabindex="0"
-                  [attr.aria-label]="'Select position ' + item"
-                >
-                  <td class="col-position">
-                    <div class="payroll-position-name-cell">
-                      <span>{{ item === 'All positions' ? 'All Positions' : item }}</span>
-                      @if (selectedPositionTab() === item) {
-                        <span class="payroll-position-selected">Selected</span>
-                      }
-                    </div>
-                  </td>
-                  <td class="col-count">{{ positionMetric(item).count }}</td>
-                  <td class="col-gross payroll-mono">\${{ positionMetric(item).gross | number:'1.2-2' }}</td>
-                  <td class="col-processed">{{ positionMetric(item).processed }}</td>
-                  <td class="col-pending">{{ positionMetric(item).pending }}</td>
-                  <td class="col-status">
-                    @if (selectedPositionTab() === item) {
-                      <span class="payroll-position-state active">Active</span>
-                    } @else {
-                      <span class="payroll-position-state">—</span>
-                    }
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
-      }
 
       <div class="payroll-layout">
         <div class="payroll-table-stack payroll-table-stack--employees">
@@ -753,18 +625,10 @@ import { environment } from '../../../../environments/environment';
       color: var(--text-primary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
       &:hover { border-color: var(--cyan); background: rgba(0,212,255,0.08); }
     }
-    .payroll-upper-toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-      margin-bottom: 0.9rem;
-    }
     .payroll-mode-tabs {
       display: inline-flex;
       gap: 8px;
-      margin: 0;
+      margin: 0 0 0.9rem;
       padding: 4px;
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 10px;
@@ -779,34 +643,6 @@ import { environment } from '../../../../environments/environment';
       font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.2s;
-      &:hover { color: var(--text-primary); border-color: rgba(0,212,255,0.22); }
-      &.active {
-        color: var(--text-primary);
-        border-color: rgba(0,212,255,0.45);
-        background: rgba(0,212,255,0.12);
-      }
-    }
-    .payroll-upper-view-tabs {
-      display: inline-flex;
-      gap: 8px;
-      padding: 4px;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      background: rgba(255,255,255,0.02);
-    }
-    .payroll-upper-view-tab {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      border: 1px solid transparent;
-      background: transparent;
-      color: var(--text-secondary);
-      border-radius: 8px;
-      padding: 0.4rem 0.9rem;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      i { font-size: 0.95rem; }
       &:hover { color: var(--text-primary); border-color: rgba(0,212,255,0.22); }
       &.active {
         color: var(--text-primary);
@@ -1248,18 +1084,6 @@ import { environment } from '../../../../environments/environment';
       font-size: 0.8rem;
       color: var(--text-secondary);
     }
-    .payroll-stats {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 1.5rem;
-    }
-    .payroll-stat {
-      display: flex; align-items: center; gap: 14px; padding: 18px 20px;
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(0,212,255,0.1); border-radius: 12px;
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      i { font-size: 1.5rem; color: var(--cyan); }
-    }
-    .payroll-stat-info { display: flex; flex-direction: column; }
-    .payroll-stat-val { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
-    .payroll-stat-lbl { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
     .payroll-search {
       display: flex; align-items: center; gap: 0.6rem;
       width: 100%;
@@ -1284,81 +1108,6 @@ import { environment } from '../../../../environments/environment';
         &::placeholder { color: var(--text-secondary); }
       }
     }
-    .payroll-org-tabs {
-      display: flex; flex-wrap: wrap; gap: 8px;
-    }
-    .payroll-org-tab {
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text-secondary); border-radius: 999px; padding: 0.4rem 0.85rem;
-      font-size: 0.78rem; cursor: pointer; transition: all 0.2s;
-      &:hover { border-color: rgba(0,212,255,0.25); color: var(--text-primary); }
-      &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.12); }
-    }
-    .payroll-position-table {
-      width: 100%;
-      border-collapse: collapse;
-      border-bottom: none;
-      th, td {
-        padding: 10px 16px;
-        text-align: left;
-        font-size: 0.82rem;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-      }
-      th {
-        color: var(--cyan);
-        font-weight: 600;
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: rgba(0,212,255,0.03);
-      }
-      .col-count,
-      .col-gross,
-      .col-processed,
-      .col-pending,
-      .col-status {
-        width: 11%;
-        text-align: center;
-        white-space: nowrap;
-      }
-      .col-position { width: 34%; }
-    }
-    .payroll-position-row {
-      cursor: pointer;
-      transition: background 0.15s ease;
-      &:hover { background: rgba(0,212,255,0.04); }
-      &.active {
-        background: rgba(0,212,255,0.08);
-        td { color: var(--text-primary); }
-      }
-      &:focus-visible {
-        outline: 2px solid rgba(0,212,255,0.45);
-        outline-offset: -2px;
-      }
-    }
-    .payroll-position-name-cell {
-      display: flex;
-      align-items: center;
-      gap: 0.55rem;
-      flex-wrap: wrap;
-    }
-    .payroll-position-selected {
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 0.68rem;
-      font-weight: 600;
-      color: #dff8ff;
-      background: rgba(0,212,255,0.18);
-      border: 1px solid rgba(0,212,255,0.35);
-    }
-    .payroll-position-state {
-      font-size: 0.72rem;
-      color: var(--text-secondary);
-      &.active {
-        color: #7ee787;
-        font-weight: 600;
-      }
-    }
     .payroll-table-stack {
       background: rgba(255,255,255,0.02);
       border: 1px solid rgba(255,255,255,0.06);
@@ -1373,31 +1122,6 @@ import { environment } from '../../../../environments/environment';
     .payroll-table-stack--employees {
       display: flex;
       flex-direction: column;
-    }
-    .payroll-filter-table {
-      width: 100%;
-      border-collapse: collapse;
-      th, td {
-        padding: 12px 16px;
-        text-align: left;
-        vertical-align: middle;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-      }
-      th {
-        width: 132px;
-        color: var(--cyan);
-        font-weight: 600;
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: rgba(0,212,255,0.03);
-        white-space: nowrap;
-      }
-      td { background: rgba(255,255,255,0.01); }
-      tbody tr:last-child th,
-      tbody tr:last-child td {
-        border-bottom: none;
-      }
     }
     .payroll-table-wrap {
       background: transparent;
@@ -1557,7 +1281,6 @@ import { environment } from '../../../../environments/environment';
       color: #dff8ff;
     }
     @media (max-width: 768px) {
-      .payroll-stats { grid-template-columns: repeat(2, 1fr); }
       .payroll-info-grid { grid-template-columns: 1fr; }
       .payroll-info-kpi-strip--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .payroll-info-split { grid-template-columns: 1fr; }
@@ -1598,7 +1321,6 @@ export class PayrollComponent implements OnInit {
   selectedStructureFilterValue = signal('All');
   periodFilter = signal('current');
   payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
-  upperViewMode = signal<'infographic' | 'table'>('infographic');
   selectedOrganization = signal('All organizations');
   selectedPositionTab = signal('All positions');
   employeePage = signal(1);
