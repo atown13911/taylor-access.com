@@ -15,7 +15,7 @@ import { environment } from '../../../../environments/environment';
       <div class="payroll-header">
         <div>
           <h1><i class="bx bx-dollar-circle"></i> Payroll</h1>
-          <p class="payroll-sub">Employee payroll management</p>
+          <p class="payroll-sub">Workforce payroll overview</p>
         </div>
         <div class="payroll-actions">
           <select class="payroll-filter" [ngModel]="periodFilter()" (ngModelChange)="onPeriodFilterChange($event)">
@@ -25,23 +25,6 @@ import { environment } from '../../../../environments/environment';
           </select>
           <button class="payroll-btn" (click)="loadData()"><i class="bx bx-refresh"></i> Refresh</button>
         </div>
-      </div>
-
-      <div class="payroll-mode-tabs">
-        <button
-          class="payroll-mode-tab"
-          [class.active]="payrollMode() === 'accumulation'"
-          (click)="setPayrollMode('accumulation')"
-        >
-          Accumulation
-        </button>
-        <button
-          class="payroll-mode-tab"
-          [class.active]="payrollMode() === 'invoiced'"
-          (click)="setPayrollMode('invoiced')"
-        >
-          Invoiced
-        </button>
       </div>
 
       <div class="payroll-info-grid">
@@ -99,7 +82,7 @@ import { environment } from '../../../../environments/environment';
               <div>
                 <span class="payroll-info-eyebrow">Payroll Volume</span>
                 <h2>Compensation summary</h2>
-                <p class="payroll-info-sub">{{ payrollMode() === 'invoiced' ? 'Invoiced view' : 'Accumulation view' }}</p>
+                <p class="payroll-info-sub">{{ periodLabel() }} snapshot</p>
               </div>
               <div class="payroll-info-hero-metric">
                 <strong class="payroll-info-value payroll-mono">\${{ totalPayroll() | number:'1.2-2' }}</strong>
@@ -353,7 +336,6 @@ import { environment } from '../../../../environments/environment';
               <th>Deductions</th>
               <th>Net Pay</th>
               <th>Status</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -378,49 +360,11 @@ import { environment } from '../../../../environments/environment';
                 <td>
                   <span class="payroll-status" [class]="emp.payrollStatus || 'pending'">{{ emp.payrollStatus || 'pending' }}</span>
                 </td>
-                <td>
-                  <div class="payroll-row-actions">
-                    <button
-                      type="button"
-                      class="payroll-icon-btn"
-                      title="Edit payroll details"
-                      aria-label="Edit payroll details"
-                      (click)="openPayrollDetails(emp)"
-                    >
-                      <i class="bx bx-edit-alt"></i>
-                    </button>
-                    <button
-                      type="button"
-                      class="payroll-icon-btn"
-                      title="Edit employee profile"
-                      aria-label="Edit employee profile"
-                      [disabled]="!emp?.id"
-                      (click)="openEmployeeProfile(emp)"
-                      *ngIf="payrollMode() === 'accumulation'"
-                    >
-                      <i class="bx bx-user-circle"></i>
-                    </button>
-                    <button
-                      type="button"
-                      class="payroll-icon-btn"
-                      title="Create invoice"
-                      aria-label="Create invoice"
-                      [disabled]="isInvoicedRow(emp) || creatingInvoiceForUserId() === emp.id"
-                      (click)="openCreateInvoiceModal(emp)"
-                    >
-                      <i class="bx bx-receipt"></i>
-                    </button>
-                  </div>
-                </td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="11" class="payroll-empty">
-                  @if (payrollMode() === 'invoiced') {
-                    No invoiced payroll data for this period
-                  } @else {
-                    No payroll accumulation data for this period
-                  }
+                <td colspan="10" class="payroll-empty">
+                  No payroll data for this period
                 </td>
               </tr>
             }
@@ -626,31 +570,6 @@ import { environment } from '../../../../environments/environment';
       border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
       color: var(--text-primary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
       &:hover { border-color: var(--cyan); background: rgba(0,212,255,0.08); }
-    }
-    .payroll-mode-tabs {
-      display: inline-flex;
-      gap: 8px;
-      margin: 0 0 0.9rem;
-      padding: 4px;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      background: rgba(255,255,255,0.02);
-    }
-    .payroll-mode-tab {
-      border: 1px solid transparent;
-      background: transparent;
-      color: var(--text-secondary);
-      border-radius: 8px;
-      padding: 0.4rem 0.9rem;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      &:hover { color: var(--text-primary); border-color: rgba(0,212,255,0.22); }
-      &.active {
-        color: var(--text-primary);
-        border-color: rgba(0,212,255,0.45);
-        background: rgba(0,212,255,0.12);
-      }
     }
     .payroll-info-grid {
       display: grid;
@@ -1336,7 +1255,6 @@ export class PayrollComponent implements OnInit {
   selectedStructureFilterField = signal<StructureFilterField>('all');
   selectedStructureFilterValue = signal('All');
   periodFilter = signal('current');
-  payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
   selectedOrganization = signal('All organizations');
   selectedPositionTab = signal('All positions');
   employeePage = signal(1);
@@ -1473,13 +1391,7 @@ export class PayrollComponent implements OnInit {
     return this.positionScopedEmployees().filter((e) => this.getSearchFieldText(e, field) === value);
   });
 
-  tabScopedEmployees = computed(() => {
-    const rows = this.scopedEmployees();
-    if (this.payrollMode() === 'accumulation') {
-      return rows;
-    }
-    return rows.filter((e) => this.hasInvoiceData(e));
-  });
+  tabScopedEmployees = computed(() => this.scopedEmployees());
 
   filteredEmployees = computed(() => {
     const search = this.searchTerm().toLowerCase();
@@ -1643,12 +1555,6 @@ export class PayrollComponent implements OnInit {
     this.periodFilter.set(value);
     this.resetEmployeePage();
     this.loadData();
-  }
-
-  setPayrollMode(mode: 'accumulation' | 'invoiced'): void {
-    if (this.payrollMode() === mode) return;
-    this.payrollMode.set(mode);
-    this.resetEmployeePage();
   }
 
   setOrganization(org: string): void {
