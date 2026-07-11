@@ -1,4 +1,4 @@
-import { Component, signal, computed, OnInit, inject } from '@angular/core';
+import { Component, signal, computed, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -1190,11 +1190,11 @@ import {
       </div>
 
       <!-- Edit Employee Modal -->
-      <div *ngIf="showEditModal" class="modal-overlay modal-overlay--edit-fullscreen" (click)="showEditModal = false">
+      <div *ngIf="showEditModal" class="modal-overlay modal-overlay--edit-fullscreen" (click)="closeEditModal()">
         <div class="modal-content modal-edit-employee" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <h2><i class="bx bx-edit"></i> Edit Employee</h2>
-            <button class="close-btn" (click)="showEditModal = false">
+            <button class="close-btn" (click)="closeEditModal()">
               <i class="bx bx-x"></i>
             </button>
           </div>
@@ -1325,7 +1325,7 @@ import {
                 <div class="form-section">
                   <h3><i class="bx bx-credit-card"></i> Satellite Banking — {{ satelliteDetails()?.name || 'Loading...' }}</h3>
                   <div class="country-banner">
-                    <i class="bx bx-info-circle"></i> Financial details are shared across all employees in this satellite. Edit on the <a href="javascript:void(0)" (click)="showEditModal = false; router.navigate(['/satellites'])" style="color:#00f2fe">Satellites page</a>.
+                    <i class="bx bx-info-circle"></i> Financial details are shared across all employees in this satellite. Edit on the <a href="javascript:void(0)" (click)="closeEditModal(); router.navigate(['/satellites'])" style="color:#00f2fe">Satellites page</a>.
                   </div>
 
                   @if (satelliteDetails()) {
@@ -1869,7 +1869,7 @@ import {
               <div class="form-section">
                 <div class="biz-header">
                   <h3><i class="bx bx-building-house"></i> {{ satelliteDetails()?.name }} — Satellite Details</h3>
-                  <a class="biz-edit-link" href="javascript:void(0)" (click)="showEditModal = false; router.navigate(['/satellites'])">
+                  <a class="biz-edit-link" href="javascript:void(0)" (click)="closeEditModal(); router.navigate(['/satellites'])">
                     <i class="bx bx-edit"></i> Edit on Satellites Page
                   </a>
                 </div>
@@ -2891,6 +2891,7 @@ import {
       align-items: stretch;
       justify-content: stretch;
       overflow: hidden;
+      z-index: 1000000;
     }
 
     .modal-edit-employee {
@@ -4653,7 +4654,7 @@ import {
     .error-line { color: #fca5a5; font-size: 0.8rem; padding: 2px 0; font-family: monospace; }
   `]
 })
-export class EmployeeRosterComponent implements OnInit {
+export class EmployeeRosterComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -5328,7 +5329,25 @@ export class EmployeeRosterComponent implements OnInit {
     this.editModalTab.set('personal');
     this.employeeAccounts.set([]);
     this.showBankForm.set(false);
-    this.showEditModal = true;
+    this.setEditModalOpen(true);
+  }
+
+  private setEditModalOpen(open: boolean): void {
+    this.showEditModal = open;
+    document.body.classList.toggle('ta-edit-employee-fullscreen', open);
+  }
+
+  closeEditModal(): void {
+    this.setEditModalOpen(false);
+    this.editingEmployee = null;
+    this.editModalTab.set('personal');
+    this.employeeAccounts.set([]);
+    this.showBankForm.set(false);
+    this.satelliteDetails.set(null);
+  }
+
+  ngOnDestroy(): void {
+    document.body.classList.remove('ta-edit-employee-fullscreen');
   }
 
   onEditEntityTypeChange() {
@@ -5372,12 +5391,7 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   cancelEdit() {
-    this.showEditModal = false;
-    this.editingEmployee = null;
-    this.editModalTab.set('personal');
-    this.employeeAccounts.set([]);
-    this.showBankForm.set(false);
-    this.satelliteDetails.set(null);
+    this.closeEditModal();
   }
 
   getEmployeeCountry(): string {
@@ -5724,9 +5738,8 @@ export class EmployeeRosterComponent implements OnInit {
 
       await this.http.put(`${this.apiUrl}/api/v1/users/${this.editingEmployee.id}`, payload).toPromise();
       
-      this.showEditModal = false;
       const employeeName = this.editingEmployee.name;
-      this.editingEmployee = null;
+      this.closeEditModal();
       this.loadRoster();
       this.loadSummary();
       
