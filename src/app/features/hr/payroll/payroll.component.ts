@@ -182,45 +182,48 @@ import { environment } from '../../../../environments/environment';
               </div>
             </header>
 
-            <div class="payroll-org-tabs payroll-info-org-tabs">
-              @for (item of organizationTabs(); track item) {
-                <button
-                  type="button"
-                  class="payroll-org-tab"
-                  [class.active]="selectedOrganization() === item"
-                  (click)="setOrganization(item)"
-                >
-                  {{ item }}
-                </button>
-              }
-            </div>
+            <div class="payroll-info-position-panel">
+              <aside class="payroll-info-org-sidebar" aria-label="Organization filters">
+                <span class="payroll-info-org-label">Organization</span>
+                @for (item of organizationTabs(); track item) {
+                  <button
+                    type="button"
+                    class="payroll-info-org-btn"
+                    [class.active]="selectedOrganization() === item"
+                    (click)="setOrganization(item)"
+                  >
+                    {{ item }}
+                  </button>
+                }
+              </aside>
 
-            <div class="payroll-info-position-list">
-              @for (row of positionInfographicRows(); track row.position) {
-                <button
-                  type="button"
-                  class="payroll-info-position-row"
-                  [class.active]="selectedPositionTab() === row.position"
-                  (click)="setPositionTab(row.position)"
-                >
-                  <div class="payroll-info-position-top">
-                    <span>{{ row.position === 'All positions' ? 'All Positions' : row.position }}</span>
-                    <div class="payroll-info-position-meta">
-                      <span>{{ row.count }} employees</span>
-                      <strong class="payroll-mono">\${{ row.gross | number:'1.2-2' }}</strong>
+              <div class="payroll-info-position-list">
+                @for (row of positionInfographicRows(); track row.position) {
+                  <button
+                    type="button"
+                    class="payroll-info-position-row"
+                    [class.active]="selectedPositionTab() === row.position"
+                    (click)="setPositionTab(row.position)"
+                  >
+                    <div class="payroll-info-position-top">
+                      <span>{{ row.position === 'All positions' ? 'All Positions' : row.position }}</span>
+                      <div class="payroll-info-position-meta">
+                        <span>{{ row.count }}</span>
+                        <strong class="payroll-mono">\${{ row.gross | number:'1.0-0' }}</strong>
+                      </div>
                     </div>
-                  </div>
-                  <div class="payroll-info-bar-track">
-                    <div class="payroll-info-bar-fill tone-cyan" [style.width.%]="row.countWidthPct"></div>
-                  </div>
-                  <div class="payroll-info-position-sub">
-                    <span>{{ row.processed }} processed</span>
-                    <span>{{ row.pending }} pending</span>
-                  </div>
-                </button>
-              } @empty {
-                <div class="payroll-info-empty">No positions for this organization</div>
-              }
+                    <div class="payroll-info-bar-track">
+                      <div class="payroll-info-bar-fill tone-cyan" [style.width.%]="row.countWidthPct"></div>
+                    </div>
+                    <div class="payroll-info-position-sub">
+                      <span>{{ row.processed }} done</span>
+                      <span>{{ row.pending }} pending</span>
+                    </div>
+                  </button>
+                } @empty {
+                  <div class="payroll-info-empty">No positions for this organization</div>
+                }
+              </div>
             </div>
           </article>
         </div>
@@ -836,8 +839,7 @@ import { environment } from '../../../../environments/environment';
       }
     }
     .payroll-info-mini-list,
-    .payroll-info-flow-list,
-    .payroll-info-position-list {
+    .payroll-info-flow-list {
       display: grid;
       gap: 0.55rem;
     }
@@ -890,18 +892,68 @@ import { environment } from '../../../../environments/environment';
       }
     }
     .payroll-info-flow-step { display: grid; gap: 0.35rem; }
-    .payroll-info-org-tabs { margin-bottom: 0.15rem; }
+    .payroll-info-position-panel {
+      display: grid;
+      grid-template-columns: minmax(148px, 190px) minmax(0, 1fr);
+      gap: 0.85rem;
+      align-items: stretch;
+      min-height: 0;
+    }
+    .payroll-info-org-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      padding-right: 0.85rem;
+      border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    .payroll-info-org-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 0.15rem;
+    }
+    .payroll-info-org-btn {
+      width: 100%;
+      text-align: left;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-secondary);
+      border-radius: 8px;
+      padding: 0.45rem 0.6rem;
+      font-size: 0.72rem;
+      line-height: 1.25;
+      cursor: pointer;
+      transition: all 0.2s;
+      &:hover {
+        border-color: rgba(0,212,255,0.25);
+        color: var(--text-primary);
+      }
+      &.active {
+        border-color: var(--cyan);
+        color: var(--text-primary);
+        background: rgba(0,212,255,0.12);
+      }
+    }
+    .payroll-info-position-list {
+      display: grid;
+      gap: 0.4rem;
+      align-content: start;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 0.15rem;
+    }
     .payroll-info-position-row {
       width: 100%;
       text-align: left;
       border: 1px solid rgba(255,255,255,0.06);
       border-radius: 10px;
       background: rgba(255,255,255,0.02);
-      padding: 0.7rem 0.8rem;
+      padding: 0.5rem 0.65rem;
       cursor: pointer;
       transition: all 0.15s ease;
       display: grid;
-      gap: 0.4rem;
+      gap: 0.28rem;
       color: inherit;
       &:hover {
         border-color: rgba(0,212,255,0.25);
@@ -913,23 +965,27 @@ import { environment } from '../../../../environments/environment';
       }
     }
     .payroll-info-position-top span {
-      font-size: 0.84rem;
+      font-size: 0.78rem;
       font-weight: 600;
       color: var(--text-primary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .payroll-info-position-meta {
       display: inline-flex;
       align-items: center;
-      gap: 0.65rem;
-      font-size: 0.74rem;
+      gap: 0.45rem;
+      font-size: 0.68rem;
       color: var(--text-secondary);
-      strong { color: #93c5fd; }
+      flex-shrink: 0;
+      strong { color: #93c5fd; font-size: 0.68rem; }
     }
     .payroll-info-position-sub {
       display: flex;
       justify-content: space-between;
-      gap: 0.75rem;
-      font-size: 0.72rem;
+      gap: 0.5rem;
+      font-size: 0.66rem;
       color: var(--text-secondary);
     }
     .payroll-info-empty {
@@ -1249,6 +1305,21 @@ import { environment } from '../../../../environments/environment';
     @media (max-width: 768px) {
       .payroll-stats { grid-template-columns: repeat(2, 1fr); }
       .payroll-info-grid { grid-template-columns: 1fr; }
+      .payroll-info-position-panel {
+        grid-template-columns: 1fr;
+      }
+      .payroll-info-org-sidebar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding-right: 0;
+        padding-bottom: 0.75rem;
+        border-right: none;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+      }
+      .payroll-info-org-btn {
+        width: auto;
+        flex: 1 1 auto;
+      }
     }
   `]
 })
