@@ -37,16 +37,20 @@ import { environment } from '../../../../environments/environment';
             <p class="payroll-info-compact-meta">{{ organizationTabs().length - 1 }} orgs · {{ positionTabs().length - 1 }} roles · {{ employeesWithPayCount() }} w/ pay</p>
             <div class="payroll-info-compact-chart">
               @if (workforceOrgChartData().length > 0) {
-                <ngx-charts-pie-chart
+                <ngx-charts-bar-horizontal
                   [results]="workforceOrgChartData()"
-                  [view]="kpiChartView"
+                  [view]="kpiBarChartView"
                   [scheme]="workforceChartScheme"
-                  [labels]="false"
-                  [legend]="false"
-                  [doughnut]="true"
-                  [arcWidth]="0.42"
-                  [animations]="true">
-                </ngx-charts-pie-chart>
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [showDataLabel]="true"
+                  [trimYAxisTicks]="true"
+                  [maxYAxisTickLength]="14"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
               } @else {
                 <div class="payroll-info-empty">No org data</div>
               }
@@ -1346,7 +1350,6 @@ export class PayrollComponent implements OnInit {
   private router = inject(Router);
   private apiUrl = environment.apiUrl;
 
-  readonly kpiChartView: [number, number] = [280, 118];
   readonly kpiBarChartView: [number, number] = [280, 132];
   readonly kpiPayrollChartView: [number, number] = [280, 96];
   readonly kpiSplitPieView: [number, number] = [96, 96];
@@ -1586,7 +1589,10 @@ export class PayrollComponent implements OnInit {
     return total > 0 ? (this.pendingCount() / total) * 100 : 0;
   });
   workforceOrgChartData = computed(() =>
-    this.orgBreakdownRows().map((row) => ({ name: row.name, value: row.count }))
+    this.orgBreakdownRows().map((row) => ({
+      name: row.name.length > 14 ? `${row.name.slice(0, 12)}…` : row.name,
+      value: row.count
+    }))
   );
   payTypeChartData = computed(() =>
     this.payTypeBreakdownRows().map((row) => ({ name: row.label, value: row.count }))
