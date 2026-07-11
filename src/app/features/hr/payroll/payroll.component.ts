@@ -31,14 +31,14 @@ import { environment } from '../../../../environments/environment';
         <button
           class="payroll-mode-tab"
           [class.active]="payrollMode() === 'accumulation'"
-          (click)="payrollMode.set('accumulation')"
+          (click)="setPayrollMode('accumulation')"
         >
           Accumulation
         </button>
         <button
           class="payroll-mode-tab"
           [class.active]="payrollMode() === 'invoiced'"
-          (click)="payrollMode.set('invoiced')"
+          (click)="setPayrollMode('invoiced')"
         >
           Invoiced
         </button>
@@ -77,7 +77,8 @@ import { environment } from '../../../../environments/environment';
       </div>
 
       <!-- Filter + Payroll Tables -->
-      <div class="payroll-table-stack">
+      <div class="payroll-layout">
+        <div class="payroll-table-stack payroll-table-stack--filters">
         <table class="payroll-filter-table" aria-label="Payroll filters">
           <tbody>
             <tr>
@@ -166,7 +167,7 @@ import { environment } from '../../../../environments/environment';
                   <select
                     class="payroll-search-field"
                     [ngModel]="selectedStructureFilterValue()"
-                    (ngModelChange)="selectedStructureFilterValue.set($event)"
+                    (ngModelChange)="onStructureFilterValueChange($event)"
                     [disabled]="selectedStructureFilterField() === 'all'"
                     aria-label="Payroll table filter value"
                   >
@@ -180,7 +181,7 @@ import { environment } from '../../../../environments/environment';
                       type="text"
                       placeholder="Search filtered table..."
                       [ngModel]="searchTerm()"
-                      (ngModelChange)="searchTerm.set($event)"
+                      (ngModelChange)="onSearchTermChange($event)"
                     >
                   </div>
                 </div>
@@ -188,7 +189,9 @@ import { environment } from '../../../../environments/environment';
             </tr>
           </tbody>
         </table>
+        </div>
 
+        <div class="payroll-table-stack payroll-table-stack--employees">
         <div class="payroll-table-wrap">
           <table class="payroll-table">
           <thead>
@@ -207,7 +210,7 @@ import { environment } from '../../../../environments/environment';
             </tr>
           </thead>
           <tbody>
-            @for (emp of filteredEmployees(); track emp.id) {
+            @for (emp of paginatedEmployees(); track emp.id) {
               <tr>
                 <td class="payroll-emp-cell">
                   <div class="payroll-avatar">{{ (emp.name || 'E').charAt(0) }}</div>
@@ -276,7 +279,47 @@ import { environment } from '../../../../environments/environment';
             }
           </tbody>
         </table>
-      </div>
+        </div>
+
+        @if (filteredEmployees().length > 0) {
+          <div class="payroll-table-pagination">
+            <span class="payroll-page-meta">
+              Showing {{ employeePageStart() }}–{{ employeePageEnd() }} of {{ filteredEmployees().length }} employees
+            </span>
+            <div class="payroll-page-controls">
+              <select
+                class="payroll-page-size"
+                [ngModel]="employeePageSize()"
+                (ngModelChange)="setEmployeePageSize($event)"
+                aria-label="Rows per page"
+              >
+                @for (size of employeePageSizeOptions; track size) {
+                  <option [value]="size">{{ size }} / page</option>
+                }
+              </select>
+              <button
+                type="button"
+                class="payroll-page-btn"
+                [disabled]="employeePage() <= 1"
+                (click)="goToEmployeePage(employeePage() - 1)"
+                aria-label="Previous page"
+              >
+                <i class="bx bx-chevron-left"></i>
+              </button>
+              <span class="payroll-page-counter">Page {{ employeePage() }} of {{ employeeTotalPages() }}</span>
+              <button
+                type="button"
+                class="payroll-page-btn"
+                [disabled]="employeePage() >= employeeTotalPages()"
+                (click)="goToEmployeePage(employeePage() + 1)"
+                aria-label="Next page"
+              >
+                <i class="bx bx-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        }
+        </div>
       </div>
 
       @if (actionMessage()) {
@@ -573,6 +616,15 @@ import { environment } from '../../../../environments/environment';
       border-radius: 12px;
       overflow: hidden;
     }
+    .payroll-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 1.35rem;
+    }
+    .payroll-table-stack--employees {
+      display: flex;
+      flex-direction: column;
+    }
     .payroll-filter-table {
       width: 100%;
       border-collapse: collapse;
@@ -615,6 +667,66 @@ import { environment } from '../../../../environments/environment';
       td { color: var(--text-primary); }
       tbody tr:hover { background: rgba(0,212,255,0.03); }
       tbody tr:last-child td { border-bottom: none; }
+    }
+    .payroll-table-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      padding: 0.85rem 1rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,212,255,0.02);
+    }
+    .payroll-page-meta {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+    .payroll-page-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+    .payroll-page-size {
+      min-width: 108px;
+      padding: 0.45rem 0.65rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.78rem;
+      outline: none;
+      option { background: #0a0a0f; }
+    }
+    .payroll-page-counter {
+      min-width: 108px;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+    .payroll-page-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: var(--text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      i { font-size: 1.1rem; }
+      &:hover:not(:disabled) {
+        border-color: rgba(0,212,255,0.35);
+        color: var(--cyan);
+        background: rgba(0,212,255,0.1);
+      }
+      &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
     }
     .payroll-emp-cell { display: flex; align-items: center; gap: 10px; }
     .payroll-avatar {
@@ -722,6 +834,9 @@ export class PayrollComponent implements OnInit {
   payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
   selectedOrganization = signal('All organizations');
   selectedPositionTab = signal('All positions');
+  employeePage = signal(1);
+  employeePageSize = signal(25);
+  readonly employeePageSizeOptions = [10, 25, 50, 100];
   detailsModalOpen = signal(false);
   selectedEmployeeDetails = signal<any | null>(null);
   invoiceModalOpen = signal(false);
@@ -870,6 +985,31 @@ export class PayrollComponent implements OnInit {
     return list;
   });
 
+  employeeTotalPages = computed(() => {
+    const total = this.filteredEmployees().length;
+    const pageSize = this.employeePageSize();
+    return Math.max(1, Math.ceil(total / pageSize));
+  });
+
+  paginatedEmployees = computed(() => {
+    const list = this.filteredEmployees();
+    const page = Math.min(this.employeePage(), this.employeeTotalPages());
+    const pageSize = this.employeePageSize();
+    const start = (page - 1) * pageSize;
+    return list.slice(start, start + pageSize);
+  });
+
+  employeePageStart = computed(() => {
+    if (this.filteredEmployees().length === 0) return 0;
+    return (Math.min(this.employeePage(), this.employeeTotalPages()) - 1) * this.employeePageSize() + 1;
+  });
+
+  employeePageEnd = computed(() => {
+    const total = this.filteredEmployees().length;
+    if (total === 0) return 0;
+    return Math.min(this.employeePageStart() + this.employeePageSize() - 1, total);
+  });
+
   totalPayroll = computed(() => this.tabScopedEmployees().reduce((sum, e) => sum + (e.grossPay || 0), 0));
   processedCount = computed(() => this.tabScopedEmployees().filter(e => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length);
   pendingCount = computed(() => this.tabScopedEmployees().filter(e => !e.payrollStatus || e.payrollStatus === 'pending').length);
@@ -882,7 +1022,14 @@ export class PayrollComponent implements OnInit {
   onPeriodFilterChange(value: string): void {
     if (this.periodFilter() === value) return;
     this.periodFilter.set(value);
+    this.resetEmployeePage();
     this.loadData();
+  }
+
+  setPayrollMode(mode: 'accumulation' | 'invoiced'): void {
+    if (this.payrollMode() === mode) return;
+    this.payrollMode.set(mode);
+    this.resetEmployeePage();
   }
 
   setOrganization(org: string): void {
@@ -890,12 +1037,14 @@ export class PayrollComponent implements OnInit {
     this.selectedOrganization.set(org);
     this.selectedPositionTab.set('All positions');
     this.selectedStructureFilterValue.set('All');
+    this.resetEmployeePage();
   }
 
   setPositionTab(position: string): void {
     if (this.selectedPositionTab() === position) return;
     this.selectedPositionTab.set(position);
     this.selectedStructureFilterValue.set('All');
+    this.resetEmployeePage();
   }
 
   positionMetric(position: string): { count: number; gross: number; processed: number; pending: number } {
@@ -906,6 +1055,34 @@ export class PayrollComponent implements OnInit {
     if (this.selectedStructureFilterField() === field) return;
     this.selectedStructureFilterField.set(field);
     this.selectedStructureFilterValue.set('All');
+    this.resetEmployeePage();
+  }
+
+  onStructureFilterValueChange(value: string): void {
+    this.selectedStructureFilterValue.set(value);
+    this.resetEmployeePage();
+  }
+
+  onSearchTermChange(value: string): void {
+    this.searchTerm.set(value);
+    this.resetEmployeePage();
+  }
+
+  setEmployeePageSize(value: string | number): void {
+    const size = Number(value);
+    if (!Number.isFinite(size) || size <= 0) return;
+    this.employeePageSize.set(size);
+    this.resetEmployeePage();
+  }
+
+  goToEmployeePage(page: number): void {
+    const next = Math.min(Math.max(page, 1), this.employeeTotalPages());
+    if (next === this.employeePage()) return;
+    this.employeePage.set(next);
+  }
+
+  private resetEmployeePage(): void {
+    this.employeePage.set(1);
   }
 
   loadData() {
