@@ -314,10 +314,10 @@ import {
                       type="button"
                       class="payroll-icon-btn"
                       (click)="openPayrollDetails(emp)"
-                      [attr.aria-label]="'Edit payroll for ' + (emp.name || 'employee')"
-                      title="Edit payroll"
+                      [attr.aria-label]="'View payroll for ' + (emp.name || 'employee')"
+                      title="View payroll"
                     >
-                      <i class="bx bx-edit"></i>
+                      <i class="bx bx-show"></i>
                     </button>
                   </div>
                 </td>
@@ -382,9 +382,9 @@ import {
 
     @if (detailsModalOpen()) {
       <div class="payroll-modal-backdrop" (click)="closePayrollDetails()"></div>
-      <div class="payroll-modal payroll-modal--details" role="dialog" aria-modal="true" aria-label="Payroll details">
+      <div class="payroll-modal payroll-modal--details" role="dialog" aria-modal="true" aria-label="View payroll details">
         <div class="payroll-modal-header">
-          <h3>Payroll Details</h3>
+          <h3>View Payroll Details</h3>
           <button type="button" class="payroll-modal-close" (click)="closePayrollDetails()">
             <i class="bx bx-x"></i>
           </button>
