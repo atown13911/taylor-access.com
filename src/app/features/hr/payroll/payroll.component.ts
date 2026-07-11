@@ -98,23 +98,6 @@ import { environment } from '../../../../environments/environment';
               </td>
             </tr>
             <tr>
-              <th scope="row">Position</th>
-              <td>
-                <div class="payroll-position-tabs">
-                  @for (item of positionTabs(); track item) {
-                    <button
-                      type="button"
-                      class="payroll-position-tab"
-                      [class.active]="selectedPositionTab() === item"
-                      (click)="setPositionTab(item)"
-                    >
-                      {{ item }}
-                    </button>
-                  }
-                </div>
-              </td>
-            </tr>
-            <tr>
               <th scope="row">Filter</th>
               <td>
                 <div class="payroll-search">
@@ -151,6 +134,53 @@ import { environment } from '../../../../environments/environment';
                 </div>
               </td>
             </tr>
+          </tbody>
+        </table>
+
+        <table class="payroll-position-table" aria-label="Position filters">
+          <thead>
+            <tr>
+              <th class="col-position">Position</th>
+              <th class="col-count">Employees</th>
+              <th class="col-gross">Total Gross</th>
+              <th class="col-processed">Processed</th>
+              <th class="col-pending">Pending</th>
+              <th class="col-status">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of positionTabs(); track item) {
+              <tr
+                class="payroll-position-row"
+                [class.active]="selectedPositionTab() === item"
+                (click)="setPositionTab(item)"
+                (keydown.enter)="setPositionTab(item); $event.preventDefault()"
+                (keydown.space)="setPositionTab(item); $event.preventDefault()"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="'Select position ' + item"
+              >
+                <td class="col-position">
+                  <div class="payroll-position-name-cell">
+                    <span>{{ item === 'All positions' ? 'All Positions' : item }}</span>
+                    @if (selectedPositionTab() === item) {
+                      <span class="payroll-position-selected">Selected</span>
+                    }
+                  </div>
+                </td>
+                <td class="col-count">{{ positionMetric(item).count }}</td>
+                <td class="col-gross payroll-mono">\${{ positionMetric(item).gross | number:'1.2-2' }}</td>
+                <td class="col-processed">{{ positionMetric(item).processed }}</td>
+                <td class="col-pending">{{ positionMetric(item).pending }}</td>
+                <td class="col-status">
+                  @if (selectedPositionTab() === item) {
+                    <span class="payroll-position-state active">Active</span>
+                  } @else {
+                    <span class="payroll-position-state">—</span>
+                  }
+                </td>
+              </tr>
+            }
           </tbody>
         </table>
 
@@ -467,15 +497,70 @@ import { environment } from '../../../../environments/environment';
       &:hover { border-color: rgba(0,212,255,0.25); color: var(--text-primary); }
       &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.12); }
     }
-    .payroll-position-tabs {
-      display: flex; flex-wrap: wrap; gap: 8px;
+    .payroll-position-table {
+      width: 100%;
+      border-collapse: collapse;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      th, td {
+        padding: 10px 16px;
+        text-align: left;
+        font-size: 0.82rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+      th {
+        color: var(--cyan);
+        font-weight: 600;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(0,212,255,0.03);
+      }
+      .col-count,
+      .col-gross,
+      .col-processed,
+      .col-pending,
+      .col-status {
+        width: 11%;
+        text-align: center;
+        white-space: nowrap;
+      }
+      .col-position { width: 34%; }
     }
-    .payroll-position-tab {
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(148, 163, 184, 0.2);
-      color: #cbd5e1; border-radius: 999px; padding: 0.32rem 0.78rem;
-      font-size: 0.74rem; cursor: pointer; transition: all 0.2s;
-      &:hover { border-color: rgba(0,212,255,0.26); color: var(--text-primary); }
-      &.active { border-color: rgba(0,212,255,0.55); color: #dff8ff; background: rgba(0,212,255,0.14); }
+    .payroll-position-row {
+      cursor: pointer;
+      transition: background 0.15s ease;
+      &:hover { background: rgba(0,212,255,0.04); }
+      &.active {
+        background: rgba(0,212,255,0.08);
+        td { color: var(--text-primary); }
+      }
+      &:focus-visible {
+        outline: 2px solid rgba(0,212,255,0.45);
+        outline-offset: -2px;
+      }
+    }
+    .payroll-position-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+    .payroll-position-selected {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: #dff8ff;
+      background: rgba(0,212,255,0.18);
+      border: 1px solid rgba(0,212,255,0.35);
+    }
+    .payroll-position-state {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      &.active {
+        color: #7ee787;
+        font-weight: 600;
+      }
     }
     .payroll-table-stack {
       background: rgba(255,255,255,0.02);
@@ -717,6 +802,22 @@ export class PayrollComponent implements OnInit {
     return ['All positions', ...Array.from(names).sort((a, b) => a.localeCompare(b))];
   });
 
+  positionMetricsByName = computed(() => {
+    const metrics: Record<string, { count: number; gross: number; processed: number; pending: number }> = {};
+    for (const position of this.positionTabs()) {
+      const rows = position === 'All positions'
+        ? this.organizationScopedEmployees()
+        : this.organizationScopedEmployees().filter((e) => this.getPositionLabel(e) === position);
+      metrics[position] = {
+        count: rows.length,
+        gross: rows.reduce((sum, emp) => sum + (Number(emp.grossPay) || 0), 0),
+        processed: rows.filter((e) => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length,
+        pending: rows.filter((e) => !e.payrollStatus || e.payrollStatus === 'pending').length
+      };
+    }
+    return metrics;
+  });
+
   positionScopedEmployees = computed(() => {
     const selectedPosition = this.selectedPositionTab();
     if (selectedPosition === 'All positions') return this.organizationScopedEmployees();
@@ -786,6 +887,10 @@ export class PayrollComponent implements OnInit {
     if (this.selectedPositionTab() === position) return;
     this.selectedPositionTab.set(position);
     this.selectedStructureFilterValue.set('All');
+  }
+
+  positionMetric(position: string): { count: number; gross: number; processed: number; pending: number } {
+    return this.positionMetricsByName()[position] ?? { count: 0, gross: 0, processed: 0, pending: 0 };
   }
 
   setStructureFilterField(field: StructureFilterField): void {
