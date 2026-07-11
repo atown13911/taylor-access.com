@@ -649,7 +649,7 @@ using (var scope = app.Services.CreateScope())
             ""CompanyCostPeriod"" DECIMAL(18,2) NOT NULL DEFAULT 0,
             ""TotalPeriod"" DECIMAL(18,2) NOT NULL DEFAULT 0,
             ""SummaryLinesJson"" TEXT NOT NULL DEFAULT '[]',
-            ""MatrixJson"" TEXT NOT NULL DEFAULT '{}',
+            ""MatrixJson"" TEXT NOT NULL DEFAULT '{{}}',
             ""ReportMetaJson"" TEXT NULL,
             ""ComputedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
             ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
