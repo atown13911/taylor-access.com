@@ -14,12 +14,8 @@ public static class CrmDbConnectionResolver
         if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
             raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
         {
-            var uri = new Uri(raw);
-            var userInfo = uri.UserInfo.Split(':');
-            if (userInfo.Length >= 2)
-            {
-                return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Disable;Trust Server Certificate=true";
-            }
+            // Npgsql 6+ accepts PostgreSQL URIs directly.
+            return raw;
         }
 
         return raw;
