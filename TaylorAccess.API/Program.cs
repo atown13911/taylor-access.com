@@ -236,6 +236,9 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<EncryptionService>();
+builder.Services.AddSingleton<IntegrationEncryptionService>();
+builder.Services.AddScoped<CrmIntegrationCopyService>();
+builder.Services.AddScoped<LocalIntegrationStatusService>();
 // Use GatewayMongoDbService when gateway is configured (production),
 // otherwise fall back to direct MongoDbService (requires MONGODB_URL).
 var gatewayInternalUrl = Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
@@ -693,6 +696,49 @@ using (var scope = app.Services.CreateScope())
         CREATE INDEX IF NOT EXISTS ""IX_EmployeePerformanceDailyMetrics_Org_Date""
             ON ""EmployeePerformanceDailyMetrics"" (""OrganizationId"", ""MetricDate"");
     ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""IntegrationConfigs"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""IntegrationType"" VARCHAR(50) NOT NULL,
+            ""Provider"" VARCHAR(100) NULL,
+            ""DisplayName"" VARCHAR(200) NULL,
+            ""EncryptedApiKey"" text NULL,
+            ""EncryptedApiSecret"" text NULL,
+            ""EncryptedAccessToken"" text NULL,
+            ""EncryptedRefreshToken"" text NULL,
+            ""EncryptedWebhookSecret"" text NULL,
+            ""Enabled"" BOOLEAN NOT NULL DEFAULT TRUE,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'connected',
+            ""TokenExpiresAt"" TIMESTAMP NULL,
+            ""OAuthScope"" VARCHAR(200) NULL,
+            ""ConnectedAt"" TIMESTAMP NULL,
+            ""LastSyncAt"" TIMESTAMP NULL,
+            ""LastErrorAt"" TIMESTAMP NULL,
+            ""LastError"" VARCHAR(500) NULL,
+            ""ConnectedByUserId"" INTEGER NULL,
+            ""ConnectedByUserName"" VARCHAR(200) NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_IntegrationConfigs_Org_Type""
+            ON ""IntegrationConfigs"" (""OrganizationId"", ""IntegrationType"");
+    ");
+
+    var hasLocalIntegrations = await context.IntegrationConfigs.AnyAsync(c =>
+        c.IntegrationType == "zoom" || c.IntegrationType == "gmail" || c.IntegrationType == "gmail-domain");
+    var forceCrmCopy = string.Equals(
+        Environment.GetEnvironmentVariable("COPY_CRM_INTEGRATIONS_ON_START"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+    if (!hasLocalIntegrations || forceCrmCopy)
+    {
+        var copyService = scope.ServiceProvider.GetRequiredService<CrmIntegrationCopyService>();
+        var copyResult = await copyService.CopyFromCrmAsync();
+        Console.WriteLine(
+            $"[CRM Integrations] Startup copy success={copyResult.Success} inserted={copyResult.Inserted} updated={copyResult.Updated} error={copyResult.Error}");
+    }
 
     await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""ApplicantRecords"" (

@@ -22,6 +22,8 @@ public class PerformanceReviewsController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly IJwtService _jwtService;
     private readonly ILogger<PerformanceReviewsController> _logger;
+    private readonly LocalIntegrationStatusService _localIntegrationStatus;
+    private readonly CrmIntegrationCopyService _crmIntegrationCopy;
 
     public PerformanceReviewsController(
         TaylorAccessDbContext context,
@@ -29,7 +31,9 @@ public class PerformanceReviewsController : ControllerBase
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         IJwtService jwtService,
-        ILogger<PerformanceReviewsController> logger)
+        ILogger<PerformanceReviewsController> logger,
+        LocalIntegrationStatusService localIntegrationStatus,
+        CrmIntegrationCopyService crmIntegrationCopy)
     {
         _context = context;
         _currentUserService = currentUserService;
@@ -37,6 +41,8 @@ public class PerformanceReviewsController : ControllerBase
         _configuration = configuration;
         _jwtService = jwtService;
         _logger = logger;
+        _localIntegrationStatus = localIntegrationStatus;
+        _crmIntegrationCopy = crmIntegrationCopy;
     }
 
     [HttpGet]
@@ -1311,8 +1317,51 @@ public class PerformanceReviewsController : ControllerBase
     [HttpGet("integration-status")]
     public async Task<ActionResult<object>> GetIntegrationStatus()
     {
-        var (_, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
         if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var resolvedOrgId = orgId ?? user.OrganizationId;
+        var authMode = "local-db";
+
+        if (!await _localIntegrationStatus.HasLocalCredentialsAsync(resolvedOrgId))
+        {
+            var copyResult = await _crmIntegrationCopy.CopyFromCrmAsync();
+            if (copyResult.Success && copyResult.Inserted + copyResult.Updated > 0)
+                authMode = "local-db-crm-copy";
+        }
+
+        var localGoogle = await _localIntegrationStatus.GetGoogleStatusAsync(resolvedOrgId);
+        var localZoom = await _localIntegrationStatus.GetZoomStatusAsync(resolvedOrgId);
+
+        if (localGoogle.Connected && localZoom.Connected)
+        {
+            return Ok(new
+            {
+                data = new
+                {
+                    google = new
+                    {
+                        connected = true,
+                        status = "connected",
+                        statusCode = 200,
+                        error = (string?)null,
+                        source = localGoogle.Source,
+                        message = localGoogle.Message
+                    },
+                    zoom = new
+                    {
+                        connected = true,
+                        status = "connected",
+                        statusCode = 200,
+                        error = (string?)null,
+                        source = localZoom.Source,
+                        message = localZoom.Message
+                    },
+                    authMode,
+                    last = new { checkedAtUtc = DateTime.UtcNow }
+                }
+            });
+        }
 
         var gatewayBase = _configuration["GatewayPublicOpenUrl"]
             ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
@@ -1321,14 +1370,19 @@ public class PerformanceReviewsController : ControllerBase
         var googleUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail/status";
 
         var serviceToken = _jwtService.GenerateToken(user);
-        var authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt" : "incoming-bearer";
+        if (localGoogle.Connected && localZoom.Connected == false)
+            authMode = "local-google-gateway-zoom";
+        else if (!localGoogle.Connected && localZoom.Connected)
+            authMode = "gateway-google-local-zoom";
+        else if (!localGoogle.Connected && !localZoom.Connected)
+            authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt-gateway" : "incoming-bearer-gateway";
 
-        var googleConnected = false;
-        var googleStatus = 0;
-        string? googleError = null;
-        var zoomConnected = false;
-        var zoomStatus = 0;
-        string? zoomError = null;
+        var googleConnected = localGoogle.Connected;
+        var googleStatus = localGoogle.Connected ? 200 : 0;
+        string? googleError = localGoogle.Connected ? null : localGoogle.Message;
+        var zoomConnected = localZoom.Connected;
+        var zoomStatus = localZoom.Connected ? 200 : 0;
+        string? zoomError = localZoom.Connected ? null : localZoom.Message;
 
         try
         {
@@ -1343,44 +1397,56 @@ public class PerformanceReviewsController : ControllerBase
                 client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
             }
 
-            using var googleResponse = await client.GetAsync(googleUrl);
-            googleStatus = (int)googleResponse.StatusCode;
-            if (googleResponse.IsSuccessStatusCode)
+            if (!googleConnected)
             {
-                var googleBody = await googleResponse.Content.ReadAsStringAsync();
-                using var googleDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(googleBody) ? "{}" : googleBody);
-                googleConnected = TryGetPropertyIgnoreCase(googleDoc.RootElement, "connected", out var connectedProp)
-                    && connectedProp.ValueKind == JsonValueKind.True;
-            }
-            else
-            {
-                googleError = $"Google status probe returned HTTP {googleStatus}";
-            }
-
-            using var response = await client.GetAsync(zoomUrl);
-            zoomStatus = (int)response.StatusCode;
-            if (response.IsSuccessStatusCode)
-            {
-                var zoomBody = await response.Content.ReadAsStringAsync();
-                using var zoomDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(zoomBody) ? "{}" : zoomBody);
-                zoomConnected = TryGetPropertyIgnoreCase(zoomDoc.RootElement, "connected", out var zoomConnectedProp)
-                    && zoomConnectedProp.ValueKind == JsonValueKind.True;
-                if (!zoomConnected && TryGetPropertyIgnoreCase(zoomDoc.RootElement, "message", out var zoomMessageProp))
+                using var googleResponse = await client.GetAsync(googleUrl);
+                googleStatus = (int)googleResponse.StatusCode;
+                if (googleResponse.IsSuccessStatusCode)
                 {
-                    zoomError = zoomMessageProp.GetString();
+                    var googleBody = await googleResponse.Content.ReadAsStringAsync();
+                    using var googleDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(googleBody) ? "{}" : googleBody);
+                    googleConnected = TryGetPropertyIgnoreCase(googleDoc.RootElement, "connected", out var connectedProp)
+                        && connectedProp.ValueKind == JsonValueKind.True;
+                }
+                else
+                {
+                    googleError = googleError ?? $"Google status probe returned HTTP {googleStatus}";
                 }
             }
-            else
+
+            if (!zoomConnected)
             {
-                zoomError = $"Zoom gateway probe returned HTTP {zoomStatus}";
+                using var response = await client.GetAsync(zoomUrl);
+                zoomStatus = (int)response.StatusCode;
+                if (response.IsSuccessStatusCode)
+                {
+                    var zoomBody = await response.Content.ReadAsStringAsync();
+                    using var zoomDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(zoomBody) ? "{}" : zoomBody);
+                    zoomConnected = TryGetPropertyIgnoreCase(zoomDoc.RootElement, "connected", out var zoomConnectedProp)
+                        && zoomConnectedProp.ValueKind == JsonValueKind.True;
+                    if (!zoomConnected && TryGetPropertyIgnoreCase(zoomDoc.RootElement, "message", out var zoomMessageProp))
+                    {
+                        zoomError = zoomMessageProp.GetString();
+                    }
+                }
+                else
+                {
+                    zoomError = zoomError ?? $"Zoom gateway probe returned HTTP {zoomStatus}";
+                }
             }
         }
         catch (Exception ex)
         {
-            googleConnected = false;
-            googleError = ex.Message;
-            zoomConnected = false;
-            zoomError = ex.Message;
+            if (!googleConnected)
+            {
+                googleConnected = false;
+                googleError = googleError ?? ex.Message;
+            }
+            if (!zoomConnected)
+            {
+                zoomConnected = false;
+                zoomError = zoomError ?? ex.Message;
+            }
             _logger.LogWarning(ex, "Performance reviews integration-status probe failed");
         }
 
