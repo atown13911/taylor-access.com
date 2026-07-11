@@ -97,43 +97,6 @@ import { environment } from '../../../../environments/environment';
                 </div>
               </td>
             </tr>
-            <tr>
-              <th scope="row">Filter</th>
-              <td>
-                <div class="payroll-search">
-                  <select
-                    class="payroll-search-field"
-                    [ngModel]="selectedStructureFilterField()"
-                    (ngModelChange)="setStructureFilterField($event)"
-                    aria-label="Payroll table filter field"
-                  >
-                    @for (item of structureFilterFieldOptions; track item.value) {
-                      <option [value]="item.value">{{ item.label }}</option>
-                    }
-                  </select>
-                  <select
-                    class="payroll-search-field"
-                    [ngModel]="selectedStructureFilterValue()"
-                    (ngModelChange)="selectedStructureFilterValue.set($event)"
-                    [disabled]="selectedStructureFilterField() === 'all'"
-                    aria-label="Payroll table filter value"
-                  >
-                    @for (item of structureFilterValueOptions(); track item) {
-                      <option [value]="item">{{ item }}</option>
-                    }
-                  </select>
-                  <div class="payroll-search-input-wrap">
-                    <i class="bx bx-search"></i>
-                    <input
-                      type="text"
-                      placeholder="Search filtered table..."
-                      [ngModel]="searchTerm()"
-                      (ngModelChange)="searchTerm.set($event)"
-                    >
-                  </div>
-                </div>
-              </td>
-            </tr>
           </tbody>
         </table>
 
@@ -181,6 +144,48 @@ import { environment } from '../../../../environments/environment';
                 </td>
               </tr>
             }
+          </tbody>
+        </table>
+
+        <table class="payroll-filter-table payroll-filter-table--below-positions" aria-label="Payroll table filters">
+          <tbody>
+            <tr>
+              <th scope="row">Filter</th>
+              <td>
+                <div class="payroll-search">
+                  <select
+                    class="payroll-search-field"
+                    [ngModel]="selectedStructureFilterField()"
+                    (ngModelChange)="setStructureFilterField($event)"
+                    aria-label="Payroll table filter field"
+                  >
+                    @for (item of structureFilterFieldOptions; track item.value) {
+                      <option [value]="item.value">{{ item.label }}</option>
+                    }
+                  </select>
+                  <select
+                    class="payroll-search-field"
+                    [ngModel]="selectedStructureFilterValue()"
+                    (ngModelChange)="selectedStructureFilterValue.set($event)"
+                    [disabled]="selectedStructureFilterField() === 'all'"
+                    aria-label="Payroll table filter value"
+                  >
+                    @for (item of structureFilterValueOptions(); track item) {
+                      <option [value]="item">{{ item }}</option>
+                    }
+                  </select>
+                  <div class="payroll-search-input-wrap">
+                    <i class="bx bx-search"></i>
+                    <input
+                      type="text"
+                      placeholder="Search filtered table..."
+                      [ngModel]="searchTerm()"
+                      (ngModelChange)="searchTerm.set($event)"
+                    >
+                  </div>
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
 
@@ -500,7 +505,7 @@ import { environment } from '../../../../environments/environment';
     .payroll-position-table {
       width: 100%;
       border-collapse: collapse;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
+      border-bottom: none;
       th, td {
         padding: 10px 16px;
         text-align: left;
@@ -590,6 +595,10 @@ import { environment } from '../../../../environments/environment';
       td { background: rgba(255,255,255,0.01); }
       tbody tr:last-child th,
       tbody tr:last-child td {
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      &--below-positions tbody tr:last-child th,
+      &--below-positions tbody tr:last-child td {
         border-bottom: 1px solid rgba(255,255,255,0.1);
       }
     }
