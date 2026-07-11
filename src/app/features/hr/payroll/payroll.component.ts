@@ -4,12 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
 import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-payroll',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NgxChartsModule],
   template: `
     <div class="payroll-page">
       <div class="payroll-header">
@@ -34,18 +35,19 @@ import { environment } from '../../../../environments/environment';
               <strong class="payroll-info-compact-value">{{ tabScopedEmployees().length }}</strong>
             </header>
             <p class="payroll-info-compact-meta">{{ organizationTabs().length - 1 }} orgs · {{ positionTabs().length - 1 }} roles · {{ employeesWithPayCount() }} w/ pay</p>
-            <div class="payroll-info-compact-scroll">
-              @for (row of orgBreakdownRows(); track row.name) {
-                <div class="payroll-info-compact-item">
-                  <div class="payroll-info-compact-line">
-                    <span>{{ row.name }}</span>
-                    <strong>{{ row.count }} <small>({{ row.sharePct | number:'1.0-0' }}%)</small></strong>
-                  </div>
-                  <div class="payroll-info-bar-track">
-                    <div class="payroll-info-bar-fill tone-cyan" [style.width.%]="row.widthPct"></div>
-                  </div>
-                </div>
-              } @empty {
+            <div class="payroll-info-compact-chart">
+              @if (workforceOrgChartData().length > 0) {
+                <ngx-charts-pie-chart
+                  [results]="workforceOrgChartData()"
+                  [view]="kpiChartView"
+                  [scheme]="workforceChartScheme"
+                  [labels]="false"
+                  [legend]="false"
+                  [doughnut]="true"
+                  [arcWidth]="0.42"
+                  [animations]="true">
+                </ngx-charts-pie-chart>
+              } @else {
                 <div class="payroll-info-empty">No org data</div>
               }
             </div>
@@ -67,22 +69,22 @@ import { environment } from '../../../../environments/environment';
                 <strong class="payroll-mono">\${{ totalDeductions() | number:'1.0-0' }}</strong>
               </div>
             </div>
-            <div class="payroll-info-compact-item">
-              <div class="payroll-info-compact-line">
-                <span>Payroll captured</span>
-                <strong>{{ payrollCapturePct() | number:'1.0-0' }}%</strong>
-              </div>
-              <div class="payroll-info-bar-track">
-                <div class="payroll-info-bar-fill tone-blue" [style.width.%]="payrollCapturePct()"></div>
-              </div>
-            </div>
-            <div class="payroll-info-compact-scroll">
-              @for (row of payTypeBreakdownRows(); track row.label) {
-                <div class="payroll-info-compact-line">
-                  <span>{{ row.label }}</span>
-                  <strong>{{ row.count }}</strong>
-                </div>
+            <div class="payroll-info-compact-chart payroll-info-compact-chart--payroll">
+              @if (payTypeChartData().length > 0) {
+                <ngx-charts-pie-chart
+                  [results]="payTypeChartData()"
+                  [view]="kpiPayrollChartView"
+                  [scheme]="payrollChartScheme"
+                  [labels]="false"
+                  [legend]="false"
+                  [doughnut]="true"
+                  [arcWidth]="0.4"
+                  [animations]="true">
+                </ngx-charts-pie-chart>
+              } @else {
+                <div class="payroll-info-empty">No pay type data</div>
               }
+              <p class="payroll-info-chart-caption">{{ payrollCapturePct() | number:'1.0-0' }}% payroll captured</p>
             </div>
           </article>
 
@@ -92,16 +94,25 @@ import { environment } from '../../../../environments/environment';
               <strong class="payroll-info-compact-value">{{ processedCount() + paidCount() }}</strong>
             </header>
             <p class="payroll-info-compact-meta">{{ processedPct() | number:'1.0-0' }}% complete · \${{ completedPayrollAmount() | number:'1.0-0' }} gross</p>
-            <div class="payroll-info-compact-status">
-              <div class="payroll-info-donut payroll-info-donut--compact" [style.background]="statusRingStyle()">
-                <div class="payroll-info-donut-core payroll-info-donut-core--compact">
-                  <strong>{{ processedPct() | number:'1.0-0' }}%</strong>
-                </div>
-              </div>
-              <div class="payroll-info-compact-scroll">
-                <div class="payroll-info-compact-line"><span>Processed</span><strong>{{ processedCount() }}</strong></div>
-                <div class="payroll-info-compact-line"><span>Paid</span><strong>{{ paidCount() }}</strong></div>
-                <div class="payroll-info-compact-line"><span>Pending</span><strong>{{ pendingCount() }}</strong></div>
+            <div class="payroll-info-compact-chart payroll-info-compact-chart--split">
+              @if (processedStatusChartData().length > 0) {
+                <ngx-charts-pie-chart
+                  [results]="processedStatusChartData()"
+                  [view]="kpiSplitPieView"
+                  [scheme]="processedChartScheme"
+                  [labels]="false"
+                  [legend]="false"
+                  [doughnut]="true"
+                  [arcWidth]="0.38"
+                  [animations]="true">
+                </ngx-charts-pie-chart>
+              } @else {
+                <div class="payroll-info-empty payroll-info-empty--inline">No status data</div>
+              }
+              <div class="payroll-info-chart-legend">
+                <div class="payroll-info-chart-legend-item"><span class="dot tone-green"></span><span>Processed</span><strong>{{ processedCount() }}</strong></div>
+                <div class="payroll-info-chart-legend-item"><span class="dot tone-cyan"></span><span>Paid</span><strong>{{ paidCount() }}</strong></div>
+                <div class="payroll-info-chart-legend-item"><span class="dot tone-amber"></span><span>Pending</span><strong>{{ pendingCount() }}</strong></div>
               </div>
             </div>
           </article>
@@ -112,18 +123,23 @@ import { environment } from '../../../../environments/environment';
               <strong class="payroll-info-compact-value">{{ pendingCount() }}</strong>
             </header>
             <p class="payroll-info-compact-meta">\${{ pendingPayrollAmount() | number:'1.0-0' }} gross · {{ pendingHours() | number:'1.0-0' }} hrs · {{ pendingPct() | number:'1.0-0' }}%</p>
-            <div class="payroll-info-compact-scroll">
-              @for (row of topPendingPositionRows(); track row.position) {
-                <div class="payroll-info-compact-item">
-                  <div class="payroll-info-compact-line">
-                    <span>{{ row.position }}</span>
-                    <strong>{{ row.pending }} · \${{ row.gross | number:'1.0-0' }}</strong>
-                  </div>
-                  <div class="payroll-info-bar-track">
-                    <div class="payroll-info-bar-fill tone-amber" [style.width.%]="row.widthPct"></div>
-                  </div>
-                </div>
-              } @empty {
+            <div class="payroll-info-compact-chart">
+              @if (pendingRoleChartData().length > 0) {
+                <ngx-charts-bar-horizontal
+                  [results]="pendingRoleChartData()"
+                  [view]="kpiBarChartView"
+                  [scheme]="pendingChartScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [showDataLabel]="true"
+                  [trimYAxisTicks]="true"
+                  [maxYAxisTickLength]="16"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
+              } @else {
                 <div class="payroll-info-empty">No pending roles</div>
               }
             </div>
@@ -523,11 +539,78 @@ import { environment } from '../../../../environments/environment';
       &--compact {
         padding: 0.72rem 0.78rem;
         gap: 0.45rem;
-        height: 210px;
-        min-height: 210px;
-        max-height: 210px;
+        height: 228px;
+        min-height: 228px;
+        max-height: 228px;
         overflow: hidden;
       }
+    }
+    .payroll-info-compact-chart {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      overflow: hidden;
+      &--payroll {
+        gap: 0.15rem;
+      }
+      &--split {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.45rem;
+      }
+    }
+    .payroll-info-chart-caption {
+      margin: 0;
+      text-align: center;
+      font-size: 0.62rem;
+      color: var(--text-secondary);
+    }
+    .payroll-info-chart-legend {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+      gap: 0.35rem;
+      align-content: center;
+    }
+    .payroll-info-chart-legend-item {
+      display: grid;
+      grid-template-columns: 8px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.64rem;
+      color: var(--text-secondary);
+      span:not(.dot) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      strong {
+        color: var(--text-primary);
+        font-size: 0.68rem;
+        font-weight: 600;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        &.tone-green { background: #4ade80; }
+        &.tone-cyan { background: #22d3ee; }
+        &.tone-amber { background: #fbbf24; }
+      }
+    }
+    ::ng-deep .payroll-kpi-row .ngx-charts { text { fill: #94a3b8 !important; } }
+    ::ng-deep .payroll-kpi-row .ngx-charts .gridline-path { stroke: rgba(255,255,255,0.06) !important; }
+    ::ng-deep .payroll-kpi-row .ngx-charts .tick text { fill: #64748b !important; font-size: 9px !important; }
+    ::ng-deep .payroll-kpi-row ngx-charts-pie-chart,
+    ::ng-deep .payroll-kpi-row ngx-charts-bar-horizontal {
+      display: block;
+      position: relative;
+      z-index: 0;
+      max-width: 100%;
+      overflow: hidden;
     }
     .payroll-info-compact-head {
       display: flex;
@@ -1028,6 +1111,7 @@ import { environment } from '../../../../environments/environment';
       text-align: center;
       font-size: 0.8rem;
       color: var(--text-secondary);
+      &--inline { padding: 0.5rem 0; font-size: 0.68rem; }
     }
     .payroll-search {
       display: flex; align-items: center; gap: 0.6rem;
@@ -1232,8 +1316,8 @@ import { environment } from '../../../../environments/environment';
       .payroll-kpi-row { grid-template-columns: 1fr; }
       .payroll-info-card--compact {
         height: auto;
-        min-height: 180px;
-        max-height: 220px;
+        min-height: 200px;
+        max-height: 240px;
       }
       .payroll-info-kpi-strip--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .payroll-info-split { grid-template-columns: 1fr; }
@@ -1261,6 +1345,36 @@ export class PayrollComponent implements OnInit {
   private http = inject(HttpClient);
   private router = inject(Router);
   private apiUrl = environment.apiUrl;
+
+  readonly kpiChartView: [number, number] = [280, 118];
+  readonly kpiBarChartView: [number, number] = [280, 132];
+  readonly kpiPayrollChartView: [number, number] = [280, 96];
+  readonly kpiSplitPieView: [number, number] = [96, 96];
+
+  workforceChartScheme: Color = {
+    name: 'payroll-workforce',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#38bdf8', '#22d3ee', '#60a5fa', '#818cf8', '#a78bfa']
+  };
+  payrollChartScheme: Color = {
+    name: 'payroll-types',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#60a5fa', '#38bdf8', '#22d3ee', '#818cf8']
+  };
+  processedChartScheme: Color = {
+    name: 'payroll-processed',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#4ade80', '#22d3ee', '#fbbf24']
+  };
+  pendingChartScheme: Color = {
+    name: 'payroll-pending',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: ['#fbbf24', '#f59e0b', '#fcd34d', '#fde68a']
+  };
 
   employees = signal<any[]>([]);
   organizationNameById = signal<Record<number, string>>({});
@@ -1471,10 +1585,27 @@ export class PayrollComponent implements OnInit {
     const total = this.statusTotal();
     return total > 0 ? (this.pendingCount() / total) * 100 : 0;
   });
-  statusRingStyle = computed(() => {
-    const processed = this.processedPct();
-    return `conic-gradient(#00ff88 0 ${processed}%, #fbbf24 ${processed}% 100%)`;
+  workforceOrgChartData = computed(() =>
+    this.orgBreakdownRows().map((row) => ({ name: row.name, value: row.count }))
+  );
+  payTypeChartData = computed(() =>
+    this.payTypeBreakdownRows().map((row) => ({ name: row.label, value: row.count }))
+  );
+  processedStatusChartData = computed(() => {
+    const rows = [
+      { name: 'Processed', value: this.processedCount() },
+      { name: 'Paid', value: this.paidCount() },
+      { name: 'Pending', value: this.pendingCount() }
+    ];
+    const filtered = rows.filter((row) => row.value > 0);
+    return filtered.length > 0 ? filtered : [{ name: 'No data', value: 1 }];
   });
+  pendingRoleChartData = computed(() =>
+    this.topPendingPositionRows().map((row) => ({
+      name: row.position.length > 18 ? `${row.position.slice(0, 16)}…` : row.position,
+      value: row.pending
+    }))
+  );
   averageGrossPay = computed(() => {
     const count = this.tabScopedEmployees().length;
     return count > 0 ? this.totalPayroll() / count : 0;
