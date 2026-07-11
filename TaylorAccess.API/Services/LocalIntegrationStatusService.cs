@@ -162,11 +162,9 @@ public class LocalIntegrationStatusService
 
     public async Task<bool> HasLocalCredentialsAsync(int? orgId = null, CancellationToken cancellationToken = default)
     {
-        if (HasGoogleDomainEnvCredentials() || HasZoomEnvCredentials())
-            return true;
-
         var domain = await FindConfigAsync("gmail-domain", orgId, cancellationToken);
         if (domain != null && IsDomainConfigured(domain)) return true;
+        if (HasGoogleDomainEnvCredentials()) return true;
 
         var gmail = await FindConfigAsync("gmail", orgId, cancellationToken);
         if (gmail?.EncryptedAccessToken != null) return true;
@@ -444,29 +442,31 @@ public class LocalIntegrationStatusService
 
     private ZoomS2SCredentials? ResolveZoomS2SCredentials(IntegrationConfig config)
     {
+        if (_encryption.IsConfigured
+            && config.EncryptedApiKey != null
+            && config.EncryptedApiSecret != null
+            && !string.IsNullOrWhiteSpace(config.OAuthScope))
+        {
+            try
+            {
+                return new ZoomS2SCredentials(
+                    _encryption.Decrypt(config.EncryptedApiKey),
+                    _encryption.Decrypt(config.EncryptedApiSecret),
+                    config.OAuthScope);
+            }
+            catch
+            {
+                // Fall back to environment credentials below.
+            }
+        }
+
         var envId = Environment.GetEnvironmentVariable("ZOOM_CLIENT_ID");
         var envSecret = Environment.GetEnvironmentVariable("ZOOM_CLIENT_SECRET");
         var envAccount = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID");
         if (!string.IsNullOrWhiteSpace(envId) && !string.IsNullOrWhiteSpace(envSecret) && !string.IsNullOrWhiteSpace(envAccount))
             return new ZoomS2SCredentials(envId, envSecret, envAccount);
 
-        if (!_encryption.IsConfigured
-            || config.EncryptedApiKey == null
-            || config.EncryptedApiSecret == null
-            || string.IsNullOrWhiteSpace(config.OAuthScope))
-            return null;
-
-        try
-        {
-            return new ZoomS2SCredentials(
-                _encryption.Decrypt(config.EncryptedApiKey),
-                _encryption.Decrypt(config.EncryptedApiSecret),
-                config.OAuthScope);
-        }
-        catch
-        {
-            return null;
-        }
+        return null;
     }
 
     private readonly record struct ZoomS2SCredentials(string ClientId, string ClientSecret, string AccountId);

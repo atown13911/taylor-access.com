@@ -42,7 +42,7 @@ public class CrmIntegrationCopyService
     public async Task<CrmIntegrationCopyResult> CopyFromCrmAsync(CancellationToken cancellationToken = default)
     {
         var httpResult = await TryCopyFromCrmHttpAsync(cancellationToken);
-        if (httpResult.Success && httpResult.Inserted + httpResult.Updated > 0)
+        if (httpResult.Success)
             return httpResult;
 
         var conn = CrmDbConnectionResolver.Resolve(_configuration);

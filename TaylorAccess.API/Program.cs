@@ -635,6 +635,40 @@ using (var scope = app.Services.CreateScope())
             ON ""InsuranceFleetDriverPeriodOverrides"" (""OrganizationId"", ""PeriodType"", ""PeriodKey"", ""DriverId"");
         CREATE INDEX IF NOT EXISTS ""IX_InsuranceFleetDriverPeriodOverrides_Org_Period""
             ON ""InsuranceFleetDriverPeriodOverrides"" (""OrganizationId"", ""PeriodType"", ""PeriodKey"");
+
+        CREATE TABLE IF NOT EXISTS ""InsuranceChargingSnapshots"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""PeriodType"" VARCHAR(10) NOT NULL,
+            ""PeriodKey"" VARCHAR(20) NOT NULL,
+            ""ActiveTruckCount"" INTEGER NOT NULL DEFAULT 0,
+            ""ActiveDriverHeadcount"" INTEGER NOT NULL DEFAULT 0,
+            ""DriverChargesAnnual"" DECIMAL(18,2) NOT NULL DEFAULT 0,
+            ""CompanyCostAnnual"" DECIMAL(18,2) NOT NULL DEFAULT 0,
+            ""DriverChargesPeriod"" DECIMAL(18,2) NOT NULL DEFAULT 0,
+            ""CompanyCostPeriod"" DECIMAL(18,2) NOT NULL DEFAULT 0,
+            ""TotalPeriod"" DECIMAL(18,2) NOT NULL DEFAULT 0,
+            ""SummaryLinesJson"" TEXT NOT NULL DEFAULT '[]',
+            ""MatrixJson"" TEXT NOT NULL DEFAULT '{}',
+            ""ReportMetaJson"" TEXT NULL,
+            ""ComputedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_InsuranceChargingSnapshots_Org_Period""
+            ON ""InsuranceChargingSnapshots"" (""OrganizationId"", ""PeriodType"", ""PeriodKey"");
+
+        CREATE TABLE IF NOT EXISTS ""InsuranceAccountingInvoiceCaches"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""MonthApplicable"" VARCHAR(30) NOT NULL,
+            ""InvoicesJson"" TEXT NOT NULL DEFAULT '[]',
+            ""FetchedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_InsuranceAccountingInvoiceCaches_Org_Month""
+            ON ""InsuranceAccountingInvoiceCaches"" (""OrganizationId"", ""MonthApplicable"");
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
@@ -727,22 +761,22 @@ using (var scope = app.Services.CreateScope())
             ON ""IntegrationConfigs"" (""OrganizationId"", ""IntegrationType"");
     ");
 
-    var hasLocalIntegrations = await context.IntegrationConfigs.AnyAsync(c =>
-        c.IntegrationType == "zoom" || c.IntegrationType == "gmail" || c.IntegrationType == "gmail-domain");
+    var bootstrapService = scope.ServiceProvider.GetRequiredService<IntegrationConfigBootstrapService>();
+    await bootstrapService.BootstrapFromEnvironmentAsync();
+
+    var hasZoomCredentials = await context.IntegrationConfigs.AnyAsync(c =>
+        c.IntegrationType == "zoom" && (c.EncryptedAccessToken != null || c.EncryptedApiKey != null));
     var forceCrmCopy = string.Equals(
         Environment.GetEnvironmentVariable("COPY_CRM_INTEGRATIONS_ON_START"),
         "true",
         StringComparison.OrdinalIgnoreCase);
-    if (!hasLocalIntegrations || forceCrmCopy)
+    if (!hasZoomCredentials || forceCrmCopy)
     {
         var copyService = scope.ServiceProvider.GetRequiredService<CrmIntegrationCopyService>();
         var copyResult = await copyService.CopyFromCrmAsync();
         Console.WriteLine(
-            $"[CRM Integrations] Startup copy success={copyResult.Success} inserted={copyResult.Inserted} updated={copyResult.Updated} error={copyResult.Error}");
+            $"[CRM Integrations] Startup copy success={copyResult.Success} inserted={copyResult.Inserted} updated={copyResult.Updated} source={copyResult.Source} error={copyResult.Error}");
     }
-
-    var bootstrapService = scope.ServiceProvider.GetRequiredService<IntegrationConfigBootstrapService>();
-    await bootstrapService.BootstrapFromEnvironmentAsync();
 
     await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""ApplicantRecords"" (

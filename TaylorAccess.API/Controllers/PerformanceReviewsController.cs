@@ -1312,15 +1312,21 @@ public class PerformanceReviewsController : ControllerBase
         var resolvedOrgId = orgId ?? user.OrganizationId;
         var authMode = "local-db";
 
-        if (!await _localIntegrationStatus.HasLocalCredentialsAsync(resolvedOrgId))
-        {
-            var copyResult = await _crmIntegrationCopy.CopyFromCrmAsync();
-            if (copyResult.Success && copyResult.Inserted + copyResult.Updated > 0)
-                authMode = "local-db-crm-copy";
-        }
-
         var localGoogle = await _localIntegrationStatus.GetGoogleStatusAsync(resolvedOrgId);
         var localZoom = await _localIntegrationStatus.GetZoomStatusAsync(resolvedOrgId);
+
+        if (!localGoogle.Connected || !localZoom.Connected)
+        {
+            var copyResult = await _crmIntegrationCopy.CopyFromCrmAsync();
+            if (copyResult.Success && (copyResult.Inserted + copyResult.Updated > 0 || copyResult.Source == "crm-http"))
+            {
+                authMode = "local-db-crm-copy";
+                if (!localGoogle.Connected)
+                    localGoogle = await _localIntegrationStatus.GetGoogleStatusAsync(resolvedOrgId);
+                if (!localZoom.Connected)
+                    localZoom = await _localIntegrationStatus.GetZoomStatusAsync(resolvedOrgId);
+            }
+        }
 
         if (localGoogle.Connected && localZoom.Connected)
         {
