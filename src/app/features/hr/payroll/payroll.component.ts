@@ -6,6 +6,16 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
 import { environment } from '../../../../environments/environment';
+import {
+  formatPayrollCurrency,
+  formatPayrollDate,
+  formatPayrollEmploymentType,
+  formatPayrollFilingStatus,
+  formatPayrollPaymentMethod,
+  formatPayrollPercent,
+  formatPayrollState,
+  formatPayrollYesNo
+} from './payroll-settings.util';
 
 @Component({
   selector: 'app-payroll',
@@ -535,267 +545,173 @@ import { environment } from '../../../../environments/environment';
           }
         </section>
 
+        <div class="payroll-modal-roster-hint">
+          <i class="bx bx-info-circle"></i>
+          Taxes, benefits, and withholding are managed in Employee Roster. Edit via <strong>Edit Employee → Financial</strong>.
+        </div>
+
         <section class="payroll-modal-section payroll-modal-section--setup">
           <div class="payroll-modal-section-head">
             <h4>Payroll setup</h4>
-            <p>Taxes, benefits, and payment</p>
+            <p>From employee roster (read-only)</p>
           </div>
-          <div class="payroll-modal-grid">
-            <label class="payroll-modal-field">
-              <span>Employment type</span>
-              <select
-                [ngModel]="payrollDetailsForm().employmentType"
-                (ngModelChange)="updatePayrollFormField('employmentType', $event)"
-              >
-                @for (item of employmentTypeOptions; track item.value) {
-                  <option [value]="item.value">{{ item.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="payroll-modal-field">
-              <span>Payment method</span>
-              <select
-                [ngModel]="payrollDetailsForm().paymentMethod"
-                (ngModelChange)="updatePayrollFormField('paymentMethod', $event)"
-              >
-                @for (item of paymentMethodOptions; track item.value) {
-                  <option [value]="item.value">{{ item.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="payroll-modal-field payroll-modal-field--checkbox">
-              <input
-                type="checkbox"
-                [ngModel]="payrollDetailsForm().w4OnFile"
-                (ngModelChange)="updatePayrollFormBooleanField('w4OnFile', $event)"
-              >
-              <span>W-4 on file</span>
-            </label>
-            <label class="payroll-modal-field">
-              <span>W-4 signed date</span>
-              <input
-                type="date"
-                [ngModel]="payrollDetailsForm().w4SignedDate"
-                (ngModelChange)="updatePayrollFormField('w4SignedDate', $event)"
-              >
-            </label>
+          <div class="payroll-readonly-grid">
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Employment type</span>
+              <span class="payroll-readonly-value">{{ formatPayrollEmploymentType(payrollDetailsForm().employmentType) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Payment method</span>
+              <span class="payroll-readonly-value">{{ formatPayrollPaymentMethod(payrollDetailsForm().paymentMethod) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">W-4 on file</span>
+              <span class="payroll-readonly-value">{{ formatPayrollYesNo(payrollDetailsForm().w4OnFile) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">W-4 signed date</span>
+              <span class="payroll-readonly-value">{{ formatPayrollDate(payrollDetailsForm().w4SignedDate) }}</span>
+            </div>
           </div>
         </section>
 
         <section class="payroll-modal-section payroll-modal-section--tax">
           <div class="payroll-modal-section-head">
             <h4>Federal withholding</h4>
-            <p>W-4 settings</p>
+            <p>From employee roster (read-only)</p>
           </div>
-          <div class="payroll-modal-grid">
-            <label class="payroll-modal-field">
-              <span>Filing status</span>
-              <select
-                [ngModel]="payrollDetailsForm().federalFilingStatus"
-                (ngModelChange)="updatePayrollFormField('federalFilingStatus', $event)"
-              >
-                @for (item of federalFilingStatusOptions; track item.value) {
-                  <option [value]="item.value">{{ item.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="payroll-modal-field payroll-modal-field--checkbox">
-              <input
-                type="checkbox"
-                [ngModel]="payrollDetailsForm().federalExempt"
-                (ngModelChange)="updatePayrollFormBooleanField('federalExempt', $event)"
-              >
-              <span>Exempt from federal withholding</span>
-            </label>
-            <label class="payroll-modal-field">
-              <span>Extra federal withholding / period</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                [ngModel]="payrollDetailsForm().extraFederalWithholding"
-                (ngModelChange)="updatePayrollFormNumberField('extraFederalWithholding', $event)"
-              >
-            </label>
-            <label class="payroll-modal-field">
-              <span>Dependents credit (annual)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                [ngModel]="payrollDetailsForm().w4DependentsCredit"
-                (ngModelChange)="updatePayrollFormNumberField('w4DependentsCredit', $event)"
-              >
-            </label>
-            <label class="payroll-modal-field">
-              <span>Other income (annual)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                [ngModel]="payrollDetailsForm().w4OtherIncome"
-                (ngModelChange)="updatePayrollFormNumberField('w4OtherIncome', $event)"
-              >
-            </label>
-            <label class="payroll-modal-field">
-              <span>Deductions (annual)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                [ngModel]="payrollDetailsForm().w4Deductions"
-                (ngModelChange)="updatePayrollFormNumberField('w4Deductions', $event)"
-              >
-            </label>
-            <label class="payroll-modal-field payroll-modal-field--checkbox">
-              <input
-                type="checkbox"
-                [ngModel]="payrollDetailsForm().w4TwoJobs"
-                (ngModelChange)="updatePayrollFormBooleanField('w4TwoJobs', $event)"
-              >
-              <span>Multiple jobs (W-4 step 2c)</span>
-            </label>
+          <div class="payroll-readonly-grid">
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Filing status</span>
+              <span class="payroll-readonly-value">{{ formatPayrollFilingStatus(payrollDetailsForm().federalFilingStatus) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Federal exempt</span>
+              <span class="payroll-readonly-value">{{ formatPayrollYesNo(payrollDetailsForm().federalExempt) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Extra federal / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().extraFederalWithholding) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Dependents credit (annual)</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().w4DependentsCredit) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Other income (annual)</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().w4OtherIncome) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Deductions (annual)</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().w4Deductions) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Multiple jobs (W-4 2c)</span>
+              <span class="payroll-readonly-value">{{ formatPayrollYesNo(payrollDetailsForm().w4TwoJobs) }}</span>
+            </div>
           </div>
         </section>
 
         <section class="payroll-modal-section payroll-modal-section--tax">
           <div class="payroll-modal-section-head">
             <h4>State withholding</h4>
-            <p>Work and residence</p>
+            <p>From employee roster (read-only)</p>
           </div>
-          <div class="payroll-modal-grid">
-            <label class="payroll-modal-field">
-              <span>Work state</span>
-              <select
-                [ngModel]="payrollDetailsForm().workState"
-                (ngModelChange)="updatePayrollFormField('workState', $event)"
-              >
-                @for (item of usStateOptions; track item.value) {
-                  <option [value]="item.value">{{ item.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="payroll-modal-field">
-              <span>Residence state</span>
-              <select
-                [ngModel]="payrollDetailsForm().residenceState"
-                (ngModelChange)="updatePayrollFormField('residenceState', $event)"
-              >
-                @for (item of usStateOptions; track item.value) {
-                  <option [value]="item.value">{{ item.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="payroll-modal-field">
-              <span>State filing status</span>
-              <select
-                [ngModel]="payrollDetailsForm().stateFilingStatus"
-                (ngModelChange)="updatePayrollFormField('stateFilingStatus', $event)"
-              >
-                @for (item of federalFilingStatusOptions; track item.value) {
-                  <option [value]="item.value">{{ item.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="payroll-modal-field">
-              <span>State withholding %</span>
-              <input
-                type="number"
-                min="0"
-                max="15"
-                step="0.01"
-                [ngModel]="payrollDetailsForm().stateWithholdingPercent"
-                (ngModelChange)="updatePayrollFormNumberField('stateWithholdingPercent', $event)"
-              >
-            </label>
-            <label class="payroll-modal-field">
-              <span>Extra state withholding / period</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                [ngModel]="payrollDetailsForm().extraStateWithholding"
-                (ngModelChange)="updatePayrollFormNumberField('extraStateWithholding', $event)"
-              >
-            </label>
-            <label class="payroll-modal-field payroll-modal-field--checkbox">
-              <input
-                type="checkbox"
-                [ngModel]="payrollDetailsForm().stateExempt"
-                (ngModelChange)="updatePayrollFormBooleanField('stateExempt', $event)"
-              >
-              <span>Exempt from state withholding</span>
-            </label>
+          <div class="payroll-readonly-grid">
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Work state</span>
+              <span class="payroll-readonly-value">{{ formatPayrollState(payrollDetailsForm().workState) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Residence state</span>
+              <span class="payroll-readonly-value">{{ formatPayrollState(payrollDetailsForm().residenceState) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">State filing status</span>
+              <span class="payroll-readonly-value">{{ formatPayrollFilingStatus(payrollDetailsForm().stateFilingStatus) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">State withholding %</span>
+              <span class="payroll-readonly-value">{{ formatPayrollPercent(payrollDetailsForm().stateWithholdingPercent) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Extra state / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().extraStateWithholding) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">State exempt</span>
+              <span class="payroll-readonly-value">{{ formatPayrollYesNo(payrollDetailsForm().stateExempt) }}</span>
+            </div>
           </div>
         </section>
 
         <section class="payroll-modal-section">
           <div class="payroll-modal-section-head">
             <h4>Pre-tax deductions</h4>
-            <p>Benefits per pay period</p>
+            <p>From employee roster (read-only)</p>
           </div>
-          <div class="payroll-modal-grid">
-            <label class="payroll-modal-field">
-              <span>Health insurance</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().healthInsurance" (ngModelChange)="updatePayrollFormNumberField('healthInsurance', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>Dental insurance</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().dentalInsurance" (ngModelChange)="updatePayrollFormNumberField('dentalInsurance', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>Vision insurance</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().visionInsurance" (ngModelChange)="updatePayrollFormNumberField('visionInsurance', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>401(k) amount / period</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().retirement401kAmount" (ngModelChange)="updatePayrollFormNumberField('retirement401kAmount', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>401(k) % of gross</span>
-              <input type="number" min="0" max="100" step="0.01" [ngModel]="payrollDetailsForm().retirement401kPercent" (ngModelChange)="updatePayrollFormNumberField('retirement401kPercent', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>HSA / period</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().hsaContribution" (ngModelChange)="updatePayrollFormNumberField('hsaContribution', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>FSA / period</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().fsaContribution" (ngModelChange)="updatePayrollFormNumberField('fsaContribution', $event)">
-            </label>
+          <div class="payroll-readonly-grid">
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Health insurance</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().healthInsurance) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Dental insurance</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().dentalInsurance) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Vision insurance</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().visionInsurance) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">401(k) amount / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().retirement401kAmount) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">401(k) % of gross</span>
+              <span class="payroll-readonly-value">{{ formatPayrollPercent(payrollDetailsForm().retirement401kPercent) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">HSA / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().hsaContribution) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">FSA / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().fsaContribution) }}</span>
+            </div>
           </div>
         </section>
 
         <section class="payroll-modal-section">
           <div class="payroll-modal-section-head">
             <h4>Taxes & post-tax deductions</h4>
-            <p>FICA and other withholdings</p>
+            <p>From employee roster (read-only)</p>
           </div>
-          <div class="payroll-modal-grid">
-            <label class="payroll-modal-field payroll-modal-field--checkbox">
-              <input type="checkbox" [ngModel]="payrollDetailsForm().exemptSocialSecurity" (ngModelChange)="updatePayrollFormBooleanField('exemptSocialSecurity', $event)">
-              <span>Exempt from Social Security</span>
-            </label>
-            <label class="payroll-modal-field payroll-modal-field--checkbox">
-              <input type="checkbox" [ngModel]="payrollDetailsForm().exemptMedicare" (ngModelChange)="updatePayrollFormBooleanField('exemptMedicare', $event)">
-              <span>Exempt from Medicare</span>
-            </label>
-            <label class="payroll-modal-field">
-              <span>Garnishment / period</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().garnishment" (ngModelChange)="updatePayrollFormNumberField('garnishment', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>Union dues / period</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().unionDues" (ngModelChange)="updatePayrollFormNumberField('unionDues', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>Other post-tax / period</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().otherPostTaxDeductions" (ngModelChange)="updatePayrollFormNumberField('otherPostTaxDeductions', $event)">
-            </label>
-            <label class="payroll-modal-field">
-              <span>Legacy period deductions</span>
-              <input type="number" min="0" step="0.01" [ngModel]="payrollDetailsForm().defaultDeductions" (ngModelChange)="updatePayrollFormNumberField('defaultDeductions', $event)">
-            </label>
+          <div class="payroll-readonly-grid">
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Exempt Social Security</span>
+              <span class="payroll-readonly-value">{{ formatPayrollYesNo(payrollDetailsForm().exemptSocialSecurity) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Exempt Medicare</span>
+              <span class="payroll-readonly-value">{{ formatPayrollYesNo(payrollDetailsForm().exemptMedicare) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Garnishment / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().garnishment) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Union dues / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().unionDues) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Other post-tax / period</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().otherPostTaxDeductions) }}</span>
+            </div>
+            <div class="payroll-readonly-item">
+              <span class="payroll-readonly-label">Legacy period deductions</span>
+              <span class="payroll-readonly-value payroll-mono">{{ formatPayrollCurrency(payrollDetailsForm().defaultDeductions) }}</span>
+            </div>
           </div>
         </section>
 
@@ -1913,6 +1829,40 @@ import { environment } from '../../../../environments/environment';
       border-color: rgba(251, 191, 36, 0.18);
       background: rgba(251, 191, 36, 0.03);
     }
+    .payroll-modal-roster-hint {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.45rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid rgba(34, 211, 238, 0.22);
+      background: rgba(34, 211, 238, 0.06);
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+    .payroll-readonly-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem 0.85rem;
+    }
+    .payroll-readonly-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      min-width: 0;
+    }
+    .payroll-readonly-label {
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .payroll-readonly-value {
+      font-size: 0.82rem;
+      color: var(--text-primary);
+      word-break: break-word;
+    }
     .payroll-modal-actions {
       display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.35rem;
     }
@@ -2652,6 +2602,15 @@ export class PayrollComponent implements OnInit {
     const amount = Number(value) || 0;
     return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
+
+  readonly formatPayrollYesNo = formatPayrollYesNo;
+  readonly formatPayrollCurrency = formatPayrollCurrency;
+  readonly formatPayrollPercent = formatPayrollPercent;
+  readonly formatPayrollEmploymentType = formatPayrollEmploymentType;
+  readonly formatPayrollPaymentMethod = formatPayrollPaymentMethod;
+  readonly formatPayrollFilingStatus = formatPayrollFilingStatus;
+  readonly formatPayrollState = formatPayrollState;
+  readonly formatPayrollDate = formatPayrollDate;
 
   async savePayrollDetails(): Promise<void> {
     const employee = this.selectedEmployeeDetails();
@@ -3500,44 +3459,12 @@ export class PayrollComponent implements OnInit {
       hourlyRate: form.payType === 'hourly' ? form.hourlyRate : 0,
       payRate,
       standardHoursPerWeek: form.standardHoursPerWeek,
-      defaultDeductions: form.defaultDeductions,
-      periodDeductions: breakdown.periodDeductions,
-      totalPeriodDeductions: breakdown.periodDeductions,
       commissionBasis: form.commissionBasis,
       commissionRate: form.commissionRate,
       baseDraw: form.baseDraw,
       commissionTarget: form.commissionTarget,
       commissionCap: form.commissionCap,
       bonusPerPeriod: form.bonusPerPeriod,
-      employmentType: form.employmentType,
-      paymentMethod: form.paymentMethod,
-      w4OnFile: form.w4OnFile,
-      w4SignedDate: form.w4SignedDate,
-      federalFilingStatus: form.federalFilingStatus,
-      federalExempt: form.federalExempt,
-      extraFederalWithholding: form.extraFederalWithholding,
-      w4DependentsCredit: form.w4DependentsCredit,
-      w4OtherIncome: form.w4OtherIncome,
-      w4Deductions: form.w4Deductions,
-      w4TwoJobs: form.w4TwoJobs,
-      workState: form.workState,
-      residenceState: form.residenceState,
-      stateFilingStatus: form.stateFilingStatus,
-      stateWithholdingPercent: form.stateWithholdingPercent,
-      extraStateWithholding: form.extraStateWithholding,
-      stateExempt: form.stateExempt,
-      exemptSocialSecurity: form.exemptSocialSecurity,
-      exemptMedicare: form.exemptMedicare,
-      healthInsurance: form.healthInsurance,
-      dentalInsurance: form.dentalInsurance,
-      visionInsurance: form.visionInsurance,
-      retirement401kAmount: form.retirement401kAmount,
-      retirement401kPercent: form.retirement401kPercent,
-      hsaContribution: form.hsaContribution,
-      fsaContribution: form.fsaContribution,
-      garnishment: form.garnishment,
-      unionDues: form.unionDues,
-      otherPostTaxDeductions: form.otherPostTaxDeductions,
       periodGrossAmount: breakdown.periodGross,
       periodNetAmount: breakdown.periodNet,
       annualizedGrossAmount: breakdown.annualizedGross,

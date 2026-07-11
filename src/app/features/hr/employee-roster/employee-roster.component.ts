@@ -8,6 +8,22 @@ import { ToastService } from '../../../core/services/toast.service';
 import { OrganizationContextService } from '../../../core/services/organization-context.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { AuthService } from '../../../core/services/auth.service';
+import {
+  buildPayrollSetupFromEmployee,
+  buildPayrollSetupPreferencePayload,
+  formatPayrollCurrency,
+  formatPayrollDate,
+  formatPayrollEmploymentType,
+  formatPayrollFilingStatus,
+  formatPayrollPaymentMethod,
+  formatPayrollPercent,
+  formatPayrollState,
+  formatPayrollYesNo,
+  PAYROLL_EMPLOYMENT_TYPE_OPTIONS,
+  PAYROLL_FILING_STATUS_OPTIONS,
+  PAYROLL_PAYMENT_METHOD_OPTIONS,
+  PAYROLL_US_STATE_OPTIONS
+} from '../payroll/payroll-settings.util';
 
 @Component({
   selector: 'app-employee-roster',
@@ -710,6 +726,71 @@ import { AuthService } from '../../../core/services/auth.service';
                 </div>
               </div>
 
+              <!-- Payroll Setup (read-only) -->
+              <div class="detail-section full-width">
+                <h3><i class="bx bx-calculator"></i> Payroll Setup</h3>
+                <div class="payroll-details-grid">
+                  <div class="detail-row">
+                    <span class="detail-label">Employment type:</span>
+                    <span class="detail-value">{{ formatPayrollEmploymentType(getEmployeePayrollSetup().employmentType) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Payment method:</span>
+                    <span class="detail-value">{{ formatPayrollPaymentMethod(getEmployeePayrollSetup().paymentMethod) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">W-4 on file:</span>
+                    <span class="detail-value">{{ formatPayrollYesNo(getEmployeePayrollSetup().w4OnFile) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">W-4 signed:</span>
+                    <span class="detail-value">{{ formatPayrollDate(getEmployeePayrollSetup().w4SignedDate) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Federal filing status:</span>
+                    <span class="detail-value">{{ formatPayrollFilingStatus(getEmployeePayrollSetup().federalFilingStatus) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Federal exempt:</span>
+                    <span class="detail-value">{{ formatPayrollYesNo(getEmployeePayrollSetup().federalExempt) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Work state:</span>
+                    <span class="detail-value">{{ formatPayrollState(getEmployeePayrollSetup().workState) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Residence state:</span>
+                    <span class="detail-value">{{ formatPayrollState(getEmployeePayrollSetup().residenceState) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">State withholding %:</span>
+                    <span class="detail-value">{{ formatPayrollPercent(getEmployeePayrollSetup().stateWithholdingPercent) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Health insurance / period:</span>
+                    <span class="detail-value">{{ formatPayrollCurrency(getEmployeePayrollSetup().healthInsurance) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">401(k) / period:</span>
+                    <span class="detail-value">{{ formatPayrollCurrency(getEmployeePayrollSetup().retirement401kAmount) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Pay type:</span>
+                    <span class="detail-value">{{ getEmployeePayrollSetup().payType || '—' }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Pay rate:</span>
+                    <span class="detail-value">{{ formatPayrollCurrency(getEmployeePayrollSetup().payRate) }}</span>
+                  </div>
+                  @if (getEmployeePayrollSetup().payrollNotes) {
+                    <div class="detail-row full-width">
+                      <span class="detail-label">Payroll notes:</span>
+                      <span class="detail-value">{{ getEmployeePayrollSetup().payrollNotes }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+
               <!-- Account Information -->
               <div class="detail-section full-width">
                 <h3><i class="bx bx-time"></i> Account Information</h3>
@@ -1387,6 +1468,240 @@ import { AuthService } from '../../../core/services/auth.service';
                       placeholder="Optional payroll notes for this employee..."
                       class="form-input pay-info-notes"
                     ></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section pay-info-section">
+                <h3><i class="bx bx-receipt"></i> Payroll Setup</h3>
+                <div class="country-banner">
+                  <i class="bx bx-info-circle"></i>
+                  Taxes, benefits, and withholding settings used by Payroll. Edit here — Payroll displays these as read-only.
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Employment Type</label>
+                    <select [(ngModel)]="editingEmployee.employmentType" class="form-select">
+                      @for (item of payrollEmploymentTypeOptions; track item.value) {
+                        <option [value]="item.value">{{ item.label }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Payment Method</label>
+                    <select [(ngModel)]="editingEmployee.paymentMethod" class="form-select">
+                      @for (item of payrollPaymentMethodOptions; track item.value) {
+                        <option [value]="item.value">{{ item.label }}</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>W-4 On File</label>
+                    <select
+                      [ngModel]="editingEmployee.w4OnFile ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.w4OnFile = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>W-4 Signed Date</label>
+                    <input type="date" [(ngModel)]="editingEmployee.w4SignedDate" class="form-input">
+                  </div>
+                </div>
+
+                <h4 class="payroll-subsection-title">Federal Withholding</h4>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Filing Status</label>
+                    <select [(ngModel)]="editingEmployee.federalFilingStatus" class="form-select">
+                      @for (item of payrollFilingStatusOptions; track item.value) {
+                        <option [value]="item.value">{{ item.label }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Federal Exempt</label>
+                    <select
+                      [ngModel]="editingEmployee.federalExempt ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.federalExempt = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Extra Federal Withholding / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.extraFederalWithholding" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Dependents Credit (Annual)</label>
+                    <input type="number" [(ngModel)]="editingEmployee.w4DependentsCredit" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Other Income (Annual)</label>
+                    <input type="number" [(ngModel)]="editingEmployee.w4OtherIncome" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Deductions (Annual)</label>
+                    <input type="number" [(ngModel)]="editingEmployee.w4Deductions" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Multiple Jobs (W-4 Step 2c)</label>
+                    <select
+                      [ngModel]="editingEmployee.w4TwoJobs ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.w4TwoJobs = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+
+                <h4 class="payroll-subsection-title">State Withholding</h4>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Work State</label>
+                    <select [(ngModel)]="editingEmployee.workState" class="form-select">
+                      @for (item of payrollUsStateOptions; track item.value) {
+                        <option [value]="item.value">{{ item.label }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Residence State</label>
+                    <select [(ngModel)]="editingEmployee.residenceState" class="form-select">
+                      @for (item of payrollUsStateOptions; track item.value) {
+                        <option [value]="item.value">{{ item.label }}</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>State Filing Status</label>
+                    <select [(ngModel)]="editingEmployee.stateFilingStatus" class="form-select">
+                      @for (item of payrollFilingStatusOptions; track item.value) {
+                        <option [value]="item.value">{{ item.label }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>State Withholding %</label>
+                    <input type="number" [(ngModel)]="editingEmployee.stateWithholdingPercent" min="0" max="15" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Extra State Withholding / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.extraStateWithholding" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>State Exempt</label>
+                    <select
+                      [ngModel]="editingEmployee.stateExempt ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.stateExempt = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+
+                <h4 class="payroll-subsection-title">Pre-Tax Deductions (Per Period)</h4>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Health Insurance</label>
+                    <input type="number" [(ngModel)]="editingEmployee.healthInsurance" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Dental Insurance</label>
+                    <input type="number" [(ngModel)]="editingEmployee.dentalInsurance" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Vision Insurance</label>
+                    <input type="number" [(ngModel)]="editingEmployee.visionInsurance" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>401(k) Amount / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.retirement401kAmount" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>401(k) % of Gross</label>
+                    <input type="number" [(ngModel)]="editingEmployee.retirement401kPercent" min="0" max="100" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>HSA / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.hsaContribution" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>FSA / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.fsaContribution" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+
+                <h4 class="payroll-subsection-title">Taxes & Post-Tax Deductions</h4>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Exempt Social Security</label>
+                    <select
+                      [ngModel]="editingEmployee.exemptSocialSecurity ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.exemptSocialSecurity = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Exempt Medicare</label>
+                    <select
+                      [ngModel]="editingEmployee.exemptMedicare ? 'yes' : 'no'"
+                      (ngModelChange)="editingEmployee.exemptMedicare = $event === 'yes'"
+                      class="form-select"
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Garnishment / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.garnishment" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Union Dues / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.unionDues" min="0" step="0.01" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Other Post-Tax / Period</label>
+                    <input type="number" [(ngModel)]="editingEmployee.otherPostTaxDeductions" min="0" step="0.01" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Legacy Period Deductions</label>
+                    <input type="number" [(ngModel)]="editingEmployee.defaultDeductions" min="0" step="0.01" class="form-input">
                   </div>
                 </div>
               </div>
@@ -3274,6 +3589,25 @@ import { AuthService } from '../../../core/services/auth.service';
       line-height: 1.45;
     }
 
+    .payroll-subsection-title {
+      margin: 1rem 0 0.5rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .payroll-details-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.35rem 1rem;
+    }
+
+    .payroll-details-grid .detail-row.full-width {
+      grid-column: 1 / -1;
+    }
+
     .form-group.full-width {
       grid-column: 1 / -1;
     }
@@ -4782,7 +5116,7 @@ export class EmployeeRosterComponent implements OnInit {
     this.showLandstarPw = false;
     this.showPowerdatPw = false;
     this.selectedEmployee.set(null); // Close details modal
-    const payrollDefaults = this.extractPayrollSettings(employee);
+    const payrollSetup = buildPayrollSetupFromEmployee(employee);
     
     // Determine entity type
     let entityType = 'corporate';
@@ -4837,14 +5171,43 @@ export class EmployeeRosterComponent implements OnInit {
       positionId: employee.positionId ? Number(employee.positionId) : null,
       timezone: employee.timezone || 'America/New_York',
       preferences: employee.preferences ?? null,
-      payType: employee.payType || payrollDefaults.payType || 'salary',
-      payRate: this.toNumberOrDefault(employee.payRate, payrollDefaults.payRate, 0),
-      standardHoursPerWeek: this.toNumberOrDefault(payrollDefaults.standardHoursPerWeek, 40),
-      overtimeEligible: this.toBooleanOrDefault(payrollDefaults.overtimeEligible, true),
-      overtimeRateMultiplier: this.toNumberOrDefault(payrollDefaults.overtimeRateMultiplier, 1.5),
-      defaultDeductions: this.toNumberOrDefault(payrollDefaults.defaultDeductions, 0),
-      defaultTaxWithholdingPct: this.toNumberOrDefault(payrollDefaults.defaultTaxWithholdingPct, 0),
-      payrollNotes: payrollDefaults.payrollNotes || ''
+      payType: employee.payType || payrollSetup.payType || 'salary',
+      payRate: this.toNumberOrDefault(employee.payRate, payrollSetup.payRate, 0),
+      standardHoursPerWeek: payrollSetup.standardHoursPerWeek,
+      overtimeEligible: payrollSetup.overtimeEligible,
+      overtimeRateMultiplier: payrollSetup.overtimeRateMultiplier,
+      defaultDeductions: payrollSetup.defaultDeductions,
+      defaultTaxWithholdingPct: payrollSetup.defaultTaxWithholdingPct,
+      payrollNotes: payrollSetup.payrollNotes,
+      employmentType: payrollSetup.employmentType,
+      paymentMethod: payrollSetup.paymentMethod,
+      w4OnFile: payrollSetup.w4OnFile,
+      w4SignedDate: payrollSetup.w4SignedDate,
+      federalFilingStatus: payrollSetup.federalFilingStatus,
+      federalExempt: payrollSetup.federalExempt,
+      extraFederalWithholding: payrollSetup.extraFederalWithholding,
+      w4DependentsCredit: payrollSetup.w4DependentsCredit,
+      w4OtherIncome: payrollSetup.w4OtherIncome,
+      w4Deductions: payrollSetup.w4Deductions,
+      w4TwoJobs: payrollSetup.w4TwoJobs,
+      workState: payrollSetup.workState,
+      residenceState: payrollSetup.residenceState,
+      stateFilingStatus: payrollSetup.stateFilingStatus,
+      stateWithholdingPercent: payrollSetup.stateWithholdingPercent,
+      extraStateWithholding: payrollSetup.extraStateWithholding,
+      stateExempt: payrollSetup.stateExempt,
+      exemptSocialSecurity: payrollSetup.exemptSocialSecurity,
+      exemptMedicare: payrollSetup.exemptMedicare,
+      healthInsurance: payrollSetup.healthInsurance,
+      dentalInsurance: payrollSetup.dentalInsurance,
+      visionInsurance: payrollSetup.visionInsurance,
+      retirement401kAmount: payrollSetup.retirement401kAmount,
+      retirement401kPercent: payrollSetup.retirement401kPercent,
+      hsaContribution: payrollSetup.hsaContribution,
+      fsaContribution: payrollSetup.fsaContribution,
+      garnishment: payrollSetup.garnishment,
+      unionDues: payrollSetup.unionDues,
+      otherPostTaxDeductions: payrollSetup.otherPostTaxDeductions
     };
     this.editModalTab.set('personal');
     this.employeeAccounts.set([]);
@@ -5124,17 +5487,25 @@ export class EmployeeRosterComponent implements OnInit {
   }
 
   private buildPayrollPreferencePayload(employee: any): Record<string, unknown> {
-    return {
-      payType: employee?.payType || 'salary',
-      payRate: this.toNumberOrDefault(employee?.payRate, 0),
-      standardHoursPerWeek: this.toNumberOrDefault(employee?.standardHoursPerWeek, 40),
-      overtimeEligible: this.toBooleanOrDefault(employee?.overtimeEligible, true),
-      overtimeRateMultiplier: this.toNumberOrDefault(employee?.overtimeRateMultiplier, 1.5),
-      defaultDeductions: this.toNumberOrDefault(employee?.defaultDeductions, 0),
-      defaultTaxWithholdingPct: this.toNumberOrDefault(employee?.defaultTaxWithholdingPct, 0),
-      payrollNotes: String(employee?.payrollNotes ?? '').trim()
-    };
+    return buildPayrollSetupPreferencePayload(employee);
   }
+
+  getEmployeePayrollSetup() {
+    return buildPayrollSetupFromEmployee(this.selectedEmployee());
+  }
+
+  readonly payrollEmploymentTypeOptions = PAYROLL_EMPLOYMENT_TYPE_OPTIONS;
+  readonly payrollPaymentMethodOptions = PAYROLL_PAYMENT_METHOD_OPTIONS;
+  readonly payrollFilingStatusOptions = PAYROLL_FILING_STATUS_OPTIONS;
+  readonly payrollUsStateOptions = PAYROLL_US_STATE_OPTIONS;
+  readonly formatPayrollYesNo = formatPayrollYesNo;
+  readonly formatPayrollCurrency = formatPayrollCurrency;
+  readonly formatPayrollPercent = formatPayrollPercent;
+  readonly formatPayrollEmploymentType = formatPayrollEmploymentType;
+  readonly formatPayrollPaymentMethod = formatPayrollPaymentMethod;
+  readonly formatPayrollFilingStatus = formatPayrollFilingStatus;
+  readonly formatPayrollState = formatPayrollState;
+  readonly formatPayrollDate = formatPayrollDate;
 
   private toNumberOrDefault(...values: unknown[]): number {
     let fallback = 0;
