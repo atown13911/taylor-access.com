@@ -239,6 +239,7 @@ builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddSingleton<IntegrationEncryptionService>();
 builder.Services.AddScoped<CrmIntegrationCopyService>();
 builder.Services.AddScoped<LocalIntegrationStatusService>();
+builder.Services.AddScoped<IntegrationConfigBootstrapService>();
 // Use GatewayMongoDbService when gateway is configured (production),
 // otherwise fall back to direct MongoDbService (requires MONGODB_URL).
 var gatewayInternalUrl = Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
@@ -739,6 +740,9 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine(
             $"[CRM Integrations] Startup copy success={copyResult.Success} inserted={copyResult.Inserted} updated={copyResult.Updated} error={copyResult.Error}");
     }
+
+    var bootstrapService = scope.ServiceProvider.GetRequiredService<IntegrationConfigBootstrapService>();
+    await bootstrapService.BootstrapFromEnvironmentAsync();
 
     await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""ApplicantRecords"" (
