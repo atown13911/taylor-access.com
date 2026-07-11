@@ -50,9 +50,108 @@ public sealed class MotivFuelLiveClient
         var records = new List<MotivFuelLiveRecord>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var path in paths)
+        void AddRecords(IEnumerable<MotivFuelLiveRecord> rows)
+        {
+            foreach (var record in rows)
+            {
+                if (record == null)
+                    continue;
+                if (record.TransactionDate.HasValue
+                    && (record.TransactionDate.Value.Date < from || record.TransactionDate.Value.Date > to))
+                {
+                    continue;
+                }
+
+                var key = record.TransactionId
+                    ?? $"{record.TransactionDate:O}|{record.DriverName}|{record.MerchantName}|{record.Amount:F2}";
+                if (!seen.Add(key))
+                    continue;
+
+                records.Add(record);
+            }
+        }
+
+        if ((to - from).TotalDays > 45)
+        {
+            var cursor = new DateTime(from.Year, from.Month, 1);
+            while (cursor <= to)
+            {
+                var monthStart = cursor < from ? from : cursor;
+                var monthEnd = new DateTime(cursor.Year, cursor.Month, DateTime.DaysInMonth(cursor.Year, cursor.Month));
+                if (monthEnd > to)
+                    monthEnd = to;
+
+                AddRecords(await FetchRecordsForPeriodAsync(client, creds, candidateRoots, monthStart, monthEnd, ct));
+                cursor = cursor.AddMonths(1);
+            }
+        }
+        else
+        {
+            AddRecords(await FetchRecordsForPeriodAsync(client, creds, candidateRoots, from, to, ct));
+        }
+
+        if (records.Count == 0)
+            AddRecords(await FetchRecordsUnfilteredAsync(client, creds, candidateRoots, from, to, ct));
+
+        if (records.Count > 0)
+            await EnrichDriverVehicleLookupsAsync(client, creds, records, ct);
+
+        return new MotivFuelLiveResult
+        {
+            Connected = true,
+            Records = records
+        };
+    }
+
+    private async Task<List<MotivFuelLiveRecord>> FetchRecordsForPeriodAsync(
+        HttpClient client,
+        MotivCredentials creds,
+        string?[] candidateRoots,
+        DateTime from,
+        DateTime to,
+        CancellationToken ct)
+    {
+        var records = new List<MotivFuelLiveRecord>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in BuildDateFilteredPaths(candidateRoots, from, to))
         {
             var pageRows = await FetchAllPagesAsync(client, creds, path, ct);
+            if (pageRows.Count == 0)
+                continue;
+
+            foreach (var element in pageRows)
+            {
+                var record = ParseRecord(element);
+                if (record == null)
+                    continue;
+
+                var key = record.TransactionId
+                    ?? $"{record.TransactionDate:O}|{record.DriverName}|{record.MerchantName}|{record.Amount:F2}";
+                if (!seen.Add(key))
+                    continue;
+
+                records.Add(record);
+            }
+        }
+
+        return records;
+    }
+
+    private async Task<List<MotivFuelLiveRecord>> FetchRecordsUnfilteredAsync(
+        HttpClient client,
+        MotivCredentials creds,
+        string?[] candidateRoots,
+        DateTime from,
+        DateTime to,
+        CancellationToken ct)
+    {
+        var records = new List<MotivFuelLiveRecord>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in candidateRoots.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var pageRows = await FetchAllPagesAsync(client, creds, root, ct, maxPages: 200);
             if (pageRows.Count == 0)
                 continue;
 
@@ -74,19 +173,9 @@ public sealed class MotivFuelLiveClient
 
                 records.Add(record);
             }
-
-            if (records.Count > 0)
-                break;
         }
 
-        if (records.Count > 0)
-            await EnrichDriverVehicleLookupsAsync(client, creds, records, ct);
-
-        return new MotivFuelLiveResult
-        {
-            Connected = true,
-            Records = records
-        };
+        return records;
     }
 
     private async Task EnrichDriverVehicleLookupsAsync(
@@ -171,10 +260,11 @@ public sealed class MotivFuelLiveClient
         HttpClient client,
         MotivCredentials creds,
         string path,
-        CancellationToken ct)
+        CancellationToken ct,
+        int maxPages = 100)
     {
         var allRows = new List<JsonElement>();
-        for (var pageNo = 1; pageNo <= 100; pageNo++)
+        for (var pageNo = 1; pageNo <= maxPages; pageNo++)
         {
             var pagedPath = BuildPagedPath(path, pageNo, 100);
             var requestUri = BuildUri(creds.BaseUrl, pagedPath);
