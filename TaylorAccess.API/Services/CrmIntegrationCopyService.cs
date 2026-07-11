@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using TaylorAccess.API.Data;
@@ -22,28 +24,37 @@ public class CrmIntegrationCopyService
 
     private readonly TaylorAccessDbContext _context;
     private readonly IConfiguration _configuration;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<CrmIntegrationCopyService> _logger;
 
     public CrmIntegrationCopyService(
         TaylorAccessDbContext context,
         IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
         ILogger<CrmIntegrationCopyService> logger)
     {
         _context = context;
         _configuration = configuration;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
     public async Task<CrmIntegrationCopyResult> CopyFromCrmAsync(CancellationToken cancellationToken = default)
     {
+        var httpResult = await TryCopyFromCrmHttpAsync(cancellationToken);
+        if (httpResult.Success && httpResult.Inserted + httpResult.Updated > 0)
+            return httpResult;
+
         var conn = CrmDbConnectionResolver.Resolve(_configuration);
         if (string.IsNullOrWhiteSpace(conn))
         {
-            return new CrmIntegrationCopyResult
-            {
-                Success = false,
-                Error = "CRM database connection is not configured (CRM_DB_CONNECTION or PortalDbConnection)."
-            };
+            return httpResult.Success == false && !string.IsNullOrWhiteSpace(httpResult.Error)
+                ? httpResult
+                : new CrmIntegrationCopyResult
+                {
+                    Success = false,
+                    Error = httpResult.Error ?? "CRM export and database copy are both unavailable."
+                };
         }
 
         List<CrmIntegrationRow> rows;
@@ -70,10 +81,96 @@ public class CrmIntegrationCopyService
                 Skipped = 0,
                 Types = CopyTypes,
                 Source = "crm-database",
-                Error = "No gmail/gmail-domain/zoom integration rows found in CRM database."
+                Error = httpResult.Error ?? "No gmail/gmail-domain/zoom integration rows found in CRM database."
             };
         }
 
+        return await UpsertRowsAsync(rows, "crm-database", cancellationToken);
+    }
+
+    private async Task<CrmIntegrationCopyResult> TryCopyFromCrmHttpAsync(CancellationToken cancellationToken)
+    {
+        var internalKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+        if (string.IsNullOrWhiteSpace(internalKey))
+        {
+            return new CrmIntegrationCopyResult
+            {
+                Success = false,
+                Error = "INTERNAL_API_KEY is not configured for CRM integration export.",
+                Source = "crm-http"
+            };
+        }
+
+        var baseUrl = Environment.GetEnvironmentVariable("TAYLOR_CRM_INTERNAL_URL")
+            ?? "http://taylor-crm.railway.internal:8080";
+        var url = $"{baseUrl.TrimEnd('/')}/api/v1/internal/integrations/export";
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", internalKey.Trim());
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", internalKey.Trim());
+
+            using var response = await client.GetAsync(url, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return new CrmIntegrationCopyResult
+                {
+                    Success = false,
+                    Error = $"CRM integration export returned HTTP {(int)response.StatusCode}: {body[..Math.Min(body.Length, 180)]}",
+                    Source = "crm-http"
+                };
+            }
+
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            {
+                return new CrmIntegrationCopyResult
+                {
+                    Success = false,
+                    Error = "CRM integration export returned no data array.",
+                    Source = "crm-http"
+                };
+            }
+
+            var rows = JsonSerializer.Deserialize<List<CrmIntegrationRow>>(data.GetRawText(), JsonOptions) ?? [];
+            if (rows.Count == 0)
+            {
+                return new CrmIntegrationCopyResult
+                {
+                    Success = true,
+                    Source = "crm-http",
+                    Error = "CRM integration export returned zero rows."
+                };
+            }
+
+            return await UpsertRowsAsync(rows, "crm-http", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CRM integration HTTP export failed for {Url}", url);
+            return new CrmIntegrationCopyResult
+            {
+                Success = false,
+                Error = $"CRM integration export failed: {ex.Message}",
+                Source = "crm-http"
+            };
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private async Task<CrmIntegrationCopyResult> UpsertRowsAsync(
+        List<CrmIntegrationRow> rows,
+        string source,
+        CancellationToken cancellationToken)
+    {
         var inserted = 0;
         var updated = 0;
         var now = DateTime.UtcNow;
@@ -144,7 +241,7 @@ public class CrmIntegrationCopyService
             Inserted = inserted,
             Updated = updated,
             Types = rows.Select(r => r.IntegrationType).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            Source = "crm-database"
+            Source = source
         };
     }
 
