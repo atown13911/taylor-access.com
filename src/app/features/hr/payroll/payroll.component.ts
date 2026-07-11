@@ -76,67 +76,86 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-      <div class="payroll-org-tabs">
-        @for (item of organizationTabs(); track item) {
-          <button
-            class="payroll-org-tab"
-            [class.active]="selectedOrganization() === item"
-            (click)="setOrganization(item)"
-          >
-            {{ item }}
-          </button>
-        }
-      </div>
+      <!-- Filter + Payroll Tables -->
+      <div class="payroll-table-stack">
+        <table class="payroll-filter-table" aria-label="Payroll filters">
+          <tbody>
+            <tr>
+              <th scope="row">Organization</th>
+              <td>
+                <div class="payroll-org-tabs">
+                  @for (item of organizationTabs(); track item) {
+                    <button
+                      type="button"
+                      class="payroll-org-tab"
+                      [class.active]="selectedOrganization() === item"
+                      (click)="setOrganization(item)"
+                    >
+                      {{ item }}
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Position</th>
+              <td>
+                <div class="payroll-position-tabs">
+                  @for (item of positionTabs(); track item) {
+                    <button
+                      type="button"
+                      class="payroll-position-tab"
+                      [class.active]="selectedPositionTab() === item"
+                      (click)="setPositionTab(item)"
+                    >
+                      {{ item }}
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Filter</th>
+              <td>
+                <div class="payroll-search">
+                  <select
+                    class="payroll-search-field"
+                    [ngModel]="selectedStructureFilterField()"
+                    (ngModelChange)="setStructureFilterField($event)"
+                    aria-label="Payroll table filter field"
+                  >
+                    @for (item of structureFilterFieldOptions; track item.value) {
+                      <option [value]="item.value">{{ item.label }}</option>
+                    }
+                  </select>
+                  <select
+                    class="payroll-search-field"
+                    [ngModel]="selectedStructureFilterValue()"
+                    (ngModelChange)="selectedStructureFilterValue.set($event)"
+                    [disabled]="selectedStructureFilterField() === 'all'"
+                    aria-label="Payroll table filter value"
+                  >
+                    @for (item of structureFilterValueOptions(); track item) {
+                      <option [value]="item">{{ item }}</option>
+                    }
+                  </select>
+                  <div class="payroll-search-input-wrap">
+                    <i class="bx bx-search"></i>
+                    <input
+                      type="text"
+                      placeholder="Search filtered table..."
+                      [ngModel]="searchTerm()"
+                      (ngModelChange)="searchTerm.set($event)"
+                    >
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-      <div class="payroll-position-tabs">
-        @for (item of positionTabs(); track item) {
-          <button
-            class="payroll-position-tab"
-            [class.active]="selectedPositionTab() === item"
-            (click)="setPositionTab(item)"
-          >
-            {{ item }}
-          </button>
-        }
-      </div>
-
-      <!-- Search -->
-      <div class="payroll-search">
-        <select
-          class="payroll-search-field"
-          [ngModel]="selectedStructureFilterField()"
-          (ngModelChange)="setStructureFilterField($event)"
-          aria-label="Payroll table filter field"
-        >
-          @for (item of structureFilterFieldOptions; track item.value) {
-            <option [value]="item.value">{{ item.label }}</option>
-          }
-        </select>
-        <select
-          class="payroll-search-field"
-          [ngModel]="selectedStructureFilterValue()"
-          (ngModelChange)="selectedStructureFilterValue.set($event)"
-          [disabled]="selectedStructureFilterField() === 'all'"
-          aria-label="Payroll table filter value"
-        >
-          @for (item of structureFilterValueOptions(); track item) {
-            <option [value]="item">{{ item }}</option>
-          }
-        </select>
-        <div class="payroll-search-input-wrap">
-          <i class="bx bx-search"></i>
-          <input
-            type="text"
-            placeholder="Search filtered table..."
-            [ngModel]="searchTerm()"
-            (ngModelChange)="searchTerm.set($event)"
-          >
-        </div>
-      </div>
-
-      <!-- Payroll Table -->
-      <div class="payroll-table-wrap">
-        <table class="payroll-table">
+        <div class="payroll-table-wrap">
+          <table class="payroll-table">
           <thead>
             <tr>
               <th>Employee</th>
@@ -222,6 +241,7 @@ import { environment } from '../../../../environments/environment';
             }
           </tbody>
         </table>
+      </div>
       </div>
 
       @if (actionMessage()) {
@@ -420,7 +440,7 @@ import { environment } from '../../../../environments/environment';
     .payroll-stat-val { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
     .payroll-stat-lbl { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
     .payroll-search {
-      margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem;
+      display: flex; align-items: center; gap: 0.6rem;
     }
     .payroll-search-field {
       min-width: 150px; padding: 0.6rem 0.75rem; background: rgba(255,255,255,0.03);
@@ -438,7 +458,7 @@ import { environment } from '../../../../environments/environment';
       }
     }
     .payroll-org-tabs {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.55rem;
+      display: flex; flex-wrap: wrap; gap: 8px;
     }
     .payroll-org-tab {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
@@ -448,7 +468,7 @@ import { environment } from '../../../../environments/environment';
       &.active { border-color: var(--cyan); color: var(--text-primary); background: rgba(0,212,255,0.12); }
     }
     .payroll-position-tabs {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 0.9rem;
+      display: flex; flex-wrap: wrap; gap: 8px;
     }
     .payroll-position-tab {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(148, 163, 184, 0.2);
@@ -457,8 +477,42 @@ import { environment } from '../../../../environments/environment';
       &:hover { border-color: rgba(0,212,255,0.26); color: var(--text-primary); }
       &.active { border-color: rgba(0,212,255,0.55); color: #dff8ff; background: rgba(0,212,255,0.14); }
     }
+    .payroll-table-stack {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .payroll-filter-table {
+      width: 100%;
+      border-collapse: collapse;
+      th, td {
+        padding: 12px 16px;
+        text-align: left;
+        vertical-align: middle;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      th {
+        width: 132px;
+        color: var(--cyan);
+        font-weight: 600;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(0,212,255,0.03);
+        white-space: nowrap;
+      }
+      td { background: rgba(255,255,255,0.01); }
+      tbody tr:last-child th,
+      tbody tr:last-child td {
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+      }
+    }
     .payroll-table-wrap {
-      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      overflow: hidden;
     }
     .payroll-table {
       width: 100%; border-collapse: collapse;
