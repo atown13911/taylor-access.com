@@ -520,6 +520,9 @@ import {
             <button class="tab-btn" [class.active]="activeDetailsTab() === 'details'" (click)="activeDetailsTab.set('details')">
               <i class="bx bx-info-circle"></i> Details
             </button>
+            <button class="tab-btn" [class.active]="activeDetailsTab() === 'payroll'" (click)="activeDetailsTab.set('payroll')">
+              <i class="bx bx-dollar-circle"></i> Payroll
+            </button>
             <button class="tab-btn" [class.active]="activeDetailsTab() === 'documents'" (click)="activeDetailsTab.set('documents'); loadEmployeeDocuments(); loadPositionRequirements()">
               <i class="bx bx-file"></i> Documents
             </button>
@@ -639,6 +642,38 @@ import {
                 </div>
               </div>
 
+              <!-- Payroll summary (read-only) -->
+              <div class="detail-section full-width payroll-summary-section">
+                <h3><i class="bx bx-calculator"></i> Payroll Summary</h3>
+                <p class="payroll-summary-hint">Full tax and deduction setup is on the <button type="button" class="link-btn" (click)="activeDetailsTab.set('payroll')">Payroll tab</button>. Edit via <strong>Edit Employee → Financial</strong>.</p>
+                <div class="payroll-details-grid">
+                  <div class="detail-row">
+                    <span class="detail-label">Pay type:</span>
+                    <span class="detail-value">{{ employeePayrollSetup().payType || '—' }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Pay rate:</span>
+                    <span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().payRate) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Employment type:</span>
+                    <span class="detail-value">{{ formatPayrollEmploymentType(employeePayrollSetup().employmentType) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Payment method:</span>
+                    <span class="detail-value">{{ formatPayrollPaymentMethod(employeePayrollSetup().paymentMethod) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Federal filing:</span>
+                    <span class="detail-value">{{ formatPayrollFilingStatus(employeePayrollSetup().federalFilingStatus) }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">W-4 on file:</span>
+                    <span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().w4OnFile) }}</span>
+                  </div>
+                </div>
+              </div>
+
               <!-- Role & Access -->
               <div class="detail-section">
                 <h3><i class="bx bx-shield"></i> Role & Access</h3>
@@ -726,71 +761,6 @@ import {
                 </div>
               </div>
 
-              <!-- Payroll Setup (read-only) -->
-              <div class="detail-section full-width">
-                <h3><i class="bx bx-calculator"></i> Payroll Setup</h3>
-                <div class="payroll-details-grid">
-                  <div class="detail-row">
-                    <span class="detail-label">Employment type:</span>
-                    <span class="detail-value">{{ formatPayrollEmploymentType(getEmployeePayrollSetup().employmentType) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Payment method:</span>
-                    <span class="detail-value">{{ formatPayrollPaymentMethod(getEmployeePayrollSetup().paymentMethod) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">W-4 on file:</span>
-                    <span class="detail-value">{{ formatPayrollYesNo(getEmployeePayrollSetup().w4OnFile) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">W-4 signed:</span>
-                    <span class="detail-value">{{ formatPayrollDate(getEmployeePayrollSetup().w4SignedDate) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Federal filing status:</span>
-                    <span class="detail-value">{{ formatPayrollFilingStatus(getEmployeePayrollSetup().federalFilingStatus) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Federal exempt:</span>
-                    <span class="detail-value">{{ formatPayrollYesNo(getEmployeePayrollSetup().federalExempt) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Work state:</span>
-                    <span class="detail-value">{{ formatPayrollState(getEmployeePayrollSetup().workState) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Residence state:</span>
-                    <span class="detail-value">{{ formatPayrollState(getEmployeePayrollSetup().residenceState) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">State withholding %:</span>
-                    <span class="detail-value">{{ formatPayrollPercent(getEmployeePayrollSetup().stateWithholdingPercent) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Health insurance / period:</span>
-                    <span class="detail-value">{{ formatPayrollCurrency(getEmployeePayrollSetup().healthInsurance) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">401(k) / period:</span>
-                    <span class="detail-value">{{ formatPayrollCurrency(getEmployeePayrollSetup().retirement401kAmount) }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Pay type:</span>
-                    <span class="detail-value">{{ getEmployeePayrollSetup().payType || '—' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">Pay rate:</span>
-                    <span class="detail-value">{{ formatPayrollCurrency(getEmployeePayrollSetup().payRate) }}</span>
-                  </div>
-                  @if (getEmployeePayrollSetup().payrollNotes) {
-                    <div class="detail-row full-width">
-                      <span class="detail-label">Payroll notes:</span>
-                      <span class="detail-value">{{ getEmployeePayrollSetup().payrollNotes }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-
               <!-- Account Information -->
               <div class="detail-section full-width">
                 <h3><i class="bx bx-time"></i> Account Information</h3>
@@ -808,6 +778,92 @@ import {
                 </div>
               </div>
             </div>
+            } @else if (activeDetailsTab() === 'payroll') {
+              <div class="payroll-details-panel">
+                <div class="payroll-details-banner">
+                  <i class="bx bx-info-circle"></i>
+                  Payroll setup is read-only here. Edit via <strong>Edit Employee → Financial</strong>.
+                </div>
+
+                <div class="detail-section full-width">
+                  <h3><i class="bx bx-calculator"></i> Pay Information</h3>
+                  <div class="payroll-details-grid">
+                    <div class="detail-row"><span class="detail-label">Pay type:</span><span class="detail-value">{{ employeePayrollSetup().payType || '—' }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Pay rate:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().payRate) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Standard hours / week:</span><span class="detail-value">{{ employeePayrollSetup().standardHoursPerWeek }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Overtime eligible:</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().overtimeEligible) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Overtime multiplier:</span><span class="detail-value">{{ employeePayrollSetup().overtimeRateMultiplier }}x</span></div>
+                    <div class="detail-row"><span class="detail-label">Default tax withholding %:</span><span class="detail-value">{{ formatPayrollPercent(employeePayrollSetup().defaultTaxWithholdingPct) }}</span></div>
+                  </div>
+                </div>
+
+                <div class="detail-section full-width">
+                  <h3><i class="bx bx-receipt"></i> Payroll Setup</h3>
+                  <div class="payroll-details-grid">
+                    <div class="detail-row"><span class="detail-label">Employment type:</span><span class="detail-value">{{ formatPayrollEmploymentType(employeePayrollSetup().employmentType) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Payment method:</span><span class="detail-value">{{ formatPayrollPaymentMethod(employeePayrollSetup().paymentMethod) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">W-4 on file:</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().w4OnFile) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">W-4 signed:</span><span class="detail-value">{{ formatPayrollDate(employeePayrollSetup().w4SignedDate) }}</span></div>
+                  </div>
+                </div>
+
+                <div class="detail-section full-width">
+                  <h3><i class="bx bx-flag"></i> Federal Withholding</h3>
+                  <div class="payroll-details-grid">
+                    <div class="detail-row"><span class="detail-label">Filing status:</span><span class="detail-value">{{ formatPayrollFilingStatus(employeePayrollSetup().federalFilingStatus) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Federal exempt:</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().federalExempt) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Extra federal / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().extraFederalWithholding) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Dependents credit (annual):</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().w4DependentsCredit) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Other income (annual):</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().w4OtherIncome) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Deductions (annual):</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().w4Deductions) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Multiple jobs (W-4 2c):</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().w4TwoJobs) }}</span></div>
+                  </div>
+                </div>
+
+                <div class="detail-section full-width">
+                  <h3><i class="bx bx-map"></i> State Withholding</h3>
+                  <div class="payroll-details-grid">
+                    <div class="detail-row"><span class="detail-label">Work state:</span><span class="detail-value">{{ formatPayrollState(employeePayrollSetup().workState) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Residence state:</span><span class="detail-value">{{ formatPayrollState(employeePayrollSetup().residenceState) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">State filing status:</span><span class="detail-value">{{ formatPayrollFilingStatus(employeePayrollSetup().stateFilingStatus) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">State withholding %:</span><span class="detail-value">{{ formatPayrollPercent(employeePayrollSetup().stateWithholdingPercent) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Extra state / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().extraStateWithholding) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">State exempt:</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().stateExempt) }}</span></div>
+                  </div>
+                </div>
+
+                <div class="detail-section full-width">
+                  <h3><i class="bx bx-heart"></i> Pre-Tax Deductions</h3>
+                  <div class="payroll-details-grid">
+                    <div class="detail-row"><span class="detail-label">Health insurance:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().healthInsurance) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Dental insurance:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().dentalInsurance) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Vision insurance:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().visionInsurance) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">401(k) amount / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().retirement401kAmount) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">401(k) % of gross:</span><span class="detail-value">{{ formatPayrollPercent(employeePayrollSetup().retirement401kPercent) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">HSA / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().hsaContribution) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">FSA / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().fsaContribution) }}</span></div>
+                  </div>
+                </div>
+
+                <div class="detail-section full-width">
+                  <h3><i class="bx bx-minus-circle"></i> Taxes & Post-Tax Deductions</h3>
+                  <div class="payroll-details-grid">
+                    <div class="detail-row"><span class="detail-label">Exempt Social Security:</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().exemptSocialSecurity) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Exempt Medicare:</span><span class="detail-value">{{ formatPayrollYesNo(employeePayrollSetup().exemptMedicare) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Garnishment / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().garnishment) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Union dues / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().unionDues) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Other post-tax / period:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().otherPostTaxDeductions) }}</span></div>
+                    <div class="detail-row"><span class="detail-label">Legacy period deductions:</span><span class="detail-value">{{ formatPayrollCurrency(employeePayrollSetup().defaultDeductions) }}</span></div>
+                  </div>
+                </div>
+
+                @if (employeePayrollSetup().payrollNotes) {
+                  <div class="detail-section full-width">
+                    <h3><i class="bx bx-note"></i> Payroll Notes</h3>
+                    <p class="payroll-notes-text">{{ employeePayrollSetup().payrollNotes }}</p>
+                  </div>
+                }
+              </div>
             } @else if (activeDetailsTab() === 'documents') {
               <!-- Documents Tab -->
               <div class="documents-section">
@@ -3608,6 +3664,54 @@ import {
       grid-column: 1 / -1;
     }
 
+    .payroll-summary-section {
+      border-color: rgba(34, 211, 238, 0.28);
+      background: rgba(34, 211, 238, 0.04);
+    }
+
+    .payroll-summary-hint {
+      margin: 0 0 14px;
+      color: #9ca3af;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      color: #00f2fe;
+      cursor: pointer;
+      font: inherit;
+      text-decoration: underline;
+    }
+
+    .payroll-details-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .payroll-details-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 10px;
+      border: 1px solid rgba(34, 211, 238, 0.22);
+      background: rgba(34, 211, 238, 0.06);
+      color: #9ca3af;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .payroll-notes-text {
+      margin: 0;
+      color: #e0e0e0;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
     .form-group.full-width {
       grid-column: 1 / -1;
     }
@@ -4671,7 +4775,7 @@ export class EmployeeRosterComponent implements OnInit {
   showBankForm = signal(false);
   editingBankAccount = signal<any>(null);
   bankForm: any = { bankName: '', accountNumber: '', routingNumber: '', accountType: 'checking', iban: '', swiftBic: '' };
-  activeDetailsTab = signal<'details' | 'documents' | 'onboarding' | 'offboarding' | 'evaluations'>('details');
+  activeDetailsTab = signal<'details' | 'payroll' | 'documents' | 'onboarding' | 'offboarding' | 'evaluations'>('details');
   employeeDocuments = signal<any[]>([]);
   editDocuments = signal<any[]>([]);
   editingExpiryType = '';
@@ -5490,8 +5594,10 @@ export class EmployeeRosterComponent implements OnInit {
     return buildPayrollSetupPreferencePayload(employee);
   }
 
+  employeePayrollSetup = computed(() => buildPayrollSetupFromEmployee(this.selectedEmployee()));
+
   getEmployeePayrollSetup() {
-    return buildPayrollSetupFromEmployee(this.selectedEmployee());
+    return this.employeePayrollSetup();
   }
 
   readonly payrollEmploymentTypeOptions = PAYROLL_EMPLOYMENT_TYPE_OPTIONS;
