@@ -59,49 +59,58 @@ import { environment } from '../../../../environments/environment';
 
           <article class="payroll-info-card payroll-info-card--compact payroll-info-card--payroll">
             <header class="payroll-info-compact-head">
-              <span class="payroll-info-eyebrow">Payroll</span>
+              <span class="payroll-info-eyebrow">Gross Payroll</span>
               <strong class="payroll-info-compact-value payroll-mono">\${{ totalPayroll() | number:'1.0-0' }}</strong>
             </header>
-            <p class="payroll-info-compact-meta">Gross · {{ totalHours() | number:'1.0-0' }} hrs · avg \${{ averageGrossPay() | number:'1.0-0' }}</p>
+            <p class="payroll-info-compact-meta">
+              Net \${{ totalNetPay() | number:'1.0-0' }} · Deductions \${{ totalDeductions() | number:'1.0-0' }} · Invoiced \${{ totalInvoiced() | number:'1.0-0' }}
+            </p>
             <div class="payroll-info-compact-stats">
               <div class="payroll-info-compact-stat">
-                <span>Net</span>
-                <strong class="payroll-mono">\${{ totalNetPay() | number:'1.0-0' }}</strong>
+                <span>Avg / employee</span>
+                <strong class="payroll-mono">\${{ averageGrossPerPaidEmployee() | number:'1.0-0' }}</strong>
               </div>
               <div class="payroll-info-compact-stat">
-                <span>Deductions</span>
-                <strong class="payroll-mono">\${{ totalDeductions() | number:'1.0-0' }}</strong>
+                <span>Effective $/hr</span>
+                <strong class="payroll-mono">\${{ averageHourlyGross() | number:'1.2-2' }}</strong>
               </div>
             </div>
             <div class="payroll-info-compact-chart payroll-info-compact-chart--payroll">
-              @if (payTypeChartData().length > 0) {
-                <ngx-charts-pie-chart
-                  [results]="payTypeChartData()"
+              @if (payTypeGrossChartData().length > 0) {
+                <ngx-charts-bar-horizontal
+                  [results]="payTypeGrossChartData()"
                   [view]="kpiPayrollChartView"
                   [scheme]="payrollChartScheme"
-                  [labels]="false"
-                  [legend]="false"
-                  [doughnut]="true"
-                  [arcWidth]="0.4"
-                  [animations]="true">
-                </ngx-charts-pie-chart>
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showXAxisLabel]="false"
+                  [showYAxisLabel]="false"
+                  [showDataLabel]="true"
+                  [trimYAxisTicks]="true"
+                  [maxYAxisTickLength]="12"
+                  [xAxisTickFormatting]="formatChartCurrency"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
               } @else {
-                <div class="payroll-info-empty">No pay type data</div>
+                <div class="payroll-info-empty">No gross payroll data</div>
               }
-              <p class="payroll-info-chart-caption">{{ payrollCapturePct() | number:'1.0-0' }}% payroll captured</p>
+              <p class="payroll-info-chart-caption">{{ payrollCapturePct() | number:'1.0-0' }}% of members with pay captured</p>
             </div>
           </article>
 
           <article class="payroll-info-card payroll-info-card--compact payroll-info-card--processed">
             <header class="payroll-info-compact-head">
-              <span class="payroll-info-eyebrow">Processed</span>
-              <strong class="payroll-info-compact-value">{{ processedCount() + paidCount() }}</strong>
+              <span class="payroll-info-eyebrow">Cleared Payroll</span>
+              <strong class="payroll-info-compact-value payroll-mono">\${{ completedPayrollAmount() | number:'1.0-0' }}</strong>
             </header>
-            <p class="payroll-info-compact-meta">{{ processedPct() | number:'1.0-0' }}% complete · \${{ completedPayrollAmount() | number:'1.0-0' }} gross</p>
+            <p class="payroll-info-compact-meta">
+              {{ payrollClearedPct() | number:'1.0-0' }}% of gross · Net \${{ completedNetPay() | number:'1.0-0' }} · Paid out \${{ paidPayrollAmount() | number:'1.0-0' }}
+            </p>
             <div class="payroll-info-compact-chart payroll-info-compact-chart--split">
-              @if (processedStatusChartData().length > 0) {
+              @if (processedFinancialChartData().length > 0) {
                 <ngx-charts-pie-chart
-                  [results]="processedStatusChartData()"
+                  [results]="processedFinancialChartData()"
                   [view]="kpiSplitPieView"
                   [scheme]="processedChartScheme"
                   [labels]="false"
@@ -111,26 +120,28 @@ import { environment } from '../../../../environments/environment';
                   [animations]="true">
                 </ngx-charts-pie-chart>
               } @else {
-                <div class="payroll-info-empty payroll-info-empty--inline">No status data</div>
+                <div class="payroll-info-empty payroll-info-empty--inline">No payroll data</div>
               }
               <div class="payroll-info-chart-legend">
-                <div class="payroll-info-chart-legend-item"><span class="dot tone-green"></span><span>Processed</span><strong>{{ processedCount() }}</strong></div>
-                <div class="payroll-info-chart-legend-item"><span class="dot tone-cyan"></span><span>Paid</span><strong>{{ paidCount() }}</strong></div>
-                <div class="payroll-info-chart-legend-item"><span class="dot tone-amber"></span><span>Pending</span><strong>{{ pendingCount() }}</strong></div>
+                <div class="payroll-info-chart-legend-item"><span class="dot tone-green"></span><span>Processed</span><strong class="payroll-mono">{{ formatCompactCurrency(processedPayrollAmount()) }}</strong></div>
+                <div class="payroll-info-chart-legend-item"><span class="dot tone-cyan"></span><span>Paid</span><strong class="payroll-mono">{{ formatCompactCurrency(paidPayrollAmount()) }}</strong></div>
+                <div class="payroll-info-chart-legend-item"><span class="dot tone-amber"></span><span>Outstanding</span><strong class="payroll-mono">{{ formatCompactCurrency(pendingPayrollAmount()) }}</strong></div>
               </div>
             </div>
           </article>
 
           <article class="payroll-info-card payroll-info-card--compact payroll-info-card--pending">
             <header class="payroll-info-compact-head">
-              <span class="payroll-info-eyebrow">Pending</span>
-              <strong class="payroll-info-compact-value">{{ pendingCount() }}</strong>
+              <span class="payroll-info-eyebrow">Outstanding Payroll</span>
+              <strong class="payroll-info-compact-value payroll-mono">\${{ pendingPayrollAmount() | number:'1.0-0' }}</strong>
             </header>
-            <p class="payroll-info-compact-meta">\${{ pendingPayrollAmount() | number:'1.0-0' }} gross · {{ pendingHours() | number:'1.0-0' }} hrs · {{ pendingPct() | number:'1.0-0' }}%</p>
+            <p class="payroll-info-compact-meta">
+              Net \${{ pendingNetPay() | number:'1.0-0' }} · Deductions \${{ pendingDeductions() | number:'1.0-0' }} · {{ pendingHours() | number:'1.0-0' }} hrs
+            </p>
             <div class="payroll-info-compact-chart">
-              @if (pendingRoleChartData().length > 0) {
+              @if (pendingRoleFinancialChartData().length > 0) {
                 <ngx-charts-bar-horizontal
-                  [results]="pendingRoleChartData()"
+                  [results]="pendingRoleFinancialChartData()"
                   [view]="kpiBarChartView"
                   [scheme]="pendingChartScheme"
                   [xAxis]="true"
@@ -140,11 +151,12 @@ import { environment } from '../../../../environments/environment';
                   [showDataLabel]="true"
                   [trimYAxisTicks]="true"
                   [maxYAxisTickLength]="16"
+                  [xAxisTickFormatting]="formatChartCurrency"
                   [animations]="true"
                   [gradient]="true">
                 </ngx-charts-bar-horizontal>
               } @else {
-                <div class="payroll-info-empty">No pending roles</div>
+                <div class="payroll-info-empty">No outstanding payroll by role</div>
               }
             </div>
           </article>
@@ -208,6 +220,10 @@ import { environment } from '../../../../environments/environment';
         </div>
 
       <div class="payroll-layout">
+        <section class="payroll-members-section">
+          <header class="payroll-section-head">
+            <h2>Corresponding Members</h2>
+          </header>
         <div class="payroll-table-stack payroll-table-stack--employees">
         <div class="payroll-employee-toolbar">
           <div class="payroll-search">
@@ -257,6 +273,7 @@ import { environment } from '../../../../environments/environment';
               <th>Deductions</th>
               <th>Net Pay</th>
               <th>Status</th>
+              <th class="payroll-actions-col" aria-label="Actions"></th>
             </tr>
           </thead>
           <tbody>
@@ -281,10 +298,23 @@ import { environment } from '../../../../environments/environment';
                 <td>
                   <span class="payroll-status" [class]="emp.payrollStatus || 'pending'">{{ emp.payrollStatus || 'pending' }}</span>
                 </td>
+                <td class="payroll-actions-col">
+                  <div class="payroll-row-actions">
+                    <button
+                      type="button"
+                      class="payroll-icon-btn"
+                      (click)="openPayrollDetails(emp)"
+                      [attr.aria-label]="'Edit payroll for ' + (emp.name || 'employee')"
+                      title="Edit payroll"
+                    >
+                      <i class="bx bx-edit"></i>
+                    </button>
+                  </div>
+                </td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="10" class="payroll-empty">
+                <td colspan="11" class="payroll-empty">
                   No payroll data for this period
                 </td>
               </tr>
@@ -332,6 +362,7 @@ import { environment } from '../../../../environments/environment';
           </div>
         }
         </div>
+        </section>
       </div>
 
       @if (actionMessage()) {
@@ -1152,6 +1183,21 @@ import { environment } from '../../../../environments/environment';
       flex-direction: column;
       gap: 1.35rem;
     }
+    .payroll-members-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .payroll-section-head {
+      margin: 0;
+      h2 {
+        margin: 0;
+        font-size: 1.02rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        letter-spacing: 0.01em;
+      }
+    }
     .payroll-table-stack--employees {
       display: flex;
       flex-direction: column;
@@ -1260,6 +1306,11 @@ import { environment } from '../../../../environments/environment';
     }
     .payroll-empty { text-align: center; padding: 40px; color: var(--text-secondary); }
     .payroll-row-actions { display: inline-flex; gap: 0.4rem; align-items: center; }
+    .payroll-actions-col {
+      width: 52px;
+      text-align: center;
+      white-space: nowrap;
+    }
     .payroll-icon-btn {
       width: 30px; height: 30px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.14);
       background: rgba(255,255,255,0.04); color: var(--text-primary); display: inline-flex;
@@ -1351,8 +1402,13 @@ export class PayrollComponent implements OnInit {
   private apiUrl = environment.apiUrl;
 
   readonly kpiBarChartView: [number, number] = [280, 132];
-  readonly kpiPayrollChartView: [number, number] = [280, 96];
+  readonly kpiPayrollChartView: [number, number] = [280, 108];
   readonly kpiSplitPieView: [number, number] = [96, 96];
+
+  formatChartCurrency = (value: number | { value?: number | string }): string => {
+    const raw = typeof value === 'number' ? value : Number(value?.value ?? 0);
+    return this.formatCompactCurrency(raw);
+  };
 
   workforceChartScheme: Color = {
     name: 'payroll-workforce',
@@ -1594,27 +1650,46 @@ export class PayrollComponent implements OnInit {
       value: row.count
     }))
   );
-  payTypeChartData = computed(() =>
-    this.payTypeBreakdownRows().map((row) => ({ name: row.label, value: row.count }))
-  );
-  processedStatusChartData = computed(() => {
+  payTypeGrossChartData = computed(() => {
+    const totals = new Map<string, number>();
+    for (const emp of this.tabScopedEmployees()) {
+      const gross = Number(emp.grossPay) || 0;
+      if (gross <= 0) continue;
+      const label = (emp.payType || 'salary').toString();
+      const normalized = label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+      totals.set(normalized, (totals.get(normalized) || 0) + gross);
+    }
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([name, value]) => ({ name, value }));
+  });
+  processedFinancialChartData = computed(() => {
     const rows = [
-      { name: 'Processed', value: this.processedCount() },
-      { name: 'Paid', value: this.paidCount() },
-      { name: 'Pending', value: this.pendingCount() }
+      { name: 'Processed', value: this.processedPayrollAmount() },
+      { name: 'Paid', value: this.paidPayrollAmount() },
+      { name: 'Outstanding', value: this.pendingPayrollAmount() }
     ];
     const filtered = rows.filter((row) => row.value > 0);
-    return filtered.length > 0 ? filtered : [{ name: 'No data', value: 1 }];
+    return filtered.length > 0 ? filtered : [{ name: 'No payroll', value: 1 }];
   });
-  pendingRoleChartData = computed(() =>
-    this.topPendingPositionRows().map((row) => ({
+  pendingRoleFinancialChartData = computed(() =>
+    this.topPendingFinancialRows().map((row) => ({
       name: row.position.length > 18 ? `${row.position.slice(0, 16)}…` : row.position,
-      value: row.pending
+      value: row.gross
     }))
   );
   averageGrossPay = computed(() => {
     const count = this.tabScopedEmployees().length;
     return count > 0 ? this.totalPayroll() / count : 0;
+  });
+  averageGrossPerPaidEmployee = computed(() => {
+    const count = this.employeesWithPayCount();
+    return count > 0 ? this.totalPayroll() / count : 0;
+  });
+  averageHourlyGross = computed(() => {
+    const hours = this.totalHours();
+    return hours > 0 ? this.totalPayroll() / hours : 0;
   });
   payrollCapturePct = computed(() => {
     const total = this.tabScopedEmployees().length;
@@ -1635,6 +1710,35 @@ export class PayrollComponent implements OnInit {
       .filter((e) => e.payrollStatus === 'processed' || e.payrollStatus === 'paid')
       .reduce((sum, e) => sum + (Number(e.grossPay) || 0), 0)
   );
+  processedPayrollAmount = computed(() =>
+    this.tabScopedEmployees()
+      .filter((e) => e.payrollStatus === 'processed')
+      .reduce((sum, e) => sum + (Number(e.grossPay) || 0), 0)
+  );
+  paidPayrollAmount = computed(() =>
+    this.tabScopedEmployees()
+      .filter((e) => e.payrollStatus === 'paid')
+      .reduce((sum, e) => sum + (Number(e.grossPay) || 0), 0)
+  );
+  completedNetPay = computed(() =>
+    this.tabScopedEmployees()
+      .filter((e) => e.payrollStatus === 'processed' || e.payrollStatus === 'paid')
+      .reduce((sum, e) => sum + (Number(e.netPay) || 0), 0)
+  );
+  pendingNetPay = computed(() =>
+    this.tabScopedEmployees()
+      .filter((e) => !e.payrollStatus || e.payrollStatus === 'pending')
+      .reduce((sum, e) => sum + (Number(e.netPay) || 0), 0)
+  );
+  pendingDeductions = computed(() =>
+    this.tabScopedEmployees()
+      .filter((e) => !e.payrollStatus || e.payrollStatus === 'pending')
+      .reduce((sum, e) => sum + (Number(e.deductions) || 0), 0)
+  );
+  payrollClearedPct = computed(() => {
+    const gross = this.totalPayroll();
+    return gross > 0 ? (this.completedPayrollAmount() / gross) * 100 : 0;
+  });
   payTypeBreakdownRows = computed(() => {
     const counts = new Map<string, number>();
     for (const emp of this.tabScopedEmployees()) {
@@ -1665,6 +1769,25 @@ export class PayrollComponent implements OnInit {
         sharePct: (count / total) * 100,
         widthPct: (count / max) * 100
       }));
+  });
+  topPendingFinancialRows = computed(() => {
+    const rows = this.positionTabs()
+      .filter((position) => position !== 'All positions')
+      .map((position) => {
+        const pendingEmployees = this.tabScopedEmployees().filter(
+          (e) => this.getPositionLabel(e) === position && (!e.payrollStatus || e.payrollStatus === 'pending')
+        );
+        return {
+          position,
+          pending: pendingEmployees.length,
+          gross: pendingEmployees.reduce((sum, e) => sum + (Number(e.grossPay) || 0), 0)
+        };
+      })
+      .filter((row) => row.gross > 0)
+      .sort((a, b) => b.gross - a.gross)
+      .slice(0, 4);
+    const max = Math.max(1, ...rows.map((row) => row.gross));
+    return rows.map((row) => ({ ...row, widthPct: (row.gross / max) * 100 }));
   });
   topPendingPositionRows = computed(() => {
     const rows = this.positionTabs()
@@ -2363,6 +2486,13 @@ export class PayrollComponent implements OnInit {
     if (agencies.status === 'fulfilled') {
       this.agencyNameById.set(this.buildIdNameMap(agencies.value?.data, ['id', 'Id'], ['name', 'Name']));
     }
+  }
+
+  formatCompactCurrency(value: number): string {
+    const amount = Number(value) || 0;
+    if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+    if (amount >= 1_000) return `$${Math.round(amount / 1_000)}k`;
+    return `$${Math.round(amount)}`;
   }
 
   getOrganizationLabel(emp: any): string | null {
