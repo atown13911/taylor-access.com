@@ -102,8 +102,22 @@ public class CrmIntegrationCopyService
             };
         }
 
-        var baseUrl = Environment.GetEnvironmentVariable("TAYLOR_CRM_INTERNAL_URL")
-            ?? "http://taylor-crm.railway.internal:8080";
+        var baseUrls = new List<string>();
+        var configuredBase = Environment.GetEnvironmentVariable("TAYLOR_CRM_INTERNAL_URL");
+        if (!string.IsNullOrWhiteSpace(configuredBase))
+            baseUrls.Add(configuredBase.TrimEnd('/'));
+
+        baseUrls.Add("http://taylor-crm.railway.internal:8080");
+
+        var gatewayInternal = Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
+        if (!string.IsNullOrWhiteSpace(gatewayInternal))
+        {
+            var trimmed = gatewayInternal.Trim().TrimEnd('/');
+            baseUrls.Add(trimmed.EndsWith("/api/v1/open", StringComparison.OrdinalIgnoreCase)
+                ? trimmed
+                : $"{trimmed}/api/v1/open/taylor-crm");
+        }
+
         var exportPaths = new[]
         {
             "/api/v1/zoom/integration-export",
@@ -111,6 +125,7 @@ public class CrmIntegrationCopyService
             "/api/v1/integration-config/internal-export"
         };
 
+        foreach (var baseUrl in baseUrls.Distinct(StringComparer.OrdinalIgnoreCase))
         foreach (var exportPath in exportPaths)
         {
             var url = $"{baseUrl.TrimEnd('/')}{exportPath}";
