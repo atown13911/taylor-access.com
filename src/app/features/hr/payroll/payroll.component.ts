@@ -27,23 +27,204 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-      <div class="payroll-mode-tabs">
-        <button
-          class="payroll-mode-tab"
-          [class.active]="payrollMode() === 'accumulation'"
-          (click)="setPayrollMode('accumulation')"
-        >
-          Accumulation
-        </button>
-        <button
-          class="payroll-mode-tab"
-          [class.active]="payrollMode() === 'invoiced'"
-          (click)="setPayrollMode('invoiced')"
-        >
-          Invoiced
-        </button>
+      <div class="payroll-upper-toolbar">
+        <div class="payroll-mode-tabs">
+          <button
+            class="payroll-mode-tab"
+            [class.active]="payrollMode() === 'accumulation'"
+            (click)="setPayrollMode('accumulation')"
+          >
+            Accumulation
+          </button>
+          <button
+            class="payroll-mode-tab"
+            [class.active]="payrollMode() === 'invoiced'"
+            (click)="setPayrollMode('invoiced')"
+          >
+            Invoiced
+          </button>
+        </div>
+
+        <div class="payroll-upper-view-tabs">
+          <button
+            type="button"
+            class="payroll-upper-view-tab"
+            [class.active]="upperViewMode() === 'infographic'"
+            (click)="upperViewMode.set('infographic')"
+          >
+            <i class="bx bx-pie-chart-alt-2"></i> Infographic
+          </button>
+          <button
+            type="button"
+            class="payroll-upper-view-tab"
+            [class.active]="upperViewMode() === 'table'"
+            (click)="upperViewMode.set('table')"
+          >
+            <i class="bx bx-table"></i> Table
+          </button>
+        </div>
       </div>
 
+      @if (upperViewMode() === 'infographic') {
+        <div class="payroll-info-grid">
+          <article class="payroll-info-card payroll-info-card--workforce">
+            <header class="payroll-info-card-head">
+              <div>
+                <span class="payroll-info-eyebrow">Workforce</span>
+                <h2>Active headcount</h2>
+              </div>
+              <strong class="payroll-info-value">{{ tabScopedEmployees().length }}</strong>
+            </header>
+            <div class="payroll-info-ring" [style.background]="workforceRingStyle()">
+              <div class="payroll-info-ring-core">
+                <span>{{ organizationTabs().length - 1 }}</span>
+                <small>Orgs</small>
+              </div>
+            </div>
+            <div class="payroll-info-mini-list">
+              @for (row of orgBreakdownRows(); track row.name) {
+                <div class="payroll-info-mini-row">
+                  <span>{{ row.name }}</span>
+                  <div class="payroll-info-bar-track">
+                    <div class="payroll-info-bar-fill tone-cyan" [style.width.%]="row.widthPct"></div>
+                  </div>
+                  <strong>{{ row.count }}</strong>
+                </div>
+              } @empty {
+                <div class="payroll-info-empty">No organization data</div>
+              }
+            </div>
+          </article>
+
+          <article class="payroll-info-card payroll-info-card--payroll">
+            <header class="payroll-info-card-head">
+              <div>
+                <span class="payroll-info-eyebrow">Payroll Volume</span>
+                <h2>Total gross pay</h2>
+              </div>
+              <strong class="payroll-info-value payroll-mono">\${{ totalPayroll() | number:'1.2-2' }}</strong>
+            </header>
+            <div class="payroll-info-hero-bar">
+              <div class="payroll-info-bar-track">
+                <div class="payroll-info-bar-fill tone-blue" [style.width.%]="payrollVolumePct()"></div>
+              </div>
+              <span>{{ payrollVolumePct() | number:'1.0-0' }}% of period capacity</span>
+            </div>
+            <div class="payroll-info-stat-row">
+              <div>
+                <span>Avg gross / employee</span>
+                <strong class="payroll-mono">\${{ averageGrossPay() | number:'1.2-2' }}</strong>
+              </div>
+              <div>
+                <span>Positions tracked</span>
+                <strong>{{ positionTabs().length - 1 }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="payroll-info-card payroll-info-card--processed">
+            <header class="payroll-info-card-head">
+              <div>
+                <span class="payroll-info-eyebrow">Processed</span>
+                <h2>Ready payroll</h2>
+              </div>
+              <strong class="payroll-info-value">{{ processedCount() }}</strong>
+            </header>
+            <div class="payroll-info-donut-wrap">
+              <div class="payroll-info-donut" [style.background]="statusRingStyle()">
+                <div class="payroll-info-donut-core">
+                  <strong>{{ processedPct() | number:'1.0-0' }}%</strong>
+                  <small>Complete</small>
+                </div>
+              </div>
+              <div class="payroll-info-legend">
+                <div><span class="dot tone-green"></span> Processed {{ processedCount() }}</div>
+                <div><span class="dot tone-amber"></span> Pending {{ pendingCount() }}</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="payroll-info-card payroll-info-card--pending">
+            <header class="payroll-info-card-head">
+              <div>
+                <span class="payroll-info-eyebrow">Pending</span>
+                <h2>Awaiting action</h2>
+              </div>
+              <strong class="payroll-info-value">{{ pendingCount() }}</strong>
+            </header>
+            <div class="payroll-info-flow-list">
+              <div class="payroll-info-flow-step">
+                <div class="payroll-info-flow-head">
+                  <span>Processed</span>
+                  <strong>{{ processedCount() }}</strong>
+                </div>
+                <div class="payroll-info-bar-track">
+                  <div class="payroll-info-bar-fill tone-green" [style.width.%]="processedPct()"></div>
+                </div>
+              </div>
+              <div class="payroll-info-flow-step">
+                <div class="payroll-info-flow-head">
+                  <span>Pending</span>
+                  <strong>{{ pendingCount() }}</strong>
+                </div>
+                <div class="payroll-info-bar-track">
+                  <div class="payroll-info-bar-fill tone-amber" [style.width.%]="pendingPct()"></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="payroll-info-card payroll-info-card--positions payroll-info-card--wide">
+            <header class="payroll-info-card-head">
+              <div>
+                <span class="payroll-info-eyebrow">Position Mix</span>
+                <h2>Where payroll sits by role</h2>
+              </div>
+            </header>
+
+            <div class="payroll-org-tabs payroll-info-org-tabs">
+              @for (item of organizationTabs(); track item) {
+                <button
+                  type="button"
+                  class="payroll-org-tab"
+                  [class.active]="selectedOrganization() === item"
+                  (click)="setOrganization(item)"
+                >
+                  {{ item }}
+                </button>
+              }
+            </div>
+
+            <div class="payroll-info-position-list">
+              @for (row of positionInfographicRows(); track row.position) {
+                <button
+                  type="button"
+                  class="payroll-info-position-row"
+                  [class.active]="selectedPositionTab() === row.position"
+                  (click)="setPositionTab(row.position)"
+                >
+                  <div class="payroll-info-position-top">
+                    <span>{{ row.position === 'All positions' ? 'All Positions' : row.position }}</span>
+                    <div class="payroll-info-position-meta">
+                      <span>{{ row.count }} employees</span>
+                      <strong class="payroll-mono">\${{ row.gross | number:'1.2-2' }}</strong>
+                    </div>
+                  </div>
+                  <div class="payroll-info-bar-track">
+                    <div class="payroll-info-bar-fill tone-cyan" [style.width.%]="row.countWidthPct"></div>
+                  </div>
+                  <div class="payroll-info-position-sub">
+                    <span>{{ row.processed }} processed</span>
+                    <span>{{ row.pending }} pending</span>
+                  </div>
+                </button>
+              } @empty {
+                <div class="payroll-info-empty">No positions for this organization</div>
+              }
+            </div>
+          </article>
+        </div>
+      } @else {
       <!-- Stats -->
       <div class="payroll-stats">
         <div class="payroll-stat">
@@ -76,79 +257,81 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-      <!-- Filter + Payroll Tables -->
       <div class="payroll-layout">
         <div class="payroll-table-stack payroll-table-stack--filters">
-        <table class="payroll-filter-table" aria-label="Payroll filters">
-          <tbody>
-            <tr>
-              <th scope="row">Organization</th>
-              <td>
-                <div class="payroll-org-tabs">
-                  @for (item of organizationTabs(); track item) {
-                    <button
-                      type="button"
-                      class="payroll-org-tab"
-                      [class.active]="selectedOrganization() === item"
-                      (click)="setOrganization(item)"
-                    >
-                      {{ item }}
-                    </button>
-                  }
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table class="payroll-position-table" aria-label="Position filters">
-          <thead>
-            <tr>
-              <th class="col-position">Position</th>
-              <th class="col-count">Employees</th>
-              <th class="col-gross">Total Gross</th>
-              <th class="col-processed">Processed</th>
-              <th class="col-pending">Pending</th>
-              <th class="col-status">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (item of positionTabs(); track item) {
-              <tr
-                class="payroll-position-row"
-                [class.active]="selectedPositionTab() === item"
-                (click)="setPositionTab(item)"
-                (keydown.enter)="setPositionTab(item); $event.preventDefault()"
-                (keydown.space)="setPositionTab(item); $event.preventDefault()"
-                role="button"
-                tabindex="0"
-                [attr.aria-label]="'Select position ' + item"
-              >
-                <td class="col-position">
-                  <div class="payroll-position-name-cell">
-                    <span>{{ item === 'All positions' ? 'All Positions' : item }}</span>
-                    @if (selectedPositionTab() === item) {
-                      <span class="payroll-position-selected">Selected</span>
+          <table class="payroll-filter-table" aria-label="Payroll filters">
+            <tbody>
+              <tr>
+                <th scope="row">Organization</th>
+                <td>
+                  <div class="payroll-org-tabs">
+                    @for (item of organizationTabs(); track item) {
+                      <button
+                        type="button"
+                        class="payroll-org-tab"
+                        [class.active]="selectedOrganization() === item"
+                        (click)="setOrganization(item)"
+                      >
+                        {{ item }}
+                      </button>
                     }
                   </div>
                 </td>
-                <td class="col-count">{{ positionMetric(item).count }}</td>
-                <td class="col-gross payroll-mono">\${{ positionMetric(item).gross | number:'1.2-2' }}</td>
-                <td class="col-processed">{{ positionMetric(item).processed }}</td>
-                <td class="col-pending">{{ positionMetric(item).pending }}</td>
-                <td class="col-status">
-                  @if (selectedPositionTab() === item) {
-                    <span class="payroll-position-state active">Active</span>
-                  } @else {
-                    <span class="payroll-position-state">—</span>
-                  }
-                </td>
               </tr>
-            }
-          </tbody>
-        </table>
-        </div>
+            </tbody>
+          </table>
 
+          <table class="payroll-position-table" aria-label="Position filters">
+            <thead>
+              <tr>
+                <th class="col-position">Position</th>
+                <th class="col-count">Employees</th>
+                <th class="col-gross">Total Gross</th>
+                <th class="col-processed">Processed</th>
+                <th class="col-pending">Pending</th>
+                <th class="col-status">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of positionTabs(); track item) {
+                <tr
+                  class="payroll-position-row"
+                  [class.active]="selectedPositionTab() === item"
+                  (click)="setPositionTab(item)"
+                  (keydown.enter)="setPositionTab(item); $event.preventDefault()"
+                  (keydown.space)="setPositionTab(item); $event.preventDefault()"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-label]="'Select position ' + item"
+                >
+                  <td class="col-position">
+                    <div class="payroll-position-name-cell">
+                      <span>{{ item === 'All positions' ? 'All Positions' : item }}</span>
+                      @if (selectedPositionTab() === item) {
+                        <span class="payroll-position-selected">Selected</span>
+                      }
+                    </div>
+                  </td>
+                  <td class="col-count">{{ positionMetric(item).count }}</td>
+                  <td class="col-gross payroll-mono">\${{ positionMetric(item).gross | number:'1.2-2' }}</td>
+                  <td class="col-processed">{{ positionMetric(item).processed }}</td>
+                  <td class="col-pending">{{ positionMetric(item).pending }}</td>
+                  <td class="col-status">
+                    @if (selectedPositionTab() === item) {
+                      <span class="payroll-position-state active">Active</span>
+                    } @else {
+                      <span class="payroll-position-state">—</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      }
+
+      <div class="payroll-layout">
         <div class="payroll-table-stack payroll-table-stack--employees">
         <div class="payroll-employee-toolbar">
           <div class="payroll-search">
@@ -472,10 +655,18 @@ import { environment } from '../../../../environments/environment';
       color: var(--text-primary); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
       &:hover { border-color: var(--cyan); background: rgba(0,212,255,0.08); }
     }
+    .payroll-upper-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.9rem;
+    }
     .payroll-mode-tabs {
       display: inline-flex;
       gap: 8px;
-      margin: 0 0 0.9rem;
+      margin: 0;
       padding: 4px;
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 10px;
@@ -496,6 +687,256 @@ import { environment } from '../../../../environments/environment';
         border-color: rgba(0,212,255,0.45);
         background: rgba(0,212,255,0.12);
       }
+    }
+    .payroll-upper-view-tabs {
+      display: inline-flex;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+    }
+    .payroll-upper-view-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      border-radius: 8px;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      i { font-size: 0.95rem; }
+      &:hover { color: var(--text-primary); border-color: rgba(0,212,255,0.22); }
+      &.active {
+        color: var(--text-primary);
+        border-color: rgba(0,212,255,0.45);
+        background: rgba(0,212,255,0.12);
+      }
+    }
+    .payroll-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.35rem;
+    }
+    .payroll-info-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      min-height: 280px;
+      padding: 1rem 1.05rem 1.1rem;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at top right, rgba(255, 255, 255, 0.04), transparent 42%),
+        rgba(0, 0, 0, 0.24);
+      box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.24),
+        0 0 48px rgba(56, 189, 248, 0.08);
+      &--wide { grid-column: 1 / -1; min-height: auto; }
+      &--workforce {
+        border-color: rgba(56, 189, 248, 0.22);
+        box-shadow: 0 0 48px rgba(56, 189, 248, 0.12);
+      }
+      &--payroll {
+        border-color: rgba(96, 165, 250, 0.22);
+        box-shadow: 0 0 48px rgba(96, 165, 250, 0.12);
+      }
+      &--processed {
+        border-color: rgba(74, 222, 128, 0.22);
+        box-shadow: 0 0 48px rgba(74, 222, 128, 0.12);
+      }
+      &--pending {
+        border-color: rgba(250, 204, 21, 0.22);
+        box-shadow: 0 0 48px rgba(250, 204, 21, 0.12);
+      }
+      &--positions {
+        border-color: rgba(0, 212, 255, 0.22);
+        box-shadow: 0 0 48px rgba(0, 212, 255, 0.12);
+      }
+    }
+    .payroll-info-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      h2 {
+        margin: 0.15rem 0 0;
+        font-size: 0.98rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+    }
+    .payroll-info-eyebrow {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .payroll-info-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+    .payroll-info-ring,
+    .payroll-info-donut {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      margin: 0 auto;
+      display: grid;
+      place-items: center;
+    }
+    .payroll-info-ring-core,
+    .payroll-info-donut-core {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(8, 12, 20, 0.96);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      strong, span {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1;
+      }
+      small {
+        margin-top: 0.15rem;
+        font-size: 0.62rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+    }
+    .payroll-info-donut-wrap {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .payroll-info-legend {
+      display: grid;
+      gap: 0.45rem;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      .dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.35rem;
+      }
+    }
+    .payroll-info-mini-list,
+    .payroll-info-flow-list,
+    .payroll-info-position-list {
+      display: grid;
+      gap: 0.55rem;
+    }
+    .payroll-info-mini-row,
+    .payroll-info-flow-head,
+    .payroll-info-position-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+    .payroll-info-mini-row {
+      display: grid;
+      grid-template-columns: minmax(90px, 1fr) minmax(80px, 1.4fr) auto;
+      align-items: center;
+      strong { color: var(--text-primary); font-size: 0.78rem; }
+    }
+    .payroll-info-bar-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .payroll-info-bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      &.tone-cyan { background: linear-gradient(90deg, rgba(0,212,255,0.55), #00d4ff); }
+      &.tone-blue { background: linear-gradient(90deg, rgba(96,165,250,0.55), #60a5fa); }
+      &.tone-green { background: linear-gradient(90deg, rgba(74,222,128,0.55), #4ade80); }
+      &.tone-amber { background: linear-gradient(90deg, rgba(251,191,36,0.55), #fbbf24); }
+    }
+    .dot.tone-green { background: #4ade80; }
+    .dot.tone-amber { background: #fbbf24; }
+    .payroll-info-hero-bar {
+      display: grid;
+      gap: 0.45rem;
+      span { font-size: 0.74rem; color: var(--text-secondary); }
+    }
+    .payroll-info-stat-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+      div {
+        display: grid;
+        gap: 0.2rem;
+        span { font-size: 0.72rem; color: var(--text-secondary); }
+        strong { font-size: 0.92rem; color: var(--text-primary); }
+      }
+    }
+    .payroll-info-flow-step { display: grid; gap: 0.35rem; }
+    .payroll-info-org-tabs { margin-bottom: 0.15rem; }
+    .payroll-info-position-row {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+      padding: 0.7rem 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: grid;
+      gap: 0.4rem;
+      color: inherit;
+      &:hover {
+        border-color: rgba(0,212,255,0.25);
+        background: rgba(0,212,255,0.04);
+      }
+      &.active {
+        border-color: rgba(0,212,255,0.45);
+        background: rgba(0,212,255,0.1);
+      }
+    }
+    .payroll-info-position-top span {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .payroll-info-position-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: 0.74rem;
+      color: var(--text-secondary);
+      strong { color: #93c5fd; }
+    }
+    .payroll-info-position-sub {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+    }
+    .payroll-info-empty {
+      padding: 1rem 0;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
     }
     .payroll-stats {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 1.5rem;
@@ -805,7 +1246,10 @@ import { environment } from '../../../../environments/environment';
       background: rgba(0,212,255,0.18);
       color: #dff8ff;
     }
-    @media (max-width: 768px) { .payroll-stats { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) {
+      .payroll-stats { grid-template-columns: repeat(2, 1fr); }
+      .payroll-info-grid { grid-template-columns: 1fr; }
+    }
   `]
 })
 export class PayrollComponent implements OnInit {
@@ -826,6 +1270,7 @@ export class PayrollComponent implements OnInit {
   selectedStructureFilterValue = signal('All');
   periodFilter = signal('current');
   payrollMode = signal<'accumulation' | 'invoiced'>('accumulation');
+  upperViewMode = signal<'infographic' | 'table'>('infographic');
   selectedOrganization = signal('All organizations');
   selectedPositionTab = signal('All positions');
   employeePage = signal(1);
@@ -1007,6 +1452,64 @@ export class PayrollComponent implements OnInit {
   totalPayroll = computed(() => this.tabScopedEmployees().reduce((sum, e) => sum + (e.grossPay || 0), 0));
   processedCount = computed(() => this.tabScopedEmployees().filter(e => e.payrollStatus === 'processed' || e.payrollStatus === 'paid').length);
   pendingCount = computed(() => this.tabScopedEmployees().filter(e => !e.payrollStatus || e.payrollStatus === 'pending').length);
+
+  statusTotal = computed(() => this.processedCount() + this.pendingCount());
+  processedPct = computed(() => {
+    const total = this.statusTotal();
+    return total > 0 ? (this.processedCount() / total) * 100 : 0;
+  });
+  pendingPct = computed(() => {
+    const total = this.statusTotal();
+    return total > 0 ? (this.pendingCount() / total) * 100 : 0;
+  });
+  statusRingStyle = computed(() => {
+    const processed = this.processedPct();
+    return `conic-gradient(#00ff88 0 ${processed}%, #fbbf24 ${processed}% 100%)`;
+  });
+  workforceRingStyle = computed(() => {
+    const total = this.tabScopedEmployees().length;
+    const orgCount = Math.max(this.organizationTabs().length - 1, 1);
+    const fill = Math.min(100, (total / Math.max(orgCount * 8, 1)) * 100);
+    return `conic-gradient(#00d4ff 0 ${fill}%, rgba(148, 163, 184, 0.18) ${fill}% 100%)`;
+  });
+  averageGrossPay = computed(() => {
+    const count = this.tabScopedEmployees().length;
+    return count > 0 ? this.totalPayroll() / count : 0;
+  });
+  payrollVolumePct = computed(() => {
+    const employees = this.tabScopedEmployees();
+    if (employees.length === 0) return 0;
+    const capacity = employees.reduce((sum, emp) => sum + (Number(emp.payRate) || Number(emp.grossPay) || 0), 0);
+    if (capacity <= 0) return this.processedPct();
+    return Math.min(100, (this.totalPayroll() / capacity) * 100);
+  });
+  orgBreakdownRows = computed(() => {
+    const counts = new Map<string, number>();
+    for (const emp of this.tabScopedEmployees()) {
+      const org = this.getOrganizationLabel(emp) || 'Unknown';
+      counts.set(org, (counts.get(org) || 0) + 1);
+    }
+    const max = Math.max(1, ...Array.from(counts.values()));
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count, widthPct: (count / max) * 100 }));
+  });
+  positionInfographicRows = computed(() => {
+    const positions = this.positionTabs();
+    const maxCount = Math.max(1, ...positions.map((position) => this.positionMetric(position).count));
+    return positions.map((position) => {
+      const metric = this.positionMetric(position);
+      return {
+        position,
+        count: metric.count,
+        gross: metric.gross,
+        processed: metric.processed,
+        pending: metric.pending,
+        countWidthPct: (metric.count / maxCount) * 100
+      };
+    });
+  });
 
   ngOnInit() {
     this.loadData();
