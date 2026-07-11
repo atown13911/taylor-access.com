@@ -258,16 +258,18 @@ import { environment } from '../../../../environments/environment';
             <div class="payroll-info-position-panel">
               <aside class="payroll-info-org-sidebar" aria-label="Organization filters">
                 <span class="payroll-info-org-label">Organization</span>
-                @for (item of organizationTabs(); track item) {
-                  <button
-                    type="button"
-                    class="payroll-info-org-btn"
-                    [class.active]="selectedOrganization() === item"
-                    (click)="setOrganization(item)"
-                  >
-                    {{ item }}
-                  </button>
-                }
+                <div class="payroll-info-org-scroll">
+                  @for (item of organizationTabs(); track item) {
+                    <button
+                      type="button"
+                      class="payroll-info-org-btn"
+                      [class.active]="selectedOrganization() === item"
+                      (click)="setOrganization(item)"
+                    >
+                      {{ item }}
+                    </button>
+                  }
+                </div>
               </aside>
 
               <div class="payroll-info-position-list">
@@ -987,14 +989,26 @@ import { environment } from '../../../../environments/environment';
       grid-template-columns: minmax(148px, 190px) minmax(0, 1fr);
       gap: 0.85rem;
       align-items: stretch;
+      height: 360px;
       min-height: 0;
     }
     .payroll-info-org-sidebar {
       display: flex;
       flex-direction: column;
       gap: 0.4rem;
+      min-height: 0;
+      overflow: hidden;
       padding-right: 0.85rem;
       border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    .payroll-info-org-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      min-height: 0;
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 0.15rem;
     }
     .payroll-info-org-label {
       font-size: 0.68rem;
@@ -1029,7 +1043,8 @@ import { environment } from '../../../../environments/environment';
       display: grid;
       gap: 0.4rem;
       align-content: start;
-      max-height: 360px;
+      min-height: 0;
+      height: 100%;
       overflow-y: auto;
       padding-right: 0.15rem;
     }
@@ -1287,18 +1302,19 @@ import { environment } from '../../../../environments/environment';
       .payroll-info-status-panel { grid-template-columns: 1fr; justify-items: center; }
       .payroll-info-position-panel {
         grid-template-columns: 1fr;
+        height: 420px;
       }
       .payroll-info-org-sidebar {
-        flex-direction: row;
-        flex-wrap: wrap;
+        flex-direction: column;
         padding-right: 0;
-        padding-bottom: 0.75rem;
+        padding-bottom: 0;
         border-right: none;
         border-bottom: 1px solid rgba(255,255,255,0.08);
+        max-height: 148px;
       }
       .payroll-info-org-btn {
-        width: auto;
-        flex: 1 1 auto;
+        width: 100%;
+        flex: 0 0 auto;
       }
     }
   `]
