@@ -37,20 +37,24 @@ public class DispatchersController : ControllerBase
     /// dispatcher roster + active landmark drivers (OTR/Drayage) + summary stats.
     /// </summary>
     [HttpGet("section-data")]
+    [AllowAnonymous]
     public async Task<ActionResult<object>> GetDispatcherSectionData()
     {
-        var user = await _currentUserService.GetUserAsync();
-        if (user == null)
+        var isInternalCall = IsAuthorizedInternalCall();
+        var user = isInternalCall ? null : await _currentUserService.GetUserAsync();
+        if (!isInternalCall && user == null)
             return Unauthorized(new { error = "Not authenticated" });
 
-        var userRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
-        var canBypassOrgFilter =
+        var userRole = isInternalCall
+            ? "development"
+            : (user!.Role ?? string.Empty).Trim().ToLowerInvariant();
+        var canBypassOrgFilter = isInternalCall ||
             userRole == "product_owner" ||
             userRole == "superadmin" ||
             userRole == "development";
 
         var allowedOrgIds = new HashSet<int>();
-        if (!canBypassOrgFilter)
+        if (!canBypassOrgFilter && user != null)
         {
             var membershipOrgIds = await _currentUserService.GetUserOrganizationIdsAsync();
             foreach (var id in membershipOrgIds)
@@ -73,11 +77,11 @@ public class DispatchersController : ControllerBase
             .OrderBy(d => d.Name)
             .ToList();
 
-        var currentUserEmail = (user.Email ?? string.Empty).Trim();
-        var currentUserName = (user.Name ?? string.Empty).Trim();
-        var currentUserId = user.Id > 0 ? user.Id : 0;
-        var currentRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
-        var isCurrentUserDispatcherRole = currentRole.Contains("dispatcher");
+        var currentUserEmail = isInternalCall ? string.Empty : (user!.Email ?? string.Empty).Trim();
+        var currentUserName = isInternalCall ? string.Empty : (user!.Name ?? string.Empty).Trim();
+        var currentUserId = isInternalCall ? 0 : (user!.Id > 0 ? user.Id : 0);
+        var currentRole = isInternalCall ? string.Empty : (user!.Role ?? string.Empty).Trim().ToLowerInvariant();
+        var isCurrentUserDispatcherRole = !isInternalCall && currentRole.Contains("dispatcher");
         var currentUserAlreadyListed = activeDispatchers.Any(d =>
             (currentUserId > 0 && d.Id == currentUserId) ||
             (!string.IsNullOrWhiteSpace(currentUserEmail) &&
@@ -730,6 +734,35 @@ public class DispatchersController : ControllerBase
         var nameMatch = System.Text.RegularExpressions.Regex.Match(raw, @"\[dispatch-assignee-id:\d+\|name:([^\]]+)\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         var parsedName = nameMatch.Success ? (nameMatch.Groups[1].Value ?? string.Empty).Trim() : null;
         return (parsedId, string.IsNullOrWhiteSpace(parsedName) ? null : parsedName);
+    }
+
+    private bool IsGatewayRequest() =>
+        Request.Headers["X-GW-Internal"].FirstOrDefault() == "1";
+
+    private bool ValidateServiceKey()
+    {
+        var expected = _configuration["INTERNAL_SERVICE_KEY"]
+            ?? Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? "ta-internal-service-key-2026";
+        var provided = Request.Headers["X-Service-Key"].FirstOrDefault();
+        return !string.IsNullOrEmpty(provided) && provided == expected;
+    }
+
+    private bool AllowLegacyServiceKey() =>
+        bool.TryParse(
+            _configuration["ALLOW_LEGACY_INTERNAL_SERVICE_KEY"]
+            ?? Environment.GetEnvironmentVariable("ALLOW_LEGACY_INTERNAL_SERVICE_KEY"),
+            out var allow) && allow;
+
+    private bool IsAuthorizedInternalCall()
+    {
+        if (IsGatewayRequest())
+            return true;
+
+        if (AllowLegacyServiceKey())
+            return ValidateServiceKey();
+
+        return false;
     }
 
     private static string NormalizePersonName(string? value)
