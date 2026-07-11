@@ -271,22 +271,11 @@ public class PerformanceReviewsController : ControllerBase
         var zoomUserIdByEmail = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var days = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
-        var gatewayBase = _configuration["GatewayPublicOpenUrl"]
-            ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
-            ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
+        var gatewayBase = ResolveCrmGatewayOpenBase();
         var crmBase = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom";
 
-        var incomingAuth = Request.Headers.Authorization.ToString();
         var client = _httpClientFactory.CreateClient();
-        var serviceToken = _jwtService.GenerateToken(user);
-        if (!string.IsNullOrWhiteSpace(serviceToken))
-        {
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
-        }
-        else if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
-        }
+        ConfigureCrmGatewayClient(client, user);
 
         if (sync)
         {
@@ -354,7 +343,7 @@ public class PerformanceReviewsController : ControllerBase
                         month = targetMonth,
                         source = "ttac-gateway->taylor-crm/zoom",
                         error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}",
-                        authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt" : "incoming-bearer"
+                        authMode = "internal-gateway"
                     }
                 });
             }
@@ -1363,19 +1352,16 @@ public class PerformanceReviewsController : ControllerBase
             });
         }
 
-        var gatewayBase = _configuration["GatewayPublicOpenUrl"]
-            ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
-            ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
+        var gatewayBase = ResolveCrmGatewayOpenBase();
         var zoomUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom/status";
-        var googleUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail/status";
+        var googleUrl = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail/domain/status";
 
-        var serviceToken = _jwtService.GenerateToken(user);
         if (localGoogle.Connected && localZoom.Connected == false)
             authMode = "local-google-gateway-zoom";
         else if (!localGoogle.Connected && localZoom.Connected)
             authMode = "gateway-google-local-zoom";
         else if (!localGoogle.Connected && !localZoom.Connected)
-            authMode = !string.IsNullOrWhiteSpace(serviceToken) ? "service-jwt-gateway" : "incoming-bearer-gateway";
+            authMode = "internal-gateway";
 
         var googleConnected = localGoogle.Connected;
         var googleStatus = localGoogle.Connected ? 200 : 0;
@@ -1386,16 +1372,8 @@ public class PerformanceReviewsController : ControllerBase
 
         try
         {
-            var incomingAuth = Request.Headers.Authorization.ToString();
             var client = _httpClientFactory.CreateClient();
-            if (!string.IsNullOrWhiteSpace(serviceToken))
-            {
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
-            }
-            else if (!string.IsNullOrWhiteSpace(incomingAuth) && incomingAuth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue.Parse(incomingAuth);
-            }
+            ConfigureCrmGatewayClient(client, user);
 
             if (!googleConnected)
             {
@@ -1761,6 +1739,46 @@ public class PerformanceReviewsController : ControllerBase
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? string.Empty;
+
+    private string ResolveCrmGatewayOpenBase()
+    {
+        var internalUrl = Environment.GetEnvironmentVariable("GATEWAY_INTERNAL_URL");
+        if (!string.IsNullOrWhiteSpace(internalUrl))
+        {
+            var trimmed = internalUrl.Trim().TrimEnd('/');
+            return trimmed.EndsWith("/api/v1/open", StringComparison.OrdinalIgnoreCase)
+                ? trimmed
+                : $"{trimmed}/api/v1/open";
+        }
+
+        return _configuration["GatewayPublicOpenUrl"]
+            ?? Environment.GetEnvironmentVariable("GATEWAY_PUBLIC_OPEN_URL")
+            ?? "https://ttac-gateway-production.up.railway.app/api/v1/open";
+    }
+
+    private void ConfigureCrmGatewayClient(HttpClient client, User user)
+    {
+        client.DefaultRequestHeaders.Remove("Authorization");
+        client.DefaultRequestHeaders.Remove("X-Service-Key");
+        client.DefaultRequestHeaders.Remove("X-Internal-Key");
+        client.DefaultRequestHeaders.Remove("X-GW-Internal");
+
+        var serviceKey = Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? Environment.GetEnvironmentVariable("INTERNAL_API_KEY");
+        if (!string.IsNullOrWhiteSpace(serviceKey))
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Service-Key", serviceKey.Trim());
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Internal-Key", serviceKey.Trim());
+        }
+
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-GW-Internal", "1");
+
+        var serviceToken = _jwtService.GenerateToken(user);
+        if (!string.IsNullOrWhiteSpace(serviceToken))
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
+        else if (AuthenticationHeaderValue.TryParse(Request.Headers.Authorization.ToString(), out var incomingAuth))
+            client.DefaultRequestHeaders.Authorization = incomingAuth;
+    }
 
     private static bool TryGetPropertyIgnoreCase(JsonElement element, string name, out JsonElement value)
     {
