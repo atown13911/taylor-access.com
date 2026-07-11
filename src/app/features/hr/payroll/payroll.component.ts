@@ -372,7 +372,7 @@ import { environment } from '../../../../environments/environment';
 
     @if (detailsModalOpen()) {
       <div class="payroll-modal-backdrop" (click)="closePayrollDetails()"></div>
-      <div class="payroll-modal" role="dialog" aria-modal="true" aria-label="Payroll details">
+      <div class="payroll-modal payroll-modal--details" role="dialog" aria-modal="true" aria-label="Payroll details">
         <div class="payroll-modal-header">
           <h3>Payroll Details</h3>
           <button type="button" class="payroll-modal-close" (click)="closePayrollDetails()">
@@ -409,14 +409,183 @@ import { environment } from '../../../../environments/environment';
           </label>
         </div>
 
+        <section class="payroll-modal-section">
+          <div class="payroll-modal-section-head">
+            <h4>Compensation amounts</h4>
+            <p>{{ payDetailsBreakdown().profileLabel }}</p>
+          </div>
+
+          @if (payrollDetailsForm().compensationModel === 'contract') {
+            <div class="payroll-modal-grid">
+              <label class="payroll-modal-field">
+                <span>Pay structure</span>
+                <select
+                  [ngModel]="payrollDetailsForm().payType"
+                  (ngModelChange)="updatePayrollFormField('payType', $event)"
+                >
+                  @for (item of payTypeOptions; track item.value) {
+                    <option [value]="item.value">{{ item.label }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="payroll-modal-field">
+                <span>Standard hours / week</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  [ngModel]="payrollDetailsForm().standardHoursPerWeek"
+                  (ngModelChange)="updatePayrollFormNumberField('standardHoursPerWeek', $event)"
+                >
+              </label>
+            </div>
+
+            <div class="payroll-modal-grid">
+              @if (payrollDetailsForm().payType === 'salary') {
+                <label class="payroll-modal-field">
+                  <span>Annual salary</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    [ngModel]="payrollDetailsForm().annualSalary"
+                    (ngModelChange)="updatePayrollFormNumberField('annualSalary', $event)"
+                  >
+                </label>
+              } @else {
+                <label class="payroll-modal-field">
+                  <span>Hourly rate</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    [ngModel]="payrollDetailsForm().hourlyRate"
+                    (ngModelChange)="updatePayrollFormNumberField('hourlyRate', $event)"
+                  >
+                </label>
+              }
+
+              <label class="payroll-modal-field">
+                <span>Period deductions</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [ngModel]="payrollDetailsForm().defaultDeductions"
+                  (ngModelChange)="updatePayrollFormNumberField('defaultDeductions', $event)"
+                >
+              </label>
+            </div>
+          } @else {
+            <div class="payroll-modal-grid">
+              <label class="payroll-modal-field">
+                <span>Commission basis</span>
+                <select
+                  [ngModel]="payrollDetailsForm().commissionBasis"
+                  (ngModelChange)="updatePayrollFormField('commissionBasis', $event)"
+                >
+                  @for (item of commissionBasisOptions; track item.value) {
+                    <option [value]="item.value">{{ item.label }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="payroll-modal-field">
+                <span>Commission rate (%)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [ngModel]="payrollDetailsForm().commissionRate"
+                  (ngModelChange)="updatePayrollFormNumberField('commissionRate', $event)"
+                >
+              </label>
+            </div>
+
+            <div class="payroll-modal-grid">
+              <label class="payroll-modal-field">
+                <span>Base draw / period</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [ngModel]="payrollDetailsForm().baseDraw"
+                  (ngModelChange)="updatePayrollFormNumberField('baseDraw', $event)"
+                >
+              </label>
+
+              <label class="payroll-modal-field">
+                <span>Target volume / period</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [ngModel]="payrollDetailsForm().commissionTarget"
+                  (ngModelChange)="updatePayrollFormNumberField('commissionTarget', $event)"
+                >
+              </label>
+            </div>
+
+            <div class="payroll-modal-grid">
+              <label class="payroll-modal-field">
+                <span>Commission cap / period</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [ngModel]="payrollDetailsForm().commissionCap"
+                  (ngModelChange)="updatePayrollFormNumberField('commissionCap', $event)"
+                >
+              </label>
+
+              <label class="payroll-modal-field">
+                <span>Bonus / period</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [ngModel]="payrollDetailsForm().bonusPerPeriod"
+                  (ngModelChange)="updatePayrollFormNumberField('bonusPerPeriod', $event)"
+                >
+              </label>
+            </div>
+
+            <label class="payroll-modal-field">
+              <span>Period deductions</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                [ngModel]="payrollDetailsForm().defaultDeductions"
+                (ngModelChange)="updatePayrollFormNumberField('defaultDeductions', $event)"
+              >
+            </label>
+          }
+        </section>
+
+        <section class="payroll-modal-section">
+          <div class="payroll-modal-section-head">
+            <h4>Pay breakdown attachment</h4>
+            <p>{{ payDetailsBreakdown().periodLabel }}</p>
+          </div>
+          <div class="payroll-modal-breakdown">
+            @for (line of payDetailsBreakdown().lines; track line.label) {
+              <div class="payroll-modal-breakdown-row" [class.emphasis]="line.emphasis">
+                <span>{{ line.label }}</span>
+                <strong class="payroll-mono">{{ line.format === 'number' ? (line.value | number:'1.0-2') : formatCurrency(line.value) }}</strong>
+              </div>
+            }
+          </div>
+        </section>
+
         <label class="payroll-modal-field">
           <span>Contract / commission notes</span>
-          <input
-            type="text"
+          <textarea
             [ngModel]="payrollDetailsForm().contractNotes"
             (ngModelChange)="updatePayrollFormField('contractNotes', $event)"
-            placeholder="Optional details or notes"
-          >
+            placeholder="Optional details, overrides, or attachment notes"
+          ></textarea>
         </label>
 
         <div class="payroll-modal-actions">
@@ -425,7 +594,7 @@ import { environment } from '../../../../environments/environment';
             @if (savingDetails()) {
               Saving...
             } @else {
-              Save details
+              Save pay attachment
             }
           </button>
         </div>
@@ -1332,6 +1501,11 @@ import { environment } from '../../../../environments/environment';
       width: min(560px, calc(100vw - 2rem)); background: #0c111b; border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.12); z-index: 501; padding: 1rem 1rem 0.9rem;
       box-shadow: 0 20px 55px rgba(0,0,0,0.55);
+      &--details {
+        width: min(720px, calc(100vw - 2rem));
+        max-height: min(90vh, 920px);
+        overflow-y: auto;
+      }
     }
     .payroll-modal-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -1348,13 +1522,58 @@ import { environment } from '../../../../environments/environment';
     .payroll-modal-field {
       display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.75rem;
       span { color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
-      input, select {
+      input, select, textarea {
         width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px;
         border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);
         color: var(--text-primary); font-size: 0.86rem; outline: none;
         &:focus { border-color: rgba(0,212,255,0.4); }
       }
+      textarea { min-height: 72px; resize: vertical; }
       select option { background: #0a0a0f; }
+    }
+    .payroll-modal-section {
+      margin: 0.15rem 0 0.85rem;
+      padding: 0.75rem 0.8rem;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+    }
+    .payroll-modal-section-head {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem;
+      margin-bottom: 0.65rem;
+      h4 {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      p {
+        margin: 0;
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        text-align: right;
+      }
+    }
+    .payroll-modal-breakdown {
+      display: grid;
+      gap: 0.42rem;
+    }
+    .payroll-modal-breakdown-row {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      strong {
+        color: var(--text-primary);
+        font-size: 0.8rem;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      &.emphasis {
+        padding-top: 0.35rem;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        color: var(--text-primary);
+        strong { color: #8be9fd; font-size: 0.86rem; }
+      }
     }
     .payroll-modal-actions {
       display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.35rem;
@@ -1459,11 +1678,7 @@ export class PayrollComponent implements OnInit {
   savingDetails = signal(false);
   creatingInvoiceForUserId = signal<number | null>(null);
   actionMessage = signal('');
-  payrollDetailsForm = signal<PayrollDetailsForm>({
-    payFrequency: 'weekly',
-    compensationModel: 'contract',
-    contractNotes: ''
-  });
+  payrollDetailsForm = signal<PayrollDetailsForm>(this.createEmptyPayrollDetailsForm());
   readonly payFrequencyOptions = [
     { value: 'weekly', label: 'Weekly' },
     { value: 'biweekly', label: 'Biweekly' },
@@ -1474,6 +1689,17 @@ export class PayrollComponent implements OnInit {
     { value: 'contract', label: 'Contract' },
     { value: 'commission', label: 'Commission' }
   ];
+  readonly payTypeOptions = [
+    { value: 'salary', label: 'Salary' },
+    { value: 'hourly', label: 'Hourly' }
+  ];
+  readonly commissionBasisOptions = [
+    { value: 'revenue', label: 'Revenue' },
+    { value: 'gross_profit', label: 'Gross profit' },
+    { value: 'load', label: 'Load / shipment' },
+    { value: 'custom', label: 'Custom basis' }
+  ];
+  payDetailsBreakdown = computed(() => this.buildPayDetailsBreakdown(this.payrollDetailsForm()));
   invoiceForm = signal<InvoiceCreateForm>({
     weekFilter: 'current',
     dueDate: '',
@@ -1924,17 +2150,17 @@ export class PayrollComponent implements OnInit {
             payroll['payFrequency'],
             payroll['frequency']
           );
-          const grossPay = this.resolveGrossPay(payType, payFrequency, u, payroll);
+          const grossPay = this.calculatePeriodGrossFromPayroll(payroll, payType, payFrequency, u);
           const invoicedAmount = this.resolveInvoicedAmount(payType, payFrequency, u, payroll);
           return {
             ...u,
             payType,
             payFrequency,
-            payRate: this.toNumberOrDefault(u.payRate, payroll['payRate'], 0),
+            payRate: this.resolvePayRate(payType, u, payroll),
             invoicedAmount,
-            hours: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 0),
+            hours: this.resolveStandardHours(payType, payroll),
             grossPay,
-            deductions: this.toNumberOrDefault(payroll['defaultDeductions'], 0),
+            deductions: this.toNumberOrDefault(payroll['defaultDeductions'], payroll['periodDeductions'], 0),
             netPay: 0,
             payrollStatus,
             invoiceNumber: this.pickFirstText(
@@ -1952,7 +2178,10 @@ export class PayrollComponent implements OnInit {
             )
           };
         });
-        this.employees.set(users);
+        this.employees.set(users.map((emp: any) => ({
+          ...emp,
+          netPay: Number(Math.max(0, (Number(emp.grossPay) || 0) - (Number(emp.deductions) || 0)).toFixed(2))
+        })));
       },
       error: () => this.employees.set([])
     });
@@ -1964,18 +2193,8 @@ export class PayrollComponent implements OnInit {
     const payroll = prefs?.['payroll'] && typeof prefs['payroll'] === 'object'
       ? prefs['payroll'] as Record<string, unknown>
       : {};
-    const payFrequency = this.normalizePayFrequency(
-      this.pickFirstText(payroll['payFrequency'], payroll['frequency'], emp?.payFrequency)
-    );
-    const compensationModel = this.normalizeCompensationModel(
-      this.pickFirstText(payroll['compensationModel'], payroll['contractType'], payroll['payPlan'], emp?.compensationModel)
-    );
     this.selectedEmployeeDetails.set(emp);
-    this.payrollDetailsForm.set({
-      payFrequency,
-      compensationModel,
-      contractNotes: this.pickFirstText(payroll['contractNotes'], payroll['compensationNotes'], emp?.contractNotes)
-    });
+    this.payrollDetailsForm.set(this.buildPayrollDetailsForm(emp, payroll));
     this.detailsModalOpen.set(true);
   }
 
@@ -2026,6 +2245,18 @@ export class PayrollComponent implements OnInit {
     this.payrollDetailsForm.update((current) => ({ ...current, [field]: value }));
   }
 
+  updatePayrollFormNumberField(field: PayrollDetailsNumericField, value: string | number): void {
+    this.payrollDetailsForm.update((current) => ({
+      ...current,
+      [field]: this.toNumberOrDefault(value, 0)
+    }));
+  }
+
+  formatCurrency(value: number): string {
+    const amount = Number(value) || 0;
+    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
   async savePayrollDetails(): Promise<void> {
     const employee = this.selectedEmployeeDetails();
     if (!employee?.id) return;
@@ -2038,13 +2269,12 @@ export class PayrollComponent implements OnInit {
           ? existingPrefs['payroll'] as Record<string, unknown>
           : {};
       const form = this.payrollDetailsForm();
+      const breakdown = this.buildPayDetailsBreakdown(form);
       const mergedPreferences = {
         ...existingPrefs,
         payroll: {
           ...existingPayroll,
-          payFrequency: form.payFrequency,
-          compensationModel: form.compensationModel,
-          contractNotes: form.contractNotes
+          ...this.serializePayrollDetails(form, breakdown)
         }
       };
 
@@ -2055,7 +2285,7 @@ export class PayrollComponent implements OnInit {
       );
 
       this.detailsModalOpen.set(false);
-      this.actionMessage.set(`Updated payroll details for ${employee.name || 'employee'}.`);
+      this.actionMessage.set(`Saved pay attachment for ${employee.name || 'employee'}.`);
       this.loadData();
     } catch {
       this.actionMessage.set('Failed to save payroll details.');
@@ -2495,6 +2725,212 @@ export class PayrollComponent implements OnInit {
     return `$${Math.round(amount)}`;
   }
 
+  private createEmptyPayrollDetailsForm(): PayrollDetailsForm {
+    return {
+      payFrequency: 'weekly',
+      compensationModel: 'contract',
+      payType: 'salary',
+      annualSalary: 0,
+      hourlyRate: 0,
+      standardHoursPerWeek: 40,
+      defaultDeductions: 0,
+      commissionBasis: 'revenue',
+      commissionRate: 0,
+      baseDraw: 0,
+      commissionTarget: 0,
+      commissionCap: 0,
+      bonusPerPeriod: 0,
+      contractNotes: ''
+    };
+  }
+
+  private buildPayrollDetailsForm(emp: any, payroll: Record<string, unknown>): PayrollDetailsForm {
+    const payType = this.normalizePayTypeKey(
+      this.pickFirstText(payroll['payType'], emp?.payType, 'salary')
+    );
+    const payRate = this.toNumberOrDefault(emp?.payRate, payroll['payRate'], payroll['annualSalary'], 0);
+    return {
+      payFrequency: this.normalizePayFrequency(
+        this.pickFirstText(payroll['payFrequency'], payroll['frequency'], emp?.payFrequency)
+      ),
+      compensationModel: this.normalizeCompensationModel(
+        this.pickFirstText(payroll['compensationModel'], payroll['contractType'], payroll['payPlan'], emp?.compensationModel)
+      ),
+      payType,
+      annualSalary: this.toNumberOrDefault(payroll['annualSalary'], payType === 'salary' ? payRate : 0, 0),
+      hourlyRate: this.toNumberOrDefault(payroll['hourlyRate'], payType === 'hourly' ? payRate : 0, 0),
+      standardHoursPerWeek: this.toNumberOrDefault(payroll['standardHoursPerWeek'], 40),
+      defaultDeductions: this.toNumberOrDefault(payroll['defaultDeductions'], payroll['periodDeductions'], 0),
+      commissionBasis: this.normalizeCommissionBasis(
+        this.pickFirstText(payroll['commissionBasis'], payroll['commissionType'])
+      ),
+      commissionRate: this.toNumberOrDefault(payroll['commissionRate'], 0),
+      baseDraw: this.toNumberOrDefault(payroll['baseDraw'], payroll['drawAmount'], 0),
+      commissionTarget: this.toNumberOrDefault(payroll['commissionTarget'], payroll['commissionVolume'], 0),
+      commissionCap: this.toNumberOrDefault(payroll['commissionCap'], 0),
+      bonusPerPeriod: this.toNumberOrDefault(payroll['bonusPerPeriod'], payroll['bonusAmount'], 0),
+      contractNotes: this.pickFirstText(payroll['contractNotes'], payroll['compensationNotes'], emp?.contractNotes)
+    };
+  }
+
+  private buildPayDetailsBreakdown(form: PayrollDetailsForm): PayDetailsBreakdown {
+    const frequencyLabel = this.payFrequencyOptions.find((item) => item.value === form.payFrequency)?.label ?? 'Period';
+    const modelLabel = form.compensationModel === 'commission' ? 'Commission' : 'Contract';
+    const periodsPerYear = this.getPayPeriodsPerYear(form.payFrequency);
+    const hoursPerPeriod = this.getHoursPerPeriod(form.payFrequency, form.standardHoursPerWeek);
+    const lines: PayDetailsBreakdownLine[] = [];
+
+    let periodGross = 0;
+    if (form.compensationModel === 'contract') {
+      if (form.payType === 'salary') {
+        periodGross = periodsPerYear > 0 ? form.annualSalary / periodsPerYear : 0;
+        lines.push({ label: 'Annual salary', value: form.annualSalary });
+        lines.push({ label: `${frequencyLabel} gross`, value: periodGross });
+      } else {
+        periodGross = form.hourlyRate * hoursPerPeriod;
+        lines.push({ label: 'Hourly rate', value: form.hourlyRate });
+        lines.push({ label: 'Hours this period', value: hoursPerPeriod, format: 'number' });
+        lines.push({ label: `${frequencyLabel} gross`, value: periodGross });
+      }
+    } else {
+      const rawCommission = (form.commissionTarget * form.commissionRate) / 100;
+      const cappedCommission = form.commissionCap > 0
+        ? Math.min(rawCommission, form.commissionCap)
+        : rawCommission;
+      periodGross = form.baseDraw + cappedCommission + form.bonusPerPeriod;
+      lines.push({ label: 'Base draw', value: form.baseDraw });
+      lines.push({ label: `Commission (${form.commissionRate}% of target)`, value: cappedCommission });
+      if (form.bonusPerPeriod > 0) {
+        lines.push({ label: 'Bonus', value: form.bonusPerPeriod });
+      }
+      lines.push({ label: `${frequencyLabel} gross`, value: periodGross });
+    }
+
+    const periodDeductions = Math.max(0, form.defaultDeductions);
+    const periodNet = Math.max(0, periodGross - periodDeductions);
+    const annualizedGross = periodGross * periodsPerYear;
+
+    if (periodDeductions > 0) {
+      lines.push({ label: 'Deductions', value: periodDeductions });
+    }
+    lines.push({ label: `${frequencyLabel} net`, value: periodNet, emphasis: true });
+    lines.push({ label: 'Annualized gross', value: annualizedGross });
+
+    const payStructureLabel = form.compensationModel === 'contract'
+      ? (form.payType === 'salary' ? 'Salary' : 'Hourly')
+      : this.commissionBasisOptions.find((item) => item.value === form.commissionBasis)?.label ?? 'Commission';
+
+    return {
+      profileLabel: `${modelLabel} · ${payStructureLabel} · ${frequencyLabel}`,
+      periodLabel: `${frequencyLabel} attachment`,
+      lines,
+      periodGross: Number(periodGross.toFixed(2)),
+      periodDeductions: Number(periodDeductions.toFixed(2)),
+      periodNet: Number(periodNet.toFixed(2)),
+      annualizedGross: Number(annualizedGross.toFixed(2))
+    };
+  }
+
+  private serializePayrollDetails(form: PayrollDetailsForm, breakdown: PayDetailsBreakdown): Record<string, unknown> {
+    const payRate = form.compensationModel === 'contract'
+      ? (form.payType === 'salary' ? form.annualSalary : form.hourlyRate)
+      : breakdown.periodGross;
+
+    return {
+      payFrequency: form.payFrequency,
+      compensationModel: form.compensationModel,
+      contractNotes: form.contractNotes,
+      payType: form.payType,
+      annualSalary: form.payType === 'salary' ? form.annualSalary : 0,
+      hourlyRate: form.payType === 'hourly' ? form.hourlyRate : 0,
+      payRate,
+      standardHoursPerWeek: form.standardHoursPerWeek,
+      defaultDeductions: form.defaultDeductions,
+      periodDeductions: form.defaultDeductions,
+      commissionBasis: form.commissionBasis,
+      commissionRate: form.commissionRate,
+      baseDraw: form.baseDraw,
+      commissionTarget: form.commissionTarget,
+      commissionCap: form.commissionCap,
+      bonusPerPeriod: form.bonusPerPeriod,
+      periodGrossAmount: breakdown.periodGross,
+      periodNetAmount: breakdown.periodNet,
+      annualizedGrossAmount: breakdown.annualizedGross,
+      payDetailsAttachment: {
+        profileLabel: breakdown.profileLabel,
+        periodLabel: breakdown.periodLabel,
+        lines: breakdown.lines,
+        periodGross: breakdown.periodGross,
+        periodDeductions: breakdown.periodDeductions,
+        periodNet: breakdown.periodNet,
+        annualizedGross: breakdown.annualizedGross,
+        updatedAt: new Date().toISOString()
+      }
+    };
+  }
+
+  private normalizePayTypeKey(value: string): PayrollDetailsForm['payType'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.includes('hour')) return 'hourly';
+    return 'salary';
+  }
+
+  private normalizeCommissionBasis(value: string): PayrollDetailsForm['commissionBasis'] {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'gross_profit' || normalized === 'gross profit') return 'gross_profit';
+    if (normalized === 'load' || normalized === 'shipment') return 'load';
+    if (normalized === 'custom') return 'custom';
+    return 'revenue';
+  }
+
+  private resolvePayRate(payType: string, user: any, payroll: Record<string, unknown>): number {
+    const normalizedPayType = String(payType ?? '').trim().toLowerCase();
+    if (this.normalizeCompensationModel(this.pickFirstText(payroll['compensationModel'])) === 'commission') {
+      return this.toNumberOrDefault(payroll['periodGrossAmount'], payroll['payRate'], 0);
+    }
+    if (normalizedPayType.includes('hour')) {
+      return this.toNumberOrDefault(payroll['hourlyRate'], user?.payRate, payroll['payRate'], 0);
+    }
+    return this.toNumberOrDefault(payroll['annualSalary'], user?.payRate, payroll['payRate'], 0);
+  }
+
+  private resolveStandardHours(payType: string, payroll: Record<string, unknown>): number {
+    const frequency = this.normalizePayFrequency(this.pickFirstText(payroll['payFrequency'], payroll['frequency']));
+    const weeklyHours = this.toNumberOrDefault(payroll['standardHoursPerWeek'], 40);
+    if (String(payType ?? '').trim().toLowerCase().includes('hour')) {
+      return Number(this.getHoursPerPeriod(frequency, weeklyHours).toFixed(2));
+    }
+    return weeklyHours;
+  }
+
+  private getHoursPerPeriod(frequency: PayrollDetailsForm['payFrequency'], standardHoursPerWeek: number): number {
+    switch (frequency) {
+      case 'weekly':
+        return standardHoursPerWeek;
+      case 'biweekly':
+        return standardHoursPerWeek * 2;
+      case 'semimonthly':
+        return (standardHoursPerWeek * 52) / 24;
+      case 'monthly':
+        return (standardHoursPerWeek * 52) / 12;
+      default:
+        return standardHoursPerWeek;
+    }
+  }
+
+  private calculatePeriodGrossFromPayroll(payroll: Record<string, unknown>, payType: string, payFrequency: string, user: any): number {
+    const stored = this.toNumberOrDefault(payroll['periodGrossAmount'], -1);
+    if (stored >= 0) return Number(stored.toFixed(2));
+
+    const compensationModel = this.normalizeCompensationModel(this.pickFirstText(payroll['compensationModel']));
+    if (compensationModel === 'commission') {
+      const form = this.buildPayrollDetailsForm(user, payroll);
+      return this.buildPayDetailsBreakdown(form).periodGross;
+    }
+
+    return this.resolveGrossPay(payType, payFrequency, user, payroll);
+  }
+
   getOrganizationLabel(emp: any): string | null {
     if (!emp || typeof emp !== 'object') return null;
     const byName = String(
@@ -2688,7 +3124,46 @@ type StructureFilterField =
 type PayrollDetailsForm = {
   payFrequency: 'weekly' | 'biweekly' | 'semimonthly' | 'monthly';
   compensationModel: 'contract' | 'commission';
+  payType: 'salary' | 'hourly';
+  annualSalary: number;
+  hourlyRate: number;
+  standardHoursPerWeek: number;
+  defaultDeductions: number;
+  commissionBasis: 'revenue' | 'gross_profit' | 'load' | 'custom';
+  commissionRate: number;
+  baseDraw: number;
+  commissionTarget: number;
+  commissionCap: number;
+  bonusPerPeriod: number;
   contractNotes: string;
+};
+
+type PayrollDetailsNumericField =
+  | 'annualSalary'
+  | 'hourlyRate'
+  | 'standardHoursPerWeek'
+  | 'defaultDeductions'
+  | 'commissionRate'
+  | 'baseDraw'
+  | 'commissionTarget'
+  | 'commissionCap'
+  | 'bonusPerPeriod';
+
+type PayDetailsBreakdownLine = {
+  label: string;
+  value: number;
+  emphasis?: boolean;
+  format?: 'currency' | 'number';
+};
+
+type PayDetailsBreakdown = {
+  profileLabel: string;
+  periodLabel: string;
+  lines: PayDetailsBreakdownLine[];
+  periodGross: number;
+  periodDeductions: number;
+  periodNet: number;
+  annualizedGross: number;
 };
 
 type PayrollInvoiceEntry = {
