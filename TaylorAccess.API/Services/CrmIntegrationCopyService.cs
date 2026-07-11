@@ -106,6 +106,7 @@ public class CrmIntegrationCopyService
             ?? "http://taylor-crm.railway.internal:8080";
         var exportPaths = new[]
         {
+            "/api/v1/zoom/integration-export",
             "/api/v1/internal/integrations/export",
             "/api/v1/integration-config/internal-export"
         };
