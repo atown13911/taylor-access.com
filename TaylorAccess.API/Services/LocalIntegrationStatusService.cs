@@ -151,11 +151,17 @@ public class LocalIntegrationStatusService
         if (reconnected.Connected)
             return reconnected;
 
+        var message = config.LastError ?? reconnected.Message ?? "Zoom credentials copied but live verification failed.";
+        if (message.Contains("invalid_client", StringComparison.OrdinalIgnoreCase))
+        {
+            message = "Zoom rejected the client ID or secret. Regenerate the Server-to-Server OAuth secret in Zoom Marketplace and update Railway.";
+        }
+
         return new IntegrationStatusProbeResult
         {
             Connected = false,
             Status = config.Status,
-            Message = config.LastError ?? reconnected.Message ?? "Zoom credentials copied but live verification failed.",
+            Message = message,
             Source = "local-db"
         };
     }
@@ -460,9 +466,9 @@ public class LocalIntegrationStatusService
             }
         }
 
-        var envId = Environment.GetEnvironmentVariable("ZOOM_CLIENT_ID");
-        var envSecret = Environment.GetEnvironmentVariable("ZOOM_CLIENT_SECRET");
-        var envAccount = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID");
+        var envId = Environment.GetEnvironmentVariable("ZOOM_CLIENT_ID")?.Trim();
+        var envSecret = Environment.GetEnvironmentVariable("ZOOM_CLIENT_SECRET")?.Trim();
+        var envAccount = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID")?.Trim();
         if (!string.IsNullOrWhiteSpace(envId) && !string.IsNullOrWhiteSpace(envSecret) && !string.IsNullOrWhiteSpace(envAccount))
             return new ZoomS2SCredentials(envId, envSecret, envAccount);
 

@@ -74,9 +74,10 @@ public class IntegrationConfigBootstrapService
 
     private async Task BootstrapZoomAsync(CancellationToken cancellationToken)
     {
-        var clientId = Environment.GetEnvironmentVariable("ZOOM_CLIENT_ID");
-        var clientSecret = Environment.GetEnvironmentVariable("ZOOM_CLIENT_SECRET");
-        var accountId = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID");
+        var clientId = Environment.GetEnvironmentVariable("ZOOM_CLIENT_ID")?.Trim();
+        var clientSecret = Environment.GetEnvironmentVariable("ZOOM_CLIENT_SECRET")?.Trim();
+        var accountId = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID")?.Trim();
+        var manualToken = Environment.GetEnvironmentVariable("ZOOM_ACCESS_TOKEN")?.Trim();
         if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret) || string.IsNullOrWhiteSpace(accountId))
             return;
 
@@ -86,6 +87,42 @@ public class IntegrationConfigBootstrapService
             && existing.TokenExpiresAt.HasValue
             && existing.TokenExpiresAt.Value > DateTime.UtcNow.AddMinutes(5))
             return;
+
+        var config = existing ?? new IntegrationConfig
+        {
+            OrganizationId = existing?.OrganizationId ?? 1,
+            IntegrationType = "zoom",
+            Provider = "zoom",
+            DisplayName = "Zoom Video",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        config.EncryptedApiKey = _encryption.Encrypt(clientId);
+        config.EncryptedApiSecret = _encryption.Encrypt(clientSecret);
+        config.OAuthScope = accountId;
+        config.Enabled = true;
+        config.UpdatedAt = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(manualToken))
+        {
+            var expiresIn = 3600;
+            if (int.TryParse(Environment.GetEnvironmentVariable("ZOOM_ACCESS_TOKEN_EXPIRES_IN"), out var parsedExpires) && parsedExpires > 0)
+                expiresIn = parsedExpires;
+
+            config.EncryptedAccessToken = _encryption.Encrypt(manualToken);
+            config.TokenExpiresAt = DateTime.UtcNow.AddSeconds(expiresIn);
+            config.Status = "connected";
+            config.ConnectedAt ??= DateTime.UtcNow;
+            config.LastError = null;
+            config.LastErrorAt = null;
+
+            if (existing == null)
+                _context.IntegrationConfigs.Add(config);
+
+            await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Bootstrapped zoom integration config from ZOOM_ACCESS_TOKEN.");
+            return;
+        }
 
         try
         {
@@ -107,7 +144,16 @@ public class IntegrationConfigBootstrapService
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Zoom bootstrap token exchange failed: {Body}", body[..Math.Min(body.Length, 180)]);
+                var error = body[..Math.Min(body.Length, 180)];
+                _logger.LogWarning("Zoom bootstrap token exchange failed: {Body}", error);
+                config.Status = "error";
+                config.LastError = $"Zoom S2S token exchange failed: {error}";
+                config.LastErrorAt = DateTime.UtcNow;
+
+                if (existing == null)
+                    _context.IntegrationConfigs.Add(config);
+
+                await _context.SaveChangesAsync(cancellationToken);
                 return;
             }
 
@@ -115,24 +161,12 @@ public class IntegrationConfigBootstrapService
             var accessToken = doc.RootElement.GetProperty("access_token").GetString()!;
             var expiresIn = doc.RootElement.TryGetProperty("expires_in", out var ei) ? ei.GetInt32() : 3600;
 
-            var config = existing ?? new IntegrationConfig
-            {
-                OrganizationId = existing?.OrganizationId ?? 1,
-                IntegrationType = "zoom",
-                Provider = "zoom",
-                DisplayName = "Zoom Video",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            config.EncryptedApiKey = _encryption.Encrypt(clientId);
-            config.EncryptedApiSecret = _encryption.Encrypt(clientSecret);
-            config.OAuthScope = accountId;
             config.EncryptedAccessToken = _encryption.Encrypt(accessToken);
             config.TokenExpiresAt = DateTime.UtcNow.AddSeconds(expiresIn);
             config.Status = "connected";
-            config.Enabled = true;
             config.ConnectedAt ??= DateTime.UtcNow;
-            config.UpdatedAt = DateTime.UtcNow;
+            config.LastError = null;
+            config.LastErrorAt = null;
 
             if (existing == null)
                 _context.IntegrationConfigs.Add(config);
