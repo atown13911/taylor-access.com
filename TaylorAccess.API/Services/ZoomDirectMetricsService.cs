@@ -153,7 +153,7 @@ public class ZoomDirectMetricsService
             var smsComplete = true;
             foreach (var user in phoneUsers)
             {
-                if ((DateTime.UtcNow - budgetStarted).TotalSeconds > 70)
+                if ((DateTime.UtcNow - budgetStarted).TotalSeconds > 110)
                 {
                     smsComplete = false;
                     break;
