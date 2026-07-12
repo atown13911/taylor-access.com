@@ -202,30 +202,60 @@ type RosterEmployee = Record<string, any>;
 
       @if (pageTab() === 'reviews') {
       <!-- Stats -->
-      <div class="stats-row">
-        <div class="stat-card"><div class="stat-icon staff"><i class='bx bx-group'></i></div><div><span class="stat-val">{{ performanceSummary().totalStaff }}</span><span class="stat-lbl">Total Staff</span></div></div>
-        <div class="stat-card"><div class="stat-icon calls"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ performanceSummary().totalCalls }}</span><span class="stat-lbl">Total Calls</span></div></div>
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-time-five'></i></div><div><span class="stat-val">{{ performanceSummary().totalCallMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Call Time</span></div></div>
-        <div class="stat-card"><div class="stat-icon total"><i class='bx bx-video'></i></div><div><span class="stat-val">{{ performanceSummary().totalMeetingMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Meeting Time</span></div></div>
-        <div class="stat-card"><div class="stat-icon activity"><i class='bx bx-line-chart'></i></div><div><span class="stat-val">{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</span><span class="stat-lbl">Avg Busy</span></div></div>
-        <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-medal'></i></div><div><span class="stat-val">{{ performanceSummary().avgScore | number:'1.0-0' }}</span><span class="stat-lbl">Avg Score</span></div></div>
-        <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-user-check'></i></div><div><span class="stat-val">{{ performanceSummary().activeStaff }}</span><span class="stat-lbl">Active Staff</span></div></div>
+      <div class="stats-row info-kpis">
+        <div class="stat-card accent-staff">
+          <div class="stat-top"><span class="stat-lbl">Total Staff</span><i class='bx bx-group'></i></div>
+          <span class="stat-val">{{ performanceSummary().totalStaff }}</span>
+          <div class="stat-meter"><span [style.width.%]="100"></span></div>
+        </div>
+        <div class="stat-card accent-calls">
+          <div class="stat-top"><span class="stat-lbl">Total Calls</span><i class='bx bx-phone-call'></i></div>
+          <span class="stat-val">{{ performanceSummary().totalCalls | number }}</span>
+          <div class="stat-meter"><span [style.width.%]="kpiCallFill()"></span></div>
+        </div>
+        <div class="stat-card accent-time">
+          <div class="stat-top"><span class="stat-lbl">Call Time</span><i class='bx bx-time-five'></i></div>
+          <span class="stat-val">{{ performanceSummary().totalCallMinutes | number:'1.0-0' }}<small>m</small></span>
+          <div class="stat-meter"><span [style.width.%]="kpiCallTimeFill()"></span></div>
+        </div>
+        <div class="stat-card accent-meet">
+          <div class="stat-top"><span class="stat-lbl">Meeting Time</span><i class='bx bx-video'></i></div>
+          <span class="stat-val">{{ performanceSummary().totalMeetingMinutes | number:'1.0-0' }}<small>m</small></span>
+          <div class="stat-meter"><span [style.width.%]="kpiMeetingFill()"></span></div>
+        </div>
+        <div class="stat-card accent-busy">
+          <div class="stat-top"><span class="stat-lbl">Avg Busy</span><i class='bx bx-line-chart'></i></div>
+          <span class="stat-val">{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}<small>%</small></span>
+          <div class="stat-meter"><span [style.width.%]="performanceSummary().avgActivityPercent"></span></div>
+        </div>
+        <div class="stat-card accent-score">
+          <div class="stat-top"><span class="stat-lbl">Avg Score</span><i class='bx bx-medal'></i></div>
+          <span class="stat-val">{{ performanceSummary().avgScore | number:'1.0-0' }}</span>
+          <div class="stat-meter"><span [style.width.%]="performanceSummary().avgScore"></span></div>
+        </div>
+        <div class="stat-card accent-active">
+          <div class="stat-top"><span class="stat-lbl">Active Staff</span><i class='bx bx-user-check'></i></div>
+          <span class="stat-val">{{ performanceSummary().activeStaff }}</span>
+          <div class="stat-meter"><span [style.width.%]="kpiActiveFill()"></span></div>
+        </div>
       </div>
-      <div class="integration-status-row">
-        <div class="status-item">
-          <span class="label">Google API</span>
+      <div class="integration-ribbon">
+        <div class="ribbon-item">
+          <i class='bx bxl-google'></i>
+          <span class="label">Google</span>
           <span class="status-chip" [class.connected]="googleApiStatus() === 'connected'" [class.not-connected]="googleApiStatus() === 'not-connected'">
             {{ integrationStatusLabel(googleApiStatus()) }}
           </span>
         </div>
-        <div class="status-item">
-          <span class="label">Zoom API</span>
+        <div class="ribbon-item">
+          <i class='bx bx-video'></i>
+          <span class="label">Zoom</span>
           <span class="status-chip" [class.connected]="zoomApiStatus() === 'connected'" [class.not-connected]="zoomApiStatus() === 'not-connected'">
             {{ integrationStatusLabel(zoomApiStatus()) }}
           </span>
         </div>
-        <div class="status-item">
-          <span class="label">Last API Check</span>
+        <div class="ribbon-item ribbon-check">
+          <span class="label">Last check</span>
           <span class="value">{{ lastApiCheckAt() || '—' }}</span>
         </div>
       </div>
@@ -259,6 +289,7 @@ type RosterEmployee = Record<string, any>;
               <button type="button" [class.active]="periodMode() === 'daily'" (click)="onPeriodModeChange('daily')">Day</button>
               <button type="button" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Week</button>
               <button type="button" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Month</button>
+              <button type="button" [class.active]="periodMode() === 'ytd'" (click)="onPeriodModeChange('ytd')">YTD</button>
             </div>
           </div>
           <div class="month-filter field-stack">
@@ -282,6 +313,12 @@ type RosterEmployee = Record<string, any>;
                   }
                 </select>
               </div>
+            } @else if (periodMode() === 'ytd') {
+              <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
+                @for (opt of reviewPeriodOptions(); track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
             } @else {
               <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
                 @for (opt of reviewPeriodOptions(); track opt.value) {
@@ -313,6 +350,9 @@ type RosterEmployee = Record<string, any>;
                 }
               </button>
               <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+              @if (refreshingLiveMetrics()) {
+                <span class="update-meta sync-status">Refreshing live Zoom / timeclock…</span>
+              }
               @if (lastSyncStatus()) {
                 <span class="update-meta sync-status" [class.partial]="lastSyncStatus() === 'partial'" [class.failed]="lastSyncStatus() === 'failed'">
                   Sync: {{ lastSyncStatus() }}{{ lastSyncCompleteness() ? ' · ' + lastSyncCompleteness() : '' }}
@@ -550,13 +590,25 @@ type RosterEmployee = Record<string, any>;
                 <th>Minutes</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody [class.has-row-lens]="focusedEmployeeId() != null">
               @for (row of filteredAdditionalMetrics(); track row.employeeId) {
-                <tr>
+                <tr
+                  class="data-row"
+                  [class.row-lens]="focusedEmployeeId() === row.employeeId"
+                  (click)="selectTableRow(row.employeeId, $event)">
                   <td class="addl-name">{{ row.employeeName || ('Employee #' + row.employeeId) }}</td>
-                  <td>{{ row.inboundCalls }}</td>
-                  <td>{{ row.outboundCalls }}</td>
-                  <td>{{ row.missedCalls }}</td>
+                  <td class="metric-cell">
+                    <span class="metric-num">{{ row.inboundCalls }}</span>
+                    <span class="spark inbound" [style.width.%]="callShare(row, 'inbound')"></span>
+                  </td>
+                  <td class="metric-cell">
+                    <span class="metric-num">{{ row.outboundCalls }}</span>
+                    <span class="spark outbound" [style.width.%]="callShare(row, 'outbound')"></span>
+                  </td>
+                  <td class="metric-cell">
+                    <span class="metric-num">{{ row.missedCalls }}</span>
+                    <span class="spark missed" [style.width.%]="callShare(row, 'missed')"></span>
+                  </td>
                   <td>{{ row.voicemails }}</td>
                   <td>{{ row.voicemailMinutes | number:'1.0-1' }}</td>
                   <td>{{ row.phoneRecordings }}</td>
@@ -575,7 +627,7 @@ type RosterEmployee = Record<string, any>;
         <div class="loading-state">
           <i class='bx bx-loader-alt bx-spin'></i>
           <h3>Loading performance reviews...</h3>
-          <p>Loading saved values</p>
+          <p>Reading saved scorecard from Access</p>
         </div>
       } @else if (filteredReviews().length === 0) {
         <div class="empty-state">
@@ -616,7 +668,7 @@ type RosterEmployee = Record<string, any>;
                     <span class="status-dot" [class.online]="hasFinanceSourceData()" [class.offline]="!hasFinanceSourceData()"></span>
                   </span>
                 </th>
-                <th class="group-label group-review" colspan="3">
+                <th class="group-label group-review" colspan="2">
                   <span class="group-content">
                     <span class="group-name">Review</span>
                     <span class="status-dot" [class.online]="hasPersistedSnapshotData()" [class.offline]="!hasPersistedSnapshotData()"></span>
@@ -641,15 +693,17 @@ type RosterEmployee = Record<string, any>;
                 <th title="System Activity %">Sys %</th>
                 <th title="Busy %">Busy %</th>
                 <th title="Busy Via">Via</th>
-                <th title="Invoiced Revenue (30d)">Rev 30d</th>
+                <th title="{{ revenueColumnTitle() }}">{{ revenueColumnLabel() }}</th>
                 <th>Score</th>
-                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody [class.has-row-lens]="focusedEmployeeId() != null">
               @for (review of sortedMetricRows(); track review.id) {
-                <tr>
+                <tr
+                  class="data-row"
+                  [class.row-lens]="focusedEmployeeId() === review.employeeId"
+                  (click)="selectTableRow(review.employeeId, $event)">
                   <td><strong>{{ review.employeeName || 'Employee #' + review.employeeId }}</strong></td>
                   <td>{{ review.callVolume }}</td>
                   <td>{{ review.totalCallMinutes | number:'1.0-0' }}</td>
@@ -658,22 +712,34 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ review.sentCount }}</td>
                   <td>{{ review.replyCount }}</td>
                   <td>{{ review.firstResponseMinutes | number:'1.0-0' }}</td>
-                  <td>{{ (review.followUpRate * 100) | number:'1.0-0' }}%</td>
+                  <td class="meter-cell">
+                    <div class="meter"><div class="meter-fill follow" [style.width.%]="pct(review.followUpRate)"></div></div>
+                    <span class="meter-lbl">{{ (review.followUpRate * 100) | number:'1.0-0' }}%</span>
+                  </td>
                   <td>{{ review.externalCount }}/{{ review.internalCount }}</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
                   <td>{{ review.idleHours | number:'1.1-1' }}</td>
-                  <td>{{ (review.presenceRate * 100) | number:'1.0-0' }}%</td>
-                  <td>{{ (review.systemActivityRate * 100) | number:'1.0-0' }}%</td>
-                  <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
-                  <td>{{ busySourceLabel(review.busySource) }}</td>
+                  <td class="meter-cell">
+                    <div class="meter"><div class="meter-fill presence" [style.width.%]="pct(review.presenceRate)"></div></div>
+                    <span class="meter-lbl">{{ (review.presenceRate * 100) | number:'1.0-0' }}%</span>
+                  </td>
+                  <td class="meter-cell">
+                    <div class="meter"><div class="meter-fill system" [style.width.%]="pct(review.systemActivityRate)"></div></div>
+                    <span class="meter-lbl">{{ (review.systemActivityRate * 100) | number:'1.0-0' }}%</span>
+                  </td>
+                  <td class="meter-cell">
+                    <div class="meter"><div class="meter-fill busy" [style.width.%]="pct(review.activityRate)"></div></div>
+                    <span class="meter-lbl">{{ (review.activityRate * 100) | number:'1.0-0' }}%</span>
+                  </td>
+                  <td><span class="via-chip" [attr.data-via]="review.busySource || 'none'">{{ busySourceLabel(review.busySource) }}</span></td>
                   <td>{{ review.invoicedRevenue | currency:'USD':'symbol':'1.0-0' }}</td>
                   <td>
-                    <div class="score-pill" [class.high]="review.score >= 80" [class.med]="review.score >= 60 && review.score < 80" [class.low]="review.score < 60">
-                      {{ review.score }}
+                    <div class="score-block" [class.high]="review.score >= 80" [class.med]="review.score >= 60 && review.score < 80" [class.low]="review.score < 60">
+                      <div class="score-track"><div class="score-fill" [style.width.%]="clampScore(review.score)"></div></div>
+                      <span class="score-pill">{{ review.score }}</span>
                     </div>
                   </td>
-                  <td><span class="status-badge" [class]="review.status">{{ review.status | titlecase }}</span></td>
                   <td>
                     <button class="icon-btn" title="View" (click)="viewReview(review)"><i class='bx bx-show'></i></button>
                     <button class="icon-btn" title="Edit" (click)="editReview(review)"><i class='bx bx-edit'></i></button>
@@ -765,6 +831,7 @@ type RosterEmployee = Record<string, any>;
               <button type="button" [class.active]="periodMode() === 'daily'" (click)="onPeriodModeChange('daily')">Day</button>
               <button type="button" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Week</button>
               <button type="button" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Month</button>
+              <button type="button" [class.active]="periodMode() === 'ytd'" (click)="onPeriodModeChange('ytd')">YTD</button>
             </div>
           </div>
           <div class="month-filter field-stack">
@@ -876,9 +943,12 @@ type RosterEmployee = Record<string, any>;
                 <th>Busy %</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody [class.has-row-lens]="focusedEmployeeId() != null">
               @for (row of managementMetricRowsSorted(); track row.employeeId) {
-                <tr>
+                <tr
+                  class="data-row"
+                  [class.row-lens]="focusedEmployeeId() === row.employeeId"
+                  (click)="selectTableRow(row.employeeId, $event)">
                   <td><strong>{{ row.employeeName || ('Employee #' + row.employeeId) }}</strong></td>
                   <td>{{ row.callVolume }}</td>
                   <td>{{ row.textVolume }}</td>
@@ -1204,6 +1274,10 @@ type RosterEmployee = Record<string, any>;
       width: 100%;
       box-sizing: border-box;
       overflow-x: clip;
+      background:
+        radial-gradient(1200px 420px at 8% -10%, rgba(56, 189, 248, 0.08), transparent 55%),
+        radial-gradient(900px 380px at 92% 0%, rgba(52, 211, 153, 0.06), transparent 50%),
+        transparent;
     }
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
     .density-controls {
@@ -1237,21 +1311,164 @@ type RosterEmployee = Record<string, any>;
     .btn-secondary { padding: 9px 16px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 108px; &:disabled { opacity: 0.75; cursor: not-allowed; } &:hover:not(:disabled) { background: #243247; border-color: #475569; } }
     .btn-spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.28); border-top-color: #e0f2fe; border-radius: 999px; display: inline-block; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
-    .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
-    .status-item { background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .status-item .label { color: #94a3b8; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
-    .status-item .value { color: #e2e8f0; font-size: 0.84rem; font-weight: 600; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .stat-card {
+      position: relative;
+      background: linear-gradient(180deg, #152033 0%, #0f172a 100%);
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 14px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: #475569;
+    }
+    .stat-card.accent-staff::before { background: #94a3b8; }
+    .stat-card.accent-calls::before { background: #38bdf8; }
+    .stat-card.accent-time::before { background: #22d3ee; }
+    .stat-card.accent-meet::before { background: #818cf8; }
+    .stat-card.accent-busy::before { background: #f59e0b; }
+    .stat-card.accent-score::before { background: #34d399; }
+    .stat-card.accent-active::before { background: #fb923c; }
+    .stat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .stat-top i { color: #64748b; font-size: 1.05rem; }
+    .stat-val {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      display: flex;
+      align-items: baseline;
+      gap: 2px;
+    }
+    .stat-val small { font-size: 0.78rem; color: #94a3b8; font-weight: 650; }
+    .stat-lbl { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 650; }
+    .stat-meter {
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(51, 65, 85, 0.7);
+      overflow: hidden;
+    }
+    .stat-meter > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #64748b, #94a3b8);
+      max-width: 100%;
+    }
+    .stat-card.accent-calls .stat-meter > span { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+    .stat-card.accent-time .stat-meter > span { background: linear-gradient(90deg, #0891b2, #22d3ee); }
+    .stat-card.accent-meet .stat-meter > span { background: linear-gradient(90deg, #6366f1, #a5b4fc); }
+    .stat-card.accent-busy .stat-meter > span { background: linear-gradient(90deg, #d97706, #fbbf24); }
+    .stat-card.accent-score .stat-meter > span { background: linear-gradient(90deg, #059669, #34d399); }
+    .stat-card.accent-active .stat-meter > span { background: linear-gradient(90deg, #ea580c, #fb923c); }
+    .integration-ribbon {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 18px;
+      margin-bottom: 16px;
+      padding: 10px 14px;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.85);
+    }
+    .ribbon-item { display: inline-flex; align-items: center; gap: 8px; }
+    .ribbon-item i { color: #64748b; font-size: 1rem; }
+    .ribbon-item .label { color: #94a3b8; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 650; }
+    .ribbon-item .value { color: #e2e8f0; font-size: 0.82rem; font-weight: 600; }
+    .ribbon-check { margin-left: auto; }
     .status-chip { border: 1px solid #334155; color: #cbd5e1; background: #1e293b; border-radius: 6px; font-size: 0.7rem; padding: 3px 9px; font-weight: 600; letter-spacing: 0.02em; }
     .status-chip.connected { color: #86efac; border-color: #166534; background: #14532d; }
     .status-chip.not-connected { color: #fca5a5; border-color: #7f1d1d; background: #450a0a; }
-    .stat-card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
     .stat-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; background: #1e293b; color: #94a3b8; }
     .stat-icon.total, .stat-icon.pending, .stat-icon.completed, .stat-icon.staff, .stat-icon.calls, .stat-icon.activity, .stat-icon.draft {
       background: #1e293b; color: #94a3b8;
     }
-    .stat-val { font-size: 1.28rem; font-weight: 650; color: #f8fafc; display: block; letter-spacing: -0.02em; }
-    .stat-lbl { font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .meter-cell {
+      min-width: 72px;
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+    }
+    .meter {
+      width: 100%;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(51, 65, 85, 0.75);
+      overflow: hidden;
+      margin-bottom: 3px;
+    }
+    .meter-fill { height: 100%; border-radius: inherit; max-width: 100%; }
+    .meter-fill.presence { background: linear-gradient(90deg, #0369a1, #38bdf8); }
+    .meter-fill.system { background: linear-gradient(90deg, #1d4ed8, #60a5fa); }
+    .meter-fill.busy { background: linear-gradient(90deg, #b45309, #fbbf24); }
+    .meter-fill.follow { background: linear-gradient(90deg, #a16207, #fde047); }
+    .meter-lbl { font-size: 0.68rem; color: #cbd5e1; font-weight: 650; }
+    .via-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+    }
+    .via-chip[data-via='zoom'] { color: #86efac; border-color: #166534; background: rgba(22, 101, 52, 0.35); }
+    .via-chip[data-via='gmail'] { color: #fde68a; border-color: #854d0e; background: rgba(133, 77, 14, 0.35); }
+    .via-chip[data-via='system'] { color: #bfdbfe; border-color: #1e40af; background: rgba(30, 64, 175, 0.35); }
+    .score-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 52px;
+    }
+    .score-track {
+      width: 100%;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(51, 65, 85, 0.8);
+      overflow: hidden;
+    }
+    .score-fill { height: 100%; border-radius: inherit; background: #64748b; max-width: 100%; }
+    .score-block.high .score-fill { background: linear-gradient(90deg, #059669, #34d399); }
+    .score-block.med .score-fill { background: linear-gradient(90deg, #d97706, #fbbf24); }
+    .score-block.low .score-fill { background: linear-gradient(90deg, #dc2626, #f87171); }
+    .metric-cell {
+      min-width: 58px;
+      vertical-align: middle !important;
+    }
+    .metric-num { display: block; font-weight: 650; color: #e2e8f0; }
+    .spark {
+      display: block;
+      height: 4px;
+      margin-top: 4px;
+      border-radius: 999px;
+      max-width: 100%;
+      background: #475569;
+    }
+    .spark.inbound { background: linear-gradient(90deg, #0ea5e9, #7dd3fc); }
+    .spark.outbound { background: linear-gradient(90deg, #22c55e, #86efac); }
+    .spark.missed { background: linear-gradient(90deg, #ef4444, #fca5a5); }
     .page-tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #1f2937; }
     .page-tab { padding: 11px 18px; border: none; background: none; color: #94a3b8; cursor: pointer; font-weight: 600; font-size: 0.9rem; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px; }
     .page-tab.active { color: #f8fafc; border-bottom-color: #64748b; }
@@ -1386,12 +1603,12 @@ type RosterEmployee = Record<string, any>;
     table thead tr.source-group-row th.group-label {
       font-size: 0.66rem;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.08em;
       text-align: center;
       font-weight: 700;
       color: #e2e8f0;
       border-bottom: 2px solid #0f172a;
-      padding: 7px 8px;
+      padding: 9px 8px;
       white-space: nowrap;
       box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
     }
@@ -1484,11 +1701,11 @@ type RosterEmployee = Record<string, any>;
       background-color: rgba(76, 29, 149, 0.08) !important;
       color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+19):nth-child(-n+21) {
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+19):nth-child(-n+20) {
       background-color: #2a1520 !important;
       color: #e2e8f0;
     }
-    .reviews-table tbody td:nth-child(n+19):nth-child(-n+21) {
+    .reviews-table tbody td:nth-child(n+19):nth-child(-n+20) {
       background-color: rgba(136, 19, 55, 0.08) !important;
       color: #e2e8f0;
     }
@@ -1757,9 +1974,91 @@ type RosterEmployee = Record<string, any>;
     .reviews-table thead tr:not(.source-group-row) th { top: 30px; z-index: 4; }
     .reviews-table tbody tr:nth-child(odd) td { background: rgba(30, 41, 59, 0.55); color: #e2e8f0; }
     .reviews-table tbody tr:nth-child(even) td { background: rgba(15, 23, 42, 0.72); color: #e2e8f0; }
+    .reviews-table tbody tr.data-row { cursor: pointer; }
     .reviews-table tbody tr:hover td {
       filter: brightness(1.12);
       color: #f8fafc;
+    }
+
+    /* Magnifier / lens row: enlarge selected line and dim the rest */
+    tbody.has-row-lens > tr.data-row:not(.row-lens) > td {
+      opacity: 0.38;
+      filter: saturate(0.7);
+      transition: opacity 0.18s ease, filter 0.18s ease, padding 0.18s ease, font-size 0.18s ease;
+    }
+    tbody > tr.data-row > td {
+      transition: opacity 0.18s ease, filter 0.18s ease, padding 0.18s ease, font-size 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+    tbody > tr.row-lens > td {
+      opacity: 1 !important;
+      filter: none !important;
+      padding-top: 18px !important;
+      padding-bottom: 18px !important;
+      font-size: 1.05rem !important;
+      font-weight: 650;
+      line-height: 1.3;
+      color: #f8fafc !important;
+      background: #2a3a52 !important;
+      box-shadow:
+        inset 0 1px 0 rgba(226, 232, 240, 0.28),
+        inset 0 -1px 0 rgba(226, 232, 240, 0.28);
+      position: relative;
+      z-index: 3;
+    }
+    tbody > tr.row-lens > td:first-child {
+      box-shadow:
+        inset 4px 0 0 #cbd5e1,
+        inset 0 1px 0 rgba(226, 232, 240, 0.28),
+        inset 0 -1px 0 rgba(226, 232, 240, 0.28),
+        1px 0 0 #1f2937;
+      background: #1e293b !important;
+      font-size: 1.12rem !important;
+      font-weight: 700;
+    }
+    tbody > tr.row-lens > td:last-child {
+      box-shadow:
+        inset 0 1px 0 rgba(226, 232, 240, 0.28),
+        inset 0 -1px 0 rgba(226, 232, 240, 0.28),
+        -10px 0 16px rgba(2, 6, 23, 0.4);
+    }
+    .reviews-table tbody tr.row-lens > td:nth-child(n+19):nth-child(-n+20) {
+      background: #2a3a52 !important;
+      z-index: 3;
+      vertical-align: middle;
+      padding-left: 8px !important;
+      padding-right: 8px !important;
+      width: auto !important;
+      max-width: none !important;
+    }
+    .reviews-table tbody tr.row-lens > td:nth-child(19) { min-width: 68px !important; }
+    .reviews-table tbody tr.row-lens > td:nth-child(20) { min-width: 88px !important; }
+    .reviews-table tbody tr.row-lens .score-block {
+      min-width: 64px;
+      gap: 6px;
+    }
+    .reviews-table tbody tr.row-lens .score-track { height: 5px; }
+    .reviews-table tbody tr.row-lens .score-pill {
+      min-width: 52px;
+      padding: 7px 14px;
+      font-size: 1rem;
+      border-radius: 999px;
+    }
+    .reviews-table tbody tr.row-lens .icon-btn {
+      font-size: 1.25rem;
+      padding: 6px 8px;
+    }
+    .reviews-page.density-dense tbody > tr.row-lens > td {
+      padding-top: 15px !important;
+      padding-bottom: 15px !important;
+      font-size: 0.95rem !important;
+    }
+    .reviews-page.density-dense tbody > tr.row-lens > td:first-child {
+      font-size: 1.02rem !important;
+    }
+    .additional-metrics-table tbody tr.data-row,
+    .management-metrics-table tbody tr.data-row { cursor: pointer; }
+    .additional-metrics-table tbody tr.row-lens > td.addl-name {
+      background: #1e293b !important;
     }
     .reviews-table th,
     .reviews-table td { vertical-align: middle; white-space: nowrap; }
@@ -1776,40 +2075,49 @@ type RosterEmployee = Record<string, any>;
     .reviews-table th:nth-child(19),
     .reviews-table td:nth-child(19),
     .reviews-table th:nth-child(20),
-    .reviews-table td:nth-child(20),
-    .reviews-table th:nth-child(21),
-    .reviews-table td:nth-child(21) {
+    .reviews-table td:nth-child(20) {
       min-width: 0;
     }
-    /* Sticky Review columns so Score stays visible at 100% zoom */
-    .reviews-table th:nth-child(21),
-    .reviews-table td:nth-child(21) {
-      position: sticky;
-      right: 0;
-      z-index: 4;
-      min-width: 72px;
-      background: #111827 !important;
-      box-shadow: -8px 0 12px rgba(2, 6, 23, 0.45);
+    /* Via + Rev need room so sticky review columns don't eat their labels */
+    .reviews-table th:nth-child(17),
+    .reviews-table td:nth-child(17) {
+      min-width: 56px;
+    }
+    .reviews-table th:nth-child(18),
+    .reviews-table td:nth-child(18) {
+      min-width: 64px;
+    }
+    /* Review columns: Score + Actions */
+    .reviews-table th:nth-child(19),
+    .reviews-table td:nth-child(19) {
+      width: 64px;
+      min-width: 64px;
+      max-width: 72px;
+      text-align: center;
+      padding-left: 6px;
+      padding-right: 6px;
     }
     .reviews-table th:nth-child(20),
     .reviews-table td:nth-child(20) {
-      position: sticky;
-      right: 72px;
-      z-index: 4;
-      min-width: 70px;
-      background: #111827 !important;
+      width: 84px;
+      min-width: 84px;
+      max-width: 92px;
+      text-align: center;
+      padding-left: 6px;
+      padding-right: 12px;
+      white-space: nowrap;
     }
-    .reviews-table th:nth-child(19),
-    .reviews-table td:nth-child(19) {
-      position: sticky;
-      right: 142px;
-      z-index: 4;
-      min-width: 56px;
-      background: #111827 !important;
+    .reviews-table tbody tr:nth-child(odd) td:nth-child(n+19):nth-child(-n+20) { background: #1e293b !important; }
+    .reviews-table tbody tr:nth-child(even) td:nth-child(n+19):nth-child(-n+20) { background: #0f172a !important; }
+    .reviews-table tbody tr.row-lens > td:nth-child(n+19):nth-child(-n+20) {
+      background: #2a3a52 !important;
+      position: static !important;
+      right: auto !important;
+      box-shadow:
+        inset 0 1px 0 rgba(226, 232, 240, 0.28),
+        inset 0 -1px 0 rgba(226, 232, 240, 0.28) !important;
+      z-index: 3;
     }
-    .reviews-table tbody tr:nth-child(odd) td:nth-child(n+19):nth-child(-n+21) { background: #1e293b !important; }
-    .reviews-table tbody tr:nth-child(even) td:nth-child(n+19):nth-child(-n+21) { background: #0f172a !important; }
-    .reviews-table thead th:nth-child(n+19):nth-child(-n+21) { z-index: 5; }
     .reviews-table td:first-child,
     .reviews-table th:first-child {
       position: sticky;
@@ -1817,9 +2125,23 @@ type RosterEmployee = Record<string, any>;
       z-index: 4;
       background: #0f172a !important;
       color: #f8fafc !important;
-      min-width: 132px;
-      max-width: 180px;
+      width: 118px;
+      min-width: 108px;
+      max-width: 128px;
+      padding-left: 8px;
+      padding-right: 8px;
       box-shadow: 1px 0 0 #1f2937;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .reviews-table td:first-child strong {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.78rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
     }
     .reviews-table thead th:first-child { z-index: 5; background: #111827 !important; }
 
@@ -1837,8 +2159,9 @@ type RosterEmployee = Record<string, any>;
     .reviews-page.density-compact .reviews-table thead tr:not(.source-group-row) th { top: 26px; }
     .reviews-page.density-compact .reviews-table td:first-child,
     .reviews-page.density-compact .reviews-table th:first-child {
-      min-width: 110px;
-      max-width: 150px;
+      width: 104px;
+      min-width: 96px;
+      max-width: 114px;
     }
     .reviews-page.density-dense th,
     .reviews-page.density-dense td {
@@ -1853,8 +2176,9 @@ type RosterEmployee = Record<string, any>;
     .reviews-page.density-dense .reviews-table thead tr:not(.source-group-row) th { top: 24px; }
     .reviews-page.density-dense .reviews-table td:first-child,
     .reviews-page.density-dense .reviews-table th:first-child {
-      min-width: 96px;
-      max-width: 130px;
+      width: 96px;
+      min-width: 88px;
+      max-width: 108px;
     }
     .reviews-page.density-dense .stat-card { padding: 10px 12px; }
     .reviews-page.density-dense .stat-val { font-size: 1.15rem; }
@@ -1998,6 +2322,9 @@ type RosterEmployee = Record<string, any>;
     .status-badge.completed { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
     .status-badge.draft { background: rgba(156, 163, 175, 0.12); color: #9ca3af; }
     .score-pill { display: inline-flex; min-width: 42px; justify-content: center; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+    .score-block.high .score-pill { background: rgba(34, 197, 94, 0.16); color: #22c55e; }
+    .score-block.med .score-pill { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+    .score-block.low .score-pill { background: rgba(239, 68, 68, 0.16); color: #ef4444; }
     .score-pill.high { background: rgba(34, 197, 94, 0.16); color: #22c55e; }
     .score-pill.med { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
     .score-pill.low { background: rgba(239, 68, 68, 0.16); color: #ef4444; }
@@ -2043,6 +2370,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   tableNeedsScroll = signal(false);
   reviews = signal<Review[]>([]);
   loadingReviews = signal<boolean>(true);
+  refreshingLiveMetrics = signal<boolean>(false);
   updatingMetrics = signal<boolean>(false);
   lastMetricsUpdateAt = signal<string>('');
   timeclockSummaries = signal<any[]>([]);
@@ -2063,6 +2391,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   selectedDayIso = signal(new Date().toISOString().slice(0, 10));
   selectedTableSort = signal<ReviewTableSort>('employee-asc');
   tableSearchTerm = signal('');
+  focusedEmployeeId = signal<number | null>(null);
   selectedManagementSort = signal<ManagementTableSort>('calls-desc');
   managementSearchTerm = signal('');
   showReportsTab = signal(false);
@@ -2083,11 +2412,24 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   }>>([]);
   lastSyncStatus = signal('');
   lastSyncCompleteness = signal('');
-  periodMode = signal<'daily' | 'weekly' | 'monthly'>('weekly');
+  periodMode = signal<'daily' | 'weekly' | 'monthly' | 'ytd'>('weekly');
   periodFieldLabel = computed(() => {
     if (this.periodMode() === 'daily') return 'Date';
     if (this.periodMode() === 'weekly') return 'Week';
+    if (this.periodMode() === 'ytd') return 'Year';
     return 'Month';
+  });
+  revenueColumnLabel = computed(() => {
+    if (this.periodMode() === 'ytd') return 'Rev YTD';
+    if (this.periodMode() === 'weekly') return 'Rev Wk';
+    if (this.periodMode() === 'daily') return 'Rev Day';
+    return 'Rev 30d';
+  });
+  revenueColumnTitle = computed(() => {
+    if (this.periodMode() === 'ytd') return 'Invoiced Revenue (Year to Date)';
+    if (this.periodMode() === 'weekly') return 'Invoiced Revenue (Selected Week)';
+    if (this.periodMode() === 'daily') return 'Invoiced Revenue (Selected Day)';
+    return 'Invoiced Revenue (30d / Month)';
   });
   filteredAdditionalMetrics = computed(() => {
     const q = this.tableSearchTerm().trim().toLowerCase();
@@ -2097,6 +2439,8 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   });
   /** When true, metrics are computed from live Zoom/timeclock (Update flow). Otherwise prefer DB snapshots. */
   private preferLiveMetrics = signal(false);
+  /** Bumps on each period reload so stale live enrichments can't skip or overwrite a newer range. */
+  private liveEnrichGeneration = 0;
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
   tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
     { value: 'score-desc', label: 'Score: High to Low' },
@@ -2635,6 +2979,15 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   reviewPeriodOptions = computed(() => {
     const opts: { value: string; label: string }[] = [];
     const now = new Date();
+    if (this.periodMode() === 'ytd') {
+      const currentYear = now.getFullYear();
+      opts.push({ value: 'current', label: `YTD ${currentYear}` });
+      for (let i = 1; i <= 5; i++) {
+        const year = currentYear - i;
+        opts.push({ value: `ytd-${year}`, label: `${year} (Full Year)` });
+      }
+      return opts;
+    }
     if (this.periodMode() === 'monthly') {
       opts.push({ value: 'current', label: 'Current Month' });
       for (let i = 1; i <= 18; i++) {
@@ -2704,6 +3057,59 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       this.resolvedDensity.set(density);
       queueMicrotask(() => this.refreshTableScrollHint());
     }
+  }
+
+  selectTableRow(employeeId: number, event?: Event): void {
+    const target = event?.target as HTMLElement | undefined;
+    if (target?.closest('button, a, input, select, textarea, .icon-btn')) return;
+    const id = Number(employeeId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    this.focusedEmployeeId.update((current) => current === id ? null : id);
+  }
+
+  pct(rate: number | null | undefined): number {
+    const n = Number(rate || 0);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, n <= 1 ? n * 100 : n));
+  }
+
+  clampScore(score: number | null | undefined): number {
+    const n = Number(score || 0);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, n));
+  }
+
+  callShare(row: { inboundCalls?: number; outboundCalls?: number; missedCalls?: number }, kind: 'inbound' | 'outbound' | 'missed'): number {
+    const inbound = Math.max(0, Number(row?.inboundCalls || 0));
+    const outbound = Math.max(0, Number(row?.outboundCalls || 0));
+    const missed = Math.max(0, Number(row?.missedCalls || 0));
+    const total = inbound + outbound + missed;
+    if (total <= 0) return 0;
+    const value = kind === 'inbound' ? inbound : kind === 'outbound' ? outbound : missed;
+    return Math.round((value / total) * 100);
+  }
+
+  kpiActiveFill(): number {
+    const total = Number(this.performanceSummary().totalStaff || 0);
+    const active = Number(this.performanceSummary().activeStaff || 0);
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(100, (active / total) * 100));
+  }
+
+  kpiCallFill(): number {
+    const calls = Number(this.performanceSummary().totalCalls || 0);
+    // Soft scale vs ~25k month volume so the bar isn't always full.
+    return Math.max(4, Math.min(100, (calls / 25000) * 100));
+  }
+
+  kpiCallTimeFill(): number {
+    const mins = Number(this.performanceSummary().totalCallMinutes || 0);
+    return Math.max(4, Math.min(100, (mins / 30000) * 100));
+  }
+
+  kpiMeetingFill(): number {
+    const mins = Number(this.performanceSummary().totalMeetingMinutes || 0);
+    return Math.max(mins > 0 ? 6 : 0, Math.min(100, (mins / 5000) * 100));
   }
 
   private restoreTableDensityPreference(): void {
@@ -2868,7 +3274,8 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       const dates = this.enumerateDateKeys(range.from, range.to);
       const merged = new Map<string, any>();
       const daily = new Map<string, { dateKey: string; label: string; activeHours: number; activeUsers: number }>();
-      for (const date of dates) {
+
+      const fetchDay = async (date: string): Promise<void> => {
         let dayActiveSeconds = 0;
         const dayActiveUsers = new Set<string>();
         try {
@@ -2921,6 +3328,12 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         } catch {
           // Keep aggregating other dates.
         }
+      };
+
+      // Parallelize day fetches (bounded) — sequential month loads were multi-minute.
+      const concurrency = 6;
+      for (let i = 0; i < dates.length; i += concurrency) {
+        await Promise.all(dates.slice(i, i + concurrency).map(fetchDay));
       }
       this.timeclockSummaries.set(Array.from(merged.values()));
       this.dailyActivitySeries.set(Array.from(daily.values()));
@@ -3063,7 +3476,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     await this.reloadPeriodScopedData();
   }
 
-  async onPeriodModeChange(mode: 'daily' | 'weekly' | 'monthly') {
+  async onPeriodModeChange(mode: 'daily' | 'weekly' | 'monthly' | 'ytd') {
     if (this.periodMode() === mode) {
       this.showReportsTab.set(false);
       return;
@@ -3077,6 +3490,8 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     } else if (mode === 'weekly') {
       this.initializeCurrentWeekSelection();
       this.selectedReviewMonth.set(this.buildWeekRangeValue(this.selectedWeekYear(), this.selectedWeekNumber()));
+    } else if (mode === 'ytd') {
+      this.selectedReviewMonth.set('current');
     } else {
       this.selectedReviewMonth.set('current');
     }
@@ -3112,21 +3527,59 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   /** Clear + reload everything that belongs to the selected Day/Week/Month window. */
   private async reloadPeriodScopedData(includeEmployees = false): Promise<void> {
     this.loadingReviews.set(true);
+    this.liveEnrichGeneration += 1;
+    const generation = this.liveEnrichGeneration;
     this.clearPeriodScopedMetrics();
     try {
-      const tasks: Promise<unknown>[] = [
+      // Fast path: warehouse / DB only — table should appear in ~1s.
+      const fast: Promise<unknown>[] = [
         this.loadReviews(),
         this.loadPersistedDailyMetrics(),
         this.loadScorecardSnapshots(),
-        this.loadAdditionalMetrics(),
-        this.loadTimeclockSummary(),
-        this.loadZoomMetrics(false)
+        this.loadAdditionalMetrics()
       ];
-      if (includeEmployees) tasks.unshift(this.loadEmployees());
-      await Promise.all(tasks);
+      if (includeEmployees) fast.unshift(this.loadEmployees());
+      await Promise.all(fast);
       this.applyScorecardSnapshotsToLiveMaps();
     } finally {
       this.loadingReviews.set(false);
+    }
+    // Live Zoom/timeclock enrichment stays in the background and must not block the table.
+    void this.enrichPeriodWithLiveSources(generation);
+  }
+
+  private warehouseHasClockedHours(): boolean {
+    return Object.values(this.scorecardSnapshotMap()).some((s) => Number(s?.clockedHours || 0) > 0);
+  }
+
+  private scorecardSnapshotHasSignal(snap: ScorecardSnapshotRow | null | undefined): boolean {
+    if (!snap) return false;
+    return Number(snap.callVolume || 0) > 0
+      || Number(snap.textVolume || 0) > 0
+      || Number(snap.sentCount || 0) > 0
+      || Number(snap.replyCount || 0) > 0
+      || Number(snap.clockedHours || 0) > 0
+      || Number(snap.activeHours || 0) > 0
+      || Number(snap.invoicedRevenue || 0) > 0
+      || Number(snap.score || 0) > 0;
+  }
+
+  private async enrichPeriodWithLiveSources(generation?: number): Promise<void> {
+    const gen = generation ?? this.liveEnrichGeneration;
+    this.refreshingLiveMetrics.set(true);
+    try {
+      // Only skip timeclock when warehouse already has real system hours (not empty stubs).
+      const skipTimeclock = this.warehouseHasClockedHours() || this.periodMode() === 'ytd';
+      await Promise.all([
+        skipTimeclock ? Promise.resolve() : this.loadTimeclockSummary(),
+        this.loadZoomMetrics(false)
+      ]);
+      if (gen !== this.liveEnrichGeneration) return;
+      this.applyScorecardSnapshotsToLiveMaps();
+    } finally {
+      if (gen === this.liveEnrichGeneration) {
+        this.refreshingLiveMetrics.set(false);
+      }
     }
   }
 
@@ -3139,6 +3592,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     this.timeclockSummaries.set([]);
     this.dailyActivitySeries.set([]);
     this.additionalMetrics.set([]);
+    this.focusedEmployeeId.set(null);
   }
 
   async updateMetricsNow(): Promise<void> {
@@ -3283,7 +3737,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Prefer warehouse snapshot for the selected period when live maps are empty or weaker. */
+  /** Merge warehouse snapshot into live maps (take the stronger value per field). */
   private applyScorecardSnapshotsToLiveMaps(): void {
     if (this.preferLiveMetrics()) return;
     const snapshots = this.scorecardSnapshotMap();
@@ -3296,26 +3750,27 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
 
     for (const id of ids) {
       const snap = snapshots[Number(id)];
-      if (!snap) continue;
+      if (!snap || !this.scorecardSnapshotHasSignal(snap)) continue;
       const existing = map[snap.employeeId];
-      const existingCalls = Number(existing?.callVolume || 0);
-      const existingSent = Number(existing?.sentCount || 0);
-      // Snapshot wins when live pull returned nothing useful for this period.
-      if (existing && (existingCalls > 0 || existingSent > 0)) continue;
-
       const metric: ZoomMetricRow = {
         employeeId: snap.employeeId,
-        callVolume: snap.callVolume,
-        totalCallMinutes: snap.totalCallMinutes,
-        avgCallMinutes: snap.avgCallMinutes,
-        textVolume: snap.textVolume,
-        sentCount: snap.sentCount,
-        replyCount: snap.replyCount,
-        firstResponseMinutes: snap.firstResponseMinutes,
-        followUpRate: snap.followUpRate,
-        internalCount: snap.internalCount,
-        externalCount: snap.externalCount,
-        employeeName: snap.employeeName
+        callVolume: Math.max(Number(existing?.callVolume || 0), Number(snap.callVolume || 0)),
+        totalCallMinutes: Math.max(Number(existing?.totalCallMinutes || 0), Number(snap.totalCallMinutes || 0)),
+        avgCallMinutes: Math.max(Number(existing?.avgCallMinutes || 0), Number(snap.avgCallMinutes || 0)),
+        textVolume: Math.max(Number(existing?.textVolume || 0), Number(snap.textVolume || 0)),
+        meetingsHosted: Math.max(Number(existing?.meetingsHosted || 0), 0),
+        meetingsJoined: Math.max(Number(existing?.meetingsJoined || 0), 0),
+        totalMeetingMinutes: Math.max(Number(existing?.totalMeetingMinutes || 0), 0),
+        sentCount: Math.max(Number(existing?.sentCount || 0), Number(snap.sentCount || 0)),
+        replyCount: Math.max(Number(existing?.replyCount || 0), Number(snap.replyCount || 0)),
+        firstResponseMinutes: Number(existing?.firstResponseMinutes || 0) > 0
+          ? Number(existing?.firstResponseMinutes || 0)
+          : Number(snap.firstResponseMinutes || 0),
+        followUpRate: Math.max(Number(existing?.followUpRate || 0), Number(snap.followUpRate || 0)),
+        internalCount: Math.max(Number(existing?.internalCount || 0), Number(snap.internalCount || 0)),
+        externalCount: Math.max(Number(existing?.externalCount || 0), Number(snap.externalCount || 0)),
+        email: existing?.email,
+        employeeName: snap.employeeName || existing?.employeeName
       };
       map[snap.employeeId] = metric;
       const emp = this.employees().find(e => Number(e.id) === snap.employeeId);
@@ -3632,7 +4087,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
 
   private toMetricRow(review: Review): ReviewMetricRow {
     const warehouse = this.scorecardSnapshotMap()[Number(review.employeeId)];
-    const useWarehouse = !!warehouse && !this.preferLiveMetrics();
+    const warehouseUsable = this.scorecardSnapshotHasSignal(warehouse) && !this.preferLiveMetrics();
     const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const scheduledHours = this.getAssignedWorkHoursForSelectedRange();
@@ -3673,24 +4128,22 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       || persistedScore > 0
       || persistedRevenue > 0
     );
-    const useDbSnapshot = !useWarehouse && hasPersistedRow && !this.preferLiveMetrics();
+    const useDbSnapshot = !warehouseUsable && hasPersistedRow && !this.preferLiveMetrics();
+    const wh = warehouseUsable ? warehouse! : null;
 
-    const callVolume = useWarehouse
-      ? Number(warehouse!.callVolume || 0)
-      : useDbSnapshot
-        ? persistedCallVolume
-        : Math.max(persistedCallVolume, snapshotCallVolume, liveCallVolume);
-    const textVolume = useWarehouse
-      ? Number(warehouse!.textVolume || 0)
-      : useDbSnapshot
-        ? persistedTextVolume
-        : Math.max(persistedTextVolume, snapshotTextVolume, liveTextVolume);
-    const totalCallMinutes = useWarehouse
-      ? Math.max(0, Number(warehouse!.totalCallMinutes || 0))
-      : Math.max(0, liveTotalCallMinutes);
+    // On open: merge warehouse + persisted + live (max). Update flow prefers live via preferLiveMetrics.
+    const callVolume = this.preferLiveMetrics()
+      ? Math.max(liveCallVolume, snapshotCallVolume)
+      : Math.max(Number(wh?.callVolume || 0), persistedCallVolume, snapshotCallVolume, liveCallVolume);
+    const textVolume = this.preferLiveMetrics()
+      ? Math.max(liveTextVolume, snapshotTextVolume)
+      : Math.max(Number(wh?.textVolume || 0), persistedTextVolume, snapshotTextVolume, liveTextVolume);
+    const totalCallMinutes = this.preferLiveMetrics()
+      ? Math.max(0, liveTotalCallMinutes)
+      : Math.max(0, Number(wh?.totalCallMinutes || 0), liveTotalCallMinutes);
     const avgCallMinutes = callVolume > 0
-      ? (useWarehouse
-        ? (Number(warehouse!.avgCallMinutes || 0) > 0 ? Number(warehouse!.avgCallMinutes || 0) : totalCallMinutes / callVolume)
+      ? (Number(wh?.avgCallMinutes || 0) > 0
+        ? Number(wh!.avgCallMinutes)
         : (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : (totalCallMinutes > 0 ? totalCallMinutes / callVolume : 0)))
       : 0;
 
@@ -3698,36 +4151,38 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     let totalHours: number;
     let activeHours: number;
     let idleHours: number;
-    if (useWarehouse) {
-      totalHours = Math.max(0, Number(warehouse!.clockedHours || 0));
-      activeHours = Math.min(Math.max(0, Number(warehouse!.activeHours || 0)), totalHours);
-      idleHours = Math.max(0, Number(warehouse!.idleHours || 0), totalHours - activeHours);
-    } else if (useDbSnapshot) {
-      totalHours = Math.max(0, persistedClocked);
-      // Never show active > clocked (old snapshots stored scheduled hours as "work").
-      activeHours = Math.min(Math.max(0, persistedActive), totalHours);
-      idleHours = Math.max(0, totalHours - activeHours);
-    } else if (hasLiveTime) {
+    if (this.preferLiveMetrics() && hasLiveTime) {
       totalHours = liveTime.totalHours;
       activeHours = Math.min(liveTime.activeHours, totalHours);
       idleHours = liveTime.idleHours;
     } else {
-      totalHours = Math.max(persistedClocked, hasSnapshot ? Number(review.clockedHours || 0) : 0);
-      activeHours = Math.min(
-        Math.max(persistedActive, hasSnapshot ? Number(review.workHours || 0) : 0),
-        totalHours
+      totalHours = Math.max(
+        Number(wh?.clockedHours || 0),
+        persistedClocked,
+        hasLiveTime ? liveTime.totalHours : 0,
+        hasSnapshot ? Number(review.clockedHours || 0) : 0
       );
-      idleHours = Math.max(0, totalHours - activeHours);
+      const rawActive = Math.max(
+        Number(wh?.activeHours || 0),
+        persistedActive,
+        hasLiveTime ? liveTime.activeHours : 0,
+        hasSnapshot ? Number(review.workHours || 0) : 0
+      );
+      activeHours = totalHours > 0 ? Math.min(rawActive, totalHours) : 0;
+      idleHours = Math.max(
+        0,
+        Number(wh?.idleHours || 0),
+        totalHours - activeHours,
+        hasLiveTime ? liveTime.idleHours : 0
+      );
     }
 
-    const presenceRate = useWarehouse
-      ? Math.min(1, Number(warehouse!.presenceRate || 0) || (scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0))
-      : (scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0);
-    const systemActivityRate = useWarehouse
-      ? Math.min(1, Number(warehouse!.systemRate || 0) || (totalHours > 0 ? Math.min(1, activeHours / totalHours) : 0))
-      : (totalHours > 0
-        ? Math.min(1, activeHours / totalHours)
-        : (hasLiveTime && !useDbSnapshot ? liveTime.activityRate : 0));
+    const presenceRate = scheduledHours > 0
+      ? Math.min(1, totalHours / scheduledHours)
+      : Math.min(1, Number(wh?.presenceRate || 0));
+    const systemActivityRate = totalHours > 0
+      ? Math.min(1, activeHours / totalHours)
+      : Math.min(1, Number(wh?.systemRate || 0) || (hasLiveTime ? liveTime.activityRate : 0));
 
     let zoomBusyRate = 0;
     let gmailBusyRate = 0;
@@ -3735,22 +4190,36 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     let activityRate = 0;
     let busySource: 'zoom' | 'gmail' | 'system' | 'none' = 'none';
 
-    const sentCount = useWarehouse ? Number(warehouse!.sentCount || 0) : liveSentCount;
-    const replyCount = useWarehouse ? Number(warehouse!.replyCount || 0) : liveReplyCount;
-    const firstResponseMinutes = useWarehouse ? Number(warehouse!.firstResponseMinutes || 0) : liveFirstResponseMinutes;
-    const followUpRate = useWarehouse ? Number(warehouse!.followUpRate || 0) : liveFollowUpRate;
-    const internalCount = useWarehouse ? Number(warehouse!.internalCount || 0) : liveInternalCount;
-    const externalCount = useWarehouse ? Number(warehouse!.externalCount || 0) : liveExternalCount;
+    const sentCount = this.preferLiveMetrics()
+      ? liveSentCount
+      : Math.max(Number(wh?.sentCount || 0), liveSentCount);
+    const replyCount = this.preferLiveMetrics()
+      ? liveReplyCount
+      : Math.max(Number(wh?.replyCount || 0), liveReplyCount);
+    const firstResponseMinutes = this.preferLiveMetrics()
+      ? liveFirstResponseMinutes
+      : (liveFirstResponseMinutes > 0
+        ? liveFirstResponseMinutes
+        : Number(wh?.firstResponseMinutes || 0));
+    const followUpRate = this.preferLiveMetrics()
+      ? liveFollowUpRate
+      : Math.max(Number(wh?.followUpRate || 0), liveFollowUpRate);
+    const internalCount = this.preferLiveMetrics()
+      ? liveInternalCount
+      : Math.max(Number(wh?.internalCount || 0), liveInternalCount);
+    const externalCount = this.preferLiveMetrics()
+      ? liveExternalCount
+      : Math.max(Number(wh?.externalCount || 0), liveExternalCount);
 
-    if (useWarehouse) {
-      activityRate = Math.min(1, Number(warehouse!.busyRate || 0) || presenceRate);
+    if (warehouseUsable && Number(wh!.busyRate || 0) > 0 && !this.preferLiveMetrics() && !hasLiveTime) {
+      activityRate = Math.min(1, Number(wh!.busyRate || 0) || presenceRate);
       systemBusyRate = Math.min(1, presenceRate * Math.max(systemActivityRate, 0));
-      const sourceRaw = String(warehouse!.busySource || '').toLowerCase();
+      const sourceRaw = String(wh!.busySource || '').toLowerCase();
       if (sourceRaw.includes('gmail')) busySource = 'gmail';
       else if (sourceRaw.includes('system')) busySource = 'system';
       else if (sourceRaw.includes('zoom')) busySource = 'zoom';
       else busySource = callVolume > 0 ? 'zoom' : (sentCount > 0 ? 'gmail' : (totalHours > 0 ? 'system' : 'none'));
-    } else if (useDbSnapshot && persistedActivity > 0) {
+    } else if (useDbSnapshot && persistedActivity > 0 && !hasLiveTime && !this.preferLiveMetrics()) {
       activityRate = Math.min(1, persistedActivity);
       systemBusyRate = Math.min(1, presenceRate * Math.max(systemActivityRate, liveTime.interactionRate));
       const sourceRaw = String(persisted?.source || '').toLowerCase();
@@ -3780,11 +4249,9 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       busySource = busy.busySource;
     }
 
-    const invoicedRevenue = useWarehouse
-      ? Number(warehouse!.invoicedRevenue || 0)
-      : useDbSnapshot
-        ? persistedRevenue
-        : Math.max(persistedRevenue, hasSnapshot ? Number(review.invoicedRevenue || 0) : 0, liveRevenue);
+    const invoicedRevenue = this.preferLiveMetrics()
+      ? Math.max(persistedRevenue, hasSnapshot ? Number(review.invoicedRevenue || 0) : 0, liveRevenue)
+      : Math.max(Number(wh?.invoicedRevenue || 0), persistedRevenue, hasSnapshot ? Number(review.invoicedRevenue || 0) : 0, liveRevenue);
 
     const computedScore = this.computePerformanceScore(
       callVolume,
@@ -3804,11 +4271,12 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       internalCount,
       externalCount
     );
-    const score = useWarehouse && Number(warehouse!.score || 0) > 0
-      ? Number(warehouse!.score || 0)
-      : useDbSnapshot && persistedScore > 0
-        ? persistedScore
-        : Math.max(persistedScore, hasSnapshot ? Number(review.score || 0) : 0, computedScore);
+    const score = Math.max(
+      Number(wh?.score || 0),
+      persistedScore,
+      hasSnapshot ? Number(review.score || 0) : 0,
+      computedScore
+    );
 
     return {
       ...review,
@@ -4261,6 +4729,23 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     const toUtcDate = (d: Date) => new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     let from: Date;
     let to: Date;
+
+    const ytdMatch = /^ytd-(\d{4})$/.exec(value || '');
+    if (this.periodMode() === 'ytd' || ytdMatch) {
+      const year = ytdMatch
+        ? Number(ytdMatch[1])
+        : ((!value || value === 'current') ? now.getFullYear() : Number(value));
+      const safeYear = Number.isFinite(year) && year >= 2000 && year <= 2100 ? year : now.getFullYear();
+      from = toUtcDate(new Date(safeYear, 0, 1));
+      if (safeYear === now.getFullYear()) {
+        to = toUtcDate(now);
+      } else {
+        to = toUtcDate(new Date(safeYear, 11, 31));
+      }
+      const fromKey = from.toISOString().slice(0, 10);
+      const toKey = to.toISOString().slice(0, 10);
+      return { year: safeYear, month: to.getUTCMonth() + 1, from, to, fromKey, toKey };
+    }
 
     if (!value || value === 'current') {
       if (this.periodMode() === 'daily') {

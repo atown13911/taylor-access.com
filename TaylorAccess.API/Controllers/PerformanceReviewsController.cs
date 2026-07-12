@@ -1879,6 +1879,23 @@ public class PerformanceReviewsController : ControllerBase
             .OrderBy(r => r.EmployeeName)
             .ToListAsync();
 
+        // Fallback: same period start + mode (ToDate can differ for "current month" vs sync day).
+        if (rows.Count == 0)
+        {
+            rows = await _context.PerformanceScorecardSnapshots.AsNoTracking()
+                .Where(r => r.OrganizationId == organizationId
+                    && r.PeriodMode == mode
+                    && r.FromDate == fromDate)
+                .OrderByDescending(r => r.ToDate)
+                .ThenBy(r => r.EmployeeName)
+                .ToListAsync();
+            if (rows.Count > 0)
+            {
+                var bestTo = rows[0].ToDate;
+                rows = rows.Where(r => r.ToDate == bestTo).ToList();
+            }
+        }
+
         return Ok(new { data = rows, meta = new { from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd"), periodMode = mode, total = rows.Count } });
     }
 
@@ -1909,6 +1926,22 @@ public class PerformanceReviewsController : ControllerBase
                 && r.ToDate == toDate)
             .OrderBy(r => r.EmployeeName)
             .ToListAsync();
+
+        if (rows.Count == 0)
+        {
+            rows = await _context.PerformanceAdditionalMetrics.AsNoTracking()
+                .Where(r => r.OrganizationId == organizationId
+                    && r.PeriodMode == mode
+                    && r.FromDate == fromDate)
+                .OrderByDescending(r => r.ToDate)
+                .ThenBy(r => r.EmployeeName)
+                .ToListAsync();
+            if (rows.Count > 0)
+            {
+                var bestTo = rows[0].ToDate;
+                rows = rows.Where(r => r.ToDate == bestTo).ToList();
+            }
+        }
 
         return Ok(new { data = rows, meta = new { from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd"), periodMode = mode, total = rows.Count } });
     }
