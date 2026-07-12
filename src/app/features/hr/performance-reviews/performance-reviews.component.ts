@@ -1567,6 +1567,9 @@ export class PerformanceReviewsComponent implements OnInit {
   showTitlePicker = signal(false);
   showTitleSettings = signal(false);
   newManagementTitle = signal<string>('');
+  private readonly legacyManagementTabsStorageKey = 'ta.performanceReviews.managementTabs.v1';
+  private managementPrefsLoaded = false;
+  private managementPrefsSaveTimer: ReturnType<typeof setTimeout> | null = null;
   showCallModal = signal(false);
   callForm: any = {
     employeeId: 0, callType: 'outbound', contactName: '', contactNumber: '',
@@ -1747,11 +1750,13 @@ export class PerformanceReviewsComponent implements OnInit {
     this.activeManagementTitleTab.set(title);
     this.newManagementTitle.set('');
     this.showTitlePicker.set(false);
+    this.queuePersistManagementTabs();
   }
 
   selectManagementTitleTab(title: string): void {
     this.activeManagementTitleTab.set(title);
     this.showTitleSettings.set(false);
+    this.queuePersistManagementTabs();
   }
 
   removeManagementTitleTab(title: string): void {
@@ -1762,12 +1767,14 @@ export class PerformanceReviewsComponent implements OnInit {
     if (nextTabs.length === 0) {
       this.activeManagementTitleTab.set('');
       this.showTitleSettings.set(false);
+      this.queuePersistManagementTabs();
       return;
     }
 
     if (this.activeManagementTitleTab().trim().toLowerCase() === normalized) {
       this.activeManagementTitleTab.set(nextTabs[0]);
     }
+    this.queuePersistManagementTabs();
   }
 
   getReviewCount(status: string): number {
@@ -2096,6 +2103,7 @@ export class PerformanceReviewsComponent implements OnInit {
 
   ngOnInit() {
     this.initializeCurrentWeekSelection();
+    void this.loadManagementTabsFromPreferences();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
   }
@@ -3190,5 +3198,97 @@ export class PerformanceReviewsComponent implements OnInit {
 
   private formatShortDate(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  private async loadManagementTabsFromPreferences(): Promise<void> {
+    try {
+      const res: any = await this.http.get(`${this.apiUrl}/api/v1/auth/preferences`).toPromise();
+      const parsed = this.parsePreferencesObject(res?.preferences);
+      const stored = parsed?.['performanceReviews'] as Record<string, unknown> | undefined;
+      const tabs = Array.isArray(stored?.['managementTabs'])
+        ? (stored!['managementTabs'] as unknown[]).map(v => String(v || '').trim()).filter(Boolean)
+        : [];
+      const active = String(stored?.['activeManagementTab'] || '').trim();
+
+      if (tabs.length > 0) {
+        const deduped = Array.from(new Set(tabs));
+        this.managementTitleTabs.set(deduped);
+        const match = deduped.find(t => t.toLowerCase() === active.toLowerCase()) || deduped[0];
+        this.activeManagementTitleTab.set(match);
+        this.managementPrefsLoaded = true;
+        return;
+      }
+
+      // One-time migrate from legacy browser storage (removed earlier).
+      const migrated = this.readLegacyManagementTabsFromLocalStorage();
+      if (migrated.tabs.length > 0) {
+        this.managementTitleTabs.set(migrated.tabs);
+        this.activeManagementTitleTab.set(migrated.active || migrated.tabs[0]);
+        this.managementPrefsLoaded = true;
+        await this.persistManagementTabsToPreferences();
+        try { localStorage.removeItem(this.legacyManagementTabsStorageKey); } catch { /* ignore */ }
+        return;
+      }
+    } catch {
+      // Fall through to empty tabs; user can re-add.
+    }
+    this.managementPrefsLoaded = true;
+  }
+
+  private readLegacyManagementTabsFromLocalStorage(): { tabs: string[]; active: string } {
+    try {
+      const raw = localStorage.getItem(this.legacyManagementTabsStorageKey);
+      if (!raw) return { tabs: [], active: '' };
+      const parsed = JSON.parse(raw) as { tabs?: string[]; active?: string };
+      const tabs = Array.isArray(parsed?.tabs)
+        ? Array.from(new Set(parsed.tabs.map(v => String(v || '').trim()).filter(Boolean)))
+        : [];
+      const active = String(parsed?.active || '').trim();
+      return { tabs, active };
+    } catch {
+      return { tabs: [], active: '' };
+    }
+  }
+
+  private queuePersistManagementTabs(): void {
+    if (!this.managementPrefsLoaded) return;
+    if (this.managementPrefsSaveTimer) clearTimeout(this.managementPrefsSaveTimer);
+    this.managementPrefsSaveTimer = setTimeout(() => {
+      void this.persistManagementTabsToPreferences();
+    }, 250);
+  }
+
+  private async persistManagementTabsToPreferences(): Promise<void> {
+    try {
+      const currentRes: any = await this.http.get(`${this.apiUrl}/api/v1/auth/preferences`).toPromise();
+      const prefs = this.parsePreferencesObject(currentRes?.preferences);
+      prefs['performanceReviews'] = {
+        ...(typeof prefs['performanceReviews'] === 'object' && prefs['performanceReviews']
+          ? prefs['performanceReviews'] as Record<string, unknown>
+          : {}),
+        managementTabs: this.managementTitleTabs(),
+        activeManagementTab: this.activeManagementTitleTab()
+      };
+      await this.http.put(`${this.apiUrl}/api/v1/auth/preferences`, {
+        preferences: JSON.stringify(prefs)
+      }).toPromise();
+    } catch {
+      // Best-effort; tabs remain in-memory for the session.
+    }
+  }
+
+  private parsePreferencesObject(raw: unknown): Record<string, unknown> {
+    if (raw == null) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return { ...(raw as Record<string, unknown>) };
+    if (typeof raw !== 'string') return {};
+    const text = raw.trim();
+    if (!text) return {};
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    } catch {
+      // Non-JSON preferences blob — keep under a reserved key so we don't wipe it.
+    }
+    return { _legacyPreferences: text };
   }
 }
