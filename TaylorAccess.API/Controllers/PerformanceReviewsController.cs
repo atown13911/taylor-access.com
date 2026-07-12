@@ -26,6 +26,7 @@ public class PerformanceReviewsController : ControllerBase
     private readonly CrmIntegrationCopyService _crmIntegrationCopy;
     private readonly ZoomDirectMetricsService _zoomDirectMetrics;
     private readonly PerformanceSyncOrchestrator _performanceSync;
+    private readonly CrmPerformanceBackfillService _crmBackfill;
 
     public PerformanceReviewsController(
         TaylorAccessDbContext context,
@@ -37,7 +38,8 @@ public class PerformanceReviewsController : ControllerBase
         LocalIntegrationStatusService localIntegrationStatus,
         CrmIntegrationCopyService crmIntegrationCopy,
         ZoomDirectMetricsService zoomDirectMetrics,
-        PerformanceSyncOrchestrator performanceSync)
+        PerformanceSyncOrchestrator performanceSync,
+        CrmPerformanceBackfillService crmBackfill)
     {
         _context = context;
         _currentUserService = currentUserService;
@@ -49,6 +51,7 @@ public class PerformanceReviewsController : ControllerBase
         _crmIntegrationCopy = crmIntegrationCopy;
         _zoomDirectMetrics = zoomDirectMetrics;
         _performanceSync = performanceSync;
+        _crmBackfill = crmBackfill;
     }
 
     [HttpGet]
@@ -1833,6 +1836,45 @@ public class PerformanceReviewsController : ControllerBase
             ToDate = to,
             Trigger = "manual-update",
             GmailSkipUsers = Math.Max(0, body?.GmailSkipUsers ?? 0)
+        }, HttpContext.RequestAborted);
+
+        return Ok(new { data = result });
+    }
+
+    public record CrmBackfillBody(string? PeriodMode, string? From, string? To);
+
+    /// <summary>One-shot CRM Zoom/Gmail → scorecard warehouse (no UI).</summary>
+    [HttpPost("crm-backfill")]
+    public async Task<ActionResult<object>> CrmBackfill([FromBody] CrmBackfillBody? body)
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var organizationId = orgId ?? user.OrganizationId ?? 0;
+        if (organizationId <= 0)
+            return BadRequest(new { message = "organizationId is required" });
+
+        var now = DateTime.UtcNow.Date;
+        var from = new DateTime(now.Year, now.Month, 1);
+        var to = now;
+        if (!string.IsNullOrWhiteSpace(body?.From) && DateTime.TryParse(body.From, out var parsedFrom))
+            from = parsedFrom.Date;
+        if (!string.IsNullOrWhiteSpace(body?.To) && DateTime.TryParse(body.To, out var parsedTo))
+            to = parsedTo.Date;
+        if (to < from) (from, to) = (to, from);
+
+        var bearer = Request.Headers.Authorization.ToString();
+        if (bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            bearer = bearer["Bearer ".Length..].Trim();
+        else
+            bearer = _jwtService.GenerateToken(user);
+
+        var result = await _crmBackfill.RunAsync(organizationId, new CrmPerformanceBackfillRequest
+        {
+            PeriodMode = body?.PeriodMode ?? "monthly",
+            FromDate = from,
+            ToDate = to,
+            BearerToken = bearer
         }, HttpContext.RequestAborted);
 
         return Ok(new { data = result });

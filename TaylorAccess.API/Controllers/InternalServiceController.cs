@@ -895,6 +895,50 @@ public class InternalServiceController : ControllerBase
         return Ok(new { data = paySheet, paystubId = paySheet.PaySheetNumber });
     }
 
+    /// <summary>One-shot CRM Zoom/Gmail scorecard warehouse backfill (no UI).</summary>
+    [HttpPost("performance/crm-backfill")]
+    public async Task<ActionResult> CrmPerformanceBackfill([FromBody] JsonElement body)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var orgId = TryGetInt(body, "organizationId", "organization_id");
+        if (orgId <= 0)
+        {
+            orgId = await _db.Organizations.AsNoTracking()
+                .OrderBy(o => o.Id)
+                .Select(o => o.Id)
+                .FirstOrDefaultAsync();
+        }
+        if (orgId <= 0)
+            return BadRequest(new { error = "organizationId is required" });
+
+        var now = DateTime.UtcNow.Date;
+        var from = TryGetDate(body, "from", "fromDate") ?? new DateTime(now.Year, now.Month, 1);
+        var to = TryGetDate(body, "to", "toDate") ?? now;
+        var periodMode = TryGetString(body, "periodMode", "period_mode") ?? "monthly";
+
+        // Prefer an active admin user so CRM gateway JWT has org context.
+        var admin = await _db.Users.AsNoTracking()
+            .Where(u => u.Status == "active" && (u.OrganizationId == orgId || u.OrganizationId == null))
+            .OrderBy(u => u.Id)
+            .FirstOrDefaultAsync();
+        if (admin == null)
+            return BadRequest(new { error = "No active user available to mint CRM gateway token" });
+
+        var jwt = HttpContext.RequestServices.GetRequiredService<IJwtService>();
+        var backfill = HttpContext.RequestServices.GetRequiredService<CrmPerformanceBackfillService>();
+        var result = await backfill.RunAsync(orgId, new CrmPerformanceBackfillRequest
+        {
+            PeriodMode = periodMode,
+            FromDate = from.Date,
+            ToDate = to.Date,
+            BearerToken = jwt.GenerateToken(admin)
+        }, HttpContext.RequestAborted);
+
+        return Ok(new { data = result });
+    }
+
     private static int TryGetInt(JsonElement element, params string[] names)
     {
         foreach (var name in names)
