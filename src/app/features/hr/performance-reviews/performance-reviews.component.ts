@@ -150,13 +150,17 @@ type RosterEmployee = Record<string, any>;
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="reviews-page" [class.density-compact]="tableDensity() === 'compact'" [class.density-dense]="tableDensity() === 'dense'">
+    <div class="reviews-page"
+      [class.density-auto]="tableDensity() === 'auto'"
+      [class.density-compact]="resolvedDensity() === 'compact'"
+      [class.density-dense]="resolvedDensity() === 'dense'">
       <header class="page-header">
         <div>
           <h1><i class='bx bx-bar-chart-square'></i> Performance Reviews</h1>
           <p class="subtitle">Employee evaluations and performance tracking</p>
         </div>
-        <div class="density-controls" title="Adjust table density for zoomed or smaller screens">
+        <div class="density-controls" title="Fit shrinks columns to your screen; Comfort keeps them roomy">
+          <button type="button" class="density-btn" [class.active]="tableDensity() === 'auto'" (click)="setTableDensity('auto')">Fit</button>
           <button type="button" class="density-btn" [class.active]="tableDensity() === 'comfortable'" (click)="setTableDensity('comfortable')">Comfort</button>
           <button type="button" class="density-btn" [class.active]="tableDensity() === 'compact'" (click)="setTableDensity('compact')">Compact</button>
           <button type="button" class="density-btn" [class.active]="tableDensity() === 'dense'" (click)="setTableDensity('dense')">Dense</button>
@@ -492,7 +496,7 @@ type RosterEmployee = Record<string, any>;
       } @else {
         <div class="table-wrap reviews-table-wrap">
           @if (tableNeedsScroll()) {
-            <div class="table-scroll-hint">Scroll sideways for Score / Actions →</div>
+            <div class="table-scroll-hint">More columns → · Score stays pinned</div>
           }
           <table class="reviews-table">
             <thead>
@@ -512,7 +516,7 @@ type RosterEmployee = Record<string, any>;
                 </th>
                 <th class="group-label group-timeclock" colspan="7">
                   <span class="group-content">
-                    <span class="group-name">VanTac/Timeclock</span>
+                    <span class="group-name">System</span>
                     <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
                   </span>
                 </th>
@@ -531,23 +535,23 @@ type RosterEmployee = Record<string, any>;
               </tr>
               <tr>
                 <th>Employee</th>
-                <th>Calls</th>
-                <th>Total Call Time</th>
-                <th>Avg Call Time</th>
-                <th>Texts</th>
-                <th>Sent</th>
-                <th>Replies</th>
-                <th>1st Resp (min)</th>
-                <th>Follow-Up %</th>
-                <th>Ext / Int</th>
-                <th>Clocked Hrs</th>
-                <th>Active Hrs</th>
-                <th>Idle Hrs</th>
-                <th>Presence %</th>
-                <th>System %</th>
-                <th>Busy %</th>
-                <th>Busy Via</th>
-                <th>Invoiced Rev (30d)</th>
+                <th title="Calls">Calls</th>
+                <th title="Total Call Time">Call Time</th>
+                <th title="Average Call Time">Avg</th>
+                <th title="Texts">Texts</th>
+                <th title="Emails Sent">Sent</th>
+                <th title="Email Replies">Replies</th>
+                <th title="First Response Minutes">1st Resp</th>
+                <th title="Follow-Up %">Follow %</th>
+                <th title="External / Internal">Ext/Int</th>
+                <th title="Clocked Hours">Clocked</th>
+                <th title="Active Hours">Active</th>
+                <th title="Idle Hours">Idle</th>
+                <th title="Presence %">Pres %</th>
+                <th title="System Activity %">Sys %</th>
+                <th title="Busy %">Busy %</th>
+                <th title="Busy Via">Via</th>
+                <th title="Invoiced Revenue (30d)">Rev 30d</th>
                 <th>Score</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -558,14 +562,14 @@ type RosterEmployee = Record<string, any>;
                 <tr>
                   <td><strong>{{ review.employeeName || 'Employee #' + review.employeeId }}</strong></td>
                   <td>{{ review.callVolume }}</td>
-                  <td>{{ review.totalCallMinutes | number:'1.1-1' }} min</td>
-                  <td>{{ review.avgCallMinutes | number:'1.1-2' }} min</td>
+                  <td>{{ review.totalCallMinutes | number:'1.0-0' }}</td>
+                  <td>{{ review.avgCallMinutes | number:'1.0-1' }}</td>
                   <td>{{ review.textVolume }}</td>
                   <td>{{ review.sentCount }}</td>
                   <td>{{ review.replyCount }}</td>
-                  <td>{{ review.firstResponseMinutes | number:'1.0-1' }}</td>
+                  <td>{{ review.firstResponseMinutes | number:'1.0-0' }}</td>
                   <td>{{ (review.followUpRate * 100) | number:'1.0-0' }}%</td>
-                  <td>{{ review.externalCount }} / {{ review.internalCount }}</td>
+                  <td>{{ review.externalCount }}/{{ review.internalCount }}</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
                   <td>{{ review.idleHours | number:'1.1-1' }}</td>
@@ -1374,8 +1378,8 @@ type RosterEmployee = Record<string, any>;
       background: rgba(15, 23, 42, 0.7);
     }
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
-    th { padding: 12px 16px; text-align: left; font-size: 0.75rem; color: #888; text-transform: uppercase; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
-    td { padding: 14px 16px; color: #e2e8f0; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    th { padding: 8px 10px; text-align: left; font-size: 0.72rem; color: #888; text-transform: uppercase; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
+    td { padding: 9px 10px; color: #e2e8f0; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
     tr:hover td { background: rgba(0, 212, 255, 0.03); }
     .reviews-table,
     .management-metrics-table {
@@ -1393,13 +1397,14 @@ type RosterEmployee = Record<string, any>;
       z-index: 2;
       background: #111827 !important;
       color: #e5e7eb !important;
-      font-size: 0.72rem;
-      letter-spacing: 0.05em;
+      font-size: 0.62rem;
+      letter-spacing: 0.03em;
       border-bottom: 1px solid #334155;
       white-space: nowrap;
+      padding: 7px 8px;
     }
     .reviews-table thead tr.source-group-row th { z-index: 3; }
-    .reviews-table thead tr:not(.source-group-row) th { top: 34px; }
+    .reviews-table thead tr:not(.source-group-row) th { top: 30px; }
     .reviews-table tbody tr:nth-child(odd) td { background: rgba(30, 41, 59, 0.55); color: #e2e8f0; }
     .reviews-table tbody tr:nth-child(even) td { background: rgba(15, 23, 42, 0.72); color: #e2e8f0; }
     .reviews-table tbody tr:hover td {
@@ -1416,20 +1421,45 @@ type RosterEmployee = Record<string, any>;
     .reviews-table thead tr.source-group-row th:last-child,
     .reviews-table thead tr:not(.source-group-row) th:last-child,
     .reviews-table tbody td:last-child {
-      padding-right: 28px;
+      padding-right: 16px;
     }
     .reviews-table th:nth-child(19),
-    .reviews-table td:nth-child(19) {
-      min-width: 72px;
-      padding-left: 18px;
-      padding-right: 18px;
-    }
+    .reviews-table td:nth-child(19),
     .reviews-table th:nth-child(20),
     .reviews-table td:nth-child(20),
     .reviews-table th:nth-child(21),
     .reviews-table td:nth-child(21) {
-      min-width: 88px;
+      min-width: 0;
     }
+    /* Sticky Review columns so Score stays visible at 100% zoom */
+    .reviews-table th:nth-child(21),
+    .reviews-table td:nth-child(21) {
+      position: sticky;
+      right: 0;
+      z-index: 4;
+      min-width: 72px;
+      background: #111827 !important;
+      box-shadow: -8px 0 12px rgba(2, 6, 23, 0.45);
+    }
+    .reviews-table th:nth-child(20),
+    .reviews-table td:nth-child(20) {
+      position: sticky;
+      right: 72px;
+      z-index: 4;
+      min-width: 70px;
+      background: #111827 !important;
+    }
+    .reviews-table th:nth-child(19),
+    .reviews-table td:nth-child(19) {
+      position: sticky;
+      right: 142px;
+      z-index: 4;
+      min-width: 56px;
+      background: #111827 !important;
+    }
+    .reviews-table tbody tr:nth-child(odd) td:nth-child(n+19):nth-child(-n+21) { background: #1e293b !important; }
+    .reviews-table tbody tr:nth-child(even) td:nth-child(n+19):nth-child(-n+21) { background: #0f172a !important; }
+    .reviews-table thead th:nth-child(n+19):nth-child(-n+21) { z-index: 5; }
     .reviews-table td:first-child,
     .reviews-table th:first-child {
       position: sticky;
@@ -1437,7 +1467,8 @@ type RosterEmployee = Record<string, any>;
       z-index: 4;
       background: #0f172a !important;
       color: #f8fafc !important;
-      min-width: 160px;
+      min-width: 132px;
+      max-width: 180px;
       box-shadow: 1px 0 0 #1f2937;
     }
     .reviews-table thead th:first-child { z-index: 5; background: #111827 !important; }
@@ -1445,31 +1476,35 @@ type RosterEmployee = Record<string, any>;
     /* Zoom / narrow viewport: auto-compact cell sizing */
     .reviews-page.density-compact th,
     .reviews-page.density-compact td {
-      padding: 8px 10px;
-      font-size: 0.78rem;
+      padding: 6px 7px;
+      font-size: 0.72rem;
     }
     .reviews-page.density-compact .reviews-table thead th {
-      font-size: 0.64rem;
-      letter-spacing: 0.03em;
+      font-size: 0.58rem;
+      letter-spacing: 0.02em;
+      padding: 5px 6px;
     }
-    .reviews-page.density-compact .reviews-table thead tr:not(.source-group-row) th { top: 30px; }
+    .reviews-page.density-compact .reviews-table thead tr:not(.source-group-row) th { top: 26px; }
     .reviews-page.density-compact .reviews-table td:first-child,
     .reviews-page.density-compact .reviews-table th:first-child {
-      min-width: 140px;
+      min-width: 110px;
+      max-width: 150px;
     }
     .reviews-page.density-dense th,
     .reviews-page.density-dense td {
-      padding: 5px 7px;
-      font-size: 0.7rem;
+      padding: 4px 5px;
+      font-size: 0.66rem;
     }
     .reviews-page.density-dense .reviews-table thead th {
-      font-size: 0.58rem;
-      letter-spacing: 0.02em;
+      font-size: 0.54rem;
+      letter-spacing: 0.01em;
+      padding: 4px 5px;
     }
-    .reviews-page.density-dense .reviews-table thead tr:not(.source-group-row) th { top: 26px; }
+    .reviews-page.density-dense .reviews-table thead tr:not(.source-group-row) th { top: 24px; }
     .reviews-page.density-dense .reviews-table td:first-child,
     .reviews-page.density-dense .reviews-table th:first-child {
-      min-width: 120px;
+      min-width: 96px;
+      max-width: 130px;
     }
     .reviews-page.density-dense .stat-card { padding: 10px 12px; }
     .reviews-page.density-dense .stat-val { font-size: 1.15rem; }
@@ -1631,12 +1666,12 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
-  private densityManual = false;
   private viewportListenerCleanup: (() => void) | null = null;
-  private readonly densityStorageKey = 'ta.performanceReviews.tableDensity.v1';
+  private readonly densityStorageKey = 'ta.performanceReviews.tableDensity.v2';
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
-  tableDensity = signal<'comfortable' | 'compact' | 'dense'>('comfortable');
+  tableDensity = signal<'auto' | 'comfortable' | 'compact' | 'dense'>('auto');
+  resolvedDensity = signal<'comfortable' | 'compact' | 'dense'>('compact');
   tableNeedsScroll = signal(false);
   reviews = signal<Review[]>([]);
   loadingReviews = signal<boolean>(true);
@@ -2243,11 +2278,10 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     this.initializeCurrentWeekSelection();
     this.restoreTableDensityPreference();
     this.bindViewportDensityWatchers();
-    this.refreshViewportDensity();
+    this.refreshViewportDensity(true);
     void this.loadManagementTabsFromPreferences();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
-    queueMicrotask(() => this.refreshTableScrollHint());
   }
 
   ngOnDestroy(): void {
@@ -2257,32 +2291,39 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
 
   @HostListener('window:resize')
   onWindowResize(): void {
-    this.refreshViewportDensity();
-    this.refreshTableScrollHint();
+    this.refreshViewportDensity(false);
   }
 
-  setTableDensity(density: 'comfortable' | 'compact' | 'dense'): void {
-    this.densityManual = true;
+  setTableDensity(density: 'auto' | 'comfortable' | 'compact' | 'dense'): void {
     this.tableDensity.set(density);
     try { localStorage.setItem(this.densityStorageKey, density); } catch { /* ignore */ }
-    queueMicrotask(() => this.refreshTableScrollHint());
+    if (density === 'auto') {
+      this.refreshViewportDensity(true);
+    } else {
+      this.resolvedDensity.set(density);
+      queueMicrotask(() => this.refreshTableScrollHint());
+    }
   }
 
   private restoreTableDensityPreference(): void {
     try {
       const saved = String(localStorage.getItem(this.densityStorageKey) || '').trim();
-      if (saved === 'comfortable' || saved === 'compact' || saved === 'dense') {
-        this.densityManual = true;
+      if (saved === 'auto' || saved === 'comfortable' || saved === 'compact' || saved === 'dense') {
         this.tableDensity.set(saved);
+        if (saved !== 'auto') this.resolvedDensity.set(saved);
+      } else {
+        // Prefer Fit on first visit so 100% zoom uses the content area, not full window width.
+        this.tableDensity.set('auto');
       }
-    } catch { /* ignore */ }
+    } catch {
+      this.tableDensity.set('auto');
+    }
   }
 
   private bindViewportDensityWatchers(): void {
     if (typeof window === 'undefined') return;
     const onViewportChange = () => {
-      this.refreshViewportDensity();
-      this.refreshTableScrollHint();
+      this.refreshViewportDensity(false);
     };
     window.visualViewport?.addEventListener('resize', onViewportChange);
     window.visualViewport?.addEventListener('scroll', onViewportChange);
@@ -2292,25 +2333,63 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     };
   }
 
-  private refreshViewportDensity(): void {
-    if (this.densityManual || typeof window === 'undefined') {
+  private refreshViewportDensity(force = false): void {
+    if (typeof window === 'undefined') return;
+    const mode = this.tableDensity();
+    if (mode !== 'auto') {
+      this.resolvedDensity.set(mode);
       this.refreshTableScrollHint();
       return;
     }
-    // Browser zoom reduces CSS pixel width (innerWidth), so this adapts density automatically.
+
+    // Measure the actual content pane (sidebar already removed), not the full browser window.
+    const content = document.querySelector('.content-area') as HTMLElement | null;
+    const page = document.querySelector('.reviews-page') as HTMLElement | null;
     const width = Math.max(
       0,
-      Number(window.visualViewport?.width || 0),
-      Number(window.innerWidth || 0)
+      Number(content?.clientWidth || 0),
+      Number(page?.clientWidth || 0),
+      Number(window.visualViewport?.width || 0) - 280,
+      Number(window.innerWidth || 0) - 280
     );
-    if (width > 0 && width < 1100) {
-      this.tableDensity.set('dense');
-    } else if (width > 0 && width < 1450) {
-      this.tableDensity.set('compact');
-    } else {
-      this.tableDensity.set('comfortable');
+
+    let next: 'comfortable' | 'compact' | 'dense' = 'compact';
+    if (width > 0 && width < 1200) next = 'dense';
+    else if (width > 0 && width < 1700) next = 'compact';
+    else next = 'comfortable';
+
+    if (force || this.resolvedDensity() !== next) {
+      this.resolvedDensity.set(next);
     }
-    this.refreshTableScrollHint();
+
+    // After layout, escalate denser if columns still overflow at 100% zoom.
+    queueMicrotask(() => this.fitDensityToOverflow());
+  }
+
+  private fitDensityToOverflow(): void {
+    if (this.tableDensity() !== 'auto' || typeof document === 'undefined') {
+      this.refreshTableScrollHint();
+      return;
+    }
+    const wrap = document.querySelector('.reviews-table-wrap') as HTMLElement | null;
+    if (!wrap) {
+      this.refreshTableScrollHint();
+      return;
+    }
+    const overflows = wrap.scrollWidth > wrap.clientWidth + 12;
+    this.tableNeedsScroll.set(overflows);
+    if (!overflows) return;
+
+    const current = this.resolvedDensity();
+    if (current === 'comfortable') {
+      this.resolvedDensity.set('compact');
+      setTimeout(() => this.fitDensityToOverflow(), 40);
+      return;
+    }
+    if (current === 'compact') {
+      this.resolvedDensity.set('dense');
+      setTimeout(() => this.refreshTableScrollHint(), 40);
+    }
   }
 
   private refreshTableScrollHint(): void {
@@ -2638,7 +2717,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     this.loadingReviews.set(false);
     void this.loadTimeclockSummary();
     void this.loadZoomMetrics(false);
-    setTimeout(() => this.refreshTableScrollHint(), 0);
+    setTimeout(() => this.refreshViewportDensity(true), 0);
   }
 
   async updateMetricsNow(): Promise<void> {
