@@ -58,8 +58,15 @@ interface ReviewMetricRow extends Review {
   presenceRate: number;
   /** active ÷ (active + idle) */
   systemActivityRate: number;
-  /** Composite: presenceRate × systemActivityRate */
+  /** Zoom-derived busy share of scheduled hours */
+  zoomBusyRate: number;
+  /** Gmail-derived busy share of scheduled hours */
+  gmailBusyRate: number;
+  /** System presence × engagement (fallback for app users) */
+  systemBusyRate: number;
+  /** Primary busy signal: max(zoom, gmail, system) */
   activityRate: number;
+  busySource: 'zoom' | 'gmail' | 'system' | 'none';
   invoicedRevenue: number;
   score: number;
 }
@@ -155,7 +162,7 @@ type RosterEmployee = Record<string, any>;
         <div class="stat-card"><div class="stat-icon calls"><i class='bx bx-phone-call'></i></div><div><span class="stat-val">{{ performanceSummary().totalCalls }}</span><span class="stat-lbl">Total Calls</span></div></div>
         <div class="stat-card"><div class="stat-icon total"><i class='bx bx-time-five'></i></div><div><span class="stat-val">{{ performanceSummary().totalCallMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Call Time</span></div></div>
         <div class="stat-card"><div class="stat-icon total"><i class='bx bx-video'></i></div><div><span class="stat-val">{{ performanceSummary().totalMeetingMinutes | number:'1.0-0' }}m</span><span class="stat-lbl">Total Meeting Time</span></div></div>
-        <div class="stat-card"><div class="stat-icon activity"><i class='bx bx-line-chart'></i></div><div><span class="stat-val">{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</span><span class="stat-lbl">Avg Activity</span></div></div>
+        <div class="stat-card"><div class="stat-icon activity"><i class='bx bx-line-chart'></i></div><div><span class="stat-val">{{ performanceSummary().avgActivityPercent | number:'1.0-0' }}%</span><span class="stat-lbl">Avg Busy</span></div></div>
         <div class="stat-card"><div class="stat-icon completed"><i class='bx bx-medal'></i></div><div><span class="stat-val">{{ performanceSummary().avgScore | number:'1.0-0' }}</span><span class="stat-lbl">Avg Score</span></div></div>
         <div class="stat-card"><div class="stat-icon pending"><i class='bx bx-user-check'></i></div><div><span class="stat-val">{{ performanceSummary().activeStaff }}</span><span class="stat-lbl">Active Staff</span></div></div>
       </div>
@@ -396,10 +403,10 @@ type RosterEmployee = Record<string, any>;
               }
             </div>
             <div class="report-panel report-panel-wide">
-              <h3>Top Performers (Activity %)</h3>
+              <h3>Top Performers (Busy %)</h3>
               <div class="report-table-head">
                 <span>Employee</span>
-                <span>Activity %</span>
+                <span>Busy %</span>
                 <span>Calls</span>
                 <span>Call Time</span>
               </div>
@@ -482,7 +489,7 @@ type RosterEmployee = Record<string, any>;
                     <span class="status-dot" [class.online]="googleApiStatus() === 'connected'" [class.offline]="googleApiStatus() !== 'connected'"></span>
                   </span>
                 </th>
-                <th class="group-label group-timeclock" colspan="6">
+                <th class="group-label group-timeclock" colspan="7">
                   <span class="group-content">
                     <span class="group-name">VanTac/Timeclock</span>
                     <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
@@ -517,7 +524,8 @@ type RosterEmployee = Record<string, any>;
                 <th>Idle Hrs</th>
                 <th>Presence %</th>
                 <th>System %</th>
-                <th>Activity %</th>
+                <th>Busy %</th>
+                <th>Busy Via</th>
                 <th>Invoiced Rev (30d)</th>
                 <th>Score</th>
                 <th>Status</th>
@@ -543,6 +551,7 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ (review.presenceRate * 100) | number:'1.0-0' }}%</td>
                   <td>{{ (review.systemActivityRate * 100) | number:'1.0-0' }}%</td>
                   <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
+                  <td>{{ busySourceLabel(review.busySource) }}</td>
                   <td>{{ review.invoicedRevenue | currency:'USD':'symbol':'1.0-0' }}</td>
                   <td>
                     <div class="score-pill" [class.high]="review.score >= 80" [class.med]="review.score >= 60 && review.score < 80" [class.low]="review.score < 60">
@@ -730,7 +739,7 @@ type RosterEmployee = Record<string, any>;
                 <th>Clocked Hrs</th>
                 <th>Active Hrs</th>
                 <th>Idle Hrs</th>
-                <th>Activity %</th>
+                <th>Busy %</th>
               </tr>
             </thead>
             <tbody>
@@ -751,7 +760,7 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ row.totalHours | number:'1.1-1' }}</td>
                   <td>{{ row.activeHours | number:'1.1-1' }}</td>
                   <td>{{ row.idleHours | number:'1.1-1' }}</td>
-                  <td>{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
+                  <td [title]="busySourceLabel(row.busySource)">{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
                 </tr>
               }
             </tbody>
@@ -1530,8 +1539,8 @@ export class PerformanceReviewsComponent implements OnInit {
   tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
     { value: 'score-desc', label: 'Score: High to Low' },
     { value: 'score-asc', label: 'Score: Low to High' },
-    { value: 'activity-desc', label: 'Activity % (composite): High to Low' },
-    { value: 'activity-asc', label: 'Activity % (composite): Low to High' },
+    { value: 'activity-desc', label: 'Busy %: High to Low' },
+    { value: 'activity-asc', label: 'Busy %: Low to High' },
     { value: 'calls-desc', label: 'Calls: High to Low' },
     { value: 'calls-asc', label: 'Calls: Low to High' },
     { value: 'calltime-desc', label: 'Total Call Time: High to Low' },
@@ -1554,8 +1563,8 @@ export class PerformanceReviewsComponent implements OnInit {
     { value: 'replies-asc', label: 'Replies: Low to High' },
     { value: 'followup-desc', label: 'Follow-Up %: High to Low' },
     { value: 'followup-asc', label: 'Follow-Up %: Low to High' },
-    { value: 'activity-desc', label: 'Activity %: High to Low' },
-    { value: 'activity-asc', label: 'Activity %: Low to High' },
+    { value: 'activity-desc', label: 'Busy %: High to Low' },
+    { value: 'activity-asc', label: 'Busy %: Low to High' },
     { value: 'employee-asc', label: 'Employee: A to Z' },
     { value: 'employee-desc', label: 'Employee: Z to A' }
   ];
@@ -2511,15 +2520,29 @@ export class PerformanceReviewsComponent implements OnInit {
     const systemActivityRate = liveTime.totalHours > 0
       ? Math.min(1, liveTime.activeHours / liveTime.totalHours)
       : 0;
-    const compositeActivityRate = Math.min(1, presenceRate * systemActivityRate);
+    const busy = this.computeBusyActivity({
+      scheduledHours,
+      totalCallMinutes: liveComms.totalCallMinutes,
+      textVolume: liveTextVolume,
+      meetingsHosted: liveComms.meetingsHosted,
+      totalMeetingMinutes: liveComms.totalMeetingMinutes,
+      sentCount: liveComms.sentCount,
+      replyCount: liveComms.replyCount,
+      externalCount: liveComms.externalCount,
+      followUpRate: liveComms.followUpRate,
+      presenceRate,
+      systemActivityRate
+    });
     const liveScore = this.computePerformanceScore(
       liveCallVolume,
       liveTextVolume,
       liveTime.totalHours,
       liveTime.activeHours,
       scheduledHours,
-      presenceRate,
-      systemActivityRate,
+      busy.zoomBusyRate,
+      busy.gmailBusyRate,
+      busy.systemBusyRate,
+      busy.busyRate,
       liveRevenue,
       liveComms.sentCount,
       liveComms.replyCount,
@@ -2544,7 +2567,7 @@ export class PerformanceReviewsComponent implements OnInit {
       textVolume: liveTextVolume,
       clockedHours: Number(liveTime.totalHours.toFixed(2)),
       workHours: Number(liveTime.activeHours.toFixed(2)),
-      activityRate: Number(compositeActivityRate.toFixed(4)),
+      activityRate: Number(busy.busyRate.toFixed(4)),
       invoicedRevenue: Number(liveRevenue.toFixed(2)),
       score: liveScore,
       createdAt: this.editingReview()?.createdAt
@@ -2772,7 +2795,19 @@ export class PerformanceReviewsComponent implements OnInit {
     const systemActivityRate = totalHours > 0
       ? Math.min(1, activeHours / totalHours)
       : (hasLiveTime ? liveTime.activityRate : 0);
-    const activityRate = Math.min(1, presenceRate * systemActivityRate);
+    const busy = this.computeBusyActivity({
+      scheduledHours,
+      totalCallMinutes,
+      textVolume,
+      meetingsHosted: liveMeetingsHosted,
+      totalMeetingMinutes: liveTotalMeetingMinutes,
+      sentCount: liveSentCount,
+      replyCount: liveReplyCount,
+      externalCount: liveExternalCount,
+      followUpRate: liveFollowUpRate,
+      presenceRate,
+      systemActivityRate
+    });
 
     const invoicedRevenue = persisted?.invoicedRevenue
       ?? (useSnapshotBlend && hasSnapshot
@@ -2784,8 +2819,10 @@ export class PerformanceReviewsComponent implements OnInit {
       totalHours,
       activeHours,
       scheduledHours,
-      presenceRate,
-      systemActivityRate,
+      busy.zoomBusyRate,
+      busy.gmailBusyRate,
+      busy.systemBusyRate,
+      busy.busyRate,
       invoicedRevenue,
       liveSentCount,
       liveReplyCount,
@@ -2820,7 +2857,11 @@ export class PerformanceReviewsComponent implements OnInit {
       scheduledHours,
       presenceRate,
       systemActivityRate,
-      activityRate,
+      zoomBusyRate: busy.zoomBusyRate,
+      gmailBusyRate: busy.gmailBusyRate,
+      systemBusyRate: busy.systemBusyRate,
+      activityRate: busy.busyRate,
+      busySource: busy.busySource,
       invoicedRevenue,
       score
     };
@@ -3046,14 +3087,76 @@ export class PerformanceReviewsComponent implements OnInit {
     return totalRevenue * (empSeconds / totalTrackedSeconds);
   }
 
+  private computeBusyActivity(input: {
+    scheduledHours: number;
+    totalCallMinutes: number;
+    textVolume: number;
+    meetingsHosted: number;
+    totalMeetingMinutes: number;
+    sentCount: number;
+    replyCount: number;
+    externalCount: number;
+    followUpRate: number;
+    presenceRate: number;
+    systemActivityRate: number;
+  }): {
+    zoomBusyRate: number;
+    gmailBusyRate: number;
+    systemBusyRate: number;
+    busyRate: number;
+    busySource: 'zoom' | 'gmail' | 'system' | 'none';
+  } {
+    const scheduled = Math.max(0, input.scheduledHours);
+    // Zoom: real call/meeting minutes + light text effort (2.4 min/text).
+    const zoomHours = Math.max(0, input.totalCallMinutes) / 60
+      + Math.max(0, input.totalMeetingMinutes) / 60
+      + Math.max(0, input.meetingsHosted) * 0.25
+      + Math.max(0, input.textVolume) * 0.04;
+    const zoomBusyRate = scheduled > 0 ? Math.min(1, zoomHours / scheduled) : 0;
+
+    // Gmail: outbound effort (~5–6 min/message) with a small follow-up quality boost.
+    const gmailHours = Math.max(0, input.sentCount) * 0.08
+      + Math.max(0, input.replyCount) * 0.1
+      + Math.max(0, input.externalCount) * 0.05;
+    const followUpBoost = 1 + Math.min(0.25, Math.max(0, input.followUpRate) * 0.25);
+    const gmailBusyRate = scheduled > 0 ? Math.min(1, (gmailHours * followUpBoost) / scheduled) : 0;
+
+    // System: only meaningful for people who actually use Taylor Access (managers).
+    const systemBusyRate = Math.min(1, Math.max(0, input.presenceRate) * Math.max(0, input.systemActivityRate));
+
+    const candidates: Array<{ source: 'zoom' | 'gmail' | 'system'; rate: number }> = [
+      { source: 'zoom', rate: zoomBusyRate },
+      { source: 'gmail', rate: gmailBusyRate },
+      { source: 'system', rate: systemBusyRate }
+    ];
+    const sourceRank = { zoom: 0, gmail: 1, system: 2 };
+    candidates.sort((a, b) => (b.rate - a.rate) || (sourceRank[a.source] - sourceRank[b.source]));
+    const best = candidates[0];
+    const busyRate = best?.rate || 0;
+    const busySource = busyRate > 0 ? best.source : 'none';
+
+    return { zoomBusyRate, gmailBusyRate, systemBusyRate, busyRate, busySource };
+  }
+
+  busySourceLabel(source: 'zoom' | 'gmail' | 'system' | 'none' | string | undefined): string {
+    switch (source) {
+      case 'zoom': return 'Zoom';
+      case 'gmail': return 'Gmail';
+      case 'system': return 'System';
+      default: return '—';
+    }
+  }
+
   private computePerformanceScore(
     callVolume: number,
     textVolume: number,
-    clockedHours: number,
-    activeHours: number,
-    scheduledHours: number,
-    presenceRate: number,
-    systemActivityRate: number,
+    _clockedHours: number,
+    _activeHours: number,
+    _scheduledHours: number,
+    zoomBusyRate: number,
+    gmailBusyRate: number,
+    systemBusyRate: number,
+    busyRate: number,
     invoicedRevenue: number,
     sentCount: number,
     replyCount: number,
@@ -3063,25 +3166,20 @@ export class PerformanceReviewsComponent implements OnInit {
     externalCount: number
   ): number {
     const targetRevenue = Math.max(1, this.totalInvoicedRevenue30d() / Math.max(1, this.employees().length));
-    const safeClocked = Math.max(0, clockedHours);
-    const safeActive = Math.max(0, activeHours);
-    const safeScheduled = Math.max(0, scheduledHours);
-    const presence = Math.min(1, Math.max(0, presenceRate > 0
-      ? presenceRate
-      : (safeScheduled > 0 ? safeClocked / safeScheduled : 0)));
-    const systemActivity = Math.min(1, Math.max(0, systemActivityRate > 0
-      ? systemActivityRate
-      : (safeClocked > 0 ? safeActive / safeClocked : 0)));
-    const compositeActivity = Math.min(1, presence * systemActivity);
+    const busy = Math.min(1, Math.max(0, busyRate));
+    const zoomBusy = Math.min(1, Math.max(0, zoomBusyRate));
+    const gmailBusy = Math.min(1, Math.max(0, gmailBusyRate));
+    const systemBusy = Math.min(1, Math.max(0, systemBusyRate));
 
+    // Comms-first: volume + best busy signal. System is only a small bonus when present.
     const callScore = Math.min(callVolume / 20, 1) * 25;
     const textScore = Math.min(textVolume / 40, 1) * 15;
-    const clockedHoursScore = Math.min(safeClocked / Math.max(safeScheduled, 40), 1) * 10;
-    const presenceScore = presence * 15;
-    const systemActivityScore = systemActivity * 15;
-    const compositeActivityScore = compositeActivity * 10;
-    const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 10;
-    const baseScore = callScore + textScore + clockedHoursScore + presenceScore + systemActivityScore + compositeActivityScore + revenueScore;
+    const busyScore = busy * 30;
+    const zoomBusyScore = zoomBusy * 10;
+    const gmailBusyScore = gmailBusy * 8;
+    const systemBonus = systemBusy * 5; // does not penalize non-users
+    const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 7;
+    const baseScore = callScore + textScore + busyScore + zoomBusyScore + gmailBusyScore + systemBonus + revenueScore;
 
     const outboundTotal = Math.max(0, internalCount) + Math.max(0, externalCount);
     const externalRate = outboundTotal > 0 ? Math.max(0, externalCount) / outboundTotal : 0;
