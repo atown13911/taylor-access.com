@@ -1054,7 +1054,17 @@ type RosterEmployee = Record<string, any>;
     </div>
   `,
   styles: [`
-    .reviews-page { padding: 24px; }
+    :host {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .reviews-page {
+      padding: 24px;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
     .page-header h1 { color: #fff; font-size: 1.8rem; margin: 0; display: flex; align-items: center; gap: 12px; i { color: #00d4ff; } }
     .subtitle { color: #888; margin: 6px 0 0; font-size: 0.9rem; }
@@ -1266,13 +1276,37 @@ type RosterEmployee = Record<string, any>;
     .remove-tab-btn:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
     .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
-    .table-wrap { border-radius: 12px; border: 1px solid #2a2a4e; overflow: auto; }
-    .reviews-table-wrap { max-height: 68vh; overflow: auto; border-color: #374151; }
+    .table-wrap {
+      border-radius: 12px;
+      border: 1px solid #2a2a4e;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-gutter: stable;
+    }
+    .reviews-table-wrap {
+      max-height: 68vh;
+      border-color: #374151;
+    }
+    .table-wrap::-webkit-scrollbar { height: 10px; width: 10px; }
+    .table-wrap::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.45);
+      border-radius: 999px;
+    }
+    .table-wrap::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.55);
+    }
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
     th { padding: 12px 16px; text-align: left; font-size: 0.75rem; color: #888; text-transform: uppercase; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     td { padding: 14px 16px; color: #e2e8f0; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
     tr:hover td { background: rgba(0, 212, 255, 0.03); }
-    .reviews-table { width: max-content; min-width: 100%; }
+    .reviews-table {
+      width: max-content;
+      min-width: 100%;
+      table-layout: auto;
+    }
     .reviews-table thead th {
       position: sticky;
       top: 0;
@@ -1297,6 +1331,24 @@ type RosterEmployee = Record<string, any>;
     .reviews-table td:nth-child(n+2):nth-child(-n+21),
     .reviews-table th:nth-child(n+2):nth-child(-n+21) {
       text-align: center;
+    }
+    /* Keep Score/Status/Actions fully inside the scroll area (not clipped by radius) */
+    .reviews-table thead tr.source-group-row th:last-child,
+    .reviews-table thead tr:not(.source-group-row) th:last-child,
+    .reviews-table tbody td:last-child {
+      padding-right: 28px;
+    }
+    .reviews-table th:nth-child(19),
+    .reviews-table td:nth-child(19) {
+      min-width: 72px;
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+    .reviews-table th:nth-child(20),
+    .reviews-table td:nth-child(20),
+    .reviews-table th:nth-child(21),
+    .reviews-table td:nth-child(21) {
+      min-width: 88px;
     }
     .reviews-table td:first-child,
     .reviews-table th:first-child {
