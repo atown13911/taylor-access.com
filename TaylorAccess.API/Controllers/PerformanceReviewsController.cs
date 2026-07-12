@@ -594,17 +594,31 @@ public class PerformanceReviewsController : ControllerBase
 
             gmailRowsAdded += await ReadGmailRowsAsync(gmailResponse, gmailPeriodByEmail, gmailPeriodByEmailLocal, gmailPeriodByNameGuess, includeRates: true);
 
-            // Fallback: use a wider window when period rows are empty, but still prefer period values whenever available.
-            if (gmailRowsAdded == 0)
+            // Always load a wider fallback window so scorecards still populate when the
+            // selected week/month has sparse synced mail (or only replies).
+            var fallbackResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?days=120");
+            await ReadGmailRowsAsync(
+                fallbackResponse,
+                gmailFallbackByEmail,
+                gmailFallbackByEmailLocal,
+                gmailFallbackByNameGuess,
+                includeRates: true
+            );
+
+            if (sync)
             {
-                var fallbackResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?days=120");
-                await ReadGmailRowsAsync(
-                    fallbackResponse,
-                    gmailFallbackByEmail,
-                    gmailFallbackByEmailLocal,
-                    gmailFallbackByNameGuess,
-                    includeRates: true
-                );
+                try
+                {
+                    // Best-effort refresh of recent mailbox history before reads above have already run.
+                    // Fire incremental sync so the next Update has fresher GmailMessages rows.
+                    using var incremental = await client.PostAsync($"{gmailBase}/domain/sync-incremental", content: null);
+                    if (!incremental.IsSuccessStatusCode)
+                        _logger.LogWarning("Gmail domain incremental sync returned HTTP {Status}", (int)incremental.StatusCode);
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogWarning(syncEx, "Gmail domain incremental sync failed during performance Update");
+                }
             }
         }
         catch (Exception ex)
@@ -889,42 +903,46 @@ public class PerformanceReviewsController : ControllerBase
             var bestGmailFallback = (SentCount: 0, ReplyCount: 0, FirstResponseMinutes: 0d, FollowUpRate: 0d, InternalCount: 0, ExternalCount: 0);
             foreach (var emailKey in emailCandidates)
             {
-                if (gmailPeriodByEmail.TryGetValue(emailKey, out var byEmail))
+                if (gmailPeriodByEmail.TryGetValue(emailKey, out var byEmail)
+                    && GmailSignalScore(byEmail) >= GmailSignalScore(bestGmailPeriod))
                 {
-                    if (byEmail.SentCount > bestGmailPeriod.SentCount) bestGmailPeriod = byEmail;
+                    bestGmailPeriod = byEmail;
                 }
                 var localPart = ExtractEmailLocalPart(emailKey);
-                if (!string.IsNullOrWhiteSpace(localPart) && gmailPeriodByEmailLocal.TryGetValue(localPart, out var byLocal))
+                if (!string.IsNullOrWhiteSpace(localPart) && gmailPeriodByEmailLocal.TryGetValue(localPart, out var byLocal)
+                    && GmailSignalScore(byLocal) >= GmailSignalScore(bestGmailPeriod))
                 {
-                    if (byLocal.SentCount > bestGmailPeriod.SentCount) bestGmailPeriod = byLocal;
+                    bestGmailPeriod = byLocal;
                 }
 
-                if (gmailFallbackByEmail.TryGetValue(emailKey, out var byEmailFallback))
+                if (gmailFallbackByEmail.TryGetValue(emailKey, out var byEmailFallback)
+                    && GmailSignalScore(byEmailFallback) >= GmailSignalScore(bestGmailFallback))
                 {
-                    if (byEmailFallback.SentCount > bestGmailFallback.SentCount) bestGmailFallback = byEmailFallback;
+                    bestGmailFallback = byEmailFallback;
                 }
-                if (!string.IsNullOrWhiteSpace(localPart) && gmailFallbackByEmailLocal.TryGetValue(localPart, out var byLocalFallback))
+                if (!string.IsNullOrWhiteSpace(localPart) && gmailFallbackByEmailLocal.TryGetValue(localPart, out var byLocalFallback)
+                    && GmailSignalScore(byLocalFallback) >= GmailSignalScore(bestGmailFallback))
                 {
-                    if (byLocalFallback.SentCount > bestGmailFallback.SentCount) bestGmailFallback = byLocalFallback;
+                    bestGmailFallback = byLocalFallback;
                 }
             }
-            if (bestGmailPeriod.SentCount <= 0 && bestGmailPeriod.ReplyCount <= 0)
+            if (GmailSignalScore(bestGmailPeriod) <= 0)
             {
                 var guessedNameKey = NormalizeName(emp.Name);
                 if (!string.IsNullOrWhiteSpace(guessedNameKey)
                     && gmailPeriodByNameGuess.TryGetValue(guessedNameKey, out var byNameGuess)
-                    && byNameGuess.SentCount > bestGmailPeriod.SentCount)
+                    && GmailSignalScore(byNameGuess) >= GmailSignalScore(bestGmailPeriod))
                 {
                     bestGmailPeriod = byNameGuess;
                 }
                 if (!string.IsNullOrWhiteSpace(guessedNameKey)
                     && gmailFallbackByNameGuess.TryGetValue(guessedNameKey, out var byNameGuessFallback)
-                    && byNameGuessFallback.SentCount > bestGmailFallback.SentCount)
+                    && GmailSignalScore(byNameGuessFallback) >= GmailSignalScore(bestGmailFallback))
                 {
                     bestGmailFallback = byNameGuessFallback;
                 }
             }
-            var hasPeriodGmailSignal = bestGmailPeriod.SentCount > 0 || bestGmailPeriod.ReplyCount > 0;
+            var hasPeriodGmailSignal = GmailSignalScore(bestGmailPeriod) > 0;
             var hasPeriodRateSignal = bestGmailPeriod.FirstResponseMinutes > 0 || bestGmailPeriod.FollowUpRate > 0;
             var chosenCounts = hasPeriodGmailSignal ? bestGmailPeriod : bestGmailFallback;
             var chosenRates = hasPeriodRateSignal ? bestGmailPeriod : bestGmailFallback;
@@ -1746,6 +1764,12 @@ public class PerformanceReviewsController : ControllerBase
         var now = DateTime.UtcNow;
         return (now.Year, now.Month);
     }
+
+    private static int GmailSignalScore((int SentCount, int ReplyCount, double FirstResponseMinutes, double FollowUpRate, int InternalCount, int ExternalCount) row)
+        => Math.Max(0, row.SentCount)
+           + Math.Max(0, row.ReplyCount)
+           + Math.Max(0, row.InternalCount)
+           + Math.Max(0, row.ExternalCount);
 
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? string.Empty;
