@@ -145,17 +145,6 @@ public class PerformanceSyncOrchestrator
                 var interactions = tc.InteractionCount;
                 var presence = clocked > 0 ? Math.Round((double)(active / clocked), 4) : 0;
                 var busy = Math.Max(presence, 0);
-                var callVol = z?.TotalCalls ?? 0;
-                var textVol = z?.SmsSessionCount ?? 0;
-                var sent = g?.SentCount ?? 0;
-                var replies = g?.ReplyCount ?? 0;
-                var score = Math.Clamp(
-                    (int)Math.Round(
-                        Math.Min(40, callVol * 0.4)
-                        + Math.Min(20, textVol * 0.5)
-                        + Math.Min(20, sent * 0.3 + replies * 0.4)
-                        + Math.Min(20, busy * 20)),
-                    0, 100);
 
                 if (!scoreByEmp.TryGetValue(emp.Id, out var scoreRow))
                 {
@@ -174,16 +163,50 @@ public class PerformanceSyncOrchestrator
 
                 scoreRow.EmployeeName = emp.Name;
                 scoreRow.SyncRunId = run.Id;
-                scoreRow.CallVolume = callVol;
-                scoreRow.TotalCallMinutes = Math.Round(z?.TotalCallMinutes ?? 0, 2);
-                scoreRow.AvgCallMinutes = callVol > 0 ? Math.Round(scoreRow.TotalCallMinutes / callVol, 2) : 0;
-                scoreRow.TextVolume = textVol;
-                scoreRow.SentCount = sent;
-                scoreRow.ReplyCount = replies;
-                scoreRow.FirstResponseMinutes = g?.FirstResponseMinutes ?? 0;
-                scoreRow.FollowUpRate = g?.FollowUpRate ?? 0;
-                scoreRow.InternalCount = g?.InternalCount ?? 0;
-                scoreRow.ExternalCount = g?.ExternalCount ?? 0;
+
+                // Zoom: never wipe prior call/SMS values when this run was incomplete or lacked a row.
+                if (z != null)
+                {
+                    var nextCalls = z.TotalCalls;
+                    var nextMinutes = Math.Round(z.TotalCallMinutes, 2);
+                    var nextSms = z.SmsSessionCount;
+                    scoreRow.CallVolume = zoom.CallsComplete
+                        ? nextCalls
+                        : Math.Max(scoreRow.CallVolume, nextCalls);
+                    scoreRow.TotalCallMinutes = zoom.CallsComplete
+                        ? nextMinutes
+                        : Math.Max(scoreRow.TotalCallMinutes, nextMinutes);
+                    scoreRow.AvgCallMinutes = scoreRow.CallVolume > 0
+                        ? Math.Round(scoreRow.TotalCallMinutes / scoreRow.CallVolume, 2)
+                        : 0;
+                    scoreRow.TextVolume = zoom.SmsComplete
+                        ? nextSms
+                        : Math.Max(scoreRow.TextVolume, nextSms);
+                }
+
+                // Gmail is batched (~50 users/pass). Only overwrite when this pass returned a row.
+                if (g != null)
+                {
+                    scoreRow.SentCount = g.SentCount;
+                    scoreRow.ReplyCount = g.ReplyCount;
+                    scoreRow.FirstResponseMinutes = g.FirstResponseMinutes;
+                    scoreRow.FollowUpRate = g.FollowUpRate;
+                    scoreRow.InternalCount = g.InternalCount;
+                    scoreRow.ExternalCount = g.ExternalCount;
+                }
+
+                var callVol = scoreRow.CallVolume;
+                var textVol = scoreRow.TextVolume;
+                var sent = scoreRow.SentCount;
+                var replies = scoreRow.ReplyCount;
+                var score = Math.Clamp(
+                    (int)Math.Round(
+                        Math.Min(40, callVol * 0.4)
+                        + Math.Min(20, textVol * 0.5)
+                        + Math.Min(20, sent * 0.3 + replies * 0.4)
+                        + Math.Min(20, busy * 20)),
+                    0, 100);
+
                 scoreRow.ClockedHours = clocked;
                 scoreRow.ActiveHours = active;
                 scoreRow.IdleHours = idle;
@@ -215,16 +238,35 @@ public class PerformanceSyncOrchestrator
 
                 extraRow.EmployeeName = emp.Name;
                 extraRow.SyncRunId = run.Id;
-                extraRow.Voicemails = z?.Voicemails ?? 0;
-                extraRow.VoicemailMinutes = Math.Round(z?.VoicemailMinutes ?? 0, 2);
-                extraRow.PhoneRecordings = z?.PhoneRecordings ?? 0;
-                extraRow.RecordingMinutes = Math.Round(z?.RecordingMinutes ?? 0, 2);
-                extraRow.MeetingsHosted = z?.MeetingsHosted ?? 0;
-                extraRow.MeetingsJoined = z?.MeetingsJoined ?? 0;
-                extraRow.MeetingMinutes = Math.Round(z?.MeetingMinutes ?? 0, 2);
-                extraRow.InboundCalls = z?.InboundCalls ?? 0;
-                extraRow.OutboundCalls = z?.OutboundCalls ?? 0;
-                extraRow.MissedCalls = z?.MissedCalls ?? 0;
+                if (z != null)
+                {
+                    if (zoom.CallsComplete)
+                    {
+                        extraRow.Voicemails = z.Voicemails;
+                        extraRow.VoicemailMinutes = Math.Round(z.VoicemailMinutes, 2);
+                        extraRow.PhoneRecordings = z.PhoneRecordings;
+                        extraRow.RecordingMinutes = Math.Round(z.RecordingMinutes, 2);
+                        extraRow.MeetingsHosted = z.MeetingsHosted;
+                        extraRow.MeetingsJoined = z.MeetingsJoined;
+                        extraRow.MeetingMinutes = Math.Round(z.MeetingMinutes, 2);
+                        extraRow.InboundCalls = z.InboundCalls;
+                        extraRow.OutboundCalls = z.OutboundCalls;
+                        extraRow.MissedCalls = z.MissedCalls;
+                    }
+                    else
+                    {
+                        extraRow.Voicemails = Math.Max(extraRow.Voicemails, z.Voicemails);
+                        extraRow.VoicemailMinutes = Math.Max(extraRow.VoicemailMinutes, Math.Round(z.VoicemailMinutes, 2));
+                        extraRow.PhoneRecordings = Math.Max(extraRow.PhoneRecordings, z.PhoneRecordings);
+                        extraRow.RecordingMinutes = Math.Max(extraRow.RecordingMinutes, Math.Round(z.RecordingMinutes, 2));
+                        extraRow.MeetingsHosted = Math.Max(extraRow.MeetingsHosted, z.MeetingsHosted);
+                        extraRow.MeetingsJoined = Math.Max(extraRow.MeetingsJoined, z.MeetingsJoined);
+                        extraRow.MeetingMinutes = Math.Max(extraRow.MeetingMinutes, Math.Round(z.MeetingMinutes, 2));
+                        extraRow.InboundCalls = Math.Max(extraRow.InboundCalls, z.InboundCalls);
+                        extraRow.OutboundCalls = Math.Max(extraRow.OutboundCalls, z.OutboundCalls);
+                        extraRow.MissedCalls = Math.Max(extraRow.MissedCalls, z.MissedCalls);
+                    }
+                }
                 extraRow.Source = "zoom-api-direct";
                 extraRow.UpdatedAt = now;
                 extraCount++;

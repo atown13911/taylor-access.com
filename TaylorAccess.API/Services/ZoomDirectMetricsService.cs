@@ -75,7 +75,7 @@ public class ZoomDirectMetricsService
         }
 
         var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(90);
+        client.Timeout = TimeSpan.FromSeconds(120);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var fromDate = fromUtc.Date.ToString("yyyy-MM-dd");
@@ -451,7 +451,7 @@ public class ZoomDirectMetricsService
 
         do
         {
-            if ((DateTime.UtcNow - budgetStarted).TotalSeconds > 45)
+            if ((DateTime.UtcNow - budgetStarted).TotalSeconds > 75)
                 return (results, pages, false);
 
             var url =
@@ -490,7 +490,7 @@ public class ZoomDirectMetricsService
                 ? npt.GetString()
                 : null;
             pages++;
-        } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 80);
+        } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 250);
 
         return (results, pages, string.IsNullOrWhiteSpace(nextToken));
     }
