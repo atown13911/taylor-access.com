@@ -46,9 +46,19 @@ interface ReviewMetricRow extends Review {
   followUpRate: number;
   internalCount: number;
   externalCount: number;
+  /** Clocked hours from timeclock (active + idle). */
   totalHours: number;
+  /** System-active hours from timeclock. */
   activeHours: number;
+  /** Idle hours from timeclock. */
   idleHours: number;
+  /** Scheduled work hours for the selected period (business days × 8). */
+  scheduledHours: number;
+  /** clocked ÷ scheduled */
+  presenceRate: number;
+  /** active ÷ (active + idle) */
+  systemActivityRate: number;
+  /** Composite: presenceRate × systemActivityRate */
   activityRate: number;
   invoicedRevenue: number;
   score: number;
@@ -472,7 +482,7 @@ type RosterEmployee = Record<string, any>;
                     <span class="status-dot" [class.online]="googleApiStatus() === 'connected'" [class.offline]="googleApiStatus() !== 'connected'"></span>
                   </span>
                 </th>
-                <th class="group-label group-timeclock" colspan="3">
+                <th class="group-label group-timeclock" colspan="6">
                   <span class="group-content">
                     <span class="group-name">VanTac/Timeclock</span>
                     <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
@@ -503,7 +513,10 @@ type RosterEmployee = Record<string, any>;
                 <th>Follow-Up %</th>
                 <th>Ext / Int</th>
                 <th>Clocked Hrs</th>
-                <th>Work Hrs</th>
+                <th>Active Hrs</th>
+                <th>Idle Hrs</th>
+                <th>Presence %</th>
+                <th>System %</th>
                 <th>Activity %</th>
                 <th>Invoiced Rev (30d)</th>
                 <th>Score</th>
@@ -526,6 +539,9 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ review.externalCount }} / {{ review.internalCount }}</td>
                   <td>{{ review.totalHours | number:'1.1-1' }}</td>
                   <td>{{ review.activeHours | number:'1.1-1' }}</td>
+                  <td>{{ review.idleHours | number:'1.1-1' }}</td>
+                  <td>{{ (review.presenceRate * 100) | number:'1.0-0' }}%</td>
+                  <td>{{ (review.systemActivityRate * 100) | number:'1.0-0' }}%</td>
                   <td>{{ (review.activityRate * 100) | number:'1.0-0' }}%</td>
                   <td>{{ review.invoicedRevenue | currency:'USD':'symbol':'1.0-0' }}</td>
                   <td>
@@ -691,7 +707,7 @@ type RosterEmployee = Record<string, any>;
                     <span class="status-dot" [class.online]="googleApiStatus() === 'connected'" [class.offline]="googleApiStatus() !== 'connected'"></span>
                   </span>
                 </th>
-                <th class="group-label group-timeclock" colspan="1">
+                <th class="group-label group-timeclock" colspan="4">
                   <span class="group-content">
                     <span class="group-name">Activity</span>
                     <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
@@ -705,12 +721,15 @@ type RosterEmployee = Record<string, any>;
                 <th>Meetings Hosted</th>
                 <th>Meetings Joined</th>
                 <th>Meeting Time</th>
+                <th>Call Time</th>
                 <th>Sent</th>
                 <th>Replies</th>
                 <th>1st Resp (min)</th>
                 <th>Follow-Up %</th>
                 <th>Ext / Int</th>
-                <th>Call Time</th>
+                <th>Clocked Hrs</th>
+                <th>Active Hrs</th>
+                <th>Idle Hrs</th>
                 <th>Activity %</th>
               </tr>
             </thead>
@@ -723,12 +742,15 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ row.meetingsHosted }}</td>
                   <td>{{ row.meetingsJoined }}</td>
                   <td>{{ row.totalMeetingMinutes | number:'1.0-1' }} min</td>
+                  <td>{{ row.totalCallMinutes | number:'1.0-1' }} min</td>
                   <td>{{ row.sentCount }}</td>
                   <td>{{ row.replyCount }}</td>
                   <td>{{ row.firstResponseMinutes | number:'1.0-1' }}</td>
                   <td>{{ (row.followUpRate * 100) | number:'1.0-0' }}%</td>
                   <td>{{ row.externalCount }} / {{ row.internalCount }}</td>
-                  <td>{{ row.totalCallMinutes | number:'1.0-1' }} min</td>
+                  <td>{{ row.totalHours | number:'1.1-1' }}</td>
+                  <td>{{ row.activeHours | number:'1.1-1' }}</td>
+                  <td>{{ row.idleHours | number:'1.1-1' }}</td>
                   <td>{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
                 </tr>
               }
@@ -1478,9 +1500,6 @@ export class PerformanceReviewsComponent implements OnInit {
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
-  private readonly managementTabsStorageKey = 'ta.performanceReviews.managementTabs.v1';
-  private readonly metricsLastUpdateStorageKey = 'ta.performanceReviews.lastUpdateAt.v1';
-
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
   reviews = signal<Review[]>([]);
@@ -1511,8 +1530,8 @@ export class PerformanceReviewsComponent implements OnInit {
   tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
     { value: 'score-desc', label: 'Score: High to Low' },
     { value: 'score-asc', label: 'Score: Low to High' },
-    { value: 'activity-desc', label: 'Activity %: High to Low' },
-    { value: 'activity-asc', label: 'Activity %: Low to High' },
+    { value: 'activity-desc', label: 'Activity % (composite): High to Low' },
+    { value: 'activity-asc', label: 'Activity % (composite): Low to High' },
     { value: 'calls-desc', label: 'Calls: High to Low' },
     { value: 'calls-asc', label: 'Calls: Low to High' },
     { value: 'calltime-desc', label: 'Total Call Time: High to Low' },
@@ -1726,7 +1745,6 @@ export class PerformanceReviewsComponent implements OnInit {
       return [...tabs, title];
     });
     this.activeManagementTitleTab.set(title);
-    this.persistManagementTabs();
     this.newManagementTitle.set('');
     this.showTitlePicker.set(false);
   }
@@ -1734,7 +1752,6 @@ export class PerformanceReviewsComponent implements OnInit {
   selectManagementTitleTab(title: string): void {
     this.activeManagementTitleTab.set(title);
     this.showTitleSettings.set(false);
-    this.persistManagementTabs();
   }
 
   removeManagementTitleTab(title: string): void {
@@ -1745,14 +1762,12 @@ export class PerformanceReviewsComponent implements OnInit {
     if (nextTabs.length === 0) {
       this.activeManagementTitleTab.set('');
       this.showTitleSettings.set(false);
-      this.persistManagementTabs();
       return;
     }
 
     if (this.activeManagementTitleTab().trim().toLowerCase() === normalized) {
       this.activeManagementTitleTab.set(nextTabs[0]);
     }
-    this.persistManagementTabs();
   }
 
   getReviewCount(status: string): number {
@@ -2081,15 +2096,21 @@ export class PerformanceReviewsComponent implements OnInit {
 
   ngOnInit() {
     this.initializeCurrentWeekSelection();
-    this.restoreManagementTabs();
-    this.restoreMetricsLastUpdateAt();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
   }
 
-  private restoreMetricsLastUpdateAt(): void {
-    const saved = localStorage.getItem(this.metricsLastUpdateStorageKey);
-    if (saved) this.lastMetricsUpdateAt.set(saved);
+  private applyLastMetricsUpdateAt(raw: unknown): void {
+    if (!raw) {
+      this.lastMetricsUpdateAt.set('');
+      return;
+    }
+    const parsed = new Date(String(raw));
+    if (Number.isNaN(parsed.getTime())) {
+      this.lastMetricsUpdateAt.set('');
+      return;
+    }
+    this.lastMetricsUpdateAt.set(parsed.toLocaleString());
   }
 
   integrationStatusLabel(status: IntegrationState): string {
@@ -2392,9 +2413,6 @@ export class PerformanceReviewsComponent implements OnInit {
         this.loadReviews(),
         this.loadPersistedDailyMetrics()
       ]);
-      const nowLabel = new Date().toLocaleString();
-      this.lastMetricsUpdateAt.set(nowLabel);
-      localStorage.setItem(this.metricsLastUpdateStorageKey, nowLabel);
       this.toast.success('Performance metrics updated');
     } catch {
       this.toast.error('Failed to update performance metrics');
@@ -2480,11 +2498,20 @@ export class PerformanceReviewsComponent implements OnInit {
     const liveTextVolume = liveComms.textVolume;
     const liveTime = this.getEmployeeTime(employeeId);
     const liveRevenue = this.getAttributedRevenue(employeeId);
+    const scheduledHours = this.getAssignedWorkHoursForSelectedRange();
+    const presenceRate = scheduledHours > 0 ? Math.min(1, liveTime.totalHours / scheduledHours) : 0;
+    const systemActivityRate = liveTime.totalHours > 0
+      ? Math.min(1, liveTime.activeHours / liveTime.totalHours)
+      : 0;
+    const compositeActivityRate = Math.min(1, presenceRate * systemActivityRate);
     const liveScore = this.computePerformanceScore(
       liveCallVolume,
       liveTextVolume,
-      liveTime.activeHours,
       liveTime.totalHours,
+      liveTime.activeHours,
+      scheduledHours,
+      presenceRate,
+      systemActivityRate,
       liveRevenue,
       liveComms.sentCount,
       liveComms.replyCount,
@@ -2509,7 +2536,7 @@ export class PerformanceReviewsComponent implements OnInit {
       textVolume: liveTextVolume,
       clockedHours: Number(liveTime.totalHours.toFixed(2)),
       workHours: Number(liveTime.activeHours.toFixed(2)),
-      activityRate: Number(liveTime.activityRate.toFixed(4)),
+      activityRate: Number(compositeActivityRate.toFixed(4)),
       invoicedRevenue: Number(liveRevenue.toFixed(2)),
       score: liveScore,
       createdAt: this.editingReview()?.createdAt
@@ -2677,7 +2704,7 @@ export class PerformanceReviewsComponent implements OnInit {
     const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const useSnapshotBlend = this.periodMode() === 'monthly';
-    const assignedWorkHours = this.getAssignedWorkHoursForSelectedRange();
+    const scheduledHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
     const {
       callVolume: liveCallVolume,
@@ -2721,15 +2748,24 @@ export class PerformanceReviewsComponent implements OnInit {
           Number(persisted?.textVolume || 0),
           liveTextVolume
         );
-    const rawTotalHours = persisted?.clockedHours
-      ?? (useSnapshotBlend && hasSnapshot
-        ? Math.max(Number(review.clockedHours || 0), liveTime.totalHours)
-        : liveTime.totalHours);
-    const activityHoursEstimate = this.estimateActivityHours(callVolume, textVolume, liveMeetingsHosted, assignedWorkHours);
-    const totalHours = rawTotalHours > 0 ? Math.min(rawTotalHours, assignedWorkHours) : activityHoursEstimate;
-    const activeHours = assignedWorkHours;
-    const idleHours = Math.max(0, activeHours - totalHours);
-    const activityRate = activeHours > 0 ? Math.min(1, totalHours / activeHours) : 0;
+
+    // Prefer live timeclock; fall back to persisted clocked/active only when live is empty.
+    const hasLiveTime = liveTime.totalSeconds > 0;
+    const totalHours = hasLiveTime
+      ? liveTime.totalHours
+      : Math.max(0, Number(persisted?.clockedHours || 0), useSnapshotBlend && hasSnapshot ? Number(review.clockedHours || 0) : 0);
+    const activeHours = hasLiveTime
+      ? liveTime.activeHours
+      : Math.max(0, Number(persisted?.workHours || 0), useSnapshotBlend && hasSnapshot ? Number(review.workHours || 0) : 0);
+    const idleHours = hasLiveTime
+      ? liveTime.idleHours
+      : Math.max(0, totalHours - activeHours);
+    const presenceRate = scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0;
+    const systemActivityRate = totalHours > 0
+      ? Math.min(1, activeHours / totalHours)
+      : (hasLiveTime ? liveTime.activityRate : 0);
+    const activityRate = Math.min(1, presenceRate * systemActivityRate);
+
     const invoicedRevenue = persisted?.invoicedRevenue
       ?? (useSnapshotBlend && hasSnapshot
         ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue)
@@ -2737,8 +2773,11 @@ export class PerformanceReviewsComponent implements OnInit {
     const computedScore = this.computePerformanceScore(
       callVolume,
       textVolume,
-      activeHours,
       totalHours,
+      activeHours,
+      scheduledHours,
+      presenceRate,
+      systemActivityRate,
       invoicedRevenue,
       liveSentCount,
       liveReplyCount,
@@ -2770,6 +2809,9 @@ export class PerformanceReviewsComponent implements OnInit {
       totalHours,
       activeHours,
       idleHours,
+      scheduledHours,
+      presenceRate,
+      systemActivityRate,
       activityRate,
       invoicedRevenue,
       score
@@ -2788,14 +2830,6 @@ export class PerformanceReviewsComponent implements OnInit {
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     return Math.max(0, businessDays) * 8;
-  }
-
-  private estimateActivityHours(callVolume: number, textVolume: number, meetingsHosted: number, assignedHours: number): number {
-    const callHours = Math.max(0, callVolume) * 0.2;
-    const textHours = Math.max(0, textVolume) * 0.04;
-    const meetingHours = Math.max(0, meetingsHosted) * 0.5;
-    const estimated = callHours + textHours + meetingHours;
-    return Math.min(assignedHours, Number(estimated.toFixed(2)));
   }
 
   private async loadPersistedDailyMetrics(): Promise<void> {
@@ -2822,8 +2856,10 @@ export class PerformanceReviewsComponent implements OnInit {
         };
       }
       this.persistedMetricMap.set(nextMap);
+      this.applyLastMetricsUpdateAt(res?.meta?.lastUpdatedAt);
     } catch {
       this.persistedMetricMap.set({});
+      this.lastMetricsUpdateAt.set('');
     }
   }
 
@@ -2863,6 +2899,8 @@ export class PerformanceReviewsComponent implements OnInit {
       || Number(row.textVolume || 0) > 0
       || Number(row.totalHours || 0) > 0
       || Number(row.activeHours || 0) > 0
+      || Number(row.idleHours || 0) > 0
+      || Number(row.activityRate || 0) > 0
       || Number(row.invoicedRevenue || 0) > 0
       || Number(row.score || 0) > 0
     );
@@ -3003,8 +3041,11 @@ export class PerformanceReviewsComponent implements OnInit {
   private computePerformanceScore(
     callVolume: number,
     textVolume: number,
+    clockedHours: number,
     activeHours: number,
-    totalHours: number,
+    scheduledHours: number,
+    presenceRate: number,
+    systemActivityRate: number,
     invoicedRevenue: number,
     sentCount: number,
     replyCount: number,
@@ -3014,15 +3055,25 @@ export class PerformanceReviewsComponent implements OnInit {
     externalCount: number
   ): number {
     const targetRevenue = Math.max(1, this.totalInvoicedRevenue30d() / Math.max(1, this.employees().length));
-    const workingHours = Math.max(0, activeHours);
-    const clockedHours = Math.max(0, totalHours);
-    const activityVsWorkingHours = workingHours > 0 ? Math.min(clockedHours / workingHours, 1) : 0;
+    const safeClocked = Math.max(0, clockedHours);
+    const safeActive = Math.max(0, activeHours);
+    const safeScheduled = Math.max(0, scheduledHours);
+    const presence = Math.min(1, Math.max(0, presenceRate > 0
+      ? presenceRate
+      : (safeScheduled > 0 ? safeClocked / safeScheduled : 0)));
+    const systemActivity = Math.min(1, Math.max(0, systemActivityRate > 0
+      ? systemActivityRate
+      : (safeClocked > 0 ? safeActive / safeClocked : 0)));
+    const compositeActivity = Math.min(1, presence * systemActivity);
+
     const callScore = Math.min(callVolume / 20, 1) * 25;
     const textScore = Math.min(textVolume / 40, 1) * 15;
-    const clockedHoursScore = Math.min(clockedHours / 160, 1) * 15;
-    const activityVsWorkingHoursScore = activityVsWorkingHours * 30;
-    const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 15;
-    const baseScore = callScore + textScore + clockedHoursScore + activityVsWorkingHoursScore + revenueScore;
+    const clockedHoursScore = Math.min(safeClocked / Math.max(safeScheduled, 40), 1) * 10;
+    const presenceScore = presence * 15;
+    const systemActivityScore = systemActivity * 15;
+    const compositeActivityScore = compositeActivity * 10;
+    const revenueScore = Math.min(invoicedRevenue / targetRevenue, 1) * 10;
+    const baseScore = callScore + textScore + clockedHoursScore + presenceScore + systemActivityScore + compositeActivityScore + revenueScore;
 
     const outboundTotal = Math.max(0, internalCount) + Math.max(0, externalCount);
     const externalRate = outboundTotal > 0 ? Math.max(0, externalCount) / outboundTotal : 0;
@@ -3139,44 +3190,5 @@ export class PerformanceReviewsComponent implements OnInit {
 
   private formatShortDate(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-
-  private restoreManagementTabs(): void {
-    try {
-      const raw = localStorage.getItem(this.managementTabsStorageKey);
-      if (!raw) return;
-
-      const parsed = JSON.parse(raw) as { tabs?: string[]; active?: string };
-      const tabs = Array.isArray(parsed?.tabs)
-        ? parsed.tabs.map(v => String(v || '').trim()).filter(Boolean)
-        : [];
-
-      if (!tabs.length) return;
-
-      const deduped = Array.from(new Set(tabs));
-      this.managementTitleTabs.set(deduped);
-
-      const active = String(parsed?.active || '').trim();
-      if (active && deduped.some(t => t.toLowerCase() === active.toLowerCase())) {
-        const exact = deduped.find(t => t.toLowerCase() === active.toLowerCase()) || deduped[0];
-        this.activeManagementTitleTab.set(exact);
-      } else {
-        this.activeManagementTitleTab.set(deduped[0]);
-      }
-    } catch {
-      // Ignore storage parsing issues and continue with defaults.
-    }
-  }
-
-  private persistManagementTabs(): void {
-    try {
-      const payload = {
-        tabs: this.managementTitleTabs(),
-        active: this.activeManagementTitleTab()
-      };
-      localStorage.setItem(this.managementTabsStorageKey, JSON.stringify(payload));
-    } catch {
-      // Ignore storage write failures.
-    }
   }
 }

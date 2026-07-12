@@ -1705,6 +1705,10 @@ public class PerformanceReviewsController : ControllerBase
             .OrderBy(x => x.employeeName)
             .ToList();
 
+        DateTime? lastUpdatedAt = rows.Count > 0
+            ? rows.Max(r => r.UpdatedAt)
+            : null;
+
         return Ok(new
         {
             data = aggregated,
@@ -1712,7 +1716,8 @@ public class PerformanceReviewsController : ControllerBase
             {
                 from = fromDate.ToString("yyyy-MM-dd"),
                 to = toDate.ToString("yyyy-MM-dd"),
-                totalEmployees = aggregated.Count
+                totalEmployees = aggregated.Count,
+                lastUpdatedAt
             }
         });
     }
