@@ -24,6 +24,7 @@ public class PerformanceReviewsController : ControllerBase
     private readonly ILogger<PerformanceReviewsController> _logger;
     private readonly LocalIntegrationStatusService _localIntegrationStatus;
     private readonly CrmIntegrationCopyService _crmIntegrationCopy;
+    private readonly ZoomDirectMetricsService _zoomDirectMetrics;
 
     public PerformanceReviewsController(
         TaylorAccessDbContext context,
@@ -33,7 +34,8 @@ public class PerformanceReviewsController : ControllerBase
         IJwtService jwtService,
         ILogger<PerformanceReviewsController> logger,
         LocalIntegrationStatusService localIntegrationStatus,
-        CrmIntegrationCopyService crmIntegrationCopy)
+        CrmIntegrationCopyService crmIntegrationCopy,
+        ZoomDirectMetricsService zoomDirectMetrics)
     {
         _context = context;
         _currentUserService = currentUserService;
@@ -43,6 +45,7 @@ public class PerformanceReviewsController : ControllerBase
         _logger = logger;
         _localIntegrationStatus = localIntegrationStatus;
         _crmIntegrationCopy = crmIntegrationCopy;
+        _zoomDirectMetrics = zoomDirectMetrics;
     }
 
     [HttpGet]
@@ -203,22 +206,6 @@ public class PerformanceReviewsController : ControllerBase
         }
         var nextMonth = targetStart.AddMonths(1);
 
-        // CRM endpoint only supports "last N days". For exact historical months, use saved snapshots.
-        if (!hasCustomRange && (targetStart.Month != now.Month || targetStart.Year != now.Year))
-        {
-            return Ok(new
-            {
-                data = Array.Empty<object>(),
-                meta = new
-                {
-                    year = targetYear,
-                    month = targetMonth,
-                    source = "ttac-gateway->taylor-crm/zoom",
-                    note = "Live Zoom monthly pull is only available for current month. Historical months are served from saved review snapshots."
-                }
-            });
-        }
-
         // Align with employee-roster behavior used by the frontend table (global active users).
         var orgFilter = 0;
         var employeeSource = "users-active";
@@ -266,8 +253,38 @@ public class PerformanceReviewsController : ControllerBase
         if (employees.Count == 0)
             return Ok(new { data = Array.Empty<object>(), meta = new { year = targetYear, month = targetMonth, note = "No active employees found", employeeSource, orgFilter } });
 
+        // Prefer Zoom API directly (Access S2S). CRM is fallback only.
+        ZoomDirectMetricsResult? directZoom = null;
+        try
+        {
+            directZoom = await _zoomDirectMetrics.GetUserMetricsAsync(targetStart, rangeEnd, orgId, HttpContext.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Direct Zoom metrics pull threw; falling back to CRM path");
+        }
+
+        var usedDirectZoom = directZoom?.Success == true && directZoom.Metrics.Count > 0;
+        if (!usedDirectZoom
+            && !hasCustomRange
+            && (targetStart.Month != now.Month || targetStart.Year != now.Year))
+        {
+            return Ok(new
+            {
+                data = Array.Empty<object>(),
+                meta = new
+                {
+                    year = targetYear,
+                    month = targetMonth,
+                    source = "ttac-gateway->taylor-crm/zoom",
+                    note = "Live Zoom monthly pull is only available for current month via CRM fallback. Historical months need direct Zoom credentials or saved review snapshots.",
+                    directZoomError = directZoom?.Error
+                }
+            });
+        }
+
         // Some deployments do not include the ZoomUserRecords table.
-        // Keep this map empty and rely on direct employee fields + live CRM metrics for matching.
+        // Keep this map empty and rely on direct employee fields + live metrics for matching.
         var zoomUserIdByEmail = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var days = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
@@ -277,7 +294,7 @@ public class PerformanceReviewsController : ControllerBase
         var client = _httpClientFactory.CreateClient();
         ConfigureCrmGatewayClient(client, user);
 
-        if (sync)
+        if (!usedDirectZoom && sync)
         {
             var syncSucceeded = false;
             string? syncError = null;
@@ -327,7 +344,7 @@ public class PerformanceReviewsController : ControllerBase
             }
         }
 
-        var skipWindowUnsupportedMetrics = false;
+        var skipWindowUnsupportedMetrics = usedDirectZoom;
         JsonDocument? metricsDoc = null;
         if (!skipWindowUnsupportedMetrics)
         {
@@ -343,7 +360,8 @@ public class PerformanceReviewsController : ControllerBase
                         month = targetMonth,
                         source = "ttac-gateway->taylor-crm/zoom",
                         error = $"Failed to fetch zoom metrics: {(int)metricsResponse.StatusCode}",
-                        authMode = "internal-gateway"
+                        authMode = "internal-gateway",
+                        directZoomError = directZoom?.Error
                     }
                 });
             }
@@ -365,7 +383,70 @@ public class PerformanceReviewsController : ControllerBase
             var crmMetricsRows = 0;
             var crmMetricsRowsWithCalls = 0;
             var crmMetricsRowsWithTexts = 0;
-            if (!skipWindowUnsupportedMetrics
+
+            if (usedDirectZoom && directZoom != null)
+            {
+                foreach (var item in directZoom.Metrics)
+                {
+                    crmMetricsRows++;
+                    var row = new ZoomUserMetricLite
+                    {
+                        ZoomUserId = item.ZoomUserId,
+                        Email = item.Email,
+                        TotalCalls = item.TotalCalls,
+                        TotalCallMinutes = Math.Max(0, item.TotalCallMinutes),
+                        SmsSessionCount = item.SmsSessionCount,
+                        MeetingsHosted = item.MeetingsHosted,
+                        MeetingsJoined = item.MeetingsJoined,
+                        MeetingMinutes = Math.Max(0, item.MeetingMinutes),
+                        HasDateBucket = true
+                    };
+
+                    if (!string.IsNullOrWhiteSpace(row.Email))
+                    {
+                        var emailKey = row.Email!.Trim().ToLower();
+                        if (metricsByEmail.TryGetValue(emailKey, out var existingByEmail))
+                            metricsByEmail[emailKey] = MergeZoomMetrics(existingByEmail, row);
+                        else
+                            metricsByEmail[emailKey] = row;
+                        var localPart = ExtractEmailLocalPart(emailKey);
+                        if (!string.IsNullOrWhiteSpace(localPart))
+                        {
+                            if (metricsByEmailLocal.TryGetValue(localPart, out var existingByLocal))
+                                metricsByEmailLocal[localPart] = PickStrongerMetric(existingByLocal, row);
+                            else
+                                metricsByEmailLocal[localPart] = row;
+                            var guessedNameKey = NormalizeName(localPart.Replace('.', ' ').Replace('_', ' ').Replace('-', ' '));
+                            if (!string.IsNullOrWhiteSpace(guessedNameKey))
+                            {
+                                if (metricsByName.TryGetValue(guessedNameKey, out var existingByGuessedName))
+                                    metricsByName[guessedNameKey] = PickStrongerMetric(existingByGuessedName, row);
+                                else
+                                    metricsByName[guessedNameKey] = row;
+                            }
+                        }
+                    }
+                    if (!string.IsNullOrWhiteSpace(row.ZoomUserId))
+                    {
+                        var zoomUserIdKey = row.ZoomUserId!.Trim();
+                        if (metricsByZoomUserId.TryGetValue(zoomUserIdKey, out var existingByZoomUserId))
+                            metricsByZoomUserId[zoomUserIdKey] = MergeZoomMetrics(existingByZoomUserId, row);
+                        else
+                            metricsByZoomUserId[zoomUserIdKey] = row;
+                    }
+                    var nameKey = NormalizeName(item.DisplayName);
+                    if (!string.IsNullOrWhiteSpace(nameKey))
+                    {
+                        if (metricsByName.TryGetValue(nameKey, out var existingByName))
+                            metricsByName[nameKey] = PickStrongerMetric(existingByName, row);
+                        else
+                            metricsByName[nameKey] = row;
+                    }
+                    if (row.TotalCalls > 0) crmMetricsRowsWithCalls++;
+                    if (row.SmsSessionCount > 0) crmMetricsRowsWithTexts++;
+                }
+            }
+            else if (!skipWindowUnsupportedMetrics
                 && TryGetPropertyIgnoreCase(metricsDoc.RootElement, "data", out var metricsData)
                 && metricsData.ValueKind == JsonValueKind.Array)
             {
@@ -521,23 +602,30 @@ public class PerformanceReviewsController : ControllerBase
         var smsRows = 0;
         try
         {
-            var smsResponse = await client.GetAsync($"{crmBase}/phone/sms?from={fromDate}&to={toDate}&pageSize=500");
-            if (smsResponse.IsSuccessStatusCode)
+            if (!usedDirectZoom)
             {
-                var smsJson = await smsResponse.Content.ReadAsStringAsync();
-                using var smsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(smsJson) ? "{}" : smsJson);
-                if (TryGetPropertyIgnoreCase(smsDoc.RootElement, "data", out var smsData)
-                    && smsData.ValueKind == JsonValueKind.Array)
+                var smsResponse = await client.GetAsync($"{crmBase}/phone/sms?from={fromDate}&to={toDate}&pageSize=500");
+                if (smsResponse.IsSuccessStatusCode)
                 {
-                    foreach (var item in smsData.EnumerateArray())
+                    var smsJson = await smsResponse.Content.ReadAsStringAsync();
+                    using var smsDoc = JsonDocument.Parse(string.IsNullOrWhiteSpace(smsJson) ? "{}" : smsJson);
+                    if (TryGetPropertyIgnoreCase(smsDoc.RootElement, "data", out var smsData)
+                        && smsData.ValueKind == JsonValueKind.Array)
                     {
-                        smsRows++;
-                        var ownerId = ReadString(item, "ownerUserId");
-                        if (string.IsNullOrWhiteSpace(ownerId)) continue;
-                        if (!smsByOwner.TryGetValue(ownerId!, out var count)) count = 0;
-                        smsByOwner[ownerId!] = count + 1;
+                        foreach (var item in smsData.EnumerateArray())
+                        {
+                            smsRows++;
+                            var ownerId = ReadString(item, "ownerUserId");
+                            if (string.IsNullOrWhiteSpace(ownerId)) continue;
+                            if (!smsByOwner.TryGetValue(ownerId!, out var count)) count = 0;
+                            smsByOwner[ownerId!] = count + 1;
+                        }
                     }
                 }
+            }
+            else
+            {
+                smsRows = directZoom?.SmsRows ?? 0;
             }
         }
         catch (Exception ex)
@@ -1261,7 +1349,9 @@ public class PerformanceReviewsController : ControllerBase
                 externalCount = externalCountByEmployee.GetValueOrDefault(emp.EmployeeId),
                 totalCallMinutes = totalCallMinutes,
                 avgCallMinutes = callVolume > 0 ? Math.Round(totalCallMinutes / callVolume, 2) : 0,
-                source = usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway"
+                source = usedDirectZoom
+                    ? "zoom-api-direct"
+                    : (usedCallLogFallback ? "zoom-call-logs-fallback" : "zoom-crm-via-ttac-gateway")
             });
         }
 
@@ -1275,10 +1365,14 @@ public class PerformanceReviewsController : ControllerBase
                     from = fromDate,
                     to = toDate,
                     days,
-                    source = "ttac-gateway->taylor-crm/zoom",
+                    source = usedDirectZoom ? "zoom-api-direct" : "ttac-gateway->taylor-crm/zoom",
                     synced = sync,
                     matchedEmployees = matchedCount,
                     totalEmployees = employees.Count,
+                    usedDirectZoom,
+                    directCallLogRows = directZoom?.CallLogRows ?? 0,
+                    directUserRows = directZoom?.UserRows ?? 0,
+                    directZoomError = usedDirectZoom ? null : directZoom?.Error,
                     usedCallLogFallback,
                     fallbackTriggered = shouldUseCallLogFallback,
                     callLogFallbackMatchedEmployees,

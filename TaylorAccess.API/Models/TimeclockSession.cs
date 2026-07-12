@@ -48,6 +48,13 @@ public class TimeclockSession
     /// <summary>In-app route / page changes</summary>
     public int RouteChangeCount { get; set; } = 0;
 
+    /// <summary>
+    /// Suite app that owns this session (access, vantac, accounting, crm, …).
+    /// One open session per email+date+app so apps don't collide.
+    /// </summary>
+    [MaxLength(40)]
+    public string AppSource { get; set; } = "access";
+
     /// <summary>active | idle | offline</summary>
     [MaxLength(20)]
     public string Status { get; set; } = "active";

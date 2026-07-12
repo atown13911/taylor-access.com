@@ -239,6 +239,7 @@ builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddSingleton<IntegrationEncryptionService>();
 builder.Services.AddScoped<CrmIntegrationCopyService>();
 builder.Services.AddScoped<LocalIntegrationStatusService>();
+builder.Services.AddScoped<ZoomDirectMetricsService>();
 builder.Services.AddScoped<IntegrationConfigBootstrapService>();
 // Use GatewayMongoDbService when gateway is configured (production),
 // otherwise fall back to direct MongoDbService (requires MONGODB_URL).
@@ -903,6 +904,7 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""ScrollCount"" INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""PointerMoveCount"" INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""RouteChangeCount"" INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""AppSource"" VARCHAR(40) NOT NULL DEFAULT 'access';
     ");
     }
     }

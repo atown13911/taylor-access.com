@@ -186,7 +186,8 @@ export class ShellComponent implements OnInit, OnDestroy {
 
     // Start session
     this.http.post<{ sessionId: number }>(
-      `${this.apiUrl}/api/v1/timeclock/session/start`, {},
+      `${this.apiUrl}/api/v1/timeclock/session/start`,
+      { appSource: 'access' },
       { headers: { Authorization: `Bearer ${token}` } }
     ).subscribe({
       next: (res) => {

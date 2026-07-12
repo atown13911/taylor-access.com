@@ -179,6 +179,65 @@ public class LocalIntegrationStatusService
         return zoom?.EncryptedAccessToken != null || zoom?.EncryptedApiKey != null;
     }
 
+    /// <summary>Returns a live Zoom S2S bearer token, refreshing from stored/env credentials when needed.</summary>
+    public async Task<string?> GetValidZoomAccessTokenAsync(int? orgId = null, CancellationToken cancellationToken = default)
+    {
+        var config = await FindZoomConfigAsync(orgId, cancellationToken);
+        if (config == null && HasZoomEnvCredentials())
+        {
+            config = new IntegrationConfig
+            {
+                IntegrationType = "zoom",
+                Status = "connected",
+                OAuthScope = Environment.GetEnvironmentVariable("ZOOM_ACCOUNT_ID")
+            };
+        }
+
+        if (config == null)
+            return null;
+
+        if (_encryption.IsConfigured
+            && config.EncryptedAccessToken != null
+            && (!config.TokenExpiresAt.HasValue || config.TokenExpiresAt.Value > DateTime.UtcNow.AddMinutes(2)))
+        {
+            try
+            {
+                var existing = _encryption.Decrypt(config.EncryptedAccessToken);
+                if (!string.IsNullOrWhiteSpace(existing))
+                {
+                    var client = _httpClientFactory.CreateClient();
+                    client.Timeout = TimeSpan.FromSeconds(8);
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", existing);
+                    using var probe = await client.GetAsync("https://api.zoom.us/v2/users?page_size=1&status=active", cancellationToken);
+                    if (probe.IsSuccessStatusCode)
+                        return existing;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Existing Zoom token probe failed; will reconnect");
+            }
+        }
+
+        var reconnected = await TryReconnectZoomAsync(config, cancellationToken);
+        if (!reconnected.Connected)
+            return null;
+
+        var refreshed = await FindZoomConfigAsync(orgId, cancellationToken);
+        if (refreshed?.EncryptedAccessToken == null || !_encryption.IsConfigured)
+            return null;
+
+        try
+        {
+            return _encryption.Decrypt(refreshed.EncryptedAccessToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to decrypt refreshed Zoom token");
+            return null;
+        }
+    }
+
     private async Task<IntegrationConfig?> FindConfigAsync(string integrationType, int? orgId, CancellationToken cancellationToken)
     {
         if (orgId is > 0)

@@ -39,13 +39,14 @@ public class TimeclockController : ControllerBase
 
     // ── Session lifecycle ──────────────────────────────────────────────────
 
-    /// <summary>Called when user opens / logs in to Taylor Access.</summary>
+    /// <summary>Called when user opens / logs in to a Taylor suite app.</summary>
     [HttpPost("session/start")]
-    public async Task<ActionResult> StartSession()
+    public async Task<ActionResult> StartSession([FromBody] StartSessionRequest? req = null)
     {
         var user = await _currentUser.GetUserAsync();
         var email = user?.Email ?? _currentUser.Email ?? "";
         var name  = user?.Name  ?? _currentUser.Name;
+        var appSource = NormalizeAppSource(req?.AppSource);
 
         if (string.IsNullOrEmpty(email))
             return BadRequest(new { error = "Could not identify user" });
@@ -72,11 +73,12 @@ public class TimeclockController : ControllerBase
         if (staleSessions.Count > 0)
             await _context.SaveChangesAsync();
 
-        // Check for an already-open session today (e.g. page refresh)
+        // One open session per email+date+app (suite apps run side-by-side)
         var existing = await _context.TimeclockSessions
             .Where(s => s.UserEmail == email &&
                         s.Date == date &&
-                        s.LogoutTime == null)
+                        s.LogoutTime == null &&
+                        s.AppSource == appSource)
             .OrderByDescending(s => s.LoginTime)
             .FirstOrDefaultAsync();
 
@@ -85,8 +87,9 @@ public class TimeclockController : ControllerBase
             // Reuse the existing session — just update heartbeat + status
             existing.LastHeartbeat = now;
             existing.Status = "active";
+            existing.AppSource = appSource;
             await _context.SaveChangesAsync();
-            return Ok(new { sessionId = existing.Id, resumed = true });
+            return Ok(new { sessionId = existing.Id, resumed = true, appSource });
         }
 
         var session = new TimeclockSession
@@ -98,13 +101,22 @@ public class TimeclockController : ControllerBase
             LoginTime     = now,
             LastHeartbeat = now,
             Status        = "active",
+            AppSource     = appSource,
             IpAddress     = HttpContext.Connection.RemoteIpAddress?.ToString()
         };
 
         _context.TimeclockSessions.Add(session);
         await _context.SaveChangesAsync();
 
-        return Ok(new { sessionId = session.Id, resumed = false });
+        return Ok(new { sessionId = session.Id, resumed = false, appSource });
+    }
+
+    private static string NormalizeAppSource(string? raw)
+    {
+        var value = (raw ?? "access").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(value)) value = "access";
+        if (value.Length > 40) value = value[..40];
+        return value;
     }
 
     /// <summary>
@@ -195,6 +207,7 @@ public class TimeclockController : ControllerBase
                 s.Date, s.LoginTime, s.LogoutTime, s.LastHeartbeat,
                 s.ActiveSeconds, s.IdleSeconds, s.Status, s.IpAddress,
                 s.ClickCount, s.KeypressCount, s.ScrollCount, s.PointerMoveCount, s.RouteChangeCount,
+                s.AppSource,
                 // Use tracked bucket totals — not wall-clock (prevents overnight bleed)
                 totalSeconds = s.ActiveSeconds + s.IdleSeconds,
                 interactionCount = s.ClickCount + s.KeypressCount + s.ScrollCount + s.RouteChangeCount
@@ -703,6 +716,7 @@ public class TimeclockController : ControllerBase
     }
 }
 
+public record StartSessionRequest(string? AppSource = null);
 public record HeartbeatRequest(
     int SessionId,
     bool IsActive,
