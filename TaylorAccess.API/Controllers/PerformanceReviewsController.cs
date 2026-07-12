@@ -636,6 +636,45 @@ public class PerformanceReviewsController : ControllerBase
         try
         {
             var gmailBase = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/gmail";
+
+            if (sync)
+            {
+                try
+                {
+                    // Background bulk catch-up (newest mail first). Returns immediately.
+                    using var bulk = await client.PostAsync(
+                        $"{gmailBase}/domain/sync-all?maxResultsPerUser=200&maxUsers=80",
+                        content: null);
+                    if (!bulk.IsSuccessStatusCode)
+                        _logger.LogWarning("Gmail domain sync-all returned HTTP {Status}", (int)bulk.StatusCode);
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogWarning(syncEx, "Gmail domain sync-all failed during performance Update");
+                }
+
+                try
+                {
+                    // Bounded recent catch-up for scorecards (history has been stale since March).
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(50));
+                    using var incremental = await client.PostAsync(
+                        $"{gmailBase}/domain/sync-incremental?maxCatchupUsers=20&catchupMaxResults=120",
+                        content: null,
+                        timeoutCts.Token);
+                    if (!incremental.IsSuccessStatusCode)
+                        _logger.LogWarning("Gmail domain incremental sync returned HTTP {Status}", (int)incremental.StatusCode);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogWarning("Gmail domain incremental sync timed out during performance Update; continuing with available rows");
+                }
+                catch (Exception syncEx)
+                {
+                    _logger.LogWarning(syncEx, "Gmail domain incremental sync failed during performance Update");
+                }
+            }
+
             var gmailResponse = await client.GetAsync($"{gmailBase}/domain/performance-metrics?from={fromDate}&to={toDate}");
             var gmailRowsAdded = 0;
 
@@ -692,22 +731,6 @@ public class PerformanceReviewsController : ControllerBase
                 gmailFallbackByNameGuess,
                 includeRates: true
             );
-
-            if (sync)
-            {
-                try
-                {
-                    // Best-effort refresh of recent mailbox history before reads above have already run.
-                    // Fire incremental sync so the next Update has fresher GmailMessages rows.
-                    using var incremental = await client.PostAsync($"{gmailBase}/domain/sync-incremental", content: null);
-                    if (!incremental.IsSuccessStatusCode)
-                        _logger.LogWarning("Gmail domain incremental sync returned HTTP {Status}", (int)incremental.StatusCode);
-                }
-                catch (Exception syncEx)
-                {
-                    _logger.LogWarning(syncEx, "Gmail domain incremental sync failed during performance Update");
-                }
-            }
         }
         catch (Exception ex)
         {
