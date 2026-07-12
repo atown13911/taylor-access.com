@@ -753,6 +753,282 @@ public class InternalServiceController : ControllerBase
         return Ok(new { data = employees, total });
     }
 
+    /// <summary>
+    /// Landmark Trucking office/salary payroll accrued into Accounting Office &amp; Admin OpEx.
+    /// Uses Users.Preferences.payroll period gross / annual salary (same source as Access Payroll UI).
+    /// Excludes driver-role users (driver pay stays in COGS via carrier-pay accrual).
+    /// </summary>
+    [HttpGet("payroll-office-accrual")]
+    public async Task<ActionResult> GetPayrollOfficeAccrual(
+        [FromQuery] string? from = null,
+        [FromQuery] string? to = null,
+        [FromQuery] string? organizationName = "Landmark Trucking")
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        if (!DateTime.TryParse(from, out var fromDate))
+            fromDate = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+        if (!DateTime.TryParse(to, out var toDate))
+            toDate = fromDate.AddMonths(1).AddDays(-1);
+
+        fromDate = fromDate.Date;
+        toDate = toDate.Date;
+        if (toDate < fromDate)
+            (fromDate, toDate) = (toDate, fromDate);
+
+        var orgNeedle = string.IsNullOrWhiteSpace(organizationName)
+            ? "landmark trucking"
+            : organizationName.Trim().ToLowerInvariant();
+
+        var orgs = await _db.Organizations
+            .AsNoTracking()
+            .Where(o => o.Name != null && o.Name.ToLower().Contains(orgNeedle))
+            .Select(o => new { o.Id, o.Name })
+            .ToListAsync();
+
+        if (orgs.Count == 0)
+        {
+            return Ok(new
+            {
+                period = new { from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd") },
+                organizationName = organizationName ?? "Landmark Trucking",
+                accrualBasis = "annual-salary-prorate",
+                totalGross = 0m,
+                employeeCount = 0,
+                employees = Array.Empty<object>(),
+                warning = $"No organization matching '{organizationName}' was found."
+            });
+        }
+
+        var orgIds = orgs.Select(o => o.Id).ToHashSet();
+        var orgNameById = orgs.ToDictionary(o => o.Id, o => o.Name ?? "Landmark Trucking");
+
+        var membershipUserIds = await _db.UserOrganizations
+            .AsNoTracking()
+            .Where(uo => orgIds.Contains(uo.OrganizationId))
+            .Select(uo => uo.UserId)
+            .Distinct()
+            .ToListAsync();
+
+        var membershipSet = membershipUserIds.ToHashSet();
+
+        var users = await _db.Users
+            .AsNoTracking()
+            .Where(u =>
+                (u.Status == null || u.Status.ToLower() == "active")
+                && (
+                    (u.OrganizationId.HasValue && orgIds.Contains(u.OrganizationId.Value))
+                    || membershipSet.Contains(u.Id)
+                ))
+            .Select(u => new
+            {
+                u.Id,
+                u.Name,
+                u.Email,
+                u.Role,
+                u.Status,
+                u.OrganizationId,
+                u.Preferences
+            })
+            .ToListAsync();
+
+        var inclusiveDays = (toDate - fromDate).Days + 1;
+        var yearDays = DateTime.IsLeapYear(fromDate.Year) ? 366m : 365m;
+        if (fromDate.Year != toDate.Year)
+        {
+            // Weighted average when the range crosses a year boundary.
+            var daysYear1 = (new DateTime(fromDate.Year, 12, 31) - fromDate).Days + 1;
+            var daysYear2 = inclusiveDays - daysYear1;
+            var y1 = DateTime.IsLeapYear(fromDate.Year) ? 366m : 365m;
+            var y2 = DateTime.IsLeapYear(toDate.Year) ? 366m : 365m;
+            yearDays = inclusiveDays <= 0
+                ? y1
+                : ((daysYear1 * y1) + (Math.Max(0, daysYear2) * y2)) / inclusiveDays;
+        }
+
+        var rows = new List<object>();
+        decimal totalGross = 0m;
+
+        foreach (var user in users)
+        {
+            var role = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
+            if (role.Contains("driver"))
+                continue;
+
+            var payroll = ExtractPayrollPreferences(user.Preferences);
+            var payType = ReadPayrollString(payroll, "payType", "PayType", "type") ?? "salary";
+            var payFrequency = NormalizePayFrequency(
+                ReadPayrollString(payroll, "payFrequency", "frequency") ?? "weekly");
+            var periodsPerYear = GetPayPeriodsPerYear(payFrequency);
+
+            var periodGrossStored = ReadPayrollDecimal(payroll, "periodGrossAmount");
+            var annualSalary = ReadPayrollDecimal(payroll, "annualSalary", "payRate");
+            var hourlyRate = ReadPayrollDecimal(payroll, "hourlyRate");
+            var weeklyHours = ReadPayrollDecimal(payroll, "standardHoursPerWeek");
+            if (weeklyHours <= 0) weeklyHours = 40m;
+
+            var isHourly = payType.Contains("hour", StringComparison.OrdinalIgnoreCase);
+            decimal annualGross;
+            decimal periodGross;
+
+            if (!isHourly && annualSalary > 0)
+            {
+                annualGross = annualSalary;
+                periodGross = periodsPerYear > 0
+                    ? Math.Round(annualSalary / periodsPerYear, 2, MidpointRounding.AwayFromZero)
+                    : annualSalary;
+            }
+            else if (periodGrossStored >= 0)
+            {
+                periodGross = periodGrossStored;
+                annualGross = periodGross * periodsPerYear;
+            }
+            else if (isHourly && hourlyRate > 0)
+            {
+                annualGross = hourlyRate * weeklyHours * 52m;
+                periodGross = periodsPerYear > 0
+                    ? Math.Round(annualGross / periodsPerYear, 2, MidpointRounding.AwayFromZero)
+                    : annualGross;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (annualGross <= 0)
+                continue;
+
+            var accrued = Math.Round(annualGross * inclusiveDays / yearDays, 2, MidpointRounding.AwayFromZero);
+            if (accrued <= 0)
+                continue;
+
+            totalGross += accrued;
+            var resolvedOrgId = user.OrganizationId.HasValue && orgIds.Contains(user.OrganizationId.Value)
+                ? user.OrganizationId.Value
+                : orgIds.First();
+
+            rows.Add(new
+            {
+                userId = user.Id,
+                name = user.Name,
+                email = user.Email,
+                role = user.Role,
+                organizationId = resolvedOrgId,
+                organizationName = orgNameById.GetValueOrDefault(resolvedOrgId, "Landmark Trucking"),
+                payType,
+                payFrequency,
+                periodGross,
+                annualSalary = annualGross,
+                accruedGross = accrued
+            });
+        }
+
+        rows.Sort((a, b) =>
+        {
+            var left = a.GetType().GetProperty("name")?.GetValue(a)?.ToString() ?? string.Empty;
+            var right = b.GetType().GetProperty("name")?.GetValue(b)?.ToString() ?? string.Empty;
+            return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
+        });
+
+        return Ok(new
+        {
+            period = new { from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd") },
+            organizationName = orgs.First().Name,
+            organizationIds = orgIds.ToArray(),
+            accrualBasis = "annual-salary-prorate",
+            inclusiveDays,
+            totalGross = Math.Round(totalGross, 2, MidpointRounding.AwayFromZero),
+            employeeCount = rows.Count,
+            employees = rows
+        });
+    }
+
+    private static Dictionary<string, JsonElement>? ExtractPayrollPreferences(string? preferencesJson)
+    {
+        if (string.IsNullOrWhiteSpace(preferencesJson))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(preferencesJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return null;
+
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (!string.Equals(prop.Name, "payroll", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (prop.Value.ValueKind != JsonValueKind.Object)
+                    return null;
+
+                var map = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+                foreach (var field in prop.Value.EnumerateObject())
+                    map[field.Name] = field.Value.Clone();
+                return map;
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static string? ReadPayrollString(Dictionary<string, JsonElement>? payroll, params string[] names)
+    {
+        if (payroll == null) return null;
+        foreach (var name in names)
+        {
+            if (!payroll.TryGetValue(name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                var text = value.GetString();
+                if (!string.IsNullOrWhiteSpace(text)) return text.Trim();
+            }
+            if (value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                return value.ToString();
+        }
+        return null;
+    }
+
+    private static decimal ReadPayrollDecimal(Dictionary<string, JsonElement>? payroll, params string[] names)
+    {
+        if (payroll == null) return -1m;
+        foreach (var name in names)
+        {
+            if (!payroll.TryGetValue(name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var n))
+                return n;
+            if (value.ValueKind == JsonValueKind.String
+                && decimal.TryParse(value.GetString(), System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                return parsed;
+        }
+        return -1m;
+    }
+
+    private static string NormalizePayFrequency(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant().Replace("-", "").Replace("_", "").Replace(" ", "");
+        return normalized switch
+        {
+            "biweekly" or "biweek" or "fortnightly" => "biweekly",
+            "semimonthly" or "semimonth" => "semimonthly",
+            "monthly" or "month" => "monthly",
+            _ => "weekly"
+        };
+    }
+
+    private static int GetPayPeriodsPerYear(string frequency) => frequency switch
+    {
+        "biweekly" => 26,
+        "semimonthly" => 24,
+        "monthly" => 12,
+        _ => 52
+    };
+
     /// <summary>Get all active carriers (for VanTac Fleet Management)</summary>
     [HttpGet("carriers")]
     public async Task<ActionResult> GetCarriers([FromQuery] int limit = 500, [FromQuery] int page = 1)
