@@ -1163,79 +1163,48 @@ type RosterEmployee = Record<string, any>;
       background: linear-gradient(90deg, rgba(244, 63, 94, 0.24), rgba(244, 63, 94, 0.14)) !important;
       color: #fecdd3 !important;
     }
-    /* Brokerage table column tinting by source group (faded) */
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(2),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(3),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(4),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(5),
-    .reviews-table tbody td:nth-child(2),
-    .reviews-table tbody td:nth-child(3),
-    .reviews-table tbody td:nth-child(4),
-    .reviews-table tbody td:nth-child(5) {
-      background-color: rgba(34, 197, 94, 0.1) !important;
+    /* Brokerage table column tinting by source group
+       1 Emp | 2-5 Zoom | 6-10 Gmail | 11-17 Timeclock | 18 Finance | 19-21 Review */
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+5),
+    .reviews-table tbody td:nth-child(n+2):nth-child(-n+5) {
+      background-color: rgba(34, 197, 94, 0.12) !important;
+      color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(6),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(7),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(8),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(9),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(10),
-    .reviews-table tbody td:nth-child(6),
-    .reviews-table tbody td:nth-child(7),
-    .reviews-table tbody td:nth-child(8),
-    .reviews-table tbody td:nth-child(9),
-    .reviews-table tbody td:nth-child(10) {
-      background-color: rgba(251, 191, 36, 0.1) !important;
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+6):nth-child(-n+10),
+    .reviews-table tbody td:nth-child(n+6):nth-child(-n+10) {
+      background-color: rgba(251, 191, 36, 0.12) !important;
+      color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(11),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(12),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(13),
-    .reviews-table tbody td:nth-child(11),
-    .reviews-table tbody td:nth-child(12),
-    .reviews-table tbody td:nth-child(13) {
-      background-color: rgba(56, 189, 248, 0.1) !important;
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+11):nth-child(-n+17),
+    .reviews-table tbody td:nth-child(n+11):nth-child(-n+17) {
+      background-color: rgba(56, 189, 248, 0.12) !important;
+      color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(14),
-    .reviews-table tbody td:nth-child(14) {
-      background-color: rgba(167, 139, 250, 0.1) !important;
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(18),
+    .reviews-table tbody td:nth-child(18) {
+      background-color: rgba(167, 139, 250, 0.14) !important;
+      color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(15),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(16),
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(17),
-    .reviews-table tbody td:nth-child(15),
-    .reviews-table tbody td:nth-child(16),
-    .reviews-table tbody td:nth-child(17) {
-      background-color: rgba(244, 63, 94, 0.1) !important;
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+19):nth-child(-n+21),
+    .reviews-table tbody td:nth-child(n+19):nth-child(-n+21) {
+      background-color: rgba(244, 63, 94, 0.12) !important;
+      color: #e2e8f0;
     }
-    /* Management table column tinting by source group (faded) */
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(2),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(3),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(4),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(5),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(6),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(12),
-    .management-metrics-table tbody td:nth-child(2),
-    .management-metrics-table tbody td:nth-child(3),
-    .management-metrics-table tbody td:nth-child(4),
-    .management-metrics-table tbody td:nth-child(5),
-    .management-metrics-table tbody td:nth-child(6),
-    .management-metrics-table tbody td:nth-child(12) {
-      background-color: rgba(34, 197, 94, 0.1) !important;
+    /* Management table: 1 Emp | 2-7 Zoom | 8-12 Gmail | 13-16 Activity */
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+7),
+    .management-metrics-table tbody td:nth-child(n+2):nth-child(-n+7) {
+      background-color: rgba(34, 197, 94, 0.12) !important;
+      color: #e2e8f0;
     }
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(7),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(8),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(9),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(10),
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(11),
-    .management-metrics-table tbody td:nth-child(7),
-    .management-metrics-table tbody td:nth-child(8),
-    .management-metrics-table tbody td:nth-child(9),
-    .management-metrics-table tbody td:nth-child(10),
-    .management-metrics-table tbody td:nth-child(11) {
-      background-color: rgba(251, 191, 36, 0.1) !important;
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+8):nth-child(-n+12),
+    .management-metrics-table tbody td:nth-child(n+8):nth-child(-n+12) {
+      background-color: rgba(251, 191, 36, 0.12) !important;
+      color: #e2e8f0;
     }
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(13),
-    .management-metrics-table tbody td:nth-child(13) {
-      background-color: rgba(56, 189, 248, 0.1) !important;
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+13):nth-child(-n+16),
+    .management-metrics-table tbody td:nth-child(n+13):nth-child(-n+16) {
+      background-color: rgba(56, 189, 248, 0.12) !important;
+      color: #e2e8f0;
     }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1297,74 +1266,49 @@ type RosterEmployee = Record<string, any>;
     .remove-tab-btn:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
     .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
-    .table-wrap { border-radius: 12px; border: 1px solid #2a2a4e; overflow: hidden; }
+    .table-wrap { border-radius: 12px; border: 1px solid #2a2a4e; overflow: auto; }
     .reviews-table-wrap { max-height: 68vh; overflow: auto; border-color: #374151; }
-    table { width: 100%; border-collapse: collapse; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
     th { padding: 12px 16px; text-align: left; font-size: 0.75rem; color: #888; text-transform: uppercase; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
-    td { padding: 14px 16px; color: #ccc; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    td { padding: 14px 16px; color: #e2e8f0; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
     tr:hover td { background: rgba(0, 212, 255, 0.03); }
+    .reviews-table { width: max-content; min-width: 100%; }
     .reviews-table thead th {
       position: sticky;
       top: 0;
       z-index: 2;
-      background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-      color: #cbd5e1;
+      background: #111827 !important;
+      color: #e5e7eb !important;
       font-size: 0.72rem;
       letter-spacing: 0.05em;
       border-bottom: 1px solid #334155;
       white-space: nowrap;
     }
-    .reviews-table tbody tr:nth-child(odd) td { background: rgba(15, 23, 42, 0.35); }
-    .reviews-table tbody tr:nth-child(even) td { background: rgba(2, 6, 23, 0.65); }
+    .reviews-table thead tr.source-group-row th { z-index: 3; }
+    .reviews-table thead tr:not(.source-group-row) th { top: 34px; }
+    .reviews-table tbody tr:nth-child(odd) td { background: rgba(30, 41, 59, 0.55); color: #e2e8f0; }
+    .reviews-table tbody tr:nth-child(even) td { background: rgba(15, 23, 42, 0.72); color: #e2e8f0; }
     .reviews-table tbody tr:hover td {
-      background: rgba(14, 165, 233, 0.14);
-      color: #e2e8f0;
+      filter: brightness(1.12);
+      color: #f8fafc;
     }
     .reviews-table th,
-    .reviews-table td { vertical-align: middle; }
-    .reviews-table td:nth-child(2),
-    .reviews-table td:nth-child(3),
-    .reviews-table td:nth-child(4),
-    .reviews-table td:nth-child(5),
-    .reviews-table td:nth-child(6),
-    .reviews-table td:nth-child(7),
-    .reviews-table td:nth-child(8),
-    .reviews-table td:nth-child(9),
-    .reviews-table td:nth-child(10),
-    .reviews-table td:nth-child(11),
-    .reviews-table td:nth-child(12),
-    .reviews-table td:nth-child(13),
-    .reviews-table td:nth-child(14),
-    .reviews-table td:nth-child(15),
-    .reviews-table td:nth-child(16),
-    .reviews-table td:nth-child(17),
-    .reviews-table th:nth-child(2),
-    .reviews-table th:nth-child(3),
-    .reviews-table th:nth-child(4),
-    .reviews-table th:nth-child(5),
-    .reviews-table th:nth-child(6),
-    .reviews-table th:nth-child(7),
-    .reviews-table th:nth-child(8),
-    .reviews-table th:nth-child(9),
-    .reviews-table th:nth-child(10),
-    .reviews-table th:nth-child(11),
-    .reviews-table th:nth-child(12),
-    .reviews-table th:nth-child(13),
-    .reviews-table th:nth-child(14),
-    .reviews-table th:nth-child(15),
-    .reviews-table th:nth-child(16),
-    .reviews-table th:nth-child(17) {
+    .reviews-table td { vertical-align: middle; white-space: nowrap; }
+    .reviews-table td:nth-child(n+2):nth-child(-n+21),
+    .reviews-table th:nth-child(n+2):nth-child(-n+21) {
       text-align: center;
     }
     .reviews-table td:first-child,
     .reviews-table th:first-child {
       position: sticky;
       left: 0;
-      z-index: 1;
-      background: #0b1220;
+      z-index: 4;
+      background: #0f172a !important;
+      color: #f8fafc !important;
       min-width: 180px;
+      box-shadow: 1px 0 0 #1f2937;
     }
-    .reviews-table thead th:first-child { z-index: 3; }
+    .reviews-table thead th:first-child { z-index: 5; background: #111827 !important; }
     .report-view { margin-top: 8px; }
     .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .report-title { color: #e2e8f0; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
@@ -2796,16 +2740,20 @@ export class PerformanceReviewsComponent implements OnInit {
     let activeHours: number;
     let idleHours: number;
     if (useDbSnapshot) {
-      totalHours = persistedClocked;
-      activeHours = persistedActive;
+      totalHours = Math.max(0, persistedClocked);
+      // Never show active > clocked (old snapshots stored scheduled hours as "work").
+      activeHours = Math.min(Math.max(0, persistedActive), totalHours);
       idleHours = Math.max(0, totalHours - activeHours);
     } else if (hasLiveTime) {
       totalHours = liveTime.totalHours;
-      activeHours = liveTime.activeHours;
+      activeHours = Math.min(liveTime.activeHours, totalHours);
       idleHours = liveTime.idleHours;
     } else {
       totalHours = Math.max(persistedClocked, hasSnapshot ? Number(review.clockedHours || 0) : 0);
-      activeHours = Math.max(persistedActive, hasSnapshot ? Number(review.workHours || 0) : 0);
+      activeHours = Math.min(
+        Math.max(persistedActive, hasSnapshot ? Number(review.workHours || 0) : 0),
+        totalHours
+      );
       idleHours = Math.max(0, totalHours - activeHours);
     }
 
