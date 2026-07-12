@@ -268,9 +268,12 @@ public class PerformanceReviewsController : ControllerBase
         }
 
         var usedDirectZoom = directZoom?.Success == true && directZoom.Metrics.Count > 0;
-        if (!usedDirectZoom
-            && !hasCustomRange
-            && (targetStart.Month != now.Month || targetStart.Year != now.Year))
+        var selectedDayCount = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
+        // CRM metrics/users?days=N is always "last N days from today". Never use it for a closed
+        // historical window (e.g. April 2025) or every month selector will show the same numbers.
+        var crmTrailingSafe = rangeEnd.Date >= now.Date.AddDays(-2);
+
+        if (!usedDirectZoom && !crmTrailingSafe)
         {
             return Ok(new
             {
@@ -279,18 +282,18 @@ public class PerformanceReviewsController : ControllerBase
                 {
                     year = targetYear,
                     month = targetMonth,
-                    source = "ttac-gateway->taylor-crm/zoom",
-                    note = "Live Zoom monthly pull is only available for current month via CRM fallback. Historical months need direct Zoom credentials or saved review snapshots.",
+                    from = targetStart.ToString("yyyy-MM-dd"),
+                    to = rangeEnd.ToString("yyyy-MM-dd"),
+                    source = "access-direct-zoom",
+                    note = "No Zoom metrics for this selected period. Run Update to save a warehouse snapshot, or ensure Zoom S2S can pull this date range.",
                     directZoomError = directZoom?.Error
                 }
             });
         }
 
-        // Some deployments do not include the ZoomUserRecords table.
-        // Keep this map empty and rely on direct employee fields + live metrics for matching.
         var zoomUserIdByEmail = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        var days = Math.Max(1, (int)Math.Ceiling((rangeEnd.Date - targetStart.Date).TotalDays) + 1);
+        var days = selectedDayCount;
         var gatewayBase = ResolveCrmGatewayOpenBase();
         var crmBase = $"{gatewayBase.TrimEnd('/')}/taylor-crm/api/v1/zoom";
 

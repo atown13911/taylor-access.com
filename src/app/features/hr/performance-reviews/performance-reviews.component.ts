@@ -112,6 +112,29 @@ interface PersistedMetricRow {
   score: number;
   source?: string;
 }
+interface ScorecardSnapshotRow {
+  employeeId: number;
+  employeeName?: string;
+  callVolume: number;
+  totalCallMinutes: number;
+  avgCallMinutes: number;
+  textVolume: number;
+  sentCount: number;
+  replyCount: number;
+  firstResponseMinutes: number;
+  followUpRate: number;
+  internalCount: number;
+  externalCount: number;
+  clockedHours: number;
+  activeHours: number;
+  idleHours: number;
+  presenceRate: number;
+  systemRate: number;
+  busyRate: number;
+  invoicedRevenue: number;
+  score: number;
+  busySource?: string;
+}
 type ReviewTableSort =
   | 'employee-asc'
   | 'employee-desc'
@@ -505,11 +528,16 @@ type RosterEmployee = Record<string, any>;
           </div>
         </section>
       } @else if (brokerageView() === 'additional') {
-        <div class="table-wrap reviews-table-wrap">
-          <table class="reviews-table additional-metrics-table">
+        <div class="table-wrap reviews-table-wrap additional-wrap">
+          <table class="additional-metrics-table">
             <thead>
-              <tr>
-                <th>Employee</th>
+              <tr class="addl-group-row">
+                <th class="addl-group" rowspan="2">Employee</th>
+                <th class="addl-group addl-calls" colspan="3">Call Direction</th>
+                <th class="addl-group addl-voice" colspan="4">Voicemail &amp; Recordings</th>
+                <th class="addl-group addl-meet" colspan="3">Meetings</th>
+              </tr>
+              <tr class="addl-col-row">
                 <th>Inbound</th>
                 <th>Outbound</th>
                 <th>Missed</th>
@@ -517,15 +545,15 @@ type RosterEmployee = Record<string, any>;
                 <th>VM Min</th>
                 <th>Recordings</th>
                 <th>Rec Min</th>
-                <th>Meetings Hosted</th>
-                <th>Meetings Joined</th>
-                <th>Meeting Min</th>
+                <th>Hosted</th>
+                <th>Joined</th>
+                <th>Minutes</th>
               </tr>
             </thead>
             <tbody>
               @for (row of filteredAdditionalMetrics(); track row.employeeId) {
                 <tr>
-                  <td><strong>{{ row.employeeName || ('Employee #' + row.employeeId) }}</strong></td>
+                  <td class="addl-name">{{ row.employeeName || ('Employee #' + row.employeeId) }}</td>
                   <td>{{ row.inboundCalls }}</td>
                   <td>{{ row.outboundCalls }}</td>
                   <td>{{ row.missedCalls }}</td>
@@ -538,7 +566,7 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ row.meetingMinutes | number:'1.0-1' }}</td>
                 </tr>
               } @empty {
-                <tr><td colspan="11">No additional metrics yet. Click Update to pull from Zoom API.</td></tr>
+                <tr><td class="addl-empty" colspan="11">No additional metrics yet. Click Update to pull from Zoom API.</td></tr>
               }
             </tbody>
           </table>
@@ -1180,57 +1208,54 @@ type RosterEmployee = Record<string, any>;
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
     .density-controls {
       display: inline-flex;
-      gap: 4px;
+      gap: 2px;
       padding: 3px;
-      border-radius: 999px;
-      border: 1px solid #2a2a4e;
-      background: rgba(15, 23, 42, 0.7);
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
     }
     .density-btn {
       border: none;
       background: transparent;
       color: #94a3b8;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      padding: 6px 10px;
-      border-radius: 999px;
+      padding: 6px 11px;
+      border-radius: 6px;
       cursor: pointer;
     }
     .density-btn.active {
-      background: rgba(34, 211, 238, 0.16);
-      color: #e0f2fe;
+      background: #1e293b;
+      color: #f1f5f9;
+      box-shadow: inset 0 0 0 1px #475569;
     }
-    .page-header h1 { color: #fff; font-size: 1.8rem; margin: 0; display: flex; align-items: center; gap: 12px; i { color: #00d4ff; } }
-    .subtitle { color: #888; margin: 6px 0 0; font-size: 0.9rem; }
-    .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); color: #0a0a14; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; &:disabled { opacity: 0.5; } }
-    .btn-secondary { padding: 10px 20px; background: #2a2a4e; color: #aaa; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 108px; &:disabled { opacity: 0.75; cursor: not-allowed; } }
+    .page-header h1 { color: #f8fafc; font-size: 1.65rem; margin: 0; display: flex; align-items: center; gap: 12px; font-weight: 650; letter-spacing: -0.02em; i { color: #94a3b8; } }
+    .subtitle { color: #94a3b8; margin: 6px 0 0; font-size: 0.88rem; }
+    .btn-primary { background: #2563eb; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; &:disabled { opacity: 0.5; } }
+    .btn-secondary { padding: 9px 16px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 108px; &:disabled { opacity: 0.75; cursor: not-allowed; } &:hover:not(:disabled) { background: #243247; border-color: #475569; } }
     .btn-spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.28); border-top-color: #e0f2fe; border-radius: 999px; display: inline-block; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
-    .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .status-item { background: #131a2e; border: 1px solid #2a2a4e; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .status-item .label { color: #8aa0b8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
-    .status-item .value { color: #dbeafe; font-size: 0.86rem; font-weight: 600; }
-    .status-chip { border: 1px solid #334155; color: #fbbf24; background: rgba(245, 158, 11, 0.12); border-radius: 999px; font-size: 0.72rem; padding: 3px 10px; font-weight: 700; }
-    .status-chip.connected { color: #22c55e; border-color: rgba(34, 197, 94, 0.5); background: rgba(34, 197, 94, 0.12); }
-    .status-chip.not-connected { color: #ef4444; border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.12); }
-    .stat-card { background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 14px; }
-    .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
-    .stat-icon.total { background: rgba(0, 212, 255, 0.12); color: #00d4ff; }
-    .stat-icon.pending { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
-    .stat-icon.completed { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
-    .stat-icon.staff { background: rgba(59, 130, 246, 0.14); color: #60a5fa; }
-    .stat-icon.calls { background: rgba(14, 165, 233, 0.14); color: #38bdf8; }
-    .stat-icon.activity { background: rgba(139, 92, 246, 0.14); color: #a78bfa; }
-    .stat-icon.draft { background: rgba(156, 163, 175, 0.12); color: #9ca3af; }
-    .stat-val { font-size: 1.4rem; font-weight: 700; color: #fff; display: block; }
-    .stat-lbl { font-size: 0.78rem; color: #888; }
-    .page-tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 2px solid #2a2a4e; }
-    .page-tab { padding: 12px 22px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.95rem; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: all 0.2s; margin-bottom: -2px; }
-    .page-tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
-    .page-tab:hover { color: #ccc; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .integration-status-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .status-item { background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .status-item .label { color: #94a3b8; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .status-item .value { color: #e2e8f0; font-size: 0.84rem; font-weight: 600; }
+    .status-chip { border: 1px solid #334155; color: #cbd5e1; background: #1e293b; border-radius: 6px; font-size: 0.7rem; padding: 3px 9px; font-weight: 600; letter-spacing: 0.02em; }
+    .status-chip.connected { color: #86efac; border-color: #166534; background: #14532d; }
+    .status-chip.not-connected { color: #fca5a5; border-color: #7f1d1d; background: #450a0a; }
+    .stat-card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+    .stat-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; background: #1e293b; color: #94a3b8; }
+    .stat-icon.total, .stat-icon.pending, .stat-icon.completed, .stat-icon.staff, .stat-icon.calls, .stat-icon.activity, .stat-icon.draft {
+      background: #1e293b; color: #94a3b8;
+    }
+    .stat-val { font-size: 1.28rem; font-weight: 650; color: #f8fafc; display: block; letter-spacing: -0.02em; }
+    .stat-lbl { font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+    .page-tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid #1f2937; }
+    .page-tab { padding: 11px 18px; border: none; background: none; color: #94a3b8; cursor: pointer; font-weight: 600; font-size: 0.9rem; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px; }
+    .page-tab.active { color: #f8fafc; border-bottom-color: #64748b; }
+    .page-tab:hover { color: #e2e8f0; }
     .review-controls {
       display: flex;
       flex-direction: column;
@@ -1246,10 +1271,9 @@ type RosterEmployee = Record<string, any>;
     }
     .review-filters.toolbar-panel {
       padding: 14px 16px;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      background: #111827;
     }
     .field-stack {
       display: flex;
@@ -1258,8 +1282,8 @@ type RosterEmployee = Record<string, any>;
       gap: 6px;
     }
     .field-stack label {
-      font-size: 0.68rem;
-      font-weight: 700;
+      font-size: 0.66rem;
+      font-weight: 650;
       letter-spacing: 0.06em;
       text-transform: uppercase;
       color: #94a3b8;
@@ -1284,8 +1308,8 @@ type RosterEmployee = Record<string, any>;
     .segmented {
       display: inline-flex;
       padding: 3px;
-      border-radius: 10px;
-      background: #0b1220;
+      border-radius: 8px;
+      background: #0f172a;
       border: 1px solid #334155;
       gap: 2px;
     }
@@ -1293,18 +1317,18 @@ type RosterEmployee = Record<string, any>;
       border: none;
       background: transparent;
       color: #94a3b8;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: 600;
       padding: 7px 14px;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       transition: background 0.15s ease, color 0.15s ease;
     }
     .segmented button:hover { color: #e2e8f0; }
     .segmented button.active {
-      background: #1e3a5f;
-      color: #e0f2fe;
-      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.55);
+      background: #1e293b;
+      color: #f8fafc;
+      box-shadow: inset 0 0 0 1px #475569;
     }
     .update-filter-end { margin-left: auto; }
     .update-btn-primary {
@@ -1320,10 +1344,37 @@ type RosterEmployee = Record<string, any>;
     .period-mode-tabs {
       margin-bottom: 0;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
       flex-wrap: wrap;
+      border-bottom: 1px solid #1f2937;
     }
-    .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .table-title-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      background: #1e293b;
+      font-size: 0.68rem;
+      font-weight: 650;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 8px;
+    }
+    .tabs .tab {
+      padding: 10px 14px;
+      border: none;
+      background: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.84rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tabs .tab.active { color: #f8fafc; border-bottom-color: #64748b; }
+    .tabs .tab:hover { color: #e2e8f0; }
     .month-filter { display: flex; align-items: stretch; gap: 8px; }
     .search-filter { display: flex; align-items: stretch; gap: 8px; }
     .sort-filter { display: flex; align-items: stretch; gap: 8px; }
@@ -1371,110 +1422,191 @@ type RosterEmployee = Record<string, any>;
     .status-dot.offline {
       background: #ef4444;
     }
-    /* Opaque sticky group headers (no see-through on scroll) */
+    /* Opaque sticky group headers — muted professional tints */
     table thead tr.source-group-row th.group-base {
-      background: #334155 !important;
-      color: #f8fafc !important;
+      background: #1e293b !important;
+      color: #e2e8f0 !important;
     }
     table thead tr.source-group-row th.group-zoom {
-      background: #14532d !important;
+      background: #1a2e24 !important;
       color: #bbf7d0 !important;
-      border-right: 1px solid #166534;
+      border-right: 1px solid #243b2f;
     }
     table thead tr.source-group-row th.group-gmail {
-      background: #78350f !important;
+      background: #2a2418 !important;
       color: #fde68a !important;
-      border-right: 1px solid #92400e;
+      border-right: 1px solid #3b301c;
     }
     table thead tr.source-group-row th.group-timeclock {
-      background: #0c4a6e !important;
-      color: #bae6fd !important;
-      border-right: 1px solid #0369a1;
+      background: #172554 !important;
+      color: #bfdbfe !important;
+      border-right: 1px solid #1e3a8a;
     }
     table thead tr.source-group-row th.group-finance {
-      background: #4c1d95 !important;
-      color: #ddd6fe !important;
-      border-right: 1px solid #6d28d9;
+      background: #1e1b4b !important;
+      color: #c4b5fd !important;
+      border-right: 1px solid #312e81;
     }
     table thead tr.source-group-row th.group-review {
-      background: #881337 !important;
+      background: #3f1d2e !important;
       color: #fecdd3 !important;
     }
-    /* Brokerage: opaque sticky column headers; body keeps light tint
-       1 Emp | 2-5 Zoom | 6-10 Gmail | 11-17 Timeclock | 18 Finance | 19-21 Review */
+    /* Brokerage: soft column tint; keep header solid */
     .reviews-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+5) {
-      background-color: #1a3a28 !important;
+      background-color: #15241c !important;
       color: #e2e8f0;
     }
     .reviews-table tbody td:nth-child(n+2):nth-child(-n+5) {
-      background-color: rgba(34, 197, 94, 0.12) !important;
+      background-color: rgba(22, 101, 52, 0.08) !important;
       color: #e2e8f0;
     }
     .reviews-table thead tr:not(.source-group-row) th:nth-child(n+6):nth-child(-n+10) {
-      background-color: #3b2a12 !important;
+      background-color: #241c12 !important;
       color: #e2e8f0;
     }
     .reviews-table tbody td:nth-child(n+6):nth-child(-n+10) {
-      background-color: rgba(251, 191, 36, 0.12) !important;
+      background-color: rgba(146, 64, 14, 0.08) !important;
       color: #e2e8f0;
     }
     .reviews-table thead tr:not(.source-group-row) th:nth-child(n+11):nth-child(-n+17) {
-      background-color: #123448 !important;
+      background-color: #111c33 !important;
       color: #e2e8f0;
     }
     .reviews-table tbody td:nth-child(n+11):nth-child(-n+17) {
-      background-color: rgba(56, 189, 248, 0.12) !important;
+      background-color: rgba(30, 64, 175, 0.08) !important;
       color: #e2e8f0;
     }
     .reviews-table thead tr:not(.source-group-row) th:nth-child(18) {
-      background-color: #2e1f55 !important;
+      background-color: #1a1733 !important;
       color: #e2e8f0;
     }
     .reviews-table tbody td:nth-child(18) {
-      background-color: rgba(167, 139, 250, 0.14) !important;
+      background-color: rgba(76, 29, 149, 0.08) !important;
       color: #e2e8f0;
     }
     .reviews-table thead tr:not(.source-group-row) th:nth-child(n+19):nth-child(-n+21) {
-      background-color: #3f1528 !important;
+      background-color: #2a1520 !important;
       color: #e2e8f0;
     }
     .reviews-table tbody td:nth-child(n+19):nth-child(-n+21) {
-      background-color: rgba(244, 63, 94, 0.12) !important;
+      background-color: rgba(136, 19, 55, 0.08) !important;
       color: #e2e8f0;
     }
-    /* Management: opaque sticky headers; body keeps light tint
-       1 Emp | 2-7 Zoom | 8-12 Gmail | 13-19 Activity */
+    /* Management: soft column tint */
     .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+7) {
-      background-color: #1a3a28 !important;
+      background-color: #15241c !important;
       color: #e2e8f0;
     }
     .management-metrics-table tbody td:nth-child(n+2):nth-child(-n+7) {
-      background-color: rgba(34, 197, 94, 0.12) !important;
+      background-color: rgba(22, 101, 52, 0.08) !important;
       color: #e2e8f0;
     }
     .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+8):nth-child(-n+12) {
-      background-color: #3b2a12 !important;
+      background-color: #241c12 !important;
       color: #e2e8f0;
     }
     .management-metrics-table tbody td:nth-child(n+8):nth-child(-n+12) {
-      background-color: rgba(251, 191, 36, 0.12) !important;
+      background-color: rgba(146, 64, 14, 0.08) !important;
       color: #e2e8f0;
     }
     .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+13):nth-child(-n+19) {
-      background-color: #123448 !important;
+      background-color: #111c33 !important;
       color: #e2e8f0;
     }
     .management-metrics-table tbody td:nth-child(n+13):nth-child(-n+19) {
-      background-color: rgba(56, 189, 248, 0.12) !important;
+      background-color: rgba(30, 64, 175, 0.08) !important;
       color: #e2e8f0;
     }
+
+    /* Additional Data table — clean professional grid (no neon column fills) */
+    .additional-wrap { border-color: #1f2937; }
+    .additional-metrics-table {
+      width: 100%;
+      min-width: 920px;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: auto;
+    }
+    .additional-metrics-table thead th {
+      position: sticky;
+      z-index: 3;
+      text-align: center;
+      white-space: nowrap;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid #1f2937;
+      color: #cbd5e1;
+      background: #111827 !important;
+    }
+    .additional-metrics-table thead tr.addl-group-row th {
+      top: 0;
+      z-index: 4;
+      font-size: 0.68rem;
+      padding: 9px 10px;
+      color: #e2e8f0;
+      background: #0f172a !important;
+      border-bottom: 1px solid #334155;
+    }
+    .additional-metrics-table thead tr.addl-group-row th.addl-calls {
+      border-right: 1px solid #334155;
+    }
+    .additional-metrics-table thead tr.addl-group-row th.addl-voice {
+      border-right: 1px solid #334155;
+    }
+    .additional-metrics-table thead tr.addl-col-row th {
+      top: 34px;
+      font-size: 0.62rem;
+      padding: 7px 8px;
+      color: #94a3b8;
+      background: #111827 !important;
+    }
+    .additional-metrics-table thead th:first-child,
+    .additional-metrics-table tbody td.addl-name {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+      text-align: left;
+      min-width: 160px;
+      max-width: 220px;
+      background: #0f172a !important;
+      box-shadow: 1px 0 0 #1f2937;
+    }
+    .additional-metrics-table thead th:first-child { z-index: 6; }
+    .additional-metrics-table tbody td {
+      padding: 9px 10px;
+      font-size: 0.8rem;
+      color: #e2e8f0;
+      text-align: center;
+      border-bottom: 1px solid #1f2937;
+      background: transparent;
+      white-space: nowrap;
+    }
+    .additional-metrics-table tbody td.addl-name {
+      font-weight: 600;
+      color: #f8fafc;
+      text-align: left;
+    }
+    .additional-metrics-table tbody tr:nth-child(even) td { background: rgba(15, 23, 42, 0.55); }
+    .additional-metrics-table tbody tr:nth-child(even) td.addl-name { background: #0f172a !important; }
+    .additional-metrics-table tbody tr:hover td { background: rgba(51, 65, 85, 0.35); }
+    .additional-metrics-table tbody tr:hover td.addl-name { background: #111827 !important; }
+    .additional-metrics-table td.addl-empty {
+      text-align: center;
+      color: #94a3b8;
+      padding: 28px 12px;
+      font-size: 0.86rem;
+    }
+    .sync-status { color: #94a3b8; }
+    .sync-status.partial { color: #fbbf24; }
+    .sync-status.failed { color: #f87171; }
     .week-selector { display: flex; align-items: center; gap: 8px; }
     .month-filter label, .sort-filter label, .search-filter label, .update-filter label, .timeframe-filter label { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
       min-width: 180px;
       background: #111827;
       color: #d1d5db;
-      border: 1px solid #2a2a4e;
+      border: 1px solid #334155;
       border-radius: 8px;
       padding: 8px 10px;
       height: 38px;
@@ -1484,14 +1616,14 @@ type RosterEmployee = Record<string, any>;
       min-width: 110px;
       background: #111827;
       color: #d1d5db;
-      border: 1px solid #2a2a4e;
+      border: 1px solid #334155;
       border-radius: 8px;
       padding: 8px 10px;
       height: 38px;
       box-sizing: border-box;
     }
-    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
-    .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #1f2937; }
+    .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #1f2937; flex-wrap: wrap; }
     .add-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
     .settings-title-tab { min-width: 42px; display: inline-flex; align-items: center; justify-content: center; }
     .title-picker { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
@@ -1539,10 +1671,22 @@ type RosterEmployee = Record<string, any>;
     }
     .remove-tab-btn:hover { background: rgba(239, 68, 68, 0.2); color: #fff; }
     .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888; font-size: 0.82rem; }
-    .tab { padding: 10px 18px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.88rem; border-bottom: 2px solid transparent; &.active { color: #00d4ff; border-bottom-color: #00d4ff; } &:hover { color: #ccc; } }
+    .tab {
+      padding: 10px 14px;
+      border: none;
+      background: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.84rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      &.active { color: #f8fafc; border-bottom-color: #64748b; }
+      &:hover { color: #e2e8f0; }
+    }
     .table-wrap {
-      border-radius: 12px;
-      border: 1px solid #2a2a4e;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
       max-width: 100%;
       width: 100%;
       min-width: 0;
@@ -1554,7 +1698,7 @@ type RosterEmployee = Record<string, any>;
     }
     .reviews-table-wrap {
       max-height: min(68vh, 720px);
-      border-color: #374151;
+      border-color: #1f2937;
       position: relative;
     }
     .table-scroll-hint {
@@ -1715,6 +1859,22 @@ type RosterEmployee = Record<string, any>;
     .reviews-page.density-dense .stat-card { padding: 10px 12px; }
     .reviews-page.density-dense .stat-val { font-size: 1.15rem; }
     .reviews-page.density-dense .page-header h1 { font-size: 1.45rem; }
+    .reviews-page.density-compact .additional-metrics-table tbody td,
+    .reviews-page.density-dense .additional-metrics-table tbody td {
+      padding: 7px 8px;
+      font-size: 0.74rem;
+    }
+    .reviews-page.density-compact .additional-metrics-table thead tr.addl-col-row th,
+    .reviews-page.density-dense .additional-metrics-table thead tr.addl-col-row th {
+      font-size: 0.58rem;
+      padding: 6px 7px;
+      top: 32px;
+    }
+    .reviews-page.density-compact .additional-metrics-table thead tr.addl-group-row th,
+    .reviews-page.density-dense .additional-metrics-table thead tr.addl-group-row th {
+      font-size: 0.64rem;
+      padding: 8px 9px;
+    }
 
     @media (max-width: 1400px) {
       .stats-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -1821,13 +1981,13 @@ type RosterEmployee = Record<string, any>;
     .report-table-head { color: #8aa0b8; text-transform: uppercase; font-size: 0.72rem; border-bottom: 1px solid #2a2a4e; background: #0d0d1a; letter-spacing: 0.04em; }
     .report-table-row { color: #dbeafe; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.84rem; }
     .employee-modal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-    .employee-avatar { width: 42px; height: 42px; border-radius: 999px; border: 1px solid #2a2a4e; background: rgba(34,211,238,0.12); color: #22d3ee; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .employee-avatar { width: 42px; height: 42px; border-radius: 999px; border: 1px solid #334155; background: #1e293b; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; }
     .employee-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
     .employee-tab-btn { border: 1px solid #334155; background: #0f172a; color: #93c5fd; border-radius: 8px; padding: 6px 10px; font-size: 0.74rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
-    .employee-tab-btn.active { background: #1e293b; border-color: #22d3ee; color: #e0f2fe; }
+    .employee-tab-btn.active { background: #1e293b; border-color: #475569; color: #f8fafc; }
     .employee-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .employee-detail-card { border: 1px solid #2a2a4e; border-radius: 10px; background: #0f172a; padding: 12px; }
-    .employee-detail-card h4 { margin: 0 0 10px; font-size: 0.82rem; color: #22d3ee; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .employee-detail-card h4 { margin: 0 0 10px; font-size: 0.82rem; color: #94a3b8; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
     .detail-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .detail-row:last-child { border-bottom: none; }
     .detail-row span { color: #8aa0b8; font-size: 0.78rem; }
@@ -1843,7 +2003,7 @@ type RosterEmployee = Record<string, any>;
     .score-pill.low { background: rgba(239, 68, 68, 0.16); color: #ef4444; }
     .rating i { font-size: 1rem; color: #333; &.filled { color: #fbbf24; } }
     .star-input i { font-size: 1.4rem; cursor: pointer; color: #333; &.filled { color: #fbbf24; } &:hover { color: #fbbf24; } }
-    .icon-btn { background: rgba(30, 41, 59, 0.45); border: 1px solid #334155; color: #a5b4fc; cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px; &:hover { color: #22d3ee; border-color: #22d3ee; background: rgba(34, 211, 238, 0.12); } }
+    .icon-btn { background: rgba(30, 41, 59, 0.45); border: 1px solid #334155; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px; &:hover { color: #e2e8f0; border-color: #64748b; background: #1e293b; } }
     .loading-state { text-align: center; padding: 60px 20px; color: #8fb6ff; i { font-size: 2.4rem; color: #42a5ff; display: block; margin-bottom: 10px; } h3 { color: #d7e7ff; margin: 0 0 6px; } p { margin: 0; font-size: 0.9rem; color: #9bb5d3; } }
     .empty-state { text-align: center; padding: 60px 20px; color: #888; i { font-size: 3rem; color: #444; display: block; margin-bottom: 12px; } h3 { color: #ccc; margin: 0 0 6px; } p { margin: 0; font-size: 0.9rem; } }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -1893,6 +2053,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   zoomMetricByEmail = signal<Record<string, ZoomMetricRow>>({});
   zoomMetricByName = signal<Record<string, ZoomMetricRow>>({});
   persistedMetricMap = signal<Record<number, PersistedMetricRow>>({});
+  scorecardSnapshotMap = signal<Record<number, ScorecardSnapshotRow>>({});
   googleApiStatus = signal<IntegrationState>('checking');
   zoomApiStatus = signal<IntegrationState>('checking');
   lastApiCheckAt = signal<string>('');
@@ -2899,14 +3060,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   async onReviewMonthChange(value: string) {
     if (!value) return;
     this.selectedReviewMonth.set(value);
-    this.loadingReviews.set(true);
-    await Promise.all([
-      this.loadReviews(),
-      this.loadPersistedDailyMetrics()
-    ]);
-    this.loadingReviews.set(false);
-    void this.loadTimeclockSummary();
-    void this.loadZoomMetrics(false);
+    await this.reloadPeriodScopedData();
   }
 
   async onPeriodModeChange(mode: 'daily' | 'weekly' | 'monthly') {
@@ -2926,14 +3080,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     } else {
       this.selectedReviewMonth.set('current');
     }
-    this.loadingReviews.set(true);
-    await Promise.all([
-      this.loadReviews(),
-      this.loadPersistedDailyMetrics()
-    ]);
-    this.loadingReviews.set(false);
-    void this.loadTimeclockSummary();
-    void this.loadZoomMetrics(false);
+    await this.reloadPeriodScopedData();
   }
 
   async onDayChange(value: string): Promise<void> {
@@ -2958,16 +3105,40 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   }
 
   private async reloadReviewData(): Promise<void> {
-    this.loadingReviews.set(true);
-    await Promise.all([
-      this.loadEmployees(),
-      this.loadReviews(),
-      this.loadPersistedDailyMetrics()
-    ]);
-    this.loadingReviews.set(false);
-    void this.loadTimeclockSummary();
-    void this.loadZoomMetrics(false);
+    await this.reloadPeriodScopedData(true);
     setTimeout(() => this.refreshViewportDensity(true), 0);
+  }
+
+  /** Clear + reload everything that belongs to the selected Day/Week/Month window. */
+  private async reloadPeriodScopedData(includeEmployees = false): Promise<void> {
+    this.loadingReviews.set(true);
+    this.clearPeriodScopedMetrics();
+    try {
+      const tasks: Promise<unknown>[] = [
+        this.loadReviews(),
+        this.loadPersistedDailyMetrics(),
+        this.loadScorecardSnapshots(),
+        this.loadAdditionalMetrics(),
+        this.loadTimeclockSummary(),
+        this.loadZoomMetrics(false)
+      ];
+      if (includeEmployees) tasks.unshift(this.loadEmployees());
+      await Promise.all(tasks);
+      this.applyScorecardSnapshotsToLiveMaps();
+    } finally {
+      this.loadingReviews.set(false);
+    }
+  }
+
+  private clearPeriodScopedMetrics(): void {
+    this.zoomMetricMap.set({});
+    this.zoomMetricByEmail.set({});
+    this.zoomMetricByName.set({});
+    this.persistedMetricMap.set({});
+    this.scorecardSnapshotMap.set({});
+    this.timeclockSummaries.set([]);
+    this.dailyActivitySeries.set([]);
+    this.additionalMetrics.set([]);
   }
 
   async updateMetricsNow(): Promise<void> {
@@ -3012,6 +3183,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         this.loadAdditionalMetrics(),
         this.loadScorecardSnapshots()
       ]);
+      this.applyScorecardSnapshotsToLiveMaps();
       await this.persistDailyMetricsSnapshot();
       await this.persistMonthlyMetricsSnapshot();
       this.preferLiveMetrics.set(false);
@@ -3019,6 +3191,7 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         this.loadReviews(),
         this.loadPersistedDailyMetrics()
       ]);
+      this.applyScorecardSnapshotsToLiveMaps();
       this.lastMetricsUpdateAt.set(new Date().toLocaleString());
       this.toast.success(lastStatus === 'partial'
         ? 'Metrics saved (partial — click Update again to continue Gmail batches)'
@@ -3072,12 +3245,95 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   private async loadScorecardSnapshots(): Promise<void> {
     try {
       const range = this.parseMonthKey(this.selectedReviewMonth());
-      await this.http.get(
+      const res: any = await this.http.get(
         `${this.apiUrl}/api/v1/performance-reviews/scorecard-snapshots?from=${encodeURIComponent(range.fromKey)}&to=${encodeURIComponent(range.toKey)}&periodMode=${encodeURIComponent(this.periodMode())}`
       ).toPromise();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      const next: Record<number, ScorecardSnapshotRow> = {};
+      for (const r of rows) {
+        const employeeId = Number(r.employeeId ?? r.EmployeeId ?? 0);
+        if (!employeeId) continue;
+        next[employeeId] = {
+          employeeId,
+          employeeName: String(r.employeeName ?? r.EmployeeName ?? '').trim() || undefined,
+          callVolume: Number(r.callVolume ?? r.CallVolume ?? 0),
+          totalCallMinutes: Number(r.totalCallMinutes ?? r.TotalCallMinutes ?? 0),
+          avgCallMinutes: Number(r.avgCallMinutes ?? r.AvgCallMinutes ?? 0),
+          textVolume: Number(r.textVolume ?? r.TextVolume ?? 0),
+          sentCount: Number(r.sentCount ?? r.SentCount ?? 0),
+          replyCount: Number(r.replyCount ?? r.ReplyCount ?? 0),
+          firstResponseMinutes: Number(r.firstResponseMinutes ?? r.FirstResponseMinutes ?? 0),
+          followUpRate: Number(r.followUpRate ?? r.FollowUpRate ?? 0),
+          internalCount: Number(r.internalCount ?? r.InternalCount ?? 0),
+          externalCount: Number(r.externalCount ?? r.ExternalCount ?? 0),
+          clockedHours: Number(r.clockedHours ?? r.ClockedHours ?? 0),
+          activeHours: Number(r.activeHours ?? r.ActiveHours ?? 0),
+          idleHours: Number(r.idleHours ?? r.IdleHours ?? 0),
+          presenceRate: Number(r.presenceRate ?? r.PresenceRate ?? 0),
+          systemRate: Number(r.systemRate ?? r.SystemRate ?? 0),
+          busyRate: Number(r.busyRate ?? r.BusyRate ?? 0),
+          invoicedRevenue: Number(r.invoicedRevenue ?? r.InvoicedRevenue ?? 0),
+          score: Number(r.score ?? r.Score ?? 0),
+          busySource: String(r.busySource ?? r.BusySource ?? '').trim() || undefined
+        };
+      }
+      this.scorecardSnapshotMap.set(next);
     } catch {
-      // Warehouse read is best-effort; live maps remain primary for scorecard rendering.
+      this.scorecardSnapshotMap.set({});
     }
+  }
+
+  /** Prefer warehouse snapshot for the selected period when live maps are empty or weaker. */
+  private applyScorecardSnapshotsToLiveMaps(): void {
+    if (this.preferLiveMetrics()) return;
+    const snapshots = this.scorecardSnapshotMap();
+    const ids = Object.keys(snapshots);
+    if (!ids.length) return;
+
+    const map = { ...this.zoomMetricMap() };
+    const emailMap = { ...this.zoomMetricByEmail() };
+    const nameMap = { ...this.zoomMetricByName() };
+
+    for (const id of ids) {
+      const snap = snapshots[Number(id)];
+      if (!snap) continue;
+      const existing = map[snap.employeeId];
+      const existingCalls = Number(existing?.callVolume || 0);
+      const existingSent = Number(existing?.sentCount || 0);
+      // Snapshot wins when live pull returned nothing useful for this period.
+      if (existing && (existingCalls > 0 || existingSent > 0)) continue;
+
+      const metric: ZoomMetricRow = {
+        employeeId: snap.employeeId,
+        callVolume: snap.callVolume,
+        totalCallMinutes: snap.totalCallMinutes,
+        avgCallMinutes: snap.avgCallMinutes,
+        textVolume: snap.textVolume,
+        sentCount: snap.sentCount,
+        replyCount: snap.replyCount,
+        firstResponseMinutes: snap.firstResponseMinutes,
+        followUpRate: snap.followUpRate,
+        internalCount: snap.internalCount,
+        externalCount: snap.externalCount,
+        employeeName: snap.employeeName
+      };
+      map[snap.employeeId] = metric;
+      const emp = this.employees().find(e => Number(e.id) === snap.employeeId);
+      for (const email of [
+        String(emp?.email || '').trim().toLowerCase(),
+        String(emp?.workEmail || '').trim().toLowerCase(),
+        String(emp?.personalEmail || '').trim().toLowerCase(),
+        String(emp?.zoomEmail || '').trim().toLowerCase()
+      ].filter(Boolean)) {
+        emailMap[email] = metric;
+      }
+      const nameKey = this.normalizeName(snap.employeeName || emp?.name);
+      if (nameKey) nameMap[nameKey] = metric;
+    }
+
+    this.zoomMetricMap.set(map);
+    this.zoomMetricByEmail.set(emailMap);
+    this.zoomMetricByName.set(nameMap);
   }
 
   openCreateModal() {
@@ -3375,6 +3631,8 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   }
 
   private toMetricRow(review: Review): ReviewMetricRow {
+    const warehouse = this.scorecardSnapshotMap()[Number(review.employeeId)];
+    const useWarehouse = !!warehouse && !this.preferLiveMetrics();
     const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
     const scheduledHours = this.getAssignedWorkHoursForSelectedRange();
@@ -3415,24 +3673,36 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       || persistedScore > 0
       || persistedRevenue > 0
     );
-    const useDbSnapshot = hasPersistedRow && !this.preferLiveMetrics();
+    const useDbSnapshot = !useWarehouse && hasPersistedRow && !this.preferLiveMetrics();
 
-    const callVolume = useDbSnapshot
-      ? persistedCallVolume
-      : Math.max(persistedCallVolume, snapshotCallVolume, liveCallVolume);
-    const textVolume = useDbSnapshot
-      ? persistedTextVolume
-      : Math.max(persistedTextVolume, snapshotTextVolume, liveTextVolume);
-    const totalCallMinutes = Math.max(0, liveTotalCallMinutes);
+    const callVolume = useWarehouse
+      ? Number(warehouse!.callVolume || 0)
+      : useDbSnapshot
+        ? persistedCallVolume
+        : Math.max(persistedCallVolume, snapshotCallVolume, liveCallVolume);
+    const textVolume = useWarehouse
+      ? Number(warehouse!.textVolume || 0)
+      : useDbSnapshot
+        ? persistedTextVolume
+        : Math.max(persistedTextVolume, snapshotTextVolume, liveTextVolume);
+    const totalCallMinutes = useWarehouse
+      ? Math.max(0, Number(warehouse!.totalCallMinutes || 0))
+      : Math.max(0, liveTotalCallMinutes);
     const avgCallMinutes = callVolume > 0
-      ? (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : (totalCallMinutes > 0 ? totalCallMinutes / callVolume : 0))
+      ? (useWarehouse
+        ? (Number(warehouse!.avgCallMinutes || 0) > 0 ? Number(warehouse!.avgCallMinutes || 0) : totalCallMinutes / callVolume)
+        : (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : (totalCallMinutes > 0 ? totalCallMinutes / callVolume : 0)))
       : 0;
 
     const hasLiveTime = liveTime.totalSeconds > 0;
     let totalHours: number;
     let activeHours: number;
     let idleHours: number;
-    if (useDbSnapshot) {
+    if (useWarehouse) {
+      totalHours = Math.max(0, Number(warehouse!.clockedHours || 0));
+      activeHours = Math.min(Math.max(0, Number(warehouse!.activeHours || 0)), totalHours);
+      idleHours = Math.max(0, Number(warehouse!.idleHours || 0), totalHours - activeHours);
+    } else if (useDbSnapshot) {
       totalHours = Math.max(0, persistedClocked);
       // Never show active > clocked (old snapshots stored scheduled hours as "work").
       activeHours = Math.min(Math.max(0, persistedActive), totalHours);
@@ -3450,10 +3720,14 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       idleHours = Math.max(0, totalHours - activeHours);
     }
 
-    const presenceRate = scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0;
-    const systemActivityRate = totalHours > 0
-      ? Math.min(1, activeHours / totalHours)
-      : (hasLiveTime && !useDbSnapshot ? liveTime.activityRate : 0);
+    const presenceRate = useWarehouse
+      ? Math.min(1, Number(warehouse!.presenceRate || 0) || (scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0))
+      : (scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0);
+    const systemActivityRate = useWarehouse
+      ? Math.min(1, Number(warehouse!.systemRate || 0) || (totalHours > 0 ? Math.min(1, activeHours / totalHours) : 0))
+      : (totalHours > 0
+        ? Math.min(1, activeHours / totalHours)
+        : (hasLiveTime && !useDbSnapshot ? liveTime.activityRate : 0));
 
     let zoomBusyRate = 0;
     let gmailBusyRate = 0;
@@ -3461,7 +3735,22 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     let activityRate = 0;
     let busySource: 'zoom' | 'gmail' | 'system' | 'none' = 'none';
 
-    if (useDbSnapshot && persistedActivity > 0) {
+    const sentCount = useWarehouse ? Number(warehouse!.sentCount || 0) : liveSentCount;
+    const replyCount = useWarehouse ? Number(warehouse!.replyCount || 0) : liveReplyCount;
+    const firstResponseMinutes = useWarehouse ? Number(warehouse!.firstResponseMinutes || 0) : liveFirstResponseMinutes;
+    const followUpRate = useWarehouse ? Number(warehouse!.followUpRate || 0) : liveFollowUpRate;
+    const internalCount = useWarehouse ? Number(warehouse!.internalCount || 0) : liveInternalCount;
+    const externalCount = useWarehouse ? Number(warehouse!.externalCount || 0) : liveExternalCount;
+
+    if (useWarehouse) {
+      activityRate = Math.min(1, Number(warehouse!.busyRate || 0) || presenceRate);
+      systemBusyRate = Math.min(1, presenceRate * Math.max(systemActivityRate, 0));
+      const sourceRaw = String(warehouse!.busySource || '').toLowerCase();
+      if (sourceRaw.includes('gmail')) busySource = 'gmail';
+      else if (sourceRaw.includes('system')) busySource = 'system';
+      else if (sourceRaw.includes('zoom')) busySource = 'zoom';
+      else busySource = callVolume > 0 ? 'zoom' : (sentCount > 0 ? 'gmail' : (totalHours > 0 ? 'system' : 'none'));
+    } else if (useDbSnapshot && persistedActivity > 0) {
       activityRate = Math.min(1, persistedActivity);
       systemBusyRate = Math.min(1, presenceRate * Math.max(systemActivityRate, liveTime.interactionRate));
       const sourceRaw = String(persisted?.source || '').toLowerCase();
@@ -3476,10 +3765,10 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         textVolume,
         meetingsHosted: liveMeetingsHosted,
         totalMeetingMinutes: liveTotalMeetingMinutes,
-        sentCount: liveSentCount,
-        replyCount: liveReplyCount,
-        externalCount: liveExternalCount,
-        followUpRate: liveFollowUpRate,
+        sentCount,
+        replyCount,
+        externalCount,
+        followUpRate,
         presenceRate,
         systemActivityRate,
         interactionRate: liveTime.interactionRate
@@ -3491,9 +3780,11 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       busySource = busy.busySource;
     }
 
-    const invoicedRevenue = useDbSnapshot
-      ? persistedRevenue
-      : Math.max(persistedRevenue, hasSnapshot ? Number(review.invoicedRevenue || 0) : 0, liveRevenue);
+    const invoicedRevenue = useWarehouse
+      ? Number(warehouse!.invoicedRevenue || 0)
+      : useDbSnapshot
+        ? persistedRevenue
+        : Math.max(persistedRevenue, hasSnapshot ? Number(review.invoicedRevenue || 0) : 0, liveRevenue);
 
     const computedScore = this.computePerformanceScore(
       callVolume,
@@ -3506,16 +3797,18 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       systemBusyRate,
       activityRate,
       invoicedRevenue,
-      liveSentCount,
-      liveReplyCount,
-      liveFirstResponseMinutes,
-      liveFollowUpRate,
-      liveInternalCount,
-      liveExternalCount
+      sentCount,
+      replyCount,
+      firstResponseMinutes,
+      followUpRate,
+      internalCount,
+      externalCount
     );
-    const score = useDbSnapshot && persistedScore > 0
-      ? persistedScore
-      : Math.max(persistedScore, hasSnapshot ? Number(review.score || 0) : 0, computedScore);
+    const score = useWarehouse && Number(warehouse!.score || 0) > 0
+      ? Number(warehouse!.score || 0)
+      : useDbSnapshot && persistedScore > 0
+        ? persistedScore
+        : Math.max(persistedScore, hasSnapshot ? Number(review.score || 0) : 0, computedScore);
 
     return {
       ...review,
@@ -3526,12 +3819,12 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
       meetingsHosted: liveMeetingsHosted,
       meetingsJoined: liveMeetingsJoined,
       totalMeetingMinutes: liveTotalMeetingMinutes,
-      sentCount: liveSentCount,
-      replyCount: liveReplyCount,
-      firstResponseMinutes: liveFirstResponseMinutes,
-      followUpRate: liveFollowUpRate,
-      internalCount: liveInternalCount,
-      externalCount: liveExternalCount,
+      sentCount,
+      replyCount,
+      firstResponseMinutes,
+      followUpRate,
+      internalCount,
+      externalCount,
       totalHours,
       activeHours,
       idleHours,
