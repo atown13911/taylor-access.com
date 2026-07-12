@@ -2992,11 +2992,15 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         completenessLabel = [
           c.gmailUsersSynced != null ? `Gmail ${c.gmailUsersSynced}/${c.gmailUsersTotal || '?'}` : null,
           c.zoomSmsComplete === false ? `SMS ${c.zoomSmsUsersSynced}/${c.zoomSmsUsersTotal}` : (c.zoomSuccess ? 'Zoom OK' : null),
-          c.zoomCallsComplete === false ? 'Calls partial' : null
+          c.zoomCallsComplete === false ? 'Calls partial' : null,
+          data.error ? String(data.error).slice(0, 80) : null
         ].filter(Boolean).join(' · ');
         this.lastSyncStatus.set(lastStatus);
         this.lastSyncCompleteness.set(completenessLabel);
-        if (lastStatus === 'complete' || lastStatus === 'failed') break;
+        if (lastStatus === 'failed') {
+          throw new Error(data.error || 'Sync failed');
+        }
+        if (lastStatus === 'complete') break;
         const nextSkip = Number(c.gmailNextSkip || c.gmailUsersSynced || 0);
         if (!nextSkip || nextSkip <= gmailSkip) break;
         gmailSkip = nextSkip;

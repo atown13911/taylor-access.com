@@ -27,19 +27,16 @@ public sealed class PerformanceSyncResult
 public class PerformanceSyncOrchestrator
 {
     private readonly TaylorAccessDbContext _context;
-    private readonly ZoomDirectMetricsService _zoom;
-    private readonly GmailDirectMetricsService _gmail;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<PerformanceSyncOrchestrator> _logger;
 
     public PerformanceSyncOrchestrator(
         TaylorAccessDbContext context,
-        ZoomDirectMetricsService zoom,
-        GmailDirectMetricsService gmail,
+        IServiceScopeFactory scopeFactory,
         ILogger<PerformanceSyncOrchestrator> logger)
     {
         _context = context;
-        _zoom = zoom;
-        _gmail = gmail;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -73,11 +70,21 @@ public class PerformanceSyncOrchestrator
                 .Select(u => new { u.Id, u.Name, u.Email, u.ZoomEmail, u.PersonalEmail })
                 .ToListAsync(cancellationToken);
 
-            var zoomTask = _zoom.GetUserMetricsAsync(from, to, organizationId, cancellationToken);
-            var gmailTask = _gmail.GetUserMetricsAsync(from, to, organizationId, maxUsers: 50, skipUsers: request.GmailSkipUsers, cancellationToken);
-            await Task.WhenAll(zoomTask, gmailTask);
-            var zoom = await zoomTask;
-            var gmail = await gmailTask;
+            // Separate scopes so Zoom + Gmail can run in parallel without sharing DbContext.
+            ZoomDirectMetricsResult zoom;
+            GmailDirectMetricsResult gmail;
+            using (var zoomScope = _scopeFactory.CreateScope())
+            using (var gmailScope = _scopeFactory.CreateScope())
+            {
+                var zoomSvc = zoomScope.ServiceProvider.GetRequiredService<ZoomDirectMetricsService>();
+                var gmailSvc = gmailScope.ServiceProvider.GetRequiredService<GmailDirectMetricsService>();
+                var zoomTask = zoomSvc.GetUserMetricsAsync(from, to, organizationId, cancellationToken);
+                var gmailTask = gmailSvc.GetUserMetricsAsync(
+                    from, to, organizationId, maxUsers: 50, skipUsers: request.GmailSkipUsers, cancellationToken);
+                await Task.WhenAll(zoomTask, gmailTask);
+                zoom = await zoomTask;
+                gmail = await gmailTask;
+            }
 
             var timeclock = await AggregateTimeclockAsync(from, to, cancellationToken);
 
@@ -261,7 +268,8 @@ public class PerformanceSyncOrchestrator
                 Status = status,
                 Completeness = completeness,
                 ScorecardRows = scoreCount,
-                AdditionalRows = extraCount
+                AdditionalRows = extraCount,
+                Error = status == "failed" ? run.ErrorMessage : null
             };
         }
         catch (Exception ex)
