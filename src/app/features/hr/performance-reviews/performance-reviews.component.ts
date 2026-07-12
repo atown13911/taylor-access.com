@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -150,11 +150,16 @@ type RosterEmployee = Record<string, any>;
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="reviews-page">
+    <div class="reviews-page" [class.density-compact]="tableDensity() === 'compact'" [class.density-dense]="tableDensity() === 'dense'">
       <header class="page-header">
         <div>
           <h1><i class='bx bx-bar-chart-square'></i> Performance Reviews</h1>
           <p class="subtitle">Employee evaluations and performance tracking</p>
+        </div>
+        <div class="density-controls" title="Adjust table density for zoomed or smaller screens">
+          <button type="button" class="density-btn" [class.active]="tableDensity() === 'comfortable'" (click)="setTableDensity('comfortable')">Comfort</button>
+          <button type="button" class="density-btn" [class.active]="tableDensity() === 'compact'" (click)="setTableDensity('compact')">Compact</button>
+          <button type="button" class="density-btn" [class.active]="tableDensity() === 'dense'" (click)="setTableDensity('dense')">Dense</button>
         </div>
       </header>
 
@@ -486,6 +491,9 @@ type RosterEmployee = Record<string, any>;
         </div>
       } @else {
         <div class="table-wrap reviews-table-wrap">
+          @if (tableNeedsScroll()) {
+            <div class="table-scroll-hint">Scroll sideways for Score / Actions →</div>
+          }
           <table class="reviews-table">
             <thead>
               <tr class="source-group-row">
@@ -1076,14 +1084,42 @@ type RosterEmployee = Record<string, any>;
       display: block;
       min-width: 0;
       max-width: 100%;
-    }
-    .reviews-page {
-      padding: 24px;
-      min-width: 0;
-      max-width: 100%;
+      width: 100%;
       box-sizing: border-box;
     }
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .reviews-page {
+      padding: 0;
+      min-width: 0;
+      max-width: 100%;
+      width: 100%;
+      box-sizing: border-box;
+      overflow-x: clip;
+    }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
+    .density-controls {
+      display: inline-flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 999px;
+      border: 1px solid #2a2a4e;
+      background: rgba(15, 23, 42, 0.7);
+    }
+    .density-btn {
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .density-btn.active {
+      background: rgba(34, 211, 238, 0.16);
+      color: #e0f2fe;
+    }
     .page-header h1 { color: #fff; font-size: 1.8rem; margin: 0; display: flex; align-items: center; gap: 12px; i { color: #00d4ff; } }
     .subtitle { color: #888; margin: 6px 0 0; font-size: 0.9rem; }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); color: #0a0a14; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; &:disabled { opacity: 0.5; } }
@@ -1298,32 +1334,58 @@ type RosterEmployee = Record<string, any>;
       border-radius: 12px;
       border: 1px solid #2a2a4e;
       max-width: 100%;
+      width: 100%;
       min-width: 0;
       overflow-x: auto;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      scrollbar-gutter: stable;
+      scrollbar-gutter: stable both-edges;
+      overscroll-behavior-x: contain;
     }
     .reviews-table-wrap {
-      max-height: 68vh;
+      max-height: min(68vh, 720px);
       border-color: #374151;
+      position: relative;
     }
-    .table-wrap::-webkit-scrollbar { height: 10px; width: 10px; }
+    .table-scroll-hint {
+      position: sticky;
+      left: 0;
+      top: 0;
+      z-index: 6;
+      width: max-content;
+      margin: 8px 0 0 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #93c5fd;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid #334155;
+      pointer-events: none;
+    }
+    .table-wrap::-webkit-scrollbar { height: 12px; width: 10px; }
     .table-wrap::-webkit-scrollbar-thumb {
-      background: rgba(148, 163, 184, 0.45);
+      background: rgba(148, 163, 184, 0.55);
       border-radius: 999px;
     }
     .table-wrap::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.55);
+      background: rgba(15, 23, 42, 0.7);
     }
     table { width: 100%; border-collapse: separate; border-spacing: 0; }
     th { padding: 12px 16px; text-align: left; font-size: 0.75rem; color: #888; text-transform: uppercase; background: #0d0d1a; border-bottom: 1px solid #2a2a4e; }
     td { padding: 14px 16px; color: #e2e8f0; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
     tr:hover td { background: rgba(0, 212, 255, 0.03); }
-    .reviews-table {
+    .reviews-table,
+    .management-metrics-table {
       width: max-content;
       min-width: 100%;
       table-layout: auto;
+    }
+    .management-metrics-table th,
+    .management-metrics-table td {
+      white-space: nowrap;
     }
     .reviews-table thead th {
       position: sticky;
@@ -1375,10 +1437,55 @@ type RosterEmployee = Record<string, any>;
       z-index: 4;
       background: #0f172a !important;
       color: #f8fafc !important;
-      min-width: 180px;
+      min-width: 160px;
       box-shadow: 1px 0 0 #1f2937;
     }
     .reviews-table thead th:first-child { z-index: 5; background: #111827 !important; }
+
+    /* Zoom / narrow viewport: auto-compact cell sizing */
+    .reviews-page.density-compact th,
+    .reviews-page.density-compact td {
+      padding: 8px 10px;
+      font-size: 0.78rem;
+    }
+    .reviews-page.density-compact .reviews-table thead th {
+      font-size: 0.64rem;
+      letter-spacing: 0.03em;
+    }
+    .reviews-page.density-compact .reviews-table thead tr:not(.source-group-row) th { top: 30px; }
+    .reviews-page.density-compact .reviews-table td:first-child,
+    .reviews-page.density-compact .reviews-table th:first-child {
+      min-width: 140px;
+    }
+    .reviews-page.density-dense th,
+    .reviews-page.density-dense td {
+      padding: 5px 7px;
+      font-size: 0.7rem;
+    }
+    .reviews-page.density-dense .reviews-table thead th {
+      font-size: 0.58rem;
+      letter-spacing: 0.02em;
+    }
+    .reviews-page.density-dense .reviews-table thead tr:not(.source-group-row) th { top: 26px; }
+    .reviews-page.density-dense .reviews-table td:first-child,
+    .reviews-page.density-dense .reviews-table th:first-child {
+      min-width: 120px;
+    }
+    .reviews-page.density-dense .stat-card { padding: 10px 12px; }
+    .reviews-page.density-dense .stat-val { font-size: 1.15rem; }
+    .reviews-page.density-dense .page-header h1 { font-size: 1.45rem; }
+
+    @media (max-width: 1400px) {
+      .stats-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+      .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
+        min-width: 140px;
+      }
+    }
+    @media (max-width: 1100px) {
+      .page-header h1 { font-size: 1.45rem; }
+      .review-controls { align-items: stretch; }
+      .update-stack { align-items: flex-start; }
+    }
     .report-view { margin-top: 8px; }
     .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
     .report-title { color: #e2e8f0; font-size: 0.9rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
@@ -1519,13 +1626,18 @@ type RosterEmployee = Record<string, any>;
     }
   `]
 })
-export class PerformanceReviewsComponent implements OnInit {
+export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
+  private densityManual = false;
+  private viewportListenerCleanup: (() => void) | null = null;
+  private readonly densityStorageKey = 'ta.performanceReviews.tableDensity.v1';
   stars = [1, 2, 3, 4, 5];
   pageTab = signal<'reviews' | 'calls'>('reviews');
+  tableDensity = signal<'comfortable' | 'compact' | 'dense'>('comfortable');
+  tableNeedsScroll = signal(false);
   reviews = signal<Review[]>([]);
   loadingReviews = signal<boolean>(true);
   updatingMetrics = signal<boolean>(false);
@@ -2129,9 +2241,89 @@ export class PerformanceReviewsComponent implements OnInit {
 
   ngOnInit() {
     this.initializeCurrentWeekSelection();
+    this.restoreTableDensityPreference();
+    this.bindViewportDensityWatchers();
+    this.refreshViewportDensity();
     void this.loadManagementTabsFromPreferences();
     void this.reloadReviewData();
     this.loadIntegrationStatuses();
+    queueMicrotask(() => this.refreshTableScrollHint());
+  }
+
+  ngOnDestroy(): void {
+    this.viewportListenerCleanup?.();
+    this.viewportListenerCleanup = null;
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.refreshViewportDensity();
+    this.refreshTableScrollHint();
+  }
+
+  setTableDensity(density: 'comfortable' | 'compact' | 'dense'): void {
+    this.densityManual = true;
+    this.tableDensity.set(density);
+    try { localStorage.setItem(this.densityStorageKey, density); } catch { /* ignore */ }
+    queueMicrotask(() => this.refreshTableScrollHint());
+  }
+
+  private restoreTableDensityPreference(): void {
+    try {
+      const saved = String(localStorage.getItem(this.densityStorageKey) || '').trim();
+      if (saved === 'comfortable' || saved === 'compact' || saved === 'dense') {
+        this.densityManual = true;
+        this.tableDensity.set(saved);
+      }
+    } catch { /* ignore */ }
+  }
+
+  private bindViewportDensityWatchers(): void {
+    if (typeof window === 'undefined') return;
+    const onViewportChange = () => {
+      this.refreshViewportDensity();
+      this.refreshTableScrollHint();
+    };
+    window.visualViewport?.addEventListener('resize', onViewportChange);
+    window.visualViewport?.addEventListener('scroll', onViewportChange);
+    this.viewportListenerCleanup = () => {
+      window.visualViewport?.removeEventListener('resize', onViewportChange);
+      window.visualViewport?.removeEventListener('scroll', onViewportChange);
+    };
+  }
+
+  private refreshViewportDensity(): void {
+    if (this.densityManual || typeof window === 'undefined') {
+      this.refreshTableScrollHint();
+      return;
+    }
+    // Browser zoom reduces CSS pixel width (innerWidth), so this adapts density automatically.
+    const width = Math.max(
+      0,
+      Number(window.visualViewport?.width || 0),
+      Number(window.innerWidth || 0)
+    );
+    if (width > 0 && width < 1100) {
+      this.tableDensity.set('dense');
+    } else if (width > 0 && width < 1450) {
+      this.tableDensity.set('compact');
+    } else {
+      this.tableDensity.set('comfortable');
+    }
+    this.refreshTableScrollHint();
+  }
+
+  private refreshTableScrollHint(): void {
+    if (typeof document === 'undefined') {
+      this.tableNeedsScroll.set(false);
+      return;
+    }
+    const wrap = document.querySelector('.reviews-table-wrap') as HTMLElement | null;
+    if (!wrap) {
+      this.tableNeedsScroll.set(false);
+      return;
+    }
+    this.tableNeedsScroll.set(wrap.scrollWidth > wrap.clientWidth + 8);
   }
 
   private applyLastMetricsUpdateAt(raw: unknown): void {
@@ -2446,6 +2638,7 @@ export class PerformanceReviewsComponent implements OnInit {
     this.loadingReviews.set(false);
     void this.loadTimeclockSummary();
     void this.loadZoomMetrics(false);
+    setTimeout(() => this.refreshTableScrollHint(), 0);
   }
 
   async updateMetricsNow(): Promise<void> {
