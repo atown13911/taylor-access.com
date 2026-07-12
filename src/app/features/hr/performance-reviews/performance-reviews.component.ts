@@ -207,31 +207,46 @@ type RosterEmployee = Record<string, any>;
         </div>
       </div>
 
-      <!-- Sub-Tabs -->
+      <!-- Sub-Tabs + toolbar -->
       <div class="review-controls">
         <div class="review-tab-stack">
           <div class="tabs period-mode-tabs">
             <span class="table-title-chip">Saved Performance Table</span>
-          </div>
-          <div class="tabs period-mode-tabs">
-            <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'weekly'" (click)="showReportsTab.set(false); onPeriodModeChange('weekly')">Weekly</button>
-            <button class="tab" [class.active]="!showReportsTab() && periodMode() === 'monthly'" (click)="showReportsTab.set(false); onPeriodModeChange('monthly')">Monthly</button>
-            <button class="tab" [class.active]="showReportsTab()" (click)="openReportsTab()">Report</button>
+            <button class="tab" [class.active]="brokerageView() === 'scorecard'" (click)="setBrokerageView('scorecard')">Scorecard</button>
+            <button class="tab" [class.active]="brokerageView() === 'additional'" (click)="setBrokerageView('additional')">Additional Data</button>
+            <button class="tab" [class.active]="brokerageView() === 'report'" (click)="setBrokerageView('report')">Report</button>
           </div>
         </div>
-        <div class="review-filters">
-          <div class="search-filter">
+        <div class="review-filters toolbar-panel">
+          <div class="search-filter field-stack">
             <label>Search</label>
-            <input
-              type="text"
-              [ngModel]="tableSearchTerm()"
-              (ngModelChange)="tableSearchTerm.set(($event || '').toString())"
-              placeholder="Employee name..."
-            />
+            <div class="input-with-icon">
+              <i class="pi pi-search" aria-hidden="true"></i>
+              <input
+                type="text"
+                [ngModel]="tableSearchTerm()"
+                (ngModelChange)="tableSearchTerm.set(($event || '').toString())"
+                placeholder="Employee name..."
+              />
+            </div>
           </div>
-          <div class="month-filter">
-            <label>Review Period</label>
-            @if (periodMode() === 'weekly') {
+          <div class="timeframe-filter field-stack">
+            <label>Timeframe</label>
+            <div class="segmented" role="group" aria-label="Timeframe">
+              <button type="button" [class.active]="periodMode() === 'daily'" (click)="onPeriodModeChange('daily')">Day</button>
+              <button type="button" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Week</button>
+              <button type="button" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Month</button>
+            </div>
+          </div>
+          <div class="month-filter field-stack">
+            <label>{{ periodFieldLabel() }}</label>
+            @if (periodMode() === 'daily') {
+              <input
+                type="date"
+                [ngModel]="selectedDayIso()"
+                (ngModelChange)="onDayChange($event)"
+              />
+            } @else if (periodMode() === 'weekly') {
               <div class="week-selector">
                 <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
                   @for (week of weekOptions; track week) {
@@ -252,8 +267,8 @@ type RosterEmployee = Record<string, any>;
               </select>
             }
           </div>
-          @if (!showReportsTab()) {
-            <div class="sort-filter">
+          @if (brokerageView() === 'scorecard') {
+            <div class="sort-filter field-stack">
               <label>Sort By</label>
               <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
                 @for (opt of tableSortOptions; track opt.value) {
@@ -262,25 +277,31 @@ type RosterEmployee = Record<string, any>;
               </select>
             </div>
           }
-          <div class="update-filter">
-            <label>&nbsp;</label>
+          <div class="update-filter field-stack update-filter-end">
+            <label>Metrics</label>
             <div class="update-stack">
-              <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+              <button class="btn-secondary update-btn-primary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
                 @if (updatingMetrics()) {
                   <span class="btn-spinner" aria-hidden="true"></span>
                   <span>Updating...</span>
                 } @else {
+                  <i class="pi pi-refresh" aria-hidden="true"></i>
                   <span>Update</span>
                 }
               </button>
               <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+              @if (lastSyncStatus()) {
+                <span class="update-meta sync-status" [class.partial]="lastSyncStatus() === 'partial'" [class.failed]="lastSyncStatus() === 'failed'">
+                  Sync: {{ lastSyncStatus() }}{{ lastSyncCompleteness() ? ' · ' + lastSyncCompleteness() : '' }}
+                </span>
+              }
             </div>
           </div>
         </div>
       </div>
 
       <!-- Reviews Table -->
-      @if (showReportsTab()) {
+      @if (brokerageView() === 'report') {
         <section class="report-view">
           <div class="report-toolbar">
             <div class="report-title">Performance Analytics</div>
@@ -483,6 +504,45 @@ type RosterEmployee = Record<string, any>;
             </div>
           </div>
         </section>
+      } @else if (brokerageView() === 'additional') {
+        <div class="table-wrap reviews-table-wrap">
+          <table class="reviews-table additional-metrics-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Inbound</th>
+                <th>Outbound</th>
+                <th>Missed</th>
+                <th>Voicemails</th>
+                <th>VM Min</th>
+                <th>Recordings</th>
+                <th>Rec Min</th>
+                <th>Meetings Hosted</th>
+                <th>Meetings Joined</th>
+                <th>Meeting Min</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of filteredAdditionalMetrics(); track row.employeeId) {
+                <tr>
+                  <td><strong>{{ row.employeeName || ('Employee #' + row.employeeId) }}</strong></td>
+                  <td>{{ row.inboundCalls }}</td>
+                  <td>{{ row.outboundCalls }}</td>
+                  <td>{{ row.missedCalls }}</td>
+                  <td>{{ row.voicemails }}</td>
+                  <td>{{ row.voicemailMinutes | number:'1.0-1' }}</td>
+                  <td>{{ row.phoneRecordings }}</td>
+                  <td>{{ row.recordingMinutes | number:'1.0-1' }}</td>
+                  <td>{{ row.meetingsHosted }}</td>
+                  <td>{{ row.meetingsJoined }}</td>
+                  <td>{{ row.meetingMinutes | number:'1.0-1' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="11">No additional metrics yet. Click Update to pull from Zoom API.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
       } @else if (loadingReviews()) {
         <div class="loading-state">
           <i class='bx bx-loader-alt bx-spin'></i>
@@ -657,24 +717,37 @@ type RosterEmployee = Record<string, any>;
           <div class="tabs period-mode-tabs">
             <span class="table-title-chip">Management Performance Table</span>
           </div>
-          <div class="tabs period-mode-tabs">
-            <button class="tab" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Weekly</button>
-            <button class="tab" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Monthly</button>
-          </div>
         </div>
-        <div class="review-filters">
-          <div class="search-filter">
+        <div class="review-filters toolbar-panel">
+          <div class="search-filter field-stack">
             <label>Search</label>
-            <input
-              type="text"
-              [ngModel]="managementSearchTerm()"
-              (ngModelChange)="managementSearchTerm.set(($event || '').toString())"
-              placeholder="Employee name..."
-            />
+            <div class="input-with-icon">
+              <i class="pi pi-search" aria-hidden="true"></i>
+              <input
+                type="text"
+                [ngModel]="managementSearchTerm()"
+                (ngModelChange)="managementSearchTerm.set(($event || '').toString())"
+                placeholder="Employee name..."
+              />
+            </div>
           </div>
-          <div class="month-filter">
-            <label>Review Period</label>
-            @if (periodMode() === 'weekly') {
+          <div class="timeframe-filter field-stack">
+            <label>Timeframe</label>
+            <div class="segmented" role="group" aria-label="Timeframe">
+              <button type="button" [class.active]="periodMode() === 'daily'" (click)="onPeriodModeChange('daily')">Day</button>
+              <button type="button" [class.active]="periodMode() === 'weekly'" (click)="onPeriodModeChange('weekly')">Week</button>
+              <button type="button" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Month</button>
+            </div>
+          </div>
+          <div class="month-filter field-stack">
+            <label>{{ periodFieldLabel() }}</label>
+            @if (periodMode() === 'daily') {
+              <input
+                type="date"
+                [ngModel]="selectedDayIso()"
+                (ngModelChange)="onDayChange($event)"
+              />
+            } @else if (periodMode() === 'weekly') {
               <div class="week-selector">
                 <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
                   @for (week of weekOptions; track week) {
@@ -695,7 +768,7 @@ type RosterEmployee = Record<string, any>;
               </select>
             }
           </div>
-          <div class="sort-filter">
+          <div class="sort-filter field-stack">
             <label>Sort By</label>
             <select [ngModel]="selectedManagementSort()" (ngModelChange)="selectedManagementSort.set($event)">
               @for (opt of managementSortOptions; track opt.value) {
@@ -703,14 +776,15 @@ type RosterEmployee = Record<string, any>;
               }
             </select>
           </div>
-          <div class="update-filter">
-            <label>&nbsp;</label>
+          <div class="update-filter field-stack update-filter-end">
+            <label>Metrics</label>
             <div class="update-stack">
-              <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+              <button class="btn-secondary update-btn-primary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
                 @if (updatingMetrics()) {
                   <span class="btn-spinner" aria-hidden="true"></span>
                   <span>Updating...</span>
                 } @else {
+                  <i class="pi pi-refresh" aria-hidden="true"></i>
                   <span>Update</span>
                 }
               </button>
@@ -1168,18 +1242,96 @@ type RosterEmployee = Record<string, any>;
       display: flex;
       flex-wrap: wrap;
       align-items: flex-end;
-      gap: 12px;
+      gap: 14px 18px;
+    }
+    .review-filters.toolbar-panel {
+      padding: 14px 16px;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+    .field-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+    .field-stack label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .input-with-icon {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-with-icon i {
+      position: absolute;
+      left: 10px;
+      color: #64748b;
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+    .input-with-icon input {
+      padding-left: 32px !important;
+      min-width: 220px;
+    }
+    .timeframe-filter { display: flex; flex-direction: column; gap: 6px; }
+    .segmented {
+      display: inline-flex;
+      padding: 3px;
+      border-radius: 10px;
+      background: #0b1220;
+      border: 1px solid #334155;
+      gap: 2px;
+    }
+    .segmented button {
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .segmented button:hover { color: #e2e8f0; }
+    .segmented button.active {
+      background: #1e3a5f;
+      color: #e0f2fe;
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.55);
+    }
+    .update-filter-end { margin-left: auto; }
+    .update-btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 118px;
+      font-weight: 600;
     }
     .management-controls { margin-bottom: 16px; }
     .review-tab-stack { display: flex; flex-direction: column; gap: 2px; }
-    .period-mode-tabs { margin-bottom: 0; }
+    .period-mode-tabs {
+      margin-bottom: 0;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .table-title-chip { display: inline-flex; align-items: center; padding: 8px 12px; border-radius: 999px; border: 1px solid #2a2a4e; color: #9dc7ff; background: rgba(66, 165, 255, 0.08); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-    .month-filter { display: flex; align-items: center; gap: 8px; }
-    .search-filter { display: flex; align-items: center; gap: 8px; }
-    .sort-filter { display: flex; align-items: center; gap: 8px; }
-    .update-filter { display: flex; align-items: center; gap: 8px; }
+    .month-filter { display: flex; align-items: stretch; gap: 8px; }
+    .search-filter { display: flex; align-items: stretch; gap: 8px; }
+    .sort-filter { display: flex; align-items: stretch; gap: 8px; }
+    .update-filter { display: flex; align-items: stretch; gap: 8px; }
     .update-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
     .update-meta { font-size: 0.7rem; color: #8aa0b8; white-space: nowrap; }
+    .sync-status.partial { color: #fbbf24; }
+    .sync-status.failed { color: #f87171; }
     table thead tr.source-group-row th.group-label {
       font-size: 0.66rem;
       text-transform: uppercase;
@@ -1187,7 +1339,7 @@ type RosterEmployee = Record<string, any>;
       text-align: center;
       font-weight: 700;
       color: #e2e8f0;
-      border-bottom: 2px solid rgba(15, 23, 42, 0.9);
+      border-bottom: 2px solid #0f172a;
       padding: 7px 8px;
       white-space: nowrap;
       box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
@@ -1219,79 +1371,105 @@ type RosterEmployee = Record<string, any>;
     .status-dot.offline {
       background: #ef4444;
     }
+    /* Opaque sticky group headers (no see-through on scroll) */
     table thead tr.source-group-row th.group-base {
-      background: linear-gradient(90deg, rgba(100, 116, 139, 0.38), rgba(71, 85, 105, 0.28)) !important;
+      background: #334155 !important;
       color: #f8fafc !important;
     }
     table thead tr.source-group-row th.group-zoom {
-      background: linear-gradient(90deg, rgba(34, 197, 94, 0.24), rgba(34, 197, 94, 0.14)) !important;
+      background: #14532d !important;
       color: #bbf7d0 !important;
-      border-right: 1px solid rgba(6, 78, 59, 0.35);
+      border-right: 1px solid #166534;
     }
     table thead tr.source-group-row th.group-gmail {
-      background: linear-gradient(90deg, rgba(251, 191, 36, 0.24), rgba(251, 191, 36, 0.14)) !important;
+      background: #78350f !important;
       color: #fde68a !important;
-      border-right: 1px solid rgba(120, 53, 15, 0.35);
+      border-right: 1px solid #92400e;
     }
     table thead tr.source-group-row th.group-timeclock {
-      background: linear-gradient(90deg, rgba(56, 189, 248, 0.24), rgba(56, 189, 248, 0.14)) !important;
+      background: #0c4a6e !important;
       color: #bae6fd !important;
-      border-right: 1px solid rgba(12, 74, 110, 0.35);
+      border-right: 1px solid #0369a1;
     }
     table thead tr.source-group-row th.group-finance {
-      background: linear-gradient(90deg, rgba(167, 139, 250, 0.24), rgba(167, 139, 250, 0.14)) !important;
+      background: #4c1d95 !important;
       color: #ddd6fe !important;
-      border-right: 1px solid rgba(76, 29, 149, 0.35);
+      border-right: 1px solid #6d28d9;
     }
     table thead tr.source-group-row th.group-review {
-      background: linear-gradient(90deg, rgba(244, 63, 94, 0.24), rgba(244, 63, 94, 0.14)) !important;
+      background: #881337 !important;
       color: #fecdd3 !important;
     }
-    /* Brokerage table column tinting by source group
+    /* Brokerage: opaque sticky column headers; body keeps light tint
        1 Emp | 2-5 Zoom | 6-10 Gmail | 11-17 Timeclock | 18 Finance | 19-21 Review */
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+5),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+5) {
+      background-color: #1a3a28 !important;
+      color: #e2e8f0;
+    }
     .reviews-table tbody td:nth-child(n+2):nth-child(-n+5) {
       background-color: rgba(34, 197, 94, 0.12) !important;
       color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+6):nth-child(-n+10),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+6):nth-child(-n+10) {
+      background-color: #3b2a12 !important;
+      color: #e2e8f0;
+    }
     .reviews-table tbody td:nth-child(n+6):nth-child(-n+10) {
       background-color: rgba(251, 191, 36, 0.12) !important;
       color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+11):nth-child(-n+17),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+11):nth-child(-n+17) {
+      background-color: #123448 !important;
+      color: #e2e8f0;
+    }
     .reviews-table tbody td:nth-child(n+11):nth-child(-n+17) {
       background-color: rgba(56, 189, 248, 0.12) !important;
       color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(18),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(18) {
+      background-color: #2e1f55 !important;
+      color: #e2e8f0;
+    }
     .reviews-table tbody td:nth-child(18) {
       background-color: rgba(167, 139, 250, 0.14) !important;
       color: #e2e8f0;
     }
-    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+19):nth-child(-n+21),
+    .reviews-table thead tr:not(.source-group-row) th:nth-child(n+19):nth-child(-n+21) {
+      background-color: #3f1528 !important;
+      color: #e2e8f0;
+    }
     .reviews-table tbody td:nth-child(n+19):nth-child(-n+21) {
       background-color: rgba(244, 63, 94, 0.12) !important;
       color: #e2e8f0;
     }
-    /* Management table: 1 Emp | 2-7 Zoom | 8-12 Gmail | 13-19 Activity */
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+7),
+    /* Management: opaque sticky headers; body keeps light tint
+       1 Emp | 2-7 Zoom | 8-12 Gmail | 13-19 Activity */
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+7) {
+      background-color: #1a3a28 !important;
+      color: #e2e8f0;
+    }
     .management-metrics-table tbody td:nth-child(n+2):nth-child(-n+7) {
       background-color: rgba(34, 197, 94, 0.12) !important;
       color: #e2e8f0;
     }
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+8):nth-child(-n+12),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+8):nth-child(-n+12) {
+      background-color: #3b2a12 !important;
+      color: #e2e8f0;
+    }
     .management-metrics-table tbody td:nth-child(n+8):nth-child(-n+12) {
       background-color: rgba(251, 191, 36, 0.12) !important;
       color: #e2e8f0;
     }
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+13):nth-child(-n+19),
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+13):nth-child(-n+19) {
+      background-color: #123448 !important;
+      color: #e2e8f0;
+    }
     .management-metrics-table tbody td:nth-child(n+13):nth-child(-n+19) {
       background-color: rgba(56, 189, 248, 0.12) !important;
       color: #e2e8f0;
     }
     .week-selector { display: flex; align-items: center; gap: 8px; }
-    .month-filter label, .sort-filter label, .search-filter label, .update-filter label { font-size: 0.76rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .month-filter label, .sort-filter label, .search-filter label, .update-filter label, .timeframe-filter label { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
     .month-filter select, .month-filter input[type="date"], .sort-filter select, .search-filter input {
       min-width: 180px;
       background: #111827;
@@ -1299,6 +1477,18 @@ type RosterEmployee = Record<string, any>;
       border: 1px solid #2a2a4e;
       border-radius: 8px;
       padding: 8px 10px;
+      height: 38px;
+      box-sizing: border-box;
+    }
+    .week-selector select {
+      min-width: 110px;
+      background: #111827;
+      color: #d1d5db;
+      border: 1px solid #2a2a4e;
+      border-radius: 8px;
+      padding: 8px 10px;
+      height: 38px;
+      box-sizing: border-box;
     }
     .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a4e; }
     .management-title-tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid #2a2a4e; flex-wrap: wrap; }
@@ -1410,7 +1600,7 @@ type RosterEmployee = Record<string, any>;
     .reviews-table thead th {
       position: sticky;
       top: 0;
-      z-index: 2;
+      z-index: 4;
       background: #111827 !important;
       color: #e5e7eb !important;
       font-size: 0.62rem;
@@ -1419,8 +1609,8 @@ type RosterEmployee = Record<string, any>;
       white-space: nowrap;
       padding: 7px 8px;
     }
-    .reviews-table thead tr.source-group-row th { z-index: 3; }
-    .reviews-table thead tr:not(.source-group-row) th { top: 30px; }
+    .reviews-table thead tr.source-group-row th { z-index: 5; }
+    .reviews-table thead tr:not(.source-group-row) th { top: 30px; z-index: 4; }
     .reviews-table tbody tr:nth-child(odd) td { background: rgba(30, 41, 59, 0.55); color: #e2e8f0; }
     .reviews-table tbody tr:nth-child(even) td { background: rgba(15, 23, 42, 0.72); color: #e2e8f0; }
     .reviews-table tbody tr:hover td {
@@ -1535,7 +1725,9 @@ type RosterEmployee = Record<string, any>;
     @media (max-width: 1100px) {
       .page-header h1 { font-size: 1.45rem; }
       .review-filters { align-items: stretch; }
+      .update-filter-end { margin-left: 0; width: 100%; }
       .update-stack { align-items: flex-start; }
+      .input-with-icon input { min-width: 0; width: 100%; }
     }
     .report-view { margin-top: 8px; }
     .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -1707,12 +1899,41 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
   selectedReviewMonth = signal('current');
   selectedWeekNumber = signal(1);
   selectedWeekYear = signal(new Date().getUTCFullYear());
+  selectedDayIso = signal(new Date().toISOString().slice(0, 10));
   selectedTableSort = signal<ReviewTableSort>('employee-asc');
   tableSearchTerm = signal('');
   selectedManagementSort = signal<ManagementTableSort>('calls-desc');
   managementSearchTerm = signal('');
   showReportsTab = signal(false);
-  periodMode = signal<'weekly' | 'monthly'>('weekly');
+  brokerageView = signal<'scorecard' | 'additional' | 'report'>('scorecard');
+  additionalMetrics = signal<Array<{
+    employeeId: number;
+    employeeName?: string;
+    inboundCalls: number;
+    outboundCalls: number;
+    missedCalls: number;
+    voicemails: number;
+    voicemailMinutes: number;
+    phoneRecordings: number;
+    recordingMinutes: number;
+    meetingsHosted: number;
+    meetingsJoined: number;
+    meetingMinutes: number;
+  }>>([]);
+  lastSyncStatus = signal('');
+  lastSyncCompleteness = signal('');
+  periodMode = signal<'daily' | 'weekly' | 'monthly'>('weekly');
+  periodFieldLabel = computed(() => {
+    if (this.periodMode() === 'daily') return 'Date';
+    if (this.periodMode() === 'weekly') return 'Week';
+    return 'Month';
+  });
+  filteredAdditionalMetrics = computed(() => {
+    const q = this.tableSearchTerm().trim().toLowerCase();
+    const rows = this.additionalMetrics();
+    if (!q) return rows;
+    return rows.filter((r) => String(r.employeeName || '').toLowerCase().includes(q));
+  });
   /** When true, metrics are computed from live Zoom/timeclock (Update flow). Otherwise prefer DB snapshots. */
   private preferLiveMetrics = signal(false);
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
@@ -2287,6 +2508,9 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     const found = this.reviewPeriodOptions().find(o => o.value === selected);
     if (found) return found.label;
     const parsed = this.parseMonthKey(selected);
+    if (parsed.fromKey === parsed.toKey) {
+      return this.formatShortDate(parsed.from);
+    }
     return `${this.formatShortDate(parsed.from)} - ${this.formatShortDate(parsed.to)}`;
   });
 
@@ -2685,11 +2909,18 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     void this.loadZoomMetrics(false);
   }
 
-  async onPeriodModeChange(mode: 'weekly' | 'monthly') {
-    if (this.periodMode() === mode) return;
+  async onPeriodModeChange(mode: 'daily' | 'weekly' | 'monthly') {
+    if (this.periodMode() === mode) {
+      this.showReportsTab.set(false);
+      return;
+    }
     this.periodMode.set(mode);
     this.showReportsTab.set(false);
-    if (mode === 'weekly') {
+    if (mode === 'daily') {
+      const iso = this.selectedDayIso() || new Date().toISOString().slice(0, 10);
+      this.selectedDayIso.set(iso);
+      this.selectedReviewMonth.set(`${iso}_${iso}`);
+    } else if (mode === 'weekly') {
       this.initializeCurrentWeekSelection();
       this.selectedReviewMonth.set(this.buildWeekRangeValue(this.selectedWeekYear(), this.selectedWeekNumber()));
     } else {
@@ -2705,8 +2936,11 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     void this.loadZoomMetrics(false);
   }
 
-  openReportsTab(): void {
-    this.showReportsTab.set(true);
+  async onDayChange(value: string): Promise<void> {
+    const iso = (value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    this.selectedDayIso.set(iso);
+    await this.onReviewMonthChange(`${iso}_${iso}`);
   }
 
   async onWeekNumberChange(value: number | string): Promise<void> {
@@ -2741,9 +2975,38 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     this.updatingMetrics.set(true);
     this.preferLiveMetrics.set(true);
     try {
+      const range = this.parseMonthKey(this.selectedReviewMonth());
+      let gmailSkip = 0;
+      let lastStatus = 'running';
+      let completenessLabel = '';
+      for (let pass = 0; pass < 4; pass++) {
+        const res: any = await this.http.post(`${this.apiUrl}/api/v1/performance-reviews/sync-run`, {
+          periodMode: this.periodMode(),
+          from: range.fromKey,
+          to: range.toKey,
+          gmailSkipUsers: gmailSkip
+        }).toPromise();
+        const data = res?.data || {};
+        lastStatus = String(data.status || 'complete');
+        const c = data.completeness || {};
+        completenessLabel = [
+          c.gmailUsersSynced != null ? `Gmail ${c.gmailUsersSynced}/${c.gmailUsersTotal || '?'}` : null,
+          c.zoomSmsComplete === false ? `SMS ${c.zoomSmsUsersSynced}/${c.zoomSmsUsersTotal}` : (c.zoomSuccess ? 'Zoom OK' : null),
+          c.zoomCallsComplete === false ? 'Calls partial' : null
+        ].filter(Boolean).join(' · ');
+        this.lastSyncStatus.set(lastStatus);
+        this.lastSyncCompleteness.set(completenessLabel);
+        if (lastStatus === 'complete' || lastStatus === 'failed') break;
+        const nextSkip = Number(c.gmailNextSkip || c.gmailUsersSynced || 0);
+        if (!nextSkip || nextSkip <= gmailSkip) break;
+        gmailSkip = nextSkip;
+      }
+
       await Promise.all([
         this.loadTimeclockSummary(),
-        this.loadZoomMetrics(true)
+        this.loadZoomMetrics(false),
+        this.loadAdditionalMetrics(),
+        this.loadScorecardSnapshots()
       ]);
       await this.persistDailyMetricsSnapshot();
       await this.persistMonthlyMetricsSnapshot();
@@ -2752,12 +3015,64 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         this.loadReviews(),
         this.loadPersistedDailyMetrics()
       ]);
-      this.toast.success('Performance metrics saved to database');
+      this.lastMetricsUpdateAt.set(new Date().toLocaleString());
+      this.toast.success(lastStatus === 'partial'
+        ? 'Metrics saved (partial — click Update again to continue Gmail batches)'
+        : 'Performance metrics saved to Access warehouse');
     } catch (err: any) {
       this.toast.error(err?.error?.message || err?.message || 'Failed to save performance metrics');
     } finally {
       this.preferLiveMetrics.set(false);
       this.updatingMetrics.set(false);
+    }
+  }
+
+  setBrokerageView(view: 'scorecard' | 'additional' | 'report'): void {
+    this.brokerageView.set(view);
+    this.showReportsTab.set(view === 'report');
+    if (view === 'additional') {
+      void this.loadAdditionalMetrics();
+    }
+  }
+
+  openReportsTab(): void {
+    this.setBrokerageView('report');
+  }
+
+  private async loadAdditionalMetrics(): Promise<void> {
+    try {
+      const range = this.parseMonthKey(this.selectedReviewMonth());
+      const res: any = await this.http.get(
+        `${this.apiUrl}/api/v1/performance-reviews/additional-metrics?from=${encodeURIComponent(range.fromKey)}&to=${encodeURIComponent(range.toKey)}&periodMode=${encodeURIComponent(this.periodMode())}`
+      ).toPromise();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      this.additionalMetrics.set(rows.map((r: any) => ({
+        employeeId: Number(r.employeeId || r.EmployeeId || 0),
+        employeeName: r.employeeName || r.EmployeeName || '',
+        inboundCalls: Number(r.inboundCalls ?? r.InboundCalls ?? 0),
+        outboundCalls: Number(r.outboundCalls ?? r.OutboundCalls ?? 0),
+        missedCalls: Number(r.missedCalls ?? r.MissedCalls ?? 0),
+        voicemails: Number(r.voicemails ?? r.Voicemails ?? 0),
+        voicemailMinutes: Number(r.voicemailMinutes ?? r.VoicemailMinutes ?? 0),
+        phoneRecordings: Number(r.phoneRecordings ?? r.PhoneRecordings ?? 0),
+        recordingMinutes: Number(r.recordingMinutes ?? r.RecordingMinutes ?? 0),
+        meetingsHosted: Number(r.meetingsHosted ?? r.MeetingsHosted ?? 0),
+        meetingsJoined: Number(r.meetingsJoined ?? r.MeetingsJoined ?? 0),
+        meetingMinutes: Number(r.meetingMinutes ?? r.MeetingMinutes ?? 0)
+      })).filter((r: any) => r.employeeId > 0));
+    } catch {
+      this.additionalMetrics.set([]);
+    }
+  }
+
+  private async loadScorecardSnapshots(): Promise<void> {
+    try {
+      const range = this.parseMonthKey(this.selectedReviewMonth());
+      await this.http.get(
+        `${this.apiUrl}/api/v1/performance-reviews/scorecard-snapshots?from=${encodeURIComponent(range.fromKey)}&to=${encodeURIComponent(range.toKey)}&periodMode=${encodeURIComponent(this.periodMode())}`
+      ).toPromise();
+    } catch {
+      // Warehouse read is best-effort; live maps remain primary for scorecard rendering.
     }
   }
 
@@ -3651,7 +3966,12 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     let to: Date;
 
     if (!value || value === 'current') {
-      if (this.periodMode() === 'monthly') {
+      if (this.periodMode() === 'daily') {
+        const day = this.selectedDayIso() || now.toISOString().slice(0, 10);
+        const parsedDay = new Date(`${day}T00:00:00`);
+        from = toUtcDate(Number.isNaN(parsedDay.getTime()) ? now : parsedDay);
+        to = from;
+      } else if (this.periodMode() === 'monthly') {
         from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), 1));
         to = toUtcDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
       } else {
@@ -3682,6 +4002,9 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
         if (!Number.isNaN(parsed.getTime())) {
           to = toUtcDate(parsed);
           from = toUtcDate(new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() - 6));
+        } else if (this.periodMode() === 'daily') {
+          from = toUtcDate(now);
+          to = from;
         } else if (this.periodMode() === 'monthly') {
           from = toUtcDate(new Date(now.getFullYear(), now.getMonth(), 1));
           to = toUtcDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));

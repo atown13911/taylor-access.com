@@ -10,11 +10,18 @@ public sealed class ZoomDirectUserMetric
     public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public int TotalCalls { get; set; }
+    public int InboundCalls { get; set; }
+    public int OutboundCalls { get; set; }
+    public int MissedCalls { get; set; }
     public double TotalCallMinutes { get; set; }
     public int SmsSessionCount { get; set; }
     public int MeetingsHosted { get; set; }
     public int MeetingsJoined { get; set; }
     public double MeetingMinutes { get; set; }
+    public int Voicemails { get; set; }
+    public double VoicemailMinutes { get; set; }
+    public int PhoneRecordings { get; set; }
+    public double RecordingMinutes { get; set; }
 }
 
 public sealed class ZoomDirectMetricsResult
@@ -24,12 +31,16 @@ public sealed class ZoomDirectMetricsResult
     public int CallLogRows { get; init; }
     public int UserRows { get; init; }
     public int SmsRows { get; init; }
+    public int SmsUsersSynced { get; init; }
+    public int SmsUsersTotal { get; init; }
+    public int CallPages { get; init; }
+    public bool SmsComplete { get; init; }
+    public bool CallsComplete { get; init; }
     public List<ZoomDirectUserMetric> Metrics { get; init; } = new();
 }
 
 /// <summary>
 /// Pulls Zoom Phone / Meetings metrics straight from Zoom APIs using Access S2S credentials.
-/// Bypasses Taylor CRM for performance-review Zoom columns.
 /// </summary>
 public class ZoomDirectMetricsService
 {
@@ -64,11 +75,12 @@ public class ZoomDirectMetricsService
         }
 
         var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(25);
+        client.Timeout = TimeSpan.FromSeconds(90);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var fromDate = fromUtc.Date.ToString("yyyy-MM-dd");
         var toDate = toUtc.Date.ToString("yyyy-MM-dd");
+        var budgetStarted = DateTime.UtcNow;
 
         try
         {
@@ -107,8 +119,8 @@ public class ZoomDirectMetricsService
                 return row;
             }
 
+            var (callLogs, callPages, callsComplete) = await FetchCallHistoryAsync(client, fromDate, toDate, budgetStarted, cancellationToken);
             var callRows = 0;
-            var callLogs = await FetchCallHistoryAsync(client, fromDate, toDate, cancellationToken);
             foreach (var log in callLogs)
             {
                 callRows++;
@@ -127,25 +139,31 @@ public class ZoomDirectMetricsService
                 var row = Ensure(key, ownerId, email, displayName);
                 row.TotalCalls += 1;
                 row.TotalCallMinutes += minutes;
+                var direction = (log.Direction ?? "").Trim().ToLowerInvariant();
+                if (direction is "inbound" or "incoming") row.InboundCalls += 1;
+                else if (direction is "outbound" or "outgoing") row.OutboundCalls += 1;
+                var result = (log.Result ?? "").Trim().ToLowerInvariant();
+                if (result.Contains("miss") || result.Contains("no_answer") || result.Contains("no answer"))
+                    row.MissedCalls += 1;
             }
 
+            var phoneUsers = users.Where(u => !string.IsNullOrWhiteSpace(u.Id) && !string.IsNullOrWhiteSpace(u.Email)).ToList();
             var smsRows = 0;
-            // Sample phone users with emails — keep bounded for latency.
-            foreach (var user in users.Where(u => !string.IsNullOrWhiteSpace(u.Id) && !string.IsNullOrWhiteSpace(u.Email)).Take(40))
+            var smsUsersSynced = 0;
+            var smsComplete = true;
+            foreach (var user in phoneUsers)
             {
+                if ((DateTime.UtcNow - budgetStarted).TotalSeconds > 70)
+                {
+                    smsComplete = false;
+                    break;
+                }
+
                 try
                 {
-                    var url =
-                        $"https://api.zoom.us/v2/phone/users/{Uri.EscapeDataString(user.Id!)}/sms/sessions?from={fromDate}&to={toDate}&page_size=100";
-                    using var smsRes = await client.GetAsync(url, cancellationToken);
-                    if (!smsRes.IsSuccessStatusCode) continue;
-                    await using var stream = await smsRes.Content.ReadAsStreamAsync(cancellationToken);
-                    using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-                    if (!doc.RootElement.TryGetProperty("sms_sessions", out var sessions)
-                        || sessions.ValueKind != JsonValueKind.Array)
-                        continue;
-
-                    var count = sessions.GetArrayLength();
+                    var (count, pagesLeft) = await CountSmsSessionsAsync(client, user.Id!, fromDate, toDate, cancellationToken);
+                    smsUsersSynced++;
+                    if (pagesLeft) smsComplete = false;
                     if (count <= 0) continue;
                     smsRows += count;
                     var row = Ensure(user.Email!, user.Id, user.Email, user.DisplayName);
@@ -157,42 +175,14 @@ public class ZoomDirectMetricsService
                 }
             }
 
-            // Meeting report (account-level daily users) — best-effort for hosted minutes.
-            try
-            {
-                var reportUrl =
-                    $"https://api.zoom.us/v2/report/users?from={fromDate}&to={toDate}&page_size=300&type=active";
-                using var reportRes = await client.GetAsync(reportUrl, cancellationToken);
-                if (reportRes.IsSuccessStatusCode)
-                {
-                    await using var stream = await reportRes.Content.ReadAsStreamAsync(cancellationToken);
-                    using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-                    if (doc.RootElement.TryGetProperty("users", out var reportUsers)
-                        && reportUsers.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var u in reportUsers.EnumerateArray())
-                        {
-                            var email = ReadString(u, "email")?.Trim().ToLowerInvariant();
-                            if (string.IsNullOrWhiteSpace(email)) continue;
-                            var meetings = ReadInt(u, "meetings");
-                            var participants = ReadInt(u, "participants");
-                            var meetingMinutes = ReadDouble(u, "meeting_minutes");
-                            if (meetings <= 0 && participants <= 0 && meetingMinutes <= 0) continue;
-                            var row = Ensure(email!, ReadString(u, "id"), email, ReadString(u, "user_name"));
-                            row.MeetingsHosted = Math.Max(row.MeetingsHosted, meetings);
-                            row.MeetingsJoined = Math.Max(row.MeetingsJoined, Math.Max(participants, meetings));
-                            row.MeetingMinutes = Math.Max(row.MeetingMinutes, meetingMinutes);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Zoom report/users pull failed");
-            }
+            await EnrichMeetingsAsync(client, fromDate, toDate, Ensure, cancellationToken);
+            await EnrichVoicemailsAsync(client, fromDate, toDate, emailByZoomId, nameByZoomId, Ensure, cancellationToken);
+            await EnrichRecordingsAsync(client, fromDate, toDate, emailByZoomId, nameByZoomId, Ensure, cancellationToken);
 
             var metrics = metricsByKey.Values
-                .Where(m => m.TotalCalls > 0 || m.SmsSessionCount > 0 || m.MeetingsHosted > 0 || m.MeetingMinutes > 0)
+                .Where(m =>
+                    m.TotalCalls > 0 || m.SmsSessionCount > 0 || m.MeetingsHosted > 0 || m.MeetingMinutes > 0
+                    || m.Voicemails > 0 || m.PhoneRecordings > 0)
                 .OrderByDescending(m => m.TotalCalls)
                 .ToList();
 
@@ -202,6 +192,11 @@ public class ZoomDirectMetricsService
                 CallLogRows = callRows,
                 UserRows = users.Count,
                 SmsRows = smsRows,
+                SmsUsersSynced = smsUsersSynced,
+                SmsUsersTotal = phoneUsers.Count,
+                CallPages = callPages,
+                SmsComplete = smsComplete && smsUsersSynced >= phoneUsers.Count,
+                CallsComplete = callsComplete,
                 Metrics = metrics
             };
         }
@@ -214,6 +209,193 @@ public class ZoomDirectMetricsService
                 Error = ex.Message
             };
         }
+    }
+
+    private async Task EnrichMeetingsAsync(
+        HttpClient client,
+        string fromDate,
+        string toDate,
+        Func<string, string?, string?, string?, ZoomDirectUserMetric> ensure,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? nextToken = null;
+            var pages = 0;
+            do
+            {
+                var reportUrl =
+                    $"https://api.zoom.us/v2/report/users?from={fromDate}&to={toDate}&page_size=300&type=active";
+                if (!string.IsNullOrWhiteSpace(nextToken))
+                    reportUrl += $"&next_page_token={Uri.EscapeDataString(nextToken)}";
+
+                using var reportRes = await client.GetAsync(reportUrl, cancellationToken);
+                if (!reportRes.IsSuccessStatusCode) break;
+                await using var stream = await reportRes.Content.ReadAsStreamAsync(cancellationToken);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                if (doc.RootElement.TryGetProperty("users", out var reportUsers)
+                    && reportUsers.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var u in reportUsers.EnumerateArray())
+                    {
+                        var email = ReadString(u, "email")?.Trim().ToLowerInvariant();
+                        if (string.IsNullOrWhiteSpace(email)) continue;
+                        var meetings = ReadInt(u, "meetings");
+                        var participants = ReadInt(u, "participants");
+                        var meetingMinutes = ReadDouble(u, "meeting_minutes");
+                        if (meetings <= 0 && participants <= 0 && meetingMinutes <= 0) continue;
+                        var row = ensure(email!, ReadString(u, "id"), email, ReadString(u, "user_name"));
+                        row.MeetingsHosted = Math.Max(row.MeetingsHosted, meetings);
+                        row.MeetingsJoined = Math.Max(row.MeetingsJoined, Math.Max(participants, meetings));
+                        row.MeetingMinutes = Math.Max(row.MeetingMinutes, meetingMinutes);
+                    }
+                }
+
+                nextToken = doc.RootElement.TryGetProperty("next_page_token", out var npt) ? npt.GetString() : null;
+                pages++;
+            } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 10);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Zoom report/users pull failed");
+        }
+    }
+
+    private async Task EnrichVoicemailsAsync(
+        HttpClient client,
+        string fromDate,
+        string toDate,
+        Dictionary<string, string> emailByZoomId,
+        Dictionary<string, string> nameByZoomId,
+        Func<string, string?, string?, string?, ZoomDirectUserMetric> ensure,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? nextToken = null;
+            var pages = 0;
+            do
+            {
+                var url = $"https://api.zoom.us/v2/phone/voice_mails?from={fromDate}&to={toDate}&page_size=100";
+                if (!string.IsNullOrWhiteSpace(nextToken))
+                    url += $"&next_page_token={Uri.EscapeDataString(nextToken)}";
+                using var res = await client.GetAsync(url, cancellationToken);
+                if (!res.IsSuccessStatusCode) break;
+                await using var stream = await res.Content.ReadAsStreamAsync(cancellationToken);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                var arrName = doc.RootElement.TryGetProperty("voice_mails", out _) ? "voice_mails" : "voicemails";
+                if (doc.RootElement.TryGetProperty(arrName, out var items) && items.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        var ownerId = ReadString(item, "owner", "id")
+                            ?? ReadString(item, "callee_user_id")
+                            ?? ReadString(item, "owner_id");
+                        var email = ownerId != null && emailByZoomId.TryGetValue(ownerId, out var mapped)
+                            ? mapped
+                            : FirstEmail(ReadString(item, "callee_email"), ReadString(item, "owner_email"));
+                        var key = !string.IsNullOrWhiteSpace(email)
+                            ? email!
+                            : (!string.IsNullOrWhiteSpace(ownerId) ? $"id:{ownerId}" : null);
+                        if (string.IsNullOrWhiteSpace(key)) continue;
+                        var display = ownerId != null && nameByZoomId.TryGetValue(ownerId, out var n) ? n : null;
+                        var row = ensure(key, ownerId, email, display);
+                        row.Voicemails += 1;
+                        row.VoicemailMinutes += Math.Max(0, ReadInt(item, "duration")) / 60d;
+                    }
+                }
+
+                nextToken = doc.RootElement.TryGetProperty("next_page_token", out var npt) ? npt.GetString() : null;
+                pages++;
+            } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 20);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Zoom voicemails pull failed");
+        }
+    }
+
+    private async Task EnrichRecordingsAsync(
+        HttpClient client,
+        string fromDate,
+        string toDate,
+        Dictionary<string, string> emailByZoomId,
+        Dictionary<string, string> nameByZoomId,
+        Func<string, string?, string?, string?, ZoomDirectUserMetric> ensure,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? nextToken = null;
+            var pages = 0;
+            do
+            {
+                var url = $"https://api.zoom.us/v2/phone/recordings?from={fromDate}&to={toDate}&page_size=100";
+                if (!string.IsNullOrWhiteSpace(nextToken))
+                    url += $"&next_page_token={Uri.EscapeDataString(nextToken)}";
+                using var res = await client.GetAsync(url, cancellationToken);
+                if (!res.IsSuccessStatusCode) break;
+                await using var stream = await res.Content.ReadAsStreamAsync(cancellationToken);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                if (doc.RootElement.TryGetProperty("recordings", out var items) && items.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        var ownerId = ReadString(item, "owner", "id")
+                            ?? ReadString(item, "owner_id")
+                            ?? ReadString(item, "user_id");
+                        var email = ownerId != null && emailByZoomId.TryGetValue(ownerId, out var mapped)
+                            ? mapped
+                            : FirstEmail(ReadString(item, "owner_email"), ReadString(item, "caller_email"));
+                        var key = !string.IsNullOrWhiteSpace(email)
+                            ? email!
+                            : (!string.IsNullOrWhiteSpace(ownerId) ? $"id:{ownerId}" : null);
+                        if (string.IsNullOrWhiteSpace(key)) continue;
+                        var display = ownerId != null && nameByZoomId.TryGetValue(ownerId, out var n) ? n : null;
+                        var row = ensure(key, ownerId, email, display);
+                        row.PhoneRecordings += 1;
+                        row.RecordingMinutes += Math.Max(0, ReadInt(item, "duration")) / 60d;
+                    }
+                }
+
+                nextToken = doc.RootElement.TryGetProperty("next_page_token", out var npt) ? npt.GetString() : null;
+                pages++;
+            } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 20);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Zoom recordings pull failed");
+        }
+    }
+
+    private async Task<(int Count, bool HitPageCap)> CountSmsSessionsAsync(
+        HttpClient client,
+        string userId,
+        string fromDate,
+        string toDate,
+        CancellationToken cancellationToken)
+    {
+        var total = 0;
+        string? nextToken = null;
+        var pages = 0;
+        do
+        {
+            var url =
+                $"https://api.zoom.us/v2/phone/users/{Uri.EscapeDataString(userId)}/sms/sessions?from={fromDate}&to={toDate}&page_size=100";
+            if (!string.IsNullOrWhiteSpace(nextToken))
+                url += $"&next_page_token={Uri.EscapeDataString(nextToken)}";
+            using var smsRes = await client.GetAsync(url, cancellationToken);
+            if (!smsRes.IsSuccessStatusCode) break;
+            await using var stream = await smsRes.Content.ReadAsStreamAsync(cancellationToken);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            if (doc.RootElement.TryGetProperty("sms_sessions", out var sessions)
+                && sessions.ValueKind == JsonValueKind.Array)
+                total += sessions.GetArrayLength();
+            nextToken = doc.RootElement.TryGetProperty("next_page_token", out var npt) ? npt.GetString() : null;
+            pages++;
+        } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 10);
+
+        return (total, !string.IsNullOrWhiteSpace(nextToken));
     }
 
     private async Task<List<ZoomUserLite>> ListUsersAsync(HttpClient client, CancellationToken cancellationToken)
@@ -256,21 +438,21 @@ public class ZoomDirectMetricsService
         return users;
     }
 
-    private async Task<List<ZoomCallLite>> FetchCallHistoryAsync(
+    private async Task<(List<ZoomCallLite> Logs, int Pages, bool Complete)> FetchCallHistoryAsync(
         HttpClient client,
         string fromDate,
         string toDate,
+        DateTime budgetStarted,
         CancellationToken cancellationToken)
     {
         var results = new List<ZoomCallLite>();
         string? nextToken = null;
         var pages = 0;
-        var started = DateTime.UtcNow;
 
         do
         {
-            if ((DateTime.UtcNow - started).TotalSeconds > 40)
-                break;
+            if ((DateTime.UtcNow - budgetStarted).TotalSeconds > 45)
+                return (results, pages, false);
 
             var url =
                 $"https://api.zoom.us/v2/phone/call_history?from={fromDate}&to={toDate}&page_size=300";
@@ -298,7 +480,9 @@ public class ZoomDirectMetricsService
                             ?? ReadString(item, "owner_id"),
                         ReadString(item, "caller_email"),
                         ReadString(item, "callee_email"),
-                        ReadInt(item, "duration")));
+                        ReadInt(item, "duration"),
+                        ReadString(item, "direction"),
+                        ReadString(item, "result") ?? ReadString(item, "call_end_reason")));
                 }
             }
 
@@ -306,9 +490,9 @@ public class ZoomDirectMetricsService
                 ? npt.GetString()
                 : null;
             pages++;
-        } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 40);
+        } while (!string.IsNullOrWhiteSpace(nextToken) && pages < 80);
 
-        return results;
+        return (results, pages, string.IsNullOrWhiteSpace(nextToken));
     }
 
     private static string? FirstEmail(params string?[] values)
@@ -352,5 +536,11 @@ public class ZoomDirectMetricsService
     }
 
     private sealed record ZoomUserLite(string? Id, string? Email, string? DisplayName);
-    private sealed record ZoomCallLite(string? OwnerId, string? CallerEmail, string? CalleeEmail, int DurationSeconds);
+    private sealed record ZoomCallLite(
+        string? OwnerId,
+        string? CallerEmail,
+        string? CalleeEmail,
+        int DurationSeconds,
+        string? Direction,
+        string? Result);
 }

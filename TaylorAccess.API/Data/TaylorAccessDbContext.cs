@@ -56,6 +56,8 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<InsurancePolicy> InsurancePolicies => Set<InsurancePolicy>();
     public DbSet<InsuranceEnrollment> InsuranceEnrollments => Set<InsuranceEnrollment>();
     public DbSet<InsuranceFleetDriverPeriodOverride> InsuranceFleetDriverPeriodOverrides => Set<InsuranceFleetDriverPeriodOverride>();
+    public DbSet<InsuranceChargingSnapshot> InsuranceChargingSnapshots => Set<InsuranceChargingSnapshot>();
+    public DbSet<InsuranceAccountingInvoiceCache> InsuranceAccountingInvoiceCaches => Set<InsuranceAccountingInvoiceCache>();
 
     // OAuth2 / SSO
     public DbSet<OAuthClient> OAuthClients => Set<OAuthClient>();
@@ -118,6 +120,9 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<Timesheet> Timesheets => Set<Timesheet>();
     public DbSet<PerformanceReview> PerformanceReviews => Set<PerformanceReview>();
     public DbSet<EmployeePerformanceDailyMetric> EmployeePerformanceDailyMetrics => Set<EmployeePerformanceDailyMetric>();
+    public DbSet<PerformanceSyncRun> PerformanceSyncRuns => Set<PerformanceSyncRun>();
+    public DbSet<PerformanceScorecardSnapshot> PerformanceScorecardSnapshots => Set<PerformanceScorecardSnapshot>();
+    public DbSet<PerformanceAdditionalMetric> PerformanceAdditionalMetrics => Set<PerformanceAdditionalMetric>();
     public DbSet<ApplicantRecord> ApplicantRecords => Set<ApplicantRecord>();
     public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
     public DbSet<MotivDriverProfile> MotivDriverProfiles => Set<MotivDriverProfile>();
@@ -235,6 +240,17 @@ public class TaylorAccessDbContext : DbContext
         modelBuilder.Entity<EmployeePerformanceDailyMetric>()
             .HasIndex(r => new { r.OrganizationId, r.EmployeeId, r.MetricDate })
             .IsUnique();
+
+        modelBuilder.Entity<PerformanceScorecardSnapshot>()
+            .HasIndex(r => new { r.OrganizationId, r.EmployeeId, r.PeriodMode, r.FromDate, r.ToDate })
+            .IsUnique();
+
+        modelBuilder.Entity<PerformanceAdditionalMetric>()
+            .HasIndex(r => new { r.OrganizationId, r.EmployeeId, r.PeriodMode, r.FromDate, r.ToDate })
+            .IsUnique();
+
+        modelBuilder.Entity<PerformanceSyncRun>()
+            .HasIndex(r => new { r.OrganizationId, r.StartedAt });
 
         modelBuilder.Entity<IntegrationConfig>()
             .HasIndex(c => new { c.OrganizationId, c.IntegrationType })

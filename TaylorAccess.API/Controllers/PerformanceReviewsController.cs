@@ -25,6 +25,7 @@ public class PerformanceReviewsController : ControllerBase
     private readonly LocalIntegrationStatusService _localIntegrationStatus;
     private readonly CrmIntegrationCopyService _crmIntegrationCopy;
     private readonly ZoomDirectMetricsService _zoomDirectMetrics;
+    private readonly PerformanceSyncOrchestrator _performanceSync;
 
     public PerformanceReviewsController(
         TaylorAccessDbContext context,
@@ -35,7 +36,8 @@ public class PerformanceReviewsController : ControllerBase
         ILogger<PerformanceReviewsController> logger,
         LocalIntegrationStatusService localIntegrationStatus,
         CrmIntegrationCopyService crmIntegrationCopy,
-        ZoomDirectMetricsService zoomDirectMetrics)
+        ZoomDirectMetricsService zoomDirectMetrics,
+        PerformanceSyncOrchestrator performanceSync)
     {
         _context = context;
         _currentUserService = currentUserService;
@@ -46,6 +48,7 @@ public class PerformanceReviewsController : ControllerBase
         _localIntegrationStatus = localIntegrationStatus;
         _crmIntegrationCopy = crmIntegrationCopy;
         _zoomDirectMetrics = zoomDirectMetrics;
+        _performanceSync = performanceSync;
     }
 
     [HttpGet]
@@ -1793,6 +1796,118 @@ public class PerformanceReviewsController : ControllerBase
                 total = byEmployee.Count
             }
         });
+    }
+
+    public record PerformanceSyncRunBody(
+        string? PeriodMode,
+        string? From,
+        string? To,
+        int GmailSkipUsers = 0);
+
+    [HttpPost("sync-run")]
+    public async Task<ActionResult<object>> StartSyncRun([FromBody] PerformanceSyncRunBody? body)
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+
+        var organizationId = orgId ?? user.OrganizationId ?? 0;
+        if (organizationId <= 0)
+            return BadRequest(new { message = "organizationId is required" });
+
+        var now = DateTime.UtcNow.Date;
+        var from = now.AddDays(-6);
+        var to = now;
+        if (!string.IsNullOrWhiteSpace(body?.From) && DateTime.TryParse(body.From, out var parsedFrom))
+            from = parsedFrom.Date;
+        if (!string.IsNullOrWhiteSpace(body?.To) && DateTime.TryParse(body.To, out var parsedTo))
+            to = parsedTo.Date;
+        if (to < from) (from, to) = (to, from);
+
+        var result = await _performanceSync.RunAsync(organizationId, new PerformanceSyncRequest
+        {
+            PeriodMode = body?.PeriodMode ?? "weekly",
+            FromDate = from,
+            ToDate = to,
+            Trigger = "manual-update",
+            GmailSkipUsers = Math.Max(0, body?.GmailSkipUsers ?? 0)
+        }, HttpContext.RequestAborted);
+
+        return Ok(new { data = result });
+    }
+
+    [HttpGet("sync-run/{id:int}")]
+    public async Task<ActionResult<object>> GetSyncRun(int id)
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+        var organizationId = orgId ?? user.OrganizationId ?? 0;
+
+        var run = await _context.PerformanceSyncRuns.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == id && (organizationId <= 0 || r.OrganizationId == organizationId));
+        if (run == null) return NotFound(new { message = "Sync run not found" });
+        return Ok(new { data = run });
+    }
+
+    [HttpGet("scorecard-snapshots")]
+    public async Task<ActionResult<object>> GetScorecardSnapshots(
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string periodMode = "weekly")
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+        var organizationId = orgId ?? user.OrganizationId ?? 0;
+        if (organizationId <= 0) return BadRequest(new { message = "organizationId is required" });
+
+        var now = DateTime.UtcNow.Date;
+        var fromDate = now.AddDays(-6);
+        var toDate = now;
+        if (!string.IsNullOrWhiteSpace(from) && DateTime.TryParse(from, out var parsedFrom))
+            fromDate = parsedFrom.Date;
+        if (!string.IsNullOrWhiteSpace(to) && DateTime.TryParse(to, out var parsedTo))
+            toDate = parsedTo.Date;
+
+        var mode = string.IsNullOrWhiteSpace(periodMode) ? "weekly" : periodMode.Trim().ToLowerInvariant();
+        var rows = await _context.PerformanceScorecardSnapshots.AsNoTracking()
+            .Where(r => r.OrganizationId == organizationId
+                && r.PeriodMode == mode
+                && r.FromDate == fromDate
+                && r.ToDate == toDate)
+            .OrderBy(r => r.EmployeeName)
+            .ToListAsync();
+
+        return Ok(new { data = rows, meta = new { from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd"), periodMode = mode, total = rows.Count } });
+    }
+
+    [HttpGet("additional-metrics")]
+    public async Task<ActionResult<object>> GetAdditionalMetrics(
+        [FromQuery] string? from,
+        [FromQuery] string? to,
+        [FromQuery] string periodMode = "weekly")
+    {
+        var (orgId, user, error) = await _currentUserService.ResolveOrgFilterAsync();
+        if (error != null || user == null) return Unauthorized(new { message = error ?? "Unauthorized" });
+        var organizationId = orgId ?? user.OrganizationId ?? 0;
+        if (organizationId <= 0) return BadRequest(new { message = "organizationId is required" });
+
+        var now = DateTime.UtcNow.Date;
+        var fromDate = now.AddDays(-6);
+        var toDate = now;
+        if (!string.IsNullOrWhiteSpace(from) && DateTime.TryParse(from, out var parsedFrom))
+            fromDate = parsedFrom.Date;
+        if (!string.IsNullOrWhiteSpace(to) && DateTime.TryParse(to, out var parsedTo))
+            toDate = parsedTo.Date;
+
+        var mode = string.IsNullOrWhiteSpace(periodMode) ? "weekly" : periodMode.Trim().ToLowerInvariant();
+        var rows = await _context.PerformanceAdditionalMetrics.AsNoTracking()
+            .Where(r => r.OrganizationId == organizationId
+                && r.PeriodMode == mode
+                && r.FromDate == fromDate
+                && r.ToDate == toDate)
+            .OrderBy(r => r.EmployeeName)
+            .ToListAsync();
+
+        return Ok(new { data = rows, meta = new { from = fromDate.ToString("yyyy-MM-dd"), to = toDate.ToString("yyyy-MM-dd"), periodMode = mode, total = rows.Count } });
     }
 
     [HttpGet("daily-metrics-table")]

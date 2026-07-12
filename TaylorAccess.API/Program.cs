@@ -240,6 +240,8 @@ builder.Services.AddSingleton<IntegrationEncryptionService>();
 builder.Services.AddScoped<CrmIntegrationCopyService>();
 builder.Services.AddScoped<LocalIntegrationStatusService>();
 builder.Services.AddScoped<ZoomDirectMetricsService>();
+builder.Services.AddScoped<GmailDirectMetricsService>();
+builder.Services.AddScoped<PerformanceSyncOrchestrator>();
 builder.Services.AddScoped<IntegrationConfigBootstrapService>();
 // Use GatewayMongoDbService when gateway is configured (production),
 // otherwise fall back to direct MongoDbService (requires MONGODB_URL).
@@ -731,6 +733,90 @@ using (var scope = app.Services.CreateScope())
             ON ""EmployeePerformanceDailyMetrics"" (""OrganizationId"", ""EmployeeId"", ""MetricDate"");
         CREATE INDEX IF NOT EXISTS ""IX_EmployeePerformanceDailyMetrics_Org_Date""
             ON ""EmployeePerformanceDailyMetrics"" (""OrganizationId"", ""MetricDate"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""PerformanceSyncRuns"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""PeriodMode"" VARCHAR(20) NOT NULL DEFAULT 'weekly',
+            ""FromDate"" DATE NOT NULL,
+            ""ToDate"" DATE NOT NULL,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'running',
+            ""Trigger"" VARCHAR(40) NOT NULL DEFAULT 'manual-update',
+            ""CompletenessJson"" TEXT NULL,
+            ""ErrorMessage"" TEXT NULL,
+            ""StartedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""FinishedAt"" TIMESTAMP NULL
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_PerformanceSyncRuns_Org_Started""
+            ON ""PerformanceSyncRuns"" (""OrganizationId"", ""StartedAt"");
+
+        CREATE TABLE IF NOT EXISTS ""PerformanceScorecardSnapshots"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""EmployeeId"" INTEGER NOT NULL,
+            ""EmployeeName"" VARCHAR(120) NULL,
+            ""PeriodMode"" VARCHAR(20) NOT NULL DEFAULT 'weekly',
+            ""FromDate"" DATE NOT NULL,
+            ""ToDate"" DATE NOT NULL,
+            ""SyncRunId"" INTEGER NULL,
+            ""CallVolume"" INTEGER NOT NULL DEFAULT 0,
+            ""TotalCallMinutes"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""AvgCallMinutes"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""TextVolume"" INTEGER NOT NULL DEFAULT 0,
+            ""SentCount"" INTEGER NOT NULL DEFAULT 0,
+            ""ReplyCount"" INTEGER NOT NULL DEFAULT 0,
+            ""FirstResponseMinutes"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""FollowUpRate"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""InternalCount"" INTEGER NOT NULL DEFAULT 0,
+            ""ExternalCount"" INTEGER NOT NULL DEFAULT 0,
+            ""ClockedHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""ActiveHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""IdleHours"" numeric(10,2) NOT NULL DEFAULT 0,
+            ""PresenceRate"" numeric(6,4) NOT NULL DEFAULT 0,
+            ""SystemRate"" numeric(6,4) NOT NULL DEFAULT 0,
+            ""BusyRate"" numeric(6,4) NOT NULL DEFAULT 0,
+            ""ClickCount"" INTEGER NOT NULL DEFAULT 0,
+            ""InteractionCount"" INTEGER NOT NULL DEFAULT 0,
+            ""InvoicedRevenue"" numeric(12,2) NOT NULL DEFAULT 0,
+            ""Score"" INTEGER NOT NULL DEFAULT 0,
+            ""BusySource"" VARCHAR(20) NULL,
+            ""Source"" VARCHAR(40) NOT NULL DEFAULT 'access-direct',
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_PerformanceScorecardSnapshots_Users_EmployeeId"" FOREIGN KEY (""EmployeeId"") REFERENCES ""Users""(""Id"") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PerformanceScorecardSnapshots_Org_Emp_Period""
+            ON ""PerformanceScorecardSnapshots"" (""OrganizationId"", ""EmployeeId"", ""PeriodMode"", ""FromDate"", ""ToDate"");
+
+        CREATE TABLE IF NOT EXISTS ""PerformanceAdditionalMetrics"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""EmployeeId"" INTEGER NOT NULL,
+            ""EmployeeName"" VARCHAR(120) NULL,
+            ""PeriodMode"" VARCHAR(20) NOT NULL DEFAULT 'weekly',
+            ""FromDate"" DATE NOT NULL,
+            ""ToDate"" DATE NOT NULL,
+            ""SyncRunId"" INTEGER NULL,
+            ""Voicemails"" INTEGER NOT NULL DEFAULT 0,
+            ""VoicemailMinutes"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""PhoneRecordings"" INTEGER NOT NULL DEFAULT 0,
+            ""RecordingMinutes"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""MeetingsHosted"" INTEGER NOT NULL DEFAULT 0,
+            ""MeetingsJoined"" INTEGER NOT NULL DEFAULT 0,
+            ""MeetingMinutes"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""InboundCalls"" INTEGER NOT NULL DEFAULT 0,
+            ""OutboundCalls"" INTEGER NOT NULL DEFAULT 0,
+            ""MissedCalls"" INTEGER NOT NULL DEFAULT 0,
+            ""ChatChannels"" INTEGER NOT NULL DEFAULT 0,
+            ""Source"" VARCHAR(40) NOT NULL DEFAULT 'zoom-api-direct',
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            CONSTRAINT ""FK_PerformanceAdditionalMetrics_Users_EmployeeId"" FOREIGN KEY (""EmployeeId"") REFERENCES ""Users""(""Id"") ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PerformanceAdditionalMetrics_Org_Emp_Period""
+            ON ""PerformanceAdditionalMetrics"" (""OrganizationId"", ""EmployeeId"", ""PeriodMode"", ""FromDate"", ""ToDate"");
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
