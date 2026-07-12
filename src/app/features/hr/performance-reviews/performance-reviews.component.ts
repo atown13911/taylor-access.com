@@ -219,60 +219,62 @@ type RosterEmployee = Record<string, any>;
             <button class="tab" [class.active]="showReportsTab()" (click)="openReportsTab()">Report</button>
           </div>
         </div>
-        <div class="search-filter">
-          <label>Search</label>
-          <input
-            type="text"
-            [ngModel]="tableSearchTerm()"
-            (ngModelChange)="tableSearchTerm.set(($event || '').toString())"
-            placeholder="Employee name..."
-          />
-        </div>
-        <div class="month-filter">
-          <label>Review Period</label>
-          @if (periodMode() === 'weekly') {
-            <div class="week-selector">
-              <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
-                @for (week of weekOptions; track week) {
-                  <option [ngValue]="week">Week {{ week }}</option>
+        <div class="review-filters">
+          <div class="search-filter">
+            <label>Search</label>
+            <input
+              type="text"
+              [ngModel]="tableSearchTerm()"
+              (ngModelChange)="tableSearchTerm.set(($event || '').toString())"
+              placeholder="Employee name..."
+            />
+          </div>
+          <div class="month-filter">
+            <label>Review Period</label>
+            @if (periodMode() === 'weekly') {
+              <div class="week-selector">
+                <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
+                  @for (week of weekOptions; track week) {
+                    <option [ngValue]="week">Week {{ week }}</option>
+                  }
+                </select>
+                <select [ngModel]="selectedWeekYear()" (ngModelChange)="onWeekYearChange($event)">
+                  @for (year of reviewYearOptions(); track year) {
+                    <option [ngValue]="year">{{ year }}</option>
+                  }
+                </select>
+              </div>
+            } @else {
+              <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
+                @for (opt of reviewPeriodOptions(); track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
                 }
               </select>
-              <select [ngModel]="selectedWeekYear()" (ngModelChange)="onWeekYearChange($event)">
-                @for (year of reviewYearOptions(); track year) {
-                  <option [ngValue]="year">{{ year }}</option>
+            }
+          </div>
+          @if (!showReportsTab()) {
+            <div class="sort-filter">
+              <label>Sort By</label>
+              <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
+                @for (opt of tableSortOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
                 }
               </select>
             </div>
-          } @else {
-            <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
-              @for (opt of reviewPeriodOptions(); track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
           }
-        </div>
-        @if (!showReportsTab()) {
-          <div class="sort-filter">
-            <label>Sort By</label>
-            <select [ngModel]="selectedTableSort()" (ngModelChange)="selectedTableSort.set($event)">
-              @for (opt of tableSortOptions; track opt.value) {
-                <option [value]="opt.value">{{ opt.label }}</option>
-              }
-            </select>
-          </div>
-        }
-        <div class="update-filter">
-          <label>&nbsp;</label>
-          <div class="update-stack">
-            <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
-              @if (updatingMetrics()) {
-                <span class="btn-spinner" aria-hidden="true"></span>
-                <span>Updating...</span>
-              } @else {
-                <span>Update</span>
-              }
-            </button>
-            <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+          <div class="update-filter">
+            <label>&nbsp;</label>
+            <div class="update-stack">
+              <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+                @if (updatingMetrics()) {
+                  <span class="btn-spinner" aria-hidden="true"></span>
+                  <span>Updating...</span>
+                } @else {
+                  <span>Update</span>
+                }
+              </button>
+              <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -660,58 +662,60 @@ type RosterEmployee = Record<string, any>;
             <button class="tab" [class.active]="periodMode() === 'monthly'" (click)="onPeriodModeChange('monthly')">Monthly</button>
           </div>
         </div>
-        <div class="search-filter">
-          <label>Search</label>
-          <input
-            type="text"
-            [ngModel]="managementSearchTerm()"
-            (ngModelChange)="managementSearchTerm.set(($event || '').toString())"
-            placeholder="Employee name..."
-          />
-        </div>
-        <div class="month-filter">
-          <label>Review Period</label>
-          @if (periodMode() === 'weekly') {
-            <div class="week-selector">
-              <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
-                @for (week of weekOptions; track week) {
-                  <option [ngValue]="week">Week {{ week }}</option>
+        <div class="review-filters">
+          <div class="search-filter">
+            <label>Search</label>
+            <input
+              type="text"
+              [ngModel]="managementSearchTerm()"
+              (ngModelChange)="managementSearchTerm.set(($event || '').toString())"
+              placeholder="Employee name..."
+            />
+          </div>
+          <div class="month-filter">
+            <label>Review Period</label>
+            @if (periodMode() === 'weekly') {
+              <div class="week-selector">
+                <select [ngModel]="selectedWeekNumber()" (ngModelChange)="onWeekNumberChange($event)">
+                  @for (week of weekOptions; track week) {
+                    <option [ngValue]="week">Week {{ week }}</option>
+                  }
+                </select>
+                <select [ngModel]="selectedWeekYear()" (ngModelChange)="onWeekYearChange($event)">
+                  @for (year of reviewYearOptions(); track year) {
+                    <option [ngValue]="year">{{ year }}</option>
+                  }
+                </select>
+              </div>
+            } @else {
+              <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
+                @for (opt of reviewPeriodOptions(); track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
                 }
               </select>
-              <select [ngModel]="selectedWeekYear()" (ngModelChange)="onWeekYearChange($event)">
-                @for (year of reviewYearOptions(); track year) {
-                  <option [ngValue]="year">{{ year }}</option>
-                }
-              </select>
-            </div>
-          } @else {
-            <select [ngModel]="selectedReviewMonth()" (ngModelChange)="onReviewMonthChange($event)">
-              @for (opt of reviewPeriodOptions(); track opt.value) {
+            }
+          </div>
+          <div class="sort-filter">
+            <label>Sort By</label>
+            <select [ngModel]="selectedManagementSort()" (ngModelChange)="selectedManagementSort.set($event)">
+              @for (opt of managementSortOptions; track opt.value) {
                 <option [value]="opt.value">{{ opt.label }}</option>
               }
             </select>
-          }
-        </div>
-        <div class="sort-filter">
-          <label>Sort By</label>
-          <select [ngModel]="selectedManagementSort()" (ngModelChange)="selectedManagementSort.set($event)">
-            @for (opt of managementSortOptions; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
-        </div>
-        <div class="update-filter">
-          <label>&nbsp;</label>
-          <div class="update-stack">
-            <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
-              @if (updatingMetrics()) {
-                <span class="btn-spinner" aria-hidden="true"></span>
-                <span>Updating...</span>
-              } @else {
-                <span>Update</span>
-              }
-            </button>
-            <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+          </div>
+          <div class="update-filter">
+            <label>&nbsp;</label>
+            <div class="update-stack">
+              <button class="btn-secondary" (click)="updateMetricsNow()" [disabled]="updatingMetrics()">
+                @if (updatingMetrics()) {
+                  <span class="btn-spinner" aria-hidden="true"></span>
+                  <span>Updating...</span>
+                } @else {
+                  <span>Update</span>
+                }
+              </button>
+              <span class="update-meta">Last update: {{ lastMetricsUpdateAt() || '—' }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1153,7 +1157,19 @@ type RosterEmployee = Record<string, any>;
     .page-tab { padding: 12px 22px; border: none; background: none; color: #888; cursor: pointer; font-weight: 600; font-size: 0.95rem; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; transition: all 0.2s; margin-bottom: -2px; }
     .page-tab.active { color: #00d4ff; border-bottom-color: #00d4ff; }
     .page-tab:hover { color: #ccc; }
-    .review-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .review-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .review-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+    }
     .management-controls { margin-bottom: 16px; }
     .review-tab-stack { display: flex; flex-direction: column; gap: 2px; }
     .period-mode-tabs { margin-bottom: 0; }
@@ -1518,7 +1534,7 @@ type RosterEmployee = Record<string, any>;
     }
     @media (max-width: 1100px) {
       .page-header h1 { font-size: 1.45rem; }
-      .review-controls { align-items: stretch; }
+      .review-filters { align-items: stretch; }
       .update-stack { align-items: flex-start; }
     }
     .report-view { margin-top: 8px; }
