@@ -52,17 +52,29 @@ interface ReviewMetricRow extends Review {
   activeHours: number;
   /** Idle hours from timeclock. */
   idleHours: number;
+  /** Raw interaction spyware counters from Access heartbeats. */
+  clickCount: number;
+  keypressCount: number;
+  scrollCount: number;
+  pointerMoveCount: number;
+  routeChangeCount: number;
+  /** clicks+keys+scrolls+routes */
+  interactionCount: number;
+  /** interactions per active hour */
+  interactionsPerHour: number;
   /** Scheduled work hours for the selected period (business days × 8). */
   scheduledHours: number;
   /** clocked ÷ scheduled */
   presenceRate: number;
   /** active ÷ (active + idle) */
   systemActivityRate: number;
+  /** interaction intensity vs target (for bonus scoring) */
+  interactionRate: number;
   /** Zoom-derived busy share of scheduled hours */
   zoomBusyRate: number;
   /** Gmail-derived busy share of scheduled hours */
   gmailBusyRate: number;
-  /** System presence × engagement (fallback for app users) */
+  /** System presence × max(engagement, interaction) */
   systemBusyRate: number;
   /** Primary busy signal: max(zoom, gmail, system) */
   activityRate: number;
@@ -717,7 +729,7 @@ type RosterEmployee = Record<string, any>;
                     <span class="status-dot" [class.online]="googleApiStatus() === 'connected'" [class.offline]="googleApiStatus() !== 'connected'"></span>
                   </span>
                 </th>
-                <th class="group-label group-timeclock" colspan="4">
+                <th class="group-label group-timeclock" colspan="7">
                   <span class="group-content">
                     <span class="group-name">Activity</span>
                     <span class="status-dot" [class.online]="hasTimeclockDataAttached()" [class.offline]="!hasTimeclockDataAttached()"></span>
@@ -740,6 +752,9 @@ type RosterEmployee = Record<string, any>;
                 <th>Clocked Hrs</th>
                 <th>Active Hrs</th>
                 <th>Idle Hrs</th>
+                <th>Clicks</th>
+                <th>Keys</th>
+                <th>Intensity / hr</th>
                 <th>Busy %</th>
               </tr>
             </thead>
@@ -761,6 +776,9 @@ type RosterEmployee = Record<string, any>;
                   <td>{{ row.totalHours | number:'1.1-1' }}</td>
                   <td>{{ row.activeHours | number:'1.1-1' }}</td>
                   <td>{{ row.idleHours | number:'1.1-1' }}</td>
+                  <td>{{ row.clickCount }}</td>
+                  <td>{{ row.keypressCount }}</td>
+                  <td [title]="'Scrolls: ' + row.scrollCount + ' · Routes: ' + row.routeChangeCount">{{ row.interactionsPerHour | number:'1.0-0' }}</td>
                   <td [title]="busySourceLabel(row.busySource)">{{ (row.activityRate * 100) | number:'1.0-0' }}%</td>
                 </tr>
               }
@@ -1200,7 +1218,7 @@ type RosterEmployee = Record<string, any>;
       background-color: rgba(244, 63, 94, 0.12) !important;
       color: #e2e8f0;
     }
-    /* Management table: 1 Emp | 2-7 Zoom | 8-12 Gmail | 13-16 Activity */
+    /* Management table: 1 Emp | 2-7 Zoom | 8-12 Gmail | 13-19 Activity */
     .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+2):nth-child(-n+7),
     .management-metrics-table tbody td:nth-child(n+2):nth-child(-n+7) {
       background-color: rgba(34, 197, 94, 0.12) !important;
@@ -1211,8 +1229,8 @@ type RosterEmployee = Record<string, any>;
       background-color: rgba(251, 191, 36, 0.12) !important;
       color: #e2e8f0;
     }
-    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+13):nth-child(-n+16),
-    .management-metrics-table tbody td:nth-child(n+13):nth-child(-n+16) {
+    .management-metrics-table thead tr:not(.source-group-row) th:nth-child(n+13):nth-child(-n+19),
+    .management-metrics-table tbody td:nth-child(n+13):nth-child(-n+19) {
       background-color: rgba(56, 189, 248, 0.12) !important;
       color: #e2e8f0;
     }
@@ -2196,11 +2214,26 @@ export class PerformanceReviewsComponent implements OnInit {
               userName,
               activeSeconds: 0,
               idleSeconds: 0,
-              totalSeconds: 0
+              totalSeconds: 0,
+              clickCount: 0,
+              keypressCount: 0,
+              scrollCount: 0,
+              pointerMoveCount: 0,
+              routeChangeCount: 0,
+              interactionCount: 0
             };
             existing.activeSeconds += Number(row?.activeSeconds || 0);
             existing.idleSeconds += Number(row?.idleSeconds || 0);
             existing.totalSeconds += Number(row?.totalSeconds || 0);
+            existing.clickCount += Number(row?.clickCount || 0);
+            existing.keypressCount += Number(row?.keypressCount || 0);
+            existing.scrollCount += Number(row?.scrollCount || 0);
+            existing.pointerMoveCount += Number(row?.pointerMoveCount || 0);
+            existing.routeChangeCount += Number(row?.routeChangeCount || 0);
+            existing.interactionCount += Number(
+              row?.interactionCount
+              || (Number(row?.clickCount || 0) + Number(row?.keypressCount || 0) + Number(row?.scrollCount || 0) + Number(row?.routeChangeCount || 0))
+            );
             dayActiveSeconds += Number(row?.activeSeconds || 0);
             if (Number(row?.activeSeconds || 0) > 0) dayActiveUsers.add(key);
             merged.set(key, existing);
@@ -2533,7 +2566,8 @@ export class PerformanceReviewsComponent implements OnInit {
       externalCount: liveComms.externalCount,
       followUpRate: liveComms.followUpRate,
       presenceRate,
-      systemActivityRate
+      systemActivityRate,
+      interactionRate: liveTime.interactionRate
     });
     const liveScore = this.computePerformanceScore(
       liveCallVolume,
@@ -2822,7 +2856,7 @@ export class PerformanceReviewsComponent implements OnInit {
 
     if (useDbSnapshot && persistedActivity > 0) {
       activityRate = Math.min(1, persistedActivity);
-      systemBusyRate = Math.min(1, presenceRate * systemActivityRate);
+      systemBusyRate = Math.min(1, presenceRate * Math.max(systemActivityRate, liveTime.interactionRate));
       const sourceRaw = String(persisted?.source || '').toLowerCase();
       if (sourceRaw.includes('gmail')) busySource = 'gmail';
       else if (sourceRaw.includes('system')) busySource = 'system';
@@ -2840,7 +2874,8 @@ export class PerformanceReviewsComponent implements OnInit {
         externalCount: liveExternalCount,
         followUpRate: liveFollowUpRate,
         presenceRate,
-        systemActivityRate
+        systemActivityRate,
+        interactionRate: liveTime.interactionRate
       });
       zoomBusyRate = busy.zoomBusyRate;
       gmailBusyRate = busy.gmailBusyRate;
@@ -2893,9 +2928,17 @@ export class PerformanceReviewsComponent implements OnInit {
       totalHours,
       activeHours,
       idleHours,
+      clickCount: liveTime.clickCount,
+      keypressCount: liveTime.keypressCount,
+      scrollCount: liveTime.scrollCount,
+      pointerMoveCount: liveTime.pointerMoveCount,
+      routeChangeCount: liveTime.routeChangeCount,
+      interactionCount: liveTime.interactionCount,
+      interactionsPerHour: liveTime.interactionsPerHour,
       scheduledHours,
       presenceRate,
       systemActivityRate,
+      interactionRate: liveTime.interactionRate,
       zoomBusyRate,
       gmailBusyRate,
       systemBusyRate,
@@ -3095,7 +3138,21 @@ export class PerformanceReviewsComponent implements OnInit {
     return String(value).toLowerCase().trim();
   }
 
-  private getEmployeeTime(employeeId: number, employeeName?: string): { totalHours: number; activeHours: number; idleHours: number; activityRate: number; totalSeconds: number } {
+  private getEmployeeTime(employeeId: number, employeeName?: string): {
+    totalHours: number;
+    activeHours: number;
+    idleHours: number;
+    activityRate: number;
+    totalSeconds: number;
+    clickCount: number;
+    keypressCount: number;
+    scrollCount: number;
+    pointerMoveCount: number;
+    routeChangeCount: number;
+    interactionCount: number;
+    interactionsPerHour: number;
+    interactionRate: number;
+  } {
     const emp = this.employees().find(e => Number(e.id) === Number(employeeId))
       ?? this.employees().find(e => this.normalizeName(e?.name) === this.normalizeName(employeeName));
     const email = String(emp?.email || '').toLowerCase();
@@ -3112,7 +3169,32 @@ export class PerformanceReviewsComponent implements OnInit {
     const activeHours = activeSeconds / 3600;
     const idleHours = idleSeconds / 3600;
     const activityRate = totalSeconds > 0 ? activeSeconds / totalSeconds : 0;
-    return { totalHours, activeHours, idleHours, activityRate, totalSeconds };
+    const clickCount = Number(row?.clickCount || 0);
+    const keypressCount = Number(row?.keypressCount || 0);
+    const scrollCount = Number(row?.scrollCount || 0);
+    const pointerMoveCount = Number(row?.pointerMoveCount || 0);
+    const routeChangeCount = Number(row?.routeChangeCount || 0);
+    const interactionCount = Number(row?.interactionCount || (clickCount + keypressCount + scrollCount + routeChangeCount));
+    const interactionsPerHour = activeHours > 0.05
+      ? interactionCount / activeHours
+      : (interactionCount > 0 ? interactionCount / 0.05 : 0);
+    // Target ~500 meaningful interactions per active hour for a "full" intensity score.
+    const interactionRate = Math.min(1, interactionsPerHour / 500);
+    return {
+      totalHours,
+      activeHours,
+      idleHours,
+      activityRate,
+      totalSeconds,
+      clickCount,
+      keypressCount,
+      scrollCount,
+      pointerMoveCount,
+      routeChangeCount,
+      interactionCount,
+      interactionsPerHour,
+      interactionRate
+    };
   }
 
   private getAttributedRevenue(employeeId: number): number {
@@ -3137,6 +3219,7 @@ export class PerformanceReviewsComponent implements OnInit {
     followUpRate: number;
     presenceRate: number;
     systemActivityRate: number;
+    interactionRate: number;
   }): {
     zoomBusyRate: number;
     gmailBusyRate: number;
@@ -3159,8 +3242,12 @@ export class PerformanceReviewsComponent implements OnInit {
     const followUpBoost = 1 + Math.min(0.25, Math.max(0, input.followUpRate) * 0.25);
     const gmailBusyRate = scheduled > 0 ? Math.min(1, (gmailHours * followUpBoost) / scheduled) : 0;
 
-    // System: only meaningful for people who actually use Taylor Access (managers).
-    const systemBusyRate = Math.min(1, Math.max(0, input.presenceRate) * Math.max(0, input.systemActivityRate));
+    // System: presence × best of idle-vs-active engagement and click/key intensity.
+    const engagement = Math.max(
+      Math.max(0, input.systemActivityRate),
+      Math.max(0, input.interactionRate)
+    );
+    const systemBusyRate = Math.min(1, Math.max(0, input.presenceRate) * engagement);
 
     const candidates: Array<{ source: 'zoom' | 'gmail' | 'system'; rate: number }> = [
       { source: 'zoom', rate: zoomBusyRate },

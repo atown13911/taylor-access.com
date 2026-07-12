@@ -1,7 +1,8 @@
 import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
+import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { filter, Subscription } from 'rxjs';
 import { AuthService } from '../core/services/auth.service';
 import { InactivityService } from '../core/services/inactivity.service';
 import { EventTrackingService } from '../core/services/event-tracking.service';
@@ -45,6 +46,28 @@ export class ShellComponent implements OnInit, OnDestroy {
   private lastActivityAt = Date.now();
   private readonly IDLE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
   private readonly HEARTBEAT_MS = 30_000;              // every 30 s
+  private readonly POINTER_SAMPLE_MS = 250;            // throttle mouse-move samples
+  private pendingClicks = 0;
+  private pendingKeypresses = 0;
+  private pendingScrolls = 0;
+  private pendingPointerMoves = 0;
+  private pendingRouteChanges = 0;
+  private lastPointerSampleAt = 0;
+  private activityListenersAttached = false;
+  private onClick = () => { this.markActive(); this.pendingClicks += 1; };
+  private onKeydown = () => { this.markActive(); this.pendingKeypresses += 1; };
+  private onScroll = () => { this.markActive(); this.pendingScrolls += 1; };
+  private onPointerMove = () => {
+    const now = Date.now();
+    if (now - this.lastPointerSampleAt < this.POINTER_SAMPLE_MS) return;
+    this.lastPointerSampleAt = now;
+    this.markActive();
+    this.pendingPointerMoves += 1;
+  };
+  private onVisibility = () => {
+    if (document.visibilityState === 'visible') this.markActive();
+  };
+  private routeSub: Subscription | null = null;
 
   tickerUpdates = [
     { id: 1, type: 'driver', message: 'Aaron Mathis CDL expires Jul 11, 2026' },
@@ -173,15 +196,62 @@ export class ShellComponent implements OnInit, OnDestroy {
       error: () => { /* silent — timeclock failure should not block the app */ }
     });
 
-    // Track user activity
-    const markActive = () => {
-      this.isUserActive = true;
-      this.lastActivityAt = Date.now();
+    this.attachActivityListeners();
+  }
+
+  private markActive(): void {
+    this.isUserActive = true;
+    this.lastActivityAt = Date.now();
+  }
+
+  private attachActivityListeners(): void {
+    if (this.activityListenersAttached || typeof document === 'undefined') return;
+    this.activityListenersAttached = true;
+    document.addEventListener('click', this.onClick, { passive: true, capture: true });
+    document.addEventListener('keydown', this.onKeydown, { passive: true, capture: true });
+    document.addEventListener('scroll', this.onScroll, { passive: true, capture: true });
+    document.addEventListener('mousemove', this.onPointerMove, { passive: true, capture: true });
+    document.addEventListener('visibilitychange', this.onVisibility);
+    this.routeSub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => {
+        this.markActive();
+        this.pendingRouteChanges += 1;
+      });
+  }
+
+  private detachActivityListeners(): void {
+    if (!this.activityListenersAttached || typeof document === 'undefined') return;
+    document.removeEventListener('click', this.onClick, true);
+    document.removeEventListener('keydown', this.onKeydown, true);
+    document.removeEventListener('scroll', this.onScroll, true);
+    document.removeEventListener('mousemove', this.onPointerMove, true);
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    this.routeSub?.unsubscribe();
+    this.routeSub = null;
+    this.activityListenersAttached = false;
+  }
+
+  private consumeInteractionDeltas(): {
+    clicks: number;
+    keypresses: number;
+    scrolls: number;
+    pointerMoves: number;
+    routeChanges: number;
+  } {
+    const deltas = {
+      clicks: this.pendingClicks,
+      keypresses: this.pendingKeypresses,
+      scrolls: this.pendingScrolls,
+      pointerMoves: this.pendingPointerMoves,
+      routeChanges: this.pendingRouteChanges
     };
-    document.addEventListener('mousemove', markActive, { passive: true });
-    document.addEventListener('keydown',   markActive, { passive: true });
-    document.addEventListener('click',     markActive, { passive: true });
-    document.addEventListener('scroll',    markActive, { passive: true });
+    this.pendingClicks = 0;
+    this.pendingKeypresses = 0;
+    this.pendingScrolls = 0;
+    this.pendingPointerMoves = 0;
+    this.pendingRouteChanges = 0;
+    return deltas;
   }
 
   private startHeartbeat(): void {
@@ -193,10 +263,19 @@ export class ShellComponent implements OnInit, OnDestroy {
       // Check if user has been active recently
       const idle = (Date.now() - this.lastActivityAt) > this.IDLE_THRESHOLD_MS;
       this.isUserActive = !idle;
+      const deltas = this.consumeInteractionDeltas();
 
       this.http.post(
         `${this.apiUrl}/api/v1/timeclock/session/heartbeat`,
-        { sessionId: this.sessionId, isActive: this.isUserActive },
+        {
+          sessionId: this.sessionId,
+          isActive: this.isUserActive,
+          clicks: deltas.clicks,
+          keypresses: deltas.keypresses,
+          scrolls: deltas.scrolls,
+          pointerMoves: deltas.pointerMoves,
+          routeChanges: deltas.routeChanges
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       ).subscribe({ error: () => {} });
     }, this.HEARTBEAT_MS);
@@ -206,6 +285,26 @@ export class ShellComponent implements OnInit, OnDestroy {
     if (!this.sessionId) return;
     const token = this.authService.getToken();
     if (!token) return;
+
+    // Flush any pending interaction counters before ending the session.
+    const deltas = this.consumeInteractionDeltas();
+    if (deltas.clicks + deltas.keypresses + deltas.scrolls + deltas.pointerMoves + deltas.routeChanges > 0) {
+      try {
+        this.http.post(
+          `${this.apiUrl}/api/v1/timeclock/session/heartbeat`,
+          {
+            sessionId: this.sessionId,
+            isActive: true,
+            clicks: deltas.clicks,
+            keypresses: deltas.keypresses,
+            scrolls: deltas.scrolls,
+            pointerMoves: deltas.pointerMoves,
+            routeChanges: deltas.routeChanges
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).subscribe({ error: () => {} });
+      } catch { /* ignore flush errors on teardown */ }
+    }
 
     // Use sendBeacon for reliability on page unload, fall back to HTTP
     const url  = `${this.apiUrl}/api/v1/timeclock/session/end`;
@@ -331,6 +430,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.clockInterval)    clearInterval(this.clockInterval);
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.detachActivityListeners();
     this.endTimeclock();
   }
 

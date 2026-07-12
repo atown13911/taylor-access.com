@@ -111,6 +111,7 @@ public class TimeclockController : ControllerBase
     /// Heartbeat — sent every 30 s by the frontend.
     /// isActive = true  → user interacted recently (mouse/keyboard)
     /// isActive = false → tab is idle / hidden
+    /// Optional interaction deltas accumulate click/key/scroll intensity for bonus scoring.
     /// </summary>
     [HttpPost("session/heartbeat")]
     public async Task<ActionResult> Heartbeat([FromBody] HeartbeatRequest req)
@@ -128,11 +129,25 @@ public class TimeclockController : ControllerBase
         else
             session.IdleSeconds += capped;
 
+        session.ClickCount += Math.Max(0, req.Clicks);
+        session.KeypressCount += Math.Max(0, req.Keypresses);
+        session.ScrollCount += Math.Max(0, req.Scrolls);
+        session.PointerMoveCount += Math.Max(0, req.PointerMoves);
+        session.RouteChangeCount += Math.Max(0, req.RouteChanges);
+
         session.LastHeartbeat = now;
         session.Status        = req.IsActive ? "active" : "idle";
 
         await _context.SaveChangesAsync();
-        return Ok(new { ok = true });
+        return Ok(new
+        {
+            ok = true,
+            clickCount = session.ClickCount,
+            keypressCount = session.KeypressCount,
+            scrollCount = session.ScrollCount,
+            pointerMoveCount = session.PointerMoveCount,
+            routeChangeCount = session.RouteChangeCount
+        });
     }
 
     /// <summary>Called when user explicitly logs out.</summary>
@@ -179,8 +194,10 @@ public class TimeclockController : ControllerBase
                 s.Id, s.UserId, s.UserEmail, s.UserName,
                 s.Date, s.LoginTime, s.LogoutTime, s.LastHeartbeat,
                 s.ActiveSeconds, s.IdleSeconds, s.Status, s.IpAddress,
+                s.ClickCount, s.KeypressCount, s.ScrollCount, s.PointerMoveCount, s.RouteChangeCount,
                 // Use tracked bucket totals — not wall-clock (prevents overnight bleed)
-                totalSeconds = s.ActiveSeconds + s.IdleSeconds
+                totalSeconds = s.ActiveSeconds + s.IdleSeconds,
+                interactionCount = s.ClickCount + s.KeypressCount + s.ScrollCount + s.RouteChangeCount
             })
             .ToListAsync();
 
@@ -200,7 +217,8 @@ public class TimeclockController : ControllerBase
         var dayEnd    = targetDate.AddDays(1);
         var isToday   = targetDate.Date == DateTime.UtcNow.Date;
 
-        // Prefer TSS Portal source when available so work hours reflect shared timeclock.
+        // Prefer TSS Portal hours when available, but always overlay Access interaction spyware counters.
+        var accessInteractionByEmail = await LoadAccessInteractionTotalsAsync(dayStart, dayEnd);
         var tssRows = await TryFetchTssPortalDailySummaryAsync(targetDate);
         if (tssRows.Count > 0)
         {
@@ -209,20 +227,36 @@ public class TimeclockController : ControllerBase
                 date = targetDate.ToString("yyyy-MM-dd"),
                 activeNow = tssRows.Count(u => string.Equals(u.Status, "active", StringComparison.OrdinalIgnoreCase)),
                 totalUsers = tssRows.Count,
-                data = tssRows.Select(u => new
+                data = tssRows.Select(u =>
                 {
-                    userEmail = u.UserEmail,
-                    userName = u.UserName,
-                    userId = u.UserId,
-                    firstLogin = u.FirstLogin,
-                    lastLogout = u.LastLogout,
-                    lastHeartbeat = u.LastHeartbeat,
-                    activeSeconds = u.ActiveSeconds,
-                    idleSeconds = u.IdleSeconds,
-                    totalSeconds = u.TotalSeconds,
-                    status = u.Status,
-                    sessions = u.Sessions,
-                    source = "tss-portal"
+                    var key = (u.UserEmail ?? "").Trim().ToLowerInvariant();
+                    accessInteractionByEmail.TryGetValue(key, out var interactions);
+                    var clicks = interactions.Clicks;
+                    var keys = interactions.Keypresses;
+                    var scrolls = interactions.Scrolls;
+                    var pointerMoves = interactions.PointerMoves;
+                    var routeChanges = interactions.RouteChanges;
+                    return new
+                    {
+                        userEmail = u.UserEmail,
+                        userName = u.UserName,
+                        userId = u.UserId,
+                        firstLogin = u.FirstLogin,
+                        lastLogout = u.LastLogout,
+                        lastHeartbeat = u.LastHeartbeat,
+                        activeSeconds = u.ActiveSeconds,
+                        idleSeconds = u.IdleSeconds,
+                        totalSeconds = u.TotalSeconds,
+                        clickCount = clicks,
+                        keypressCount = keys,
+                        scrollCount = scrolls,
+                        pointerMoveCount = pointerMoves,
+                        routeChangeCount = routeChanges,
+                        interactionCount = clicks + keys + scrolls + routeChanges,
+                        status = u.Status,
+                        sessions = u.Sessions,
+                        source = "tss-portal"
+                    };
                 })
             });
         }
@@ -252,6 +286,11 @@ public class TimeclockController : ControllerBase
                 // This is accurate regardless of how long the tab has been open,
                 // and avoids the overnight bleed issue where wall-clock time >> actual work time.
                 var total = all.Sum(s => s.ActiveSeconds + s.IdleSeconds);
+                var clicks = all.Sum(s => s.ClickCount);
+                var keys = all.Sum(s => s.KeypressCount);
+                var scrolls = all.Sum(s => s.ScrollCount);
+                var pointerMoves = all.Sum(s => s.PointerMoveCount);
+                var routeChanges = all.Sum(s => s.RouteChangeCount);
 
                 // A session is only "active/idle" if it received a heartbeat in the last 5 minutes
                 var recentBeat = (DateTime.UtcNow - lastBeat).TotalMinutes < 5;
@@ -270,6 +309,12 @@ public class TimeclockController : ControllerBase
                     activeSeconds = active,
                     idleSeconds   = idle,
                     totalSeconds  = total,
+                    clickCount = clicks,
+                    keypressCount = keys,
+                    scrollCount = scrolls,
+                    pointerMoveCount = pointerMoves,
+                    routeChangeCount = routeChanges,
+                    interactionCount = clicks + keys + scrolls + routeChanges,
                     status,
                     sessions      = all.Count,
                     source        = "tracked"
@@ -300,6 +345,12 @@ public class TimeclockController : ControllerBase
                     activeSeconds = 0,
                     idleSeconds   = 0,
                     totalSeconds  = 0,
+                    clickCount = 0,
+                    keypressCount = 0,
+                    scrollCount = 0,
+                    pointerMoveCount = 0,
+                    routeChangeCount = 0,
+                    interactionCount = 0,
                     status        = "offline",
                     sessions      = 1,
                     source        = "lastlogin"
@@ -323,20 +374,36 @@ public class TimeclockController : ControllerBase
                     date = targetDate.ToString("yyyy-MM-dd"),
                     activeNow = mongoRows.Count(u => string.Equals(u.Status, "active", StringComparison.OrdinalIgnoreCase)),
                     totalUsers = mongoRows.Count,
-                    data = mongoRows.Select(u => new
+                    data = mongoRows.Select(u =>
                     {
-                        userEmail = u.UserEmail,
-                        userName = u.UserName,
-                        userId = u.UserId,
-                        firstLogin = u.FirstLogin,
-                        lastLogout = u.LastLogout,
-                        lastHeartbeat = u.LastHeartbeat,
-                        activeSeconds = u.ActiveSeconds,
-                        idleSeconds = u.IdleSeconds,
-                        totalSeconds = u.TotalSeconds,
-                        status = u.Status,
-                        sessions = u.Sessions,
-                        source = "mongo-user-sessions"
+                        var key = (u.UserEmail ?? "").Trim().ToLowerInvariant();
+                        accessInteractionByEmail.TryGetValue(key, out var interactions);
+                        var clicks = interactions.Clicks;
+                        var keys = interactions.Keypresses;
+                        var scrolls = interactions.Scrolls;
+                        var pointerMoves = interactions.PointerMoves;
+                        var routeChanges = interactions.RouteChanges;
+                        return new
+                        {
+                            userEmail = u.UserEmail,
+                            userName = u.UserName,
+                            userId = u.UserId,
+                            firstLogin = u.FirstLogin,
+                            lastLogout = u.LastLogout,
+                            lastHeartbeat = u.LastHeartbeat,
+                            activeSeconds = u.ActiveSeconds,
+                            idleSeconds = u.IdleSeconds,
+                            totalSeconds = u.TotalSeconds,
+                            clickCount = clicks,
+                            keypressCount = keys,
+                            scrollCount = scrolls,
+                            pointerMoveCount = pointerMoves,
+                            routeChangeCount = routeChanges,
+                            interactionCount = clicks + keys + scrolls + routeChanges,
+                            status = u.Status,
+                            sessions = u.Sessions,
+                            source = "mongo-user-sessions"
+                        };
                     })
                 });
             }
@@ -349,6 +416,34 @@ public class TimeclockController : ControllerBase
             totalUsers   = result.Count,
             data         = result
         });
+    }
+
+    private async Task<Dictionary<string, AccessInteractionTotals>> LoadAccessInteractionTotalsAsync(DateTime dayStart, DateTime dayEnd)
+    {
+        var sessions = await _context.TimeclockSessions
+            .Where(s => s.Date >= dayStart && s.Date < dayEnd)
+            .Select(s => new
+            {
+                s.UserEmail,
+                s.ClickCount,
+                s.KeypressCount,
+                s.ScrollCount,
+                s.PointerMoveCount,
+                s.RouteChangeCount
+            })
+            .ToListAsync();
+
+        return sessions
+            .GroupBy(s => (s.UserEmail ?? "").Trim().ToLowerInvariant())
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .ToDictionary(
+                g => g.Key,
+                g => new AccessInteractionTotals(
+                    g.Sum(x => x.ClickCount),
+                    g.Sum(x => x.KeypressCount),
+                    g.Sum(x => x.ScrollCount),
+                    g.Sum(x => x.PointerMoveCount),
+                    g.Sum(x => x.RouteChangeCount)));
     }
 
     private async Task<List<DailySummaryRow>> TryFetchTssPortalDailySummaryAsync(DateTime targetDate)
@@ -608,8 +703,21 @@ public class TimeclockController : ControllerBase
     }
 }
 
-public record HeartbeatRequest(int SessionId, bool IsActive);
+public record HeartbeatRequest(
+    int SessionId,
+    bool IsActive,
+    int Clicks = 0,
+    int Keypresses = 0,
+    int Scrolls = 0,
+    int PointerMoves = 0,
+    int RouteChanges = 0);
 public record TimeclockEndRequest(int SessionId);
+internal readonly record struct AccessInteractionTotals(
+    int Clicks,
+    int Keypresses,
+    int Scrolls,
+    int PointerMoves,
+    int RouteChanges);
 
 internal sealed class DailySummaryRow
 {
@@ -622,6 +730,11 @@ internal sealed class DailySummaryRow
     public int ActiveSeconds { get; set; }
     public int IdleSeconds { get; set; }
     public int TotalSeconds { get; set; }
+    public int ClickCount { get; set; }
+    public int KeypressCount { get; set; }
+    public int ScrollCount { get; set; }
+    public int PointerMoveCount { get; set; }
+    public int RouteChangeCount { get; set; }
     public string Status { get; set; } = "offline";
     public int Sessions { get; set; }
 }

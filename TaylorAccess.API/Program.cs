@@ -898,6 +898,11 @@ using (var scope = app.Services.CreateScope())
             ON ""TimeclockSessions"" (""Date"");
         CREATE INDEX IF NOT EXISTS ""IX_TimeclockSessions_UserEmail_Date""
             ON ""TimeclockSessions"" (""UserEmail"", ""Date"");
+        ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""ClickCount"" INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""KeypressCount"" INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""ScrollCount"" INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""PointerMoveCount"" INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE ""TimeclockSessions"" ADD COLUMN IF NOT EXISTS ""RouteChangeCount"" INTEGER NOT NULL DEFAULT 0;
     ");
     }
     }

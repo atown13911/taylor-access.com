@@ -33,6 +33,21 @@ public class TimeclockSession
     /// <summary>Total seconds the user was idle (tab open but no input)</summary>
     public int IdleSeconds { get; set; } = 0;
 
+    /// <summary>Pointer clicks / taps attributed to this session</summary>
+    public int ClickCount { get; set; } = 0;
+
+    /// <summary>Keypresses attributed to this session</summary>
+    public int KeypressCount { get; set; } = 0;
+
+    /// <summary>Scroll events attributed to this session</summary>
+    public int ScrollCount { get; set; } = 0;
+
+    /// <summary>Pointer-move samples (throttled client-side)</summary>
+    public int PointerMoveCount { get; set; } = 0;
+
+    /// <summary>In-app route / page changes</summary>
+    public int RouteChangeCount { get; set; } = 0;
+
     /// <summary>active | idle | offline</summary>
     [MaxLength(20)]
     public string Status { get; set; } = "active";
