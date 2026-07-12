@@ -895,48 +895,81 @@ public class InternalServiceController : ControllerBase
         return Ok(new { data = paySheet, paystubId = paySheet.PaySheetNumber });
     }
 
-    /// <summary>One-shot CRM Zoom/Gmail scorecard warehouse backfill (no UI).</summary>
+    /// <summary>One-shot CRM Zoom/Gmail scorecard warehouse backfill (no UI). Runs in background to avoid gateway timeouts.</summary>
     [HttpPost("performance/crm-backfill")]
-    public async Task<ActionResult> CrmPerformanceBackfill([FromBody] JsonElement body)
+    public ActionResult CrmPerformanceBackfill([FromBody] JsonElement body)
     {
         if (!IsAuthorizedInternalCall())
             return Unauthorized(new { error = "Invalid gateway or service key" });
 
         var orgId = TryGetInt(body, "organizationId", "organization_id");
-        if (orgId <= 0)
-        {
-            orgId = await _db.Organizations.AsNoTracking()
-                .OrderBy(o => o.Id)
-                .Select(o => o.Id)
-                .FirstOrDefaultAsync();
-        }
-        if (orgId <= 0)
-            return BadRequest(new { error = "organizationId is required" });
-
         var now = DateTime.UtcNow.Date;
         var from = TryGetDate(body, "from", "fromDate") ?? new DateTime(now.Year, now.Month, 1);
         var to = TryGetDate(body, "to", "toDate") ?? now;
         var periodMode = TryGetString(body, "periodMode", "period_mode") ?? "monthly";
 
-        // Prefer an active admin user so CRM gateway JWT has org context.
-        var admin = await _db.Users.AsNoTracking()
-            .Where(u => u.Status == "active" && (u.OrganizationId == orgId || u.OrganizationId == null))
-            .OrderBy(u => u.Id)
-            .FirstOrDefaultAsync();
-        if (admin == null)
-            return BadRequest(new { error = "No active user available to mint CRM gateway token" });
-
-        var jwt = HttpContext.RequestServices.GetRequiredService<IJwtService>();
-        var backfill = HttpContext.RequestServices.GetRequiredService<CrmPerformanceBackfillService>();
-        var result = await backfill.RunAsync(orgId, new CrmPerformanceBackfillRequest
+        _ = Task.Run(async () =>
         {
-            PeriodMode = periodMode,
-            FromDate = from.Date,
-            ToDate = to.Date,
-            BearerToken = jwt.GenerateToken(admin)
-        }, HttpContext.RequestAborted);
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<TaylorAccessDbContext>();
+                var jwt = scope.ServiceProvider.GetRequiredService<IJwtService>();
+                var backfill = scope.ServiceProvider.GetRequiredService<CrmPerformanceBackfillService>();
 
-        return Ok(new { data = result });
+                var resolvedOrg = orgId;
+                if (resolvedOrg <= 0)
+                {
+                    resolvedOrg = await db.Organizations.AsNoTracking()
+                        .OrderBy(o => o.Id)
+                        .Select(o => o.Id)
+                        .FirstOrDefaultAsync();
+                }
+                if (resolvedOrg <= 0)
+                {
+                    _logger.LogWarning("CRM backfill aborted: no organizationId");
+                    return;
+                }
+
+                var admin = await db.Users.AsNoTracking()
+                    .Where(u => u.Status == "active")
+                    .OrderBy(u => u.Id)
+                    .FirstOrDefaultAsync();
+                if (admin == null)
+                {
+                    _logger.LogWarning("CRM backfill aborted: no active user for JWT");
+                    return;
+                }
+
+                var result = await backfill.RunAsync(resolvedOrg, new CrmPerformanceBackfillRequest
+                {
+                    PeriodMode = periodMode,
+                    FromDate = from.Date,
+                    ToDate = to.Date,
+                    BearerToken = jwt.GenerateToken(admin)
+                });
+                _logger.LogInformation(
+                    "CRM backfill finished status={Status} mode={Mode} from={From} to={To} upserted={Upserted} zoom={Zoom} gmail={Gmail}",
+                    result.Status, result.PeriodMode, result.From, result.To,
+                    result.ScorecardUpserted, result.ZoomMatched, result.GmailMatched);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CRM backfill background task failed");
+            }
+        });
+
+        return Accepted(new
+        {
+            data = new
+            {
+                status = "started",
+                periodMode,
+                from = from.ToString("yyyy-MM-dd"),
+                to = to.ToString("yyyy-MM-dd"),
+                note = "Backfill running in background. Check PerformanceSyncRuns trigger=crm-backfill."
+            }
+        });
     }
 
     private static int TryGetInt(JsonElement element, params string[] names)

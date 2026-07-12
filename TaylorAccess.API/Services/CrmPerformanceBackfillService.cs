@@ -107,13 +107,11 @@ public class CrmPerformanceBackfillService
             var gmailRows = 0;
             string? note = null;
 
-            // Recent ranges: CRM aggregate metrics (trailing days ≈ window length).
+            // Use CRM-stored metrics only (skip live Zoom sync/compute — too slow for gateway).
             if (trailingSafe)
             {
                 try
                 {
-                    await client.PostAsync($"{zoomBase}/sync?days={days}", content: null, cancellationToken);
-                    await client.PostAsync($"{zoomBase}/metrics/compute?days={days}", content: null, cancellationToken);
                     var metricsRes = await client.GetAsync($"{zoomBase}/metrics/users?days={days}", cancellationToken);
                     if (metricsRes.IsSuccessStatusCode)
                     {
@@ -226,16 +224,7 @@ public class CrmPerformanceBackfillService
                 _logger.LogWarning(ex, "CRM SMS backfill failed");
             }
 
-            // Gmail performance metrics (true from/to).
-            try
-            {
-                await client.PostAsync(
-                    $"{gmailBase}/domain/sync-incremental?maxCatchupUsers=40&catchupMaxResults=120",
-                    content: null,
-                    cancellationToken);
-            }
-            catch { /* best-effort */ }
-
+            // Skip live gmail sync — read CRM performance-metrics warehouse only.
             try
             {
                 var gmailRes = await client.GetAsync(
