@@ -98,6 +98,7 @@ interface PersistedMetricRow {
   activityRate: number;
   invoicedRevenue: number;
   score: number;
+  source?: string;
 }
 type ReviewTableSort =
   | 'employee-asc'
@@ -1535,6 +1536,8 @@ export class PerformanceReviewsComponent implements OnInit {
   managementSearchTerm = signal('');
   showReportsTab = signal(false);
   periodMode = signal<'weekly' | 'monthly'>('weekly');
+  /** When true, metrics are computed from live Zoom/timeclock (Update flow). Otherwise prefer DB snapshots. */
+  private preferLiveMetrics = signal(false);
   weekOptions = Array.from({ length: 52 }, (_, idx) => idx + 1);
   tableSortOptions: Array<{ value: ReviewTableSort; label: string }> = [
     { value: 'score-desc', label: 'Score: High to Low' },
@@ -2419,6 +2422,7 @@ export class PerformanceReviewsComponent implements OnInit {
   async updateMetricsNow(): Promise<void> {
     if (this.updatingMetrics()) return;
     this.updatingMetrics.set(true);
+    this.preferLiveMetrics.set(true);
     try {
       await Promise.all([
         this.loadTimeclockSummary(),
@@ -2426,14 +2430,16 @@ export class PerformanceReviewsComponent implements OnInit {
       ]);
       await this.persistDailyMetricsSnapshot();
       await this.persistMonthlyMetricsSnapshot();
+      this.preferLiveMetrics.set(false);
       await Promise.all([
         this.loadReviews(),
         this.loadPersistedDailyMetrics()
       ]);
-      this.toast.success('Performance metrics updated');
-    } catch {
-      this.toast.error('Failed to update performance metrics');
+      this.toast.success('Performance metrics saved to database');
+    } catch (err: any) {
+      this.toast.error(err?.error?.message || err?.message || 'Failed to save performance metrics');
     } finally {
+      this.preferLiveMetrics.set(false);
       this.updatingMetrics.set(false);
     }
   }
@@ -2734,7 +2740,6 @@ export class PerformanceReviewsComponent implements OnInit {
   private toMetricRow(review: Review): ReviewMetricRow {
     const persisted = this.persistedMetricMap()[Number(review.employeeId)];
     const hasSnapshot = !review.isSeeded && (review.clockedHours != null || review.score != null);
-    const useSnapshotBlend = this.periodMode() === 'monthly';
     const scheduledHours = this.getAssignedWorkHoursForSelectedRange();
     const liveComms = this.getEmployeeCommunicationMetrics(review.employeeId, review.employeeName);
     const {
@@ -2757,72 +2762,107 @@ export class PerformanceReviewsComponent implements OnInit {
 
     const snapshotCallVolume = this.readNumeric(review as Record<string, any>, ['callVolume', 'totalCalls', 'calls', 'callCount']);
     const snapshotTextVolume = this.readNumeric(review as Record<string, any>, ['textVolume', 'totalTexts', 'texts', 'smsCount', 'textCount']);
-    const callVolume = useSnapshotBlend
-      ? Math.max(
-          Number(persisted?.callVolume || 0),
-          snapshotCallVolume,
-          liveCallVolume
-        )
-      : Math.max(
-          Number(persisted?.callVolume || 0),
-          liveCallVolume
-        );
-    const totalCallMinutes = Math.max(0, liveTotalCallMinutes);
-    const avgCallMinutes = callVolume > 0 ? (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : totalCallMinutes / callVolume) : 0;
-    const textVolume = useSnapshotBlend
-      ? Math.max(
-          Number(persisted?.textVolume || 0),
-          snapshotTextVolume,
-          liveTextVolume
-        )
-      : Math.max(
-          Number(persisted?.textVolume || 0),
-          liveTextVolume
-        );
+    const persistedCallVolume = Number(persisted?.callVolume || 0);
+    const persistedTextVolume = Number(persisted?.textVolume || 0);
+    const persistedClocked = Number(persisted?.clockedHours || 0);
+    const persistedActive = Number(persisted?.workHours || 0);
+    const persistedActivity = Number(persisted?.activityRate || 0);
+    const persistedScore = Number(persisted?.score || 0);
+    const persistedRevenue = Number(persisted?.invoicedRevenue || 0);
+    const hasPersistedRow = !!persisted && (
+      persistedCallVolume > 0
+      || persistedTextVolume > 0
+      || persistedClocked > 0
+      || persistedActive > 0
+      || persistedActivity > 0
+      || persistedScore > 0
+      || persistedRevenue > 0
+    );
+    const useDbSnapshot = hasPersistedRow && !this.preferLiveMetrics();
 
-    // Prefer live timeclock; fall back to persisted clocked/active only when live is empty.
+    const callVolume = useDbSnapshot
+      ? persistedCallVolume
+      : Math.max(persistedCallVolume, snapshotCallVolume, liveCallVolume);
+    const textVolume = useDbSnapshot
+      ? persistedTextVolume
+      : Math.max(persistedTextVolume, snapshotTextVolume, liveTextVolume);
+    const totalCallMinutes = Math.max(0, liveTotalCallMinutes);
+    const avgCallMinutes = callVolume > 0
+      ? (liveAvgCallMinutes > 0 ? liveAvgCallMinutes : (totalCallMinutes > 0 ? totalCallMinutes / callVolume : 0))
+      : 0;
+
     const hasLiveTime = liveTime.totalSeconds > 0;
-    const totalHours = hasLiveTime
-      ? liveTime.totalHours
-      : Math.max(0, Number(persisted?.clockedHours || 0), useSnapshotBlend && hasSnapshot ? Number(review.clockedHours || 0) : 0);
-    const activeHours = hasLiveTime
-      ? liveTime.activeHours
-      : Math.max(0, Number(persisted?.workHours || 0), useSnapshotBlend && hasSnapshot ? Number(review.workHours || 0) : 0);
-    const idleHours = hasLiveTime
-      ? liveTime.idleHours
-      : Math.max(0, totalHours - activeHours);
+    let totalHours: number;
+    let activeHours: number;
+    let idleHours: number;
+    if (useDbSnapshot) {
+      totalHours = persistedClocked;
+      activeHours = persistedActive;
+      idleHours = Math.max(0, totalHours - activeHours);
+    } else if (hasLiveTime) {
+      totalHours = liveTime.totalHours;
+      activeHours = liveTime.activeHours;
+      idleHours = liveTime.idleHours;
+    } else {
+      totalHours = Math.max(persistedClocked, hasSnapshot ? Number(review.clockedHours || 0) : 0);
+      activeHours = Math.max(persistedActive, hasSnapshot ? Number(review.workHours || 0) : 0);
+      idleHours = Math.max(0, totalHours - activeHours);
+    }
+
     const presenceRate = scheduledHours > 0 ? Math.min(1, totalHours / scheduledHours) : 0;
     const systemActivityRate = totalHours > 0
       ? Math.min(1, activeHours / totalHours)
-      : (hasLiveTime ? liveTime.activityRate : 0);
-    const busy = this.computeBusyActivity({
-      scheduledHours,
-      totalCallMinutes,
-      textVolume,
-      meetingsHosted: liveMeetingsHosted,
-      totalMeetingMinutes: liveTotalMeetingMinutes,
-      sentCount: liveSentCount,
-      replyCount: liveReplyCount,
-      externalCount: liveExternalCount,
-      followUpRate: liveFollowUpRate,
-      presenceRate,
-      systemActivityRate
-    });
+      : (hasLiveTime && !useDbSnapshot ? liveTime.activityRate : 0);
 
-    const invoicedRevenue = persisted?.invoicedRevenue
-      ?? (useSnapshotBlend && hasSnapshot
-        ? Math.max(Number(review.invoicedRevenue || 0), liveRevenue)
-        : liveRevenue);
+    let zoomBusyRate = 0;
+    let gmailBusyRate = 0;
+    let systemBusyRate = 0;
+    let activityRate = 0;
+    let busySource: 'zoom' | 'gmail' | 'system' | 'none' = 'none';
+
+    if (useDbSnapshot && persistedActivity > 0) {
+      activityRate = Math.min(1, persistedActivity);
+      systemBusyRate = Math.min(1, presenceRate * systemActivityRate);
+      const sourceRaw = String(persisted?.source || '').toLowerCase();
+      if (sourceRaw.includes('gmail')) busySource = 'gmail';
+      else if (sourceRaw.includes('system')) busySource = 'system';
+      else if (sourceRaw.includes('zoom')) busySource = 'zoom';
+      else busySource = systemBusyRate >= activityRate && systemBusyRate > 0 ? 'system' : 'zoom';
+    } else {
+      const busy = this.computeBusyActivity({
+        scheduledHours,
+        totalCallMinutes,
+        textVolume,
+        meetingsHosted: liveMeetingsHosted,
+        totalMeetingMinutes: liveTotalMeetingMinutes,
+        sentCount: liveSentCount,
+        replyCount: liveReplyCount,
+        externalCount: liveExternalCount,
+        followUpRate: liveFollowUpRate,
+        presenceRate,
+        systemActivityRate
+      });
+      zoomBusyRate = busy.zoomBusyRate;
+      gmailBusyRate = busy.gmailBusyRate;
+      systemBusyRate = busy.systemBusyRate;
+      activityRate = busy.busyRate;
+      busySource = busy.busySource;
+    }
+
+    const invoicedRevenue = useDbSnapshot
+      ? persistedRevenue
+      : Math.max(persistedRevenue, hasSnapshot ? Number(review.invoicedRevenue || 0) : 0, liveRevenue);
+
     const computedScore = this.computePerformanceScore(
       callVolume,
       textVolume,
       totalHours,
       activeHours,
       scheduledHours,
-      busy.zoomBusyRate,
-      busy.gmailBusyRate,
-      busy.systemBusyRate,
-      busy.busyRate,
+      zoomBusyRate,
+      gmailBusyRate,
+      systemBusyRate,
+      activityRate,
       invoicedRevenue,
       liveSentCount,
       liveReplyCount,
@@ -2831,10 +2871,9 @@ export class PerformanceReviewsComponent implements OnInit {
       liveInternalCount,
       liveExternalCount
     );
-    const score = persisted?.score
-      ?? (useSnapshotBlend && hasSnapshot
-        ? Math.max(Number(review.score || 0), computedScore)
-        : computedScore);
+    const score = useDbSnapshot && persistedScore > 0
+      ? persistedScore
+      : Math.max(persistedScore, hasSnapshot ? Number(review.score || 0) : 0, computedScore);
 
     return {
       ...review,
@@ -2857,11 +2896,11 @@ export class PerformanceReviewsComponent implements OnInit {
       scheduledHours,
       presenceRate,
       systemActivityRate,
-      zoomBusyRate: busy.zoomBusyRate,
-      gmailBusyRate: busy.gmailBusyRate,
-      systemBusyRate: busy.systemBusyRate,
-      activityRate: busy.busyRate,
-      busySource: busy.busySource,
+      zoomBusyRate,
+      gmailBusyRate,
+      systemBusyRate,
+      activityRate,
+      busySource,
       invoicedRevenue,
       score
     };
@@ -2901,7 +2940,8 @@ export class PerformanceReviewsComponent implements OnInit {
           workHours: Number(row?.workHours || 0),
           activityRate: Number(row?.activityRate || 0),
           invoicedRevenue: Number(row?.invoicedRevenue || 0),
-          score: Number(row?.score || 0)
+          score: Number(row?.score || 0),
+          source: String(row?.source || '').trim() || undefined
         };
       }
       this.persistedMetricMap.set(nextMap);
@@ -2918,7 +2958,7 @@ export class PerformanceReviewsComponent implements OnInit {
     if (!rows.length) return;
     const payload = {
       metricDate: toKey,
-      forceUpdateExisting: false,
+      forceUpdateExisting: true,
       rows: rows.map((row) => ({
         employeeId: Number(row.employeeId || 0),
         employeeName: row.employeeName || '',
@@ -2929,15 +2969,14 @@ export class PerformanceReviewsComponent implements OnInit {
         activityRate: Number((row.activityRate || 0).toFixed(4)),
         invoicedRevenue: Number((row.invoicedRevenue || 0).toFixed(2)),
         score: Number(row.score || 0),
-        source: 'zoom-google-sync'
+        source: `busy:${row.busySource || 'none'}`
       }))
     };
-    try {
-      await this.http.post(`${this.apiUrl}/api/v1/performance-reviews/daily-metrics-upsert`, payload).toPromise();
-      await this.loadPersistedDailyMetrics();
-    } catch {
-      // Best-effort persistence. UI can still use live values if this call fails.
-    }
+    const res: any = await this.http
+      .post(`${this.apiUrl}/api/v1/performance-reviews/daily-metrics-upsert`, payload)
+      .toPromise();
+    if (!res) throw new Error('Daily metrics save returned empty response');
+    await this.loadPersistedDailyMetrics();
   }
 
   private async persistMonthlyMetricsSnapshot(): Promise<void> {
@@ -2979,11 +3018,10 @@ export class PerformanceReviewsComponent implements OnInit {
       }))
     };
 
-    try {
-      await this.http.post(`${this.apiUrl}/api/v1/performance-reviews/metrics-snapshot`, payload).toPromise();
-    } catch {
-      // Snapshot persistence is best-effort; keep screen responsive even if background save fails.
-    }
+    const res: any = await this.http
+      .post(`${this.apiUrl}/api/v1/performance-reviews/metrics-snapshot`, payload)
+      .toPromise();
+    if (!res) throw new Error('Metrics snapshot save returned empty response');
   }
 
   private extractEmployeeTitle(emp: RosterEmployee): string {

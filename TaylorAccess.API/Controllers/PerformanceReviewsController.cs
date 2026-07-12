@@ -1696,11 +1696,10 @@ public class PerformanceReviewsController : ControllerBase
                 textVolume = g.Sum(x => x.TextVolume),
                 clockedHours = Math.Round(g.Sum(x => x.ClockedHours), 2),
                 workHours = Math.Round(g.Sum(x => x.WorkHours), 2),
-                activityRate = g.Sum(x => x.ClockedHours) > 0
-                    ? Math.Round(g.Sum(x => x.WorkHours) / g.Sum(x => x.ClockedHours), 4)
-                    : 0m,
+                activityRate = g.OrderByDescending(x => x.UpdatedAt).Select(x => x.ActivityRate).FirstOrDefault(),
                 invoicedRevenue = Math.Round(g.Sum(x => x.InvoicedRevenue), 2),
-                score = (int)Math.Round(g.Average(x => (double)x.Score))
+                score = g.OrderByDescending(x => x.UpdatedAt).Select(x => x.Score).FirstOrDefault(),
+                source = g.OrderByDescending(x => x.UpdatedAt).Select(x => x.Source).FirstOrDefault()
             })
             .OrderBy(x => x.employeeName)
             .ToList();
