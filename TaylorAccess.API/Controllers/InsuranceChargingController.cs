@@ -49,6 +49,41 @@ public class InsuranceChargingController : ControllerBase
         return Ok(new { data = MapSnapshot(snapshot) });
     }
 
+    /// <summary>
+    /// Lightweight year rollup of charging snapshots (for Accounting actual-vs-estimate comparison).
+    /// </summary>
+    [HttpGet("snapshots/by-year")]
+    public async Task<ActionResult<object>> GetSnapshotsByYear(
+        [FromQuery] int year,
+        [FromQuery] string periodType = "monthly")
+    {
+        var (organizationId, error) = await ResolveOrganizationIdAsync();
+        if (error != null) return error;
+
+        if (year < 2000 || year > 2100)
+            return BadRequest(new { error = "year is required" });
+
+        var normalizedType = NormalizePeriodType(periodType) ?? "monthly";
+        var yearPrefix = $"{year}-";
+
+        var snapshots = await _context.InsuranceChargingSnapshots
+            .AsNoTracking()
+            .Where(s => s.OrganizationId == organizationId
+                && s.PeriodType == normalizedType
+                && (normalizedType == "yearly"
+                    ? s.PeriodKey == year.ToString()
+                    : s.PeriodKey.StartsWith(yearPrefix)))
+            .OrderBy(s => s.PeriodKey)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            year,
+            periodType = normalizedType,
+            data = snapshots.Select(MapSnapshotSummary).ToList()
+        });
+    }
+
     [HttpPut("snapshots")]
     public async Task<ActionResult<object>> UpsertSnapshot([FromBody] InsuranceChargingSnapshotUpsertRequest request)
     {
@@ -177,6 +212,19 @@ public class InsuranceChargingController : ControllerBase
         reportMeta = string.IsNullOrWhiteSpace(snapshot.ReportMetaJson)
             ? null
             : ParseJsonObject(snapshot.ReportMetaJson),
+        computedAt = snapshot.ComputedAt,
+        updatedAt = snapshot.UpdatedAt
+    };
+
+    private static object MapSnapshotSummary(InsuranceChargingSnapshot snapshot) => new
+    {
+        periodType = snapshot.PeriodType,
+        periodKey = snapshot.PeriodKey,
+        activeTruckCount = snapshot.ActiveTruckCount,
+        activeDriverHeadcount = snapshot.ActiveDriverHeadcount,
+        driverChargesPeriod = snapshot.DriverChargesPeriod,
+        companyCostPeriod = snapshot.CompanyCostPeriod,
+        totalPeriod = snapshot.TotalPeriod,
         computedAt = snapshot.ComputedAt,
         updatedAt = snapshot.UpdatedAt
     };

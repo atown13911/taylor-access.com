@@ -69,6 +69,63 @@ public class InternalServiceController : ControllerBase
         return false;
     }
 
+    /// <summary>
+    /// Year rollup of insurance charging snapshots for Accounting actual-vs-estimate comparison.
+    /// </summary>
+    [HttpGet("insurance-charging/snapshots")]
+    public async Task<ActionResult> GetInsuranceChargingSnapshotsByYear(
+        [FromQuery] int year,
+        [FromQuery] string periodType = "monthly",
+        [FromQuery] int? organizationId = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        if (year < 2000 || year > 2100)
+            return BadRequest(new { error = "year is required" });
+
+        var normalizedType = (periodType ?? "monthly").Trim().ToLowerInvariant();
+        if (normalizedType is not ("daily" or "weekly" or "monthly" or "yearly"))
+            normalizedType = "monthly";
+
+        var orgId = organizationId;
+        if (!orgId.HasValue || orgId.Value <= 0)
+        {
+            orgId = await _db.Organizations.AsNoTracking()
+                .OrderBy(o => o.Id)
+                .Select(o => (int?)o.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        if (!orgId.HasValue || orgId.Value <= 0)
+            return Ok(new { year, periodType = normalizedType, data = Array.Empty<object>() });
+
+        var yearPrefix = $"{year}-";
+        var snapshots = await _db.InsuranceChargingSnapshots
+            .AsNoTracking()
+            .Where(s => s.OrganizationId == orgId.Value
+                && s.PeriodType == normalizedType
+                && (normalizedType == "yearly"
+                    ? s.PeriodKey == year.ToString()
+                    : s.PeriodKey.StartsWith(yearPrefix)))
+            .OrderBy(s => s.PeriodKey)
+            .Select(s => new
+            {
+                periodType = s.PeriodType,
+                periodKey = s.PeriodKey,
+                activeTruckCount = s.ActiveTruckCount,
+                activeDriverHeadcount = s.ActiveDriverHeadcount,
+                driverChargesPeriod = s.DriverChargesPeriod,
+                companyCostPeriod = s.CompanyCostPeriod,
+                totalPeriod = s.TotalPeriod,
+                computedAt = s.ComputedAt,
+                updatedAt = s.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { year, periodType = normalizedType, organizationId = orgId.Value, data = snapshots });
+    }
+
     /// <summary>Cached Motive driver-analysis snapshot (fast DB read for VanTac Analysis tab).</summary>
     [HttpGet("motiv/driver-analysis")]
     public async Task<ActionResult> GetCachedDriverAnalysis(
