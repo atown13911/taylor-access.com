@@ -22,19 +22,22 @@ public class InternalServiceController : ControllerBase
     private readonly ILogger<InternalServiceController> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly MotivFuelLiveClient _motivFuelLiveClient;
+    private readonly InsuranceChargingEstimateService _insuranceChargingEstimates;
 
     public InternalServiceController(
         TaylorAccessDbContext db,
         IConfiguration config,
         ILogger<InternalServiceController> logger,
         IServiceScopeFactory scopeFactory,
-        MotivFuelLiveClient motivFuelLiveClient)
+        MotivFuelLiveClient motivFuelLiveClient,
+        InsuranceChargingEstimateService insuranceChargingEstimates)
     {
         _db = db;
         _config = config;
         _logger = logger;
         _scopeFactory = scopeFactory;
         _motivFuelLiveClient = motivFuelLiveClient;
+        _insuranceChargingEstimates = insuranceChargingEstimates;
     }
 
     private bool ValidateServiceKey()
@@ -71,12 +74,14 @@ public class InternalServiceController : ControllerBase
 
     /// <summary>
     /// Year rollup of insurance charging snapshots for Accounting actual-vs-estimate comparison.
+    /// Computes live estimates (and persists) when monthly snapshots are missing.
     /// </summary>
     [HttpGet("insurance-charging/snapshots")]
     public async Task<ActionResult> GetInsuranceChargingSnapshotsByYear(
         [FromQuery] int year,
         [FromQuery] string periodType = "monthly",
-        [FromQuery] int? organizationId = null)
+        [FromQuery] int? organizationId = null,
+        [FromQuery] string? organizationName = null)
     {
         if (!IsAuthorizedInternalCall())
             return Unauthorized(new { error = "Invalid gateway or service key" });
@@ -88,22 +93,38 @@ public class InternalServiceController : ControllerBase
         if (normalizedType is not ("daily" or "weekly" or "monthly" or "yearly"))
             normalizedType = "monthly";
 
-        var orgId = organizationId;
-        if (!orgId.HasValue || orgId.Value <= 0)
-        {
-            orgId = await _db.Organizations.AsNoTracking()
-                .OrderBy(o => o.Id)
-                .Select(o => (int?)o.Id)
-                .FirstOrDefaultAsync();
-        }
-
-        if (!orgId.HasValue || orgId.Value <= 0)
+        var orgId = await _insuranceChargingEstimates.ResolveOrganizationIdAsync(organizationId, organizationName);
+        if (orgId <= 0)
             return Ok(new { year, periodType = normalizedType, data = Array.Empty<object>() });
+
+        if (normalizedType == "monthly")
+        {
+            var months = await _insuranceChargingEstimates.GetOrComputeYearEstimatesAsync(orgId, year);
+            return Ok(new
+            {
+                year,
+                periodType = normalizedType,
+                organizationId = orgId,
+                source = "computed-or-snapshot",
+                data = months.Select(m => new
+                {
+                    periodType = "monthly",
+                    periodKey = m.PeriodKey,
+                    activeTruckCount = m.ActiveTruckCount,
+                    activeDriverHeadcount = m.ActiveDriverHeadcount,
+                    driverChargesPeriod = m.DriverChargesPeriod,
+                    companyCostPeriod = m.CompanyCostPeriod,
+                    totalPeriod = m.TotalPeriod,
+                    computedAt = m.ComputedAt,
+                    updatedAt = m.ComputedAt
+                })
+            });
+        }
 
         var yearPrefix = $"{year}-";
         var snapshots = await _db.InsuranceChargingSnapshots
             .AsNoTracking()
-            .Where(s => s.OrganizationId == orgId.Value
+            .Where(s => s.OrganizationId == orgId
                 && s.PeriodType == normalizedType
                 && (normalizedType == "yearly"
                     ? s.PeriodKey == year.ToString()
@@ -123,7 +144,7 @@ public class InternalServiceController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { year, periodType = normalizedType, organizationId = orgId.Value, data = snapshots });
+        return Ok(new { year, periodType = normalizedType, organizationId = orgId, data = snapshots });
     }
 
     /// <summary>Cached Motive driver-analysis snapshot (fast DB read for VanTac Analysis tab).</summary>

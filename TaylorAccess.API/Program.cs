@@ -243,6 +243,7 @@ builder.Services.AddScoped<ZoomDirectMetricsService>();
 builder.Services.AddScoped<GmailDirectMetricsService>();
 builder.Services.AddScoped<PerformanceSyncOrchestrator>();
 builder.Services.AddScoped<CrmPerformanceBackfillService>();
+builder.Services.AddScoped<InsuranceChargingEstimateService>();
 builder.Services.AddScoped<IntegrationConfigBootstrapService>();
 // Use GatewayMongoDbService when gateway is configured (production),
 // otherwise fall back to direct MongoDbService (requires MONGODB_URL).
