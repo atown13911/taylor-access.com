@@ -65,7 +65,7 @@ export class DriverDatabaseComponent implements OnInit {
     'insurance', 'vehicle', 'permits', 'ifta', 'safety', 'violations'
   ];
   // Filters
-  searchTerm = '';
+  searchTerm = signal('');
   statusFilter = 'all';
   complianceFilter = 'all';
   activeStatusTab = signal<'current' | 'onboarding' | 'closeout' | 'archived'>('current');
@@ -73,15 +73,20 @@ export class DriverDatabaseComponent implements OnInit {
   filteredDrivers = computed(() => {
     let list = this.drivers();
     const tab = this.activeStatusTab();
-    if (tab === 'current') list = list.filter((d: any) => this.isCurrentStatus(d.status));
-    // Include both hired applicants and Drivers rows with onboarding status
-    // (fleet roster can create Drivers as onboarding before paperwork is complete).
-    else if (tab === 'onboarding') list = list.filter((d: any) => this.isOnboardingStatus(d.status));
-    else if (tab === 'closeout') list = list.filter((d: any) => this.isCloseoutStatus(d.status));
-    else if (tab === 'archived') list = list.filter((d: any) => this.isArchivedStatus(d.status));
+    // Match Drivers roster Active tab: include onboarding Drivers on Current so
+    // newly created roster drivers are visible without switching tabs.
+    if (tab === 'current') {
+      list = list.filter((d: any) => this.isCurrentStatus(d.status) || this.isOnboardingStatus(d.status));
+    } else if (tab === 'onboarding') {
+      list = list.filter((d: any) => this.isOnboardingStatus(d.status));
+    } else if (tab === 'closeout') {
+      list = list.filter((d: any) => this.isCloseoutStatus(d.status));
+    } else if (tab === 'archived') {
+      list = list.filter((d: any) => this.isArchivedStatus(d.status));
+    }
 
-    if (this.searchTerm) {
-      const s = this.searchTerm.toLowerCase();
+    const s = this.searchTerm().trim().toLowerCase();
+    if (s) {
       list = list.filter((d: any) =>
         (d.name || '').toLowerCase().includes(s) ||
         (d.email || '').toLowerCase().includes(s) ||
@@ -119,7 +124,7 @@ export class DriverDatabaseComponent implements OnInit {
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
-      current: all.filter((d: any) => this.isCurrentStatus(d.status)).length,
+      current: all.filter((d: any) => this.isCurrentStatus(d.status) || this.isOnboardingStatus(d.status)).length,
       onboarding: all.filter((d: any) => this.isOnboardingStatus(d.status)).length,
       closeout: all.filter((d: any) => this.isCloseoutStatus(d.status)).length,
       archived: all.filter((d: any) => this.isArchivedStatus(d.status)).length
@@ -277,9 +282,7 @@ export class DriverDatabaseComponent implements OnInit {
       _statusCache: statusCache,
       _overallStatus: overallStatus,
       _overallLabel: overallStatus === 'non-compliant' ? 'non' : overallStatus,
-      _displayStatus: overallStatus === 'non-compliant'
-        ? 'inactive'
-        : (this.isActiveStatus(driver?.status) ? 'active' : 'inactive'),
+      _displayStatus: this.resolveDisplayStatus(driver?.status, overallStatus),
       _otherStatus: this.computeOtherStatusFromCache(statusCache)
     };
   }
@@ -1404,11 +1407,14 @@ export class DriverDatabaseComponent implements OnInit {
 
   getDisplayStatus(driver: any): string {
     if (driver?._displayStatus) return driver._displayStatus;
+    return this.resolveDisplayStatus(driver?.status, this.getOverallStatus(driver));
+  }
+
+  private resolveDisplayStatus(status: any, overallStatus?: string): string {
+    if (this.isOnboardingStatus(status)) return 'onboarding';
     // Compliance override for matrix status badge display.
-    if (this.getOverallStatus(driver) === 'non-compliant') {
-      return 'inactive';
-    }
-    return this.isActiveStatus(driver?.status) ? 'active' : 'inactive';
+    if (overallStatus === 'non-compliant') return 'inactive';
+    return this.isActiveStatus(status) ? 'active' : 'inactive';
   }
 
   private getMissingOnboardingPaperworkItems(driver: any): any[] {

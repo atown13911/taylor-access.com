@@ -68,7 +68,7 @@
   <div class="filters-bar">
     <div class="search-box">
       <i class='bx bx-search'></i>
-      <input type="text" [(ngModel)]="searchTerm" placeholder="Search by name, phone, email, license...">
+      <input type="text" [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event || '')" placeholder="Search by name, phone, email, license...">
     </div>
   </div>
 
