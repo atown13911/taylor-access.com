@@ -74,7 +74,9 @@ export class DriverDatabaseComponent implements OnInit {
     let list = this.drivers();
     const tab = this.activeStatusTab();
     if (tab === 'current') list = list.filter((d: any) => this.isCurrentStatus(d.status));
-    else if (tab === 'onboarding') list = list.filter((d: any) => this.isApplicantRow(d) && this.isOnboardingStatus(d.status));
+    // Include both hired applicants and Drivers rows with onboarding status
+    // (fleet roster can create Drivers as onboarding before paperwork is complete).
+    else if (tab === 'onboarding') list = list.filter((d: any) => this.isOnboardingStatus(d.status));
     else if (tab === 'closeout') list = list.filter((d: any) => this.isCloseoutStatus(d.status));
     else if (tab === 'archived') list = list.filter((d: any) => this.isArchivedStatus(d.status));
 
@@ -118,7 +120,7 @@ export class DriverDatabaseComponent implements OnInit {
     const all = this.drivers();
     return {
       current: all.filter((d: any) => this.isCurrentStatus(d.status)).length,
-      onboarding: all.filter((d: any) => this.isApplicantRow(d) && this.isOnboardingStatus(d.status)).length,
+      onboarding: all.filter((d: any) => this.isOnboardingStatus(d.status)).length,
       closeout: all.filter((d: any) => this.isCloseoutStatus(d.status)).length,
       archived: all.filter((d: any) => this.isArchivedStatus(d.status)).length
     };
