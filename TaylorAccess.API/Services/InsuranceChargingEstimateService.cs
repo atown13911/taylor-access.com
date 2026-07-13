@@ -18,7 +18,7 @@ public class InsuranceChargingEstimateService
 
     private static readonly HashSet<string> ActiveDriverStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "available", "dispatched", "en-route", "at-location", "online"
+        "active", "available", "dispatched", "en-route", "at-location", "online"
     };
 
     private static readonly HashSet<string> OnboardingStatuses = new(StringComparer.OrdinalIgnoreCase)
