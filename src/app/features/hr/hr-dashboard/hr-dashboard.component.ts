@@ -158,20 +158,19 @@ interface StatPanel {
             @if (deptChartData().length > 0) {
               <div class="chart-card">
                 <h3>By Department</h3>
-                <div class="hbar-list">
+                <div class="vbar-chart">
                   @for (row of deptBarRows(); track row.name; let i = $index) {
                     <button
                       type="button"
-                      class="hbar-row"
+                      class="vbar-col"
                       [class.active]="selectedDepartment() === row.name"
+                      [title]="formatBreakdownLabel(row.name) + ': ' + row.value"
                       (click)="onDepartmentChartSelect(row)">
-                      <div class="hbar-meta">
-                        <span class="hbar-label">{{ formatBreakdownLabel(row.name) }}</span>
-                        <span class="hbar-value">{{ row.value }}</span>
+                      <span class="vbar-value">{{ row.value }}</span>
+                      <div class="vbar-track">
+                        <span class="vbar-fill tone-{{ i % 8 }}" [style.height.%]="row.pct"></span>
                       </div>
-                      <div class="hbar-track">
-                        <span class="hbar-fill tone-{{ i % 8 }}" [style.width.%]="row.pct"></span>
-                      </div>
+                      <span class="vbar-label">{{ formatBreakdownLabel(row.name) }}</span>
                     </button>
                   }
                 </div>
@@ -180,20 +179,19 @@ interface StatPanel {
             @if (roleChartData().length > 0) {
               <div class="chart-card">
                 <h3>By Role</h3>
-                <div class="hbar-list">
+                <div class="vbar-chart">
                   @for (row of roleBarRows(); track row.name; let i = $index) {
                     <button
                       type="button"
-                      class="hbar-row"
+                      class="vbar-col"
                       [class.active]="selectedRole() === row.name"
+                      [title]="formatBreakdownLabel(row.name) + ': ' + row.value"
                       (click)="onRoleChartSelect(row)">
-                      <div class="hbar-meta">
-                        <span class="hbar-label">{{ formatBreakdownLabel(row.name) }}</span>
-                        <span class="hbar-value">{{ row.value }}</span>
+                      <span class="vbar-value">{{ row.value }}</span>
+                      <div class="vbar-track">
+                        <span class="vbar-fill tone-{{ i % 8 }}" [style.height.%]="row.pct"></span>
                       </div>
-                      <div class="hbar-track">
-                        <span class="hbar-fill tone-{{ i % 8 }}" [style.width.%]="row.pct"></span>
-                      </div>
+                      <span class="vbar-label">{{ formatBreakdownLabel(row.name) }}</span>
                     </button>
                   }
                 </div>
@@ -202,16 +200,14 @@ interface StatPanel {
             @if (driverStatusChart().length > 0) {
               <div class="chart-card">
                 <h3>Driver Status</h3>
-                <div class="hbar-list">
+                <div class="vbar-chart">
                   @for (row of driverBarRows(); track row.name; let i = $index) {
-                    <div class="hbar-row static">
-                      <div class="hbar-meta">
-                        <span class="hbar-label">{{ formatBreakdownLabel(row.name) }}</span>
-                        <span class="hbar-value">{{ row.value }}</span>
+                    <div class="vbar-col static" [title]="formatBreakdownLabel(row.name) + ': ' + row.value">
+                      <span class="vbar-value">{{ row.value }}</span>
+                      <div class="vbar-track">
+                        <span class="vbar-fill tone-{{ i % 8 }}" [style.height.%]="row.pct"></span>
                       </div>
-                      <div class="hbar-track">
-                        <span class="hbar-fill tone-{{ i % 8 }}" [style.width.%]="row.pct"></span>
-                      </div>
+                      <span class="vbar-label">{{ formatBreakdownLabel(row.name) }}</span>
                     </div>
                   }
                 </div>
@@ -426,75 +422,83 @@ interface StatPanel {
     .chart-card h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 14px; font-weight: 500; }
     .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
 
-    .hbar-list {
+    .vbar-chart {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-height: 360px;
-      overflow-y: auto;
-      padding-right: 2px;
+      align-items: flex-end;
+      gap: 8px;
+      min-height: 260px;
+      height: 280px;
+      overflow-x: auto;
+      padding: 4px 2px 0;
     }
-    .hbar-row {
+    .vbar-col {
+      flex: 1 1 0;
+      min-width: 42px;
+      max-width: 72px;
+      height: 100%;
       display: flex;
       flex-direction: column;
-      gap: 5px;
-      width: 100%;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
       padding: 0;
       border: none;
       background: transparent;
-      text-align: left;
-      cursor: pointer;
       color: inherit;
+      cursor: pointer;
     }
-    .hbar-row.static { cursor: default; }
-    .hbar-row:not(.static):hover .hbar-label,
-    .hbar-row.active .hbar-label { color: #e0f7ff; }
-    .hbar-row:not(.static):hover .hbar-track,
-    .hbar-row.active .hbar-track {
+    .vbar-col.static { cursor: default; }
+    .vbar-col:not(.static):hover .vbar-label,
+    .vbar-col.active .vbar-label { color: #e0f7ff; }
+    .vbar-col:not(.static):hover .vbar-track,
+    .vbar-col.active .vbar-track {
       box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.28);
     }
-    .hbar-meta {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-    }
-    .hbar-label {
-      font-size: 0.78rem;
-      color: #c5d0dc;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
-    }
-    .hbar-value {
-      flex-shrink: 0;
-      font-size: 0.78rem;
+    .vbar-value {
+      font-size: 0.72rem;
       font-weight: 700;
       color: #f8fafc;
       font-variant-numeric: tabular-nums;
+      line-height: 1;
     }
-    .hbar-track {
-      height: 10px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
+    .vbar-track {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 120px;
+      border-radius: 10px 10px 4px 4px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: flex-end;
       overflow: hidden;
     }
-    .hbar-fill {
+    .vbar-fill {
       display: block;
-      height: 100%;
-      border-radius: inherit;
-      min-width: 4px;
-      transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      width: 100%;
+      min-height: 6px;
+      border-radius: 10px 10px 2px 2px;
+      transition: height 0.45s cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .hbar-fill.tone-0 { background: linear-gradient(90deg, #7c3aed, #a855f7); }
-    .hbar-fill.tone-1 { background: linear-gradient(90deg, #0284c7, #38bdf8); }
-    .hbar-fill.tone-2 { background: linear-gradient(90deg, #0e7490, #22d3ee); }
-    .hbar-fill.tone-3 { background: linear-gradient(90deg, #047857, #34d399); }
-    .hbar-fill.tone-4 { background: linear-gradient(90deg, #a16207, #facc15); }
-    .hbar-fill.tone-5 { background: linear-gradient(90deg, #c2410c, #fb923c); }
-    .hbar-fill.tone-6 { background: linear-gradient(90deg, #be123c, #fb7185); }
-    .hbar-fill.tone-7 { background: linear-gradient(90deg, #6d28d9, #c084fc); }
+    .vbar-label {
+      width: 100%;
+      min-height: 2.4em;
+      font-size: 0.62rem;
+      line-height: 1.15;
+      color: #9ca3af;
+      text-align: center;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .vbar-fill.tone-0 { background: linear-gradient(180deg, #a855f7, #7c3aed); }
+    .vbar-fill.tone-1 { background: linear-gradient(180deg, #38bdf8, #0284c7); }
+    .vbar-fill.tone-2 { background: linear-gradient(180deg, #22d3ee, #0e7490); }
+    .vbar-fill.tone-3 { background: linear-gradient(180deg, #34d399, #047857); }
+    .vbar-fill.tone-4 { background: linear-gradient(180deg, #facc15, #a16207); }
+    .vbar-fill.tone-5 { background: linear-gradient(180deg, #fb923c, #c2410c); }
+    .vbar-fill.tone-6 { background: linear-gradient(180deg, #fb7185, #be123c); }
+    .vbar-fill.tone-7 { background: linear-gradient(180deg, #c084fc, #6d28d9); }
 
     .alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
     .alert-card {
