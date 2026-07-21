@@ -8,6 +8,16 @@ import { environment } from '../../../../environments/environment';
 interface ChartPoint { name: string; value: number; }
 interface HeadcountSnapshot { month: string; value: number; }
 interface WavePoint { key: string; label: string; value: number; x: number; y: number; }
+interface WaveSeries {
+  key: string;
+  name: string;
+  color: string;
+  linePath: string;
+  areaPath: string;
+  points: WavePoint[];
+  latest: number;
+}
+type HeadcountMode = 'roles' | 'positions' | 'total';
 interface ActivityItem {
   id: string;
   icon: string;
@@ -255,33 +265,50 @@ interface StatPanel {
       }
 
       <div class="chart-section">
-        <h2><i class="bx bx-trending-up"></i> Headcount Trend</h2>
+        <div class="chart-section-head">
+          <h2><i class="bx bx-trending-up"></i> Headcount Trend</h2>
+          <div class="wave-mode-toggle" role="tablist" aria-label="Headcount breakdown">
+            <button type="button" role="tab" [class.active]="headcountMode() === 'roles'" (click)="setHeadcountMode('roles')">Roles</button>
+            <button type="button" role="tab" [class.active]="headcountMode() === 'positions'" (click)="setHeadcountMode('positions')">Positions</button>
+            <button type="button" role="tab" [class.active]="headcountMode() === 'total'" (click)="setHeadcountMode('total')">Total</button>
+          </div>
+        </div>
         <div class="chart-card wide">
-          @if (headcountWave().points.length > 0) {
+          @if (headcountWave().series.length > 0) {
+            <div class="wave-legend">
+              @for (s of headcountWave().series; track s.key) {
+                <button
+                  type="button"
+                  class="wave-legend-item"
+                  [class.dimmed]="hiddenWaveSeries().has(s.key)"
+                  (click)="toggleWaveSeries(s.key)">
+                  <i class="wave-swatch" [style.background]="s.color"></i>
+                  <span>{{ s.name }}</span>
+                  <strong>{{ s.latest }}</strong>
+                </button>
+              }
+            </div>
             <div class="wave-chart" [style.--wave-w.px]="wideChartWidth">
               <svg
                 class="wave-svg"
                 [attr.viewBox]="'0 0 ' + waveView.w + ' ' + waveView.h"
                 preserveAspectRatio="xMidYMid meet"
                 role="img"
-                aria-label="Monthly headcount trend">
+                [attr.aria-label]="'Monthly headcount by ' + headcountMode()">
                 <defs>
-                  <linearGradient id="headcountWaveFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#00ff88" stop-opacity="0.45"></stop>
-                    <stop offset="55%" stop-color="#00ff88" stop-opacity="0.16"></stop>
-                    <stop offset="100%" stop-color="#00ff88" stop-opacity="0.02"></stop>
-                  </linearGradient>
-                  <linearGradient id="headcountWaveStroke" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stop-color="#34d399"></stop>
-                    <stop offset="100%" stop-color="#00ff88"></stop>
-                  </linearGradient>
                   <filter id="headcountGlow" x="-20%" y="-40%" width="140%" height="180%">
-                    <feGaussianBlur stdDeviation="3.5" result="blur"></feGaussianBlur>
+                    <feGaussianBlur stdDeviation="2.2" result="blur"></feGaussianBlur>
                     <feMerge>
                       <feMergeNode in="blur"></feMergeNode>
                       <feMergeNode in="SourceGraphic"></feMergeNode>
                     </feMerge>
                   </filter>
+                  @for (s of headcountWave().series; track s.key) {
+                    <linearGradient [attr.id]="'waveFill-' + s.key" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" [attr.stop-color]="s.color" stop-opacity="0.28"></stop>
+                      <stop offset="100%" [attr.stop-color]="s.color" stop-opacity="0.02"></stop>
+                    </linearGradient>
+                  }
                 </defs>
 
                 @for (tick of headcountWave().yTicks; track tick.label) {
@@ -295,18 +322,26 @@ interface StatPanel {
                   <text class="wave-y-label" [attr.x]="waveView.padL - 8" [attr.y]="tick.y + 4" text-anchor="end">{{ tick.label }}</text>
                 }
 
-                <path class="wave-area" [attr.d]="headcountWave().areaPath" fill="url(#headcountWaveFill)"></path>
-                <path
-                  class="wave-line"
-                  [attr.d]="headcountWave().linePath"
-                  fill="none"
-                  stroke="url(#headcountWaveStroke)"
-                  stroke-width="3"
-                  filter="url(#headcountGlow)">
-                </path>
+                @for (s of headcountWave().series; track s.key) {
+                  @if (!hiddenWaveSeries().has(s.key)) {
+                    <path class="wave-area" [attr.d]="s.areaPath" [attr.fill]="'url(#waveFill-' + s.key + ')'"></path>
+                    <path
+                      class="wave-line"
+                      [attr.d]="s.linePath"
+                      fill="none"
+                      [attr.stroke]="s.color"
+                      stroke-width="2.5"
+                      filter="url(#headcountGlow)">
+                    </path>
+                    @for (pt of s.points; track pt.key) {
+                      <circle class="wave-dot" [attr.cx]="pt.x" [attr.cy]="pt.y" r="3.2" [attr.fill]="s.color" [attr.stroke]="s.color">
+                        <title>{{ s.name }} · {{ pt.label }}: {{ pt.value }}</title>
+                      </circle>
+                    }
+                  }
+                }
 
-                @for (pt of headcountWave().points; track pt.key) {
-                  <circle class="wave-dot" [attr.cx]="pt.x" [attr.cy]="pt.y" r="4.5"></circle>
+                @for (pt of headcountWave().xLabels; track pt.key) {
                   <text class="wave-x-label" [attr.x]="pt.x" [attr.y]="waveView.h - 10" text-anchor="middle">{{ pt.label }}</text>
                 }
               </svg>
@@ -496,11 +531,49 @@ interface StatPanel {
     }
 
     .chart-section { margin-bottom: 32px; }
+    .chart-section-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin: 0 0 16px; flex-wrap: wrap;
+    }
+    .chart-section-head h2 {
+      color: #e0f7ff; font-size: 1.1rem; margin: 0; display: flex; align-items: center; gap: 8px;
+      text-shadow: 0 0 18px rgba(0, 229, 255, 0.25);
+    }
     .chart-section h2 {
       color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
       text-shadow: 0 0 18px rgba(0, 229, 255, 0.25);
     }
-    .chart-section h2 i { color: #00e5ff; filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45)); }
+    .chart-section h2 i, .chart-section-head h2 i { color: #00e5ff; filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45)); }
+
+    .wave-mode-toggle {
+      display: inline-flex; gap: 4px; padding: 3px;
+      border-radius: 999px; border: 1px solid rgba(0, 229, 255, 0.22);
+      background: rgba(0, 229, 255, 0.06);
+    }
+    .wave-mode-toggle button {
+      border: 0; background: transparent; color: rgba(226, 232, 240, 0.72);
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    }
+    .wave-mode-toggle button.active {
+      color: #041018; background: linear-gradient(135deg, #00e5ff, #00ff88);
+      box-shadow: 0 0 16px rgba(0, 229, 255, 0.35);
+    }
+
+    .wave-legend {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+    }
+    .wave-legend-item {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04);
+      border-radius: 999px; padding: 4px 10px; color: #e2e8f0; font-size: 0.72rem; cursor: pointer;
+    }
+    .wave-legend-item strong { font-variant-numeric: tabular-nums; color: #f8fafc; }
+    .wave-legend-item.dimmed { opacity: 0.35; }
+    .wave-swatch {
+      width: 8px; height: 8px; border-radius: 999px; display: inline-block;
+      box-shadow: 0 0 8px currentColor;
+    }
     .chart-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
     .chart-card, .glow-panel {
       background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(0, 229, 255, 0.14);
@@ -516,7 +589,7 @@ interface StatPanel {
     .wave-chart {
       width: 100%;
       max-width: var(--wave-w, 960px);
-      height: 280px;
+      height: 300px;
       margin: 0 auto;
     }
     .wave-svg { width: 100%; height: 100%; display: block; overflow: visible; }
@@ -525,10 +598,9 @@ interface StatPanel {
     .wave-x-label { fill: #9ca3af; font-size: 11px; font-family: inherit; }
     .wave-line { stroke-linecap: round; stroke-linejoin: round; }
     .wave-dot {
-      fill: #0b1220;
-      stroke: #00ff88;
-      stroke-width: 2.5;
-      filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.55));
+      stroke-width: 1.5;
+      fill-opacity: 0.95;
+      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.15));
     }
 
     .vbar-chart {
@@ -721,8 +793,13 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   roleChartData = signal<ChartPoint[]>([]);
   driverStatusChart = signal<ChartPoint[]>([]);
   headcountSnapshots = signal<HeadcountSnapshot[]>([]);
+  headcountMode = signal<HeadcountMode>('roles');
+  hiddenWaveSeries = signal<Set<string>>(new Set());
   wideChartWidth = 960;
-  readonly waveView = { w: 1000, h: 280, padL: 52, padR: 20, padT: 18, padB: 40 };
+  readonly waveView = { w: 1000, h: 300, padL: 52, padR: 20, padT: 18, padB: 40 };
+  private readonly waveColors = [
+    '#00ff88', '#00d4ff', '#ffaa00', '#a78bfa', '#fb7185', '#38bdf8', '#f472b6', '#facc15', '#94a3b8'
+  ];
 
   private toBarRows(points: ChartPoint[]) {
     const max = Math.max(...points.map((p) => p.value), 1);
@@ -737,39 +814,67 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   roleBarRows = computed(() => this.toBarRows(this.roleChartData()));
   driverBarRows = computed(() => this.toBarRows(this.driverStatusChart()));
 
-  /** Last 12 months, gaps filled, drawn as a smooth wave. */
+  /** Multi-series monthly wave: Roles, Positions, or Total. */
   headcountWave = computed(() => {
-    const monthly = this.buildMonthlyHeadcountSeries(this.headcountSnapshots());
+    const mode = this.headcountMode();
     const view = this.waveView;
-    if (!monthly.length) {
-      return { points: [] as WavePoint[], linePath: '', areaPath: '', yTicks: [] as { y: number; label: string }[] };
-    }
+    const empty = {
+      series: [] as WaveSeries[],
+      xLabels: [] as WavePoint[],
+      yTicks: [] as { y: number; label: string }[]
+    };
 
-    const values = monthly.map((m) => m.value);
-    const minV = Math.min(...values);
-    const maxV = Math.max(...values);
+    const months = this.lastTwelveMonthKeys();
+    const rawSeries =
+      mode === 'total'
+        ? this.buildTotalSeries(months)
+        : this.buildBreakdownSeries(months, mode);
+
+    if (!rawSeries.length) return empty;
+
+    const allValues = rawSeries.flatMap((s) => s.values);
+    const minV = Math.min(...allValues);
+    const maxV = Math.max(...allValues);
     const pad = Math.max(2, Math.ceil((maxV - minV) * 0.12) || 2);
     const yMin = Math.max(0, Math.floor(minV - pad));
     const yMax = Math.ceil(maxV + pad);
     const plotW = view.w - view.padL - view.padR;
     const plotH = view.h - view.padT - view.padB;
-    const n = monthly.length;
+    const n = months.length;
     const xAt = (i: number) => view.padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
     const yAt = (v: number) => view.padT + (1 - (v - yMin) / Math.max(yMax - yMin, 1)) * plotH;
-
-    const points: WavePoint[] = monthly.map((m, i) => ({
-      key: m.month,
-      label: this.formatMonthShort(m.month),
-      value: m.value,
-      x: xAt(i),
-      y: yAt(m.value)
-    }));
-
-    const linePath = this.smoothWavePath(points);
     const baseY = view.h - view.padB;
-    const areaPath = points.length
-      ? `${linePath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`
-      : '';
+
+    const series: WaveSeries[] = rawSeries.map((s, idx) => {
+      const points: WavePoint[] = months.map((month, i) => ({
+        key: `${s.key}-${month}`,
+        label: this.formatMonthShort(month),
+        value: s.values[i] ?? 0,
+        x: xAt(i),
+        y: yAt(s.values[i] ?? 0)
+      }));
+      const linePath = this.smoothWavePath(points);
+      const areaPath = points.length
+        ? `${linePath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`
+        : '';
+      return {
+        key: s.key,
+        name: s.name,
+        color: this.waveColors[idx % this.waveColors.length],
+        linePath,
+        areaPath,
+        points,
+        latest: s.values[s.values.length - 1] ?? 0
+      };
+    });
+
+    const xLabels: WavePoint[] = months.map((month, i) => ({
+      key: month,
+      label: this.formatMonthShort(month),
+      value: 0,
+      x: xAt(i),
+      y: baseY
+    }));
 
     const tickCount = 5;
     const yTicks = Array.from({ length: tickCount }, (_, i) => {
@@ -778,15 +883,28 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       return { y: yAt(value), label: String(value) };
     });
 
-    return { points, linePath, areaPath, yTicks };
+    return { series, xLabels, yTicks };
   });
 
   headcountDelta30d = computed(() => {
-    const points = this.headcountWave().points;
-    if (points.length < 2) return '0';
-    const delta = (points[points.length - 1]?.value ?? 0) - (points[0]?.value ?? 0);
+    const total = this.buildTotalSeries(this.lastTwelveMonthKeys());
+    const values = total[0]?.values ?? [];
+    if (values.length < 2) return '0';
+    const delta = (values[values.length - 1] ?? 0) - (values[0] ?? 0);
     return delta > 0 ? `+${delta}` : `${delta}`;
   });
+
+  toggleWaveSeries(key: string): void {
+    const next = new Set(this.hiddenWaveSeries());
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this.hiddenWaveSeries.set(next);
+  }
+
+  setHeadcountMode(mode: HeadcountMode): void {
+    this.headcountMode.set(mode);
+    this.hiddenWaveSeries.set(new Set());
+  }
 
   private pct(n: number, d: number): number {
     return d > 0 ? Math.min(100, Math.round((n / d) * 100)) : 0;
@@ -1283,7 +1401,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   }
 
   async loadEmployeePopulation(): Promise<void> {
-    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-roster?limit=500`);
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-roster?limit=2000`);
     const employees = this.asArray(res).filter(
       (e: any) => String(e?.status ?? '').toLowerCase() === 'active' || !e?.status
     );
@@ -1427,11 +1545,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
-  /** Build the last 12 calendar months; interpolate across missing snapshot months. */
-  private buildMonthlyHeadcountSeries(snaps: HeadcountSnapshot[]): HeadcountSnapshot[] {
-    if (!snaps.length) return [];
-
-    const byMonth = new Map(snaps.map((s) => [s.month, s.value]));
+  private lastTwelveMonthKeys(): string[] {
     const end = new Date();
     end.setDate(1);
     const months: string[] = [];
@@ -1439,6 +1553,87 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
       months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
+    return months;
+  }
+
+  private buildTotalSeries(months: string[]): Array<{ key: string; name: string; values: number[] }> {
+    const filled = this.buildMonthlyHeadcountSeries(this.headcountSnapshots());
+    if (filled.length) {
+      const byMonth = new Map(filled.map((m) => [m.month, m.value]));
+      return [
+        {
+          key: 'total',
+          name: 'Total Headcount',
+          values: months.map((m) => byMonth.get(m) ?? 0)
+        }
+      ];
+    }
+
+    // Fallback: sum reconstructed role counts when snapshots are missing.
+    const roles = this.buildBreakdownSeries(months, 'roles');
+    if (!roles.length) return [];
+    const values = months.map((_, i) => roles.reduce((sum, s) => sum + (s.values[i] ?? 0), 0));
+    return [{ key: 'total', name: 'Total Headcount', values }];
+  }
+
+  /** Reconstruct monthly counts by role/position from hire/created dates. */
+  private buildBreakdownSeries(
+    months: string[],
+    mode: 'roles' | 'positions'
+  ): Array<{ key: string; name: string; values: number[] }> {
+    const employees = this.employeePopulation();
+    if (!employees.length) return [];
+
+    const tallies = new Map<string, number[]>();
+    for (const emp of employees) {
+      const label =
+        mode === 'roles'
+          ? this.formatBreakdownLabel(String(emp?.role ?? 'Unassigned'))
+          : this.formatBreakdownLabel(
+              String(emp?.position?.title ?? emp?.jobTitle ?? emp?.position ?? 'Unassigned')
+            );
+      const startKey = this.employeeStartMonth(emp);
+      if (!tallies.has(label)) tallies.set(label, months.map(() => 0));
+      const row = tallies.get(label)!;
+      months.forEach((month, i) => {
+        if (!startKey || startKey <= month) row[i] += 1;
+      });
+    }
+
+    const ranked = Array.from(tallies.entries())
+      .map(([name, values]) => ({
+        key: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        name,
+        values,
+        latest: values[values.length - 1] ?? 0
+      }))
+      .sort((a, b) => b.latest - a.latest);
+
+    const topN = 7;
+    if (ranked.length <= topN) {
+      return ranked.map(({ key, name, values }) => ({ key, name, values }));
+    }
+
+    const top = ranked.slice(0, topN);
+    const rest = ranked.slice(topN);
+    const otherValues = months.map((_, i) => rest.reduce((sum, s) => sum + (s.values[i] ?? 0), 0));
+    return [
+      ...top.map(({ key, name, values }) => ({ key, name, values })),
+      { key: 'other', name: 'Other', values: otherValues }
+    ];
+  }
+
+  private employeeStartMonth(emp: any): string {
+    const raw = emp?.hireDate ?? emp?.HireDate ?? emp?.createdAt ?? emp?.CreatedAt ?? '';
+    return this.normalizeMonthKey(String(raw));
+  }
+
+  /** Build the last 12 calendar months; interpolate across missing snapshot months. */
+  private buildMonthlyHeadcountSeries(snaps: HeadcountSnapshot[]): HeadcountSnapshot[] {
+    if (!snaps.length) return [];
+
+    const byMonth = new Map(snaps.map((s) => [s.month, s.value]));
+    const months = this.lastTwelveMonthKeys();
 
     const known = months
       .map((month, index) => (byMonth.has(month) ? { index, value: byMonth.get(month)! } : null))
@@ -1451,7 +1646,6 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       return months.map((month) => {
         if (month <= first.month) return { month, value: first.value };
         if (month >= last.month) return { month, value: last.value };
-        // interpolate between surrounding history points
         let lo = snaps[0];
         let hi = snaps[snaps.length - 1];
         for (let i = 0; i < snaps.length; i++) {
@@ -1468,11 +1662,11 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       });
     }
 
-    const filled = months.map((month, index) => {
+    return months.map((month, index) => {
       if (byMonth.has(month)) return { month, value: byMonth.get(month)! };
 
-      let prev = known.filter((k) => k.index < index).pop();
-      let next = known.find((k) => k.index > index);
+      const prev = known.filter((k) => k.index < index).pop();
+      const next = known.find((k) => k.index > index);
       if (!prev && next) return { month, value: next.value };
       if (prev && !next) return { month, value: prev.value };
       if (!prev || !next) return { month, value: snaps[snaps.length - 1].value };
@@ -1481,8 +1675,6 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       const t = (index - prev.index) / span;
       return { month, value: Math.round(prev.value + (next.value - prev.value) * t) };
     });
-
-    return filled;
   }
 
   private monthIndex(month: string): number {
