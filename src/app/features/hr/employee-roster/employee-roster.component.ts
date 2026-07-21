@@ -37,13 +37,14 @@ import {
           <p>Complete employee directory with entity assignments</p>
         </div>
         <div class="header-actions">
-          <button class="btn-secondary" (click)="refreshRoster()" [disabled]="loading()">
-            <i class="bx bx-refresh"></i> Refresh
+          <button type="button" class="btn-refresh" (click)="refreshRoster()" [disabled]="loading()">
+            <i class="bx" [class.bx-refresh]="!loading()" [class.bx-loader-alt]="loading()" [class.bx-spin]="loading()"></i>
+            Refresh
           </button>
-          <button class="btn-satellite" (click)="router.navigate(['/satellites'])">
+          <button type="button" class="btn-satellite" (click)="router.navigate(['/satellites'])">
             <i class="bx bx-building"></i> Create Satellite
           </button>
-          <button class="btn-primary" (click)="openAddModal()">
+          <button type="button" class="btn-add" (click)="openAddModal()">
             <i class="bx bx-plus"></i> Add Employee
           </button>
         </div>
@@ -51,58 +52,39 @@ import {
 
       <!-- Summary Stats -->
       @if (rosterTab() !== 'import') {
-      <div class="stats-grid">
-        <div class="stat-card total">
-          <i class="bx bx-group"></i>
-          <div>
-            <span class="value">{{ employees().length }}</span>
-            <span class="label">Total Employees</span>
-          </div>
-        </div>
-        <div class="stat-card active">
-          <i class="bx bx-user-check"></i>
-          <div>
-            <span class="value">{{ getStatusCount('active') }}</span>
-            <span class="label">Active</span>
-          </div>
-        </div>
-        <div class="stat-card inactive">
-          <i class="bx bx-user-x"></i>
-          <div>
-            <span class="value">{{ getStatusCount('inactive') }}</span>
-            <span class="label">Inactive</span>
-          </div>
-        </div>
-        <div class="stat-card pending">
-          <i class="bx bx-time-five"></i>
-          <div>
-            <span class="value">{{ getStatusCount('pending') }}</span>
-            <span class="label">Pending</span>
-          </div>
-        </div>
-        <div class="stat-card suspended">
-          <i class="bx bx-block"></i>
-          <div>
-            <span class="value">{{ getStatusCount('suspended') }}</span>
-            <span class="label">Suspended</span>
-          </div>
-        </div>
-        <div class="stat-card archived">
-          <i class="bx bx-archive"></i>
-          <div>
-            <span class="value">{{ getStatusCount('archived') }}</span>
-            <span class="label">Archive</span>
-          </div>
-        </div>
-        <div class="stat-card bulk" (click)="rosterTab.set('bulk'); rosterPage.set(1)" style="cursor: pointer">
-          <i class="bx bx-table"></i>
-          <div>
-            <span class="value">{{ bulkEmployees().length }}</span>
-            <span class="label">Bulk Staging</span>
-          </div>
-        </div>
+      <div class="stats-bar" aria-label="Roster snapshot">
+        @for (panel of rosterStatPanels(); track panel.label) {
+          @if (panel.action === 'bulk') {
+            <button type="button" class="stat-panel" [ngClass]="'tone-' + panel.tone" (click)="rosterTab.set('bulk'); rosterPage.set(1)">
+              <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ panel.label }}</span>
+                <span class="stat-panel-badge">{{ panel.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ panel.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ panel.chip }}</span>
+                <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+              </footer>
+            </button>
+          } @else {
+            <article class="stat-panel" [ngClass]="'tone-' + panel.tone">
+              <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ panel.label }}</span>
+                <span class="stat-panel-badge">{{ panel.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ panel.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ panel.chip }}</span>
+                <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+              </footer>
+            </article>
+          }
+        }
       </div>
-
       }
 
       <!-- Filters -->
@@ -2422,14 +2404,20 @@ import {
     .page-header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 1.5rem;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 1.25rem;
+      padding: 14px 16px;
+      border: 1px solid rgba(0, 229, 255, 0.18);
+      border-radius: 14px;
+      background: rgba(9, 18, 32, 0.72);
+      box-shadow: 0 0 24px rgba(0, 229, 255, 0.08);
     }
 
     .page-header h1 {
       color: #00f2fe;
-      font-size: 2rem;
-      margin: 0 0 8px 0;
+      font-size: 1.65rem;
+      margin: 0 0 4px 0;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -2439,13 +2427,184 @@ import {
     .page-header p {
       color: #9ca3af;
       margin: 0;
+      font-size: 0.9rem;
     }
 
     .header-actions {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       flex-shrink: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn-refresh {
+      border: 1px solid rgba(0, 242, 254, 0.3);
+      background: rgba(0, 242, 254, 0.1);
+      color: #00f2fe;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.16);
+      transition: all 0.2s ease;
+    }
+    .btn-refresh:hover:not(:disabled) {
+      background: rgba(0, 242, 254, 0.2);
+      box-shadow: 0 0 24px rgba(0, 242, 254, 0.28);
+    }
+    .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-satellite {
+      background: rgba(0, 200, 83, 0.1);
+      border: 1px solid rgba(0, 200, 83, 0.4);
+      color: #00c853;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 0 16px rgba(0, 200, 83, 0.14);
+      transition: all 0.2s ease;
+    }
+    .btn-satellite:hover {
+      background: rgba(0, 200, 83, 0.2);
+      border-color: rgba(0, 200, 83, 0.55);
+      box-shadow: 0 0 22px rgba(0, 200, 83, 0.22);
+    }
+
+    .btn-add {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      border: 1px solid rgba(168, 85, 247, 0.55);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
+      transition: all 0.2s ease;
+    }
+    .btn-add:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 0 28px rgba(168, 85, 247, 0.5);
+      transform: translateY(-1px);
+    }
+
+    @keyframes stat-panel-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0 0 22px;
+    }
+    @media (max-width: 1400px) { .stats-bar { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 900px) { .stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px) { .stats-bar { grid-template-columns: 1fr; } }
+
+    .stat-panel {
+      --kpi-accent: #67e8f9;
+      --kpi-accent-soft: rgba(0, 212, 255, 0.16);
+      position: relative; overflow: hidden; isolation: isolate;
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 0; min-height: 132px; padding: 14px 14px 12px 16px;
+      border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(120% 90% at 100% 0%, var(--kpi-accent-soft), transparent 55%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.05), transparent 46%),
+        rgba(10, 13, 22, 0.92);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 0 20px color-mix(in srgb, var(--kpi-accent) 16%, transparent),
+        0 12px 28px rgba(0, 0, 0, 0.3);
+      animation: stat-panel-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      text-align: left; color: inherit; font: inherit; cursor: default;
+    }
+    button.stat-panel { cursor: pointer; width: 100%; }
+    .stat-panel::before {
+      content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+      border-radius: 0 4px 4px 0;
+      background: linear-gradient(180deg, var(--kpi-accent), transparent 95%);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--kpi-accent) 70%, transparent);
+    }
+    .stat-panel:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--kpi-accent) 48%, rgba(255, 255, 255, 0.08));
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.06) inset,
+        0 0 32px color-mix(in srgb, var(--kpi-accent) 26%, transparent),
+        0 16px 32px rgba(0, 0, 0, 0.34);
+    }
+    .stat-panel:nth-child(1) { animation-delay: 0s; }
+    .stat-panel:nth-child(2) { animation-delay: 0.04s; }
+    .stat-panel:nth-child(3) { animation-delay: 0.08s; }
+    .stat-panel:nth-child(4) { animation-delay: 0.12s; }
+    .stat-panel:nth-child(5) { animation-delay: 0.16s; }
+    .stat-panel:nth-child(6) { animation-delay: 0.2s; }
+    .stat-panel:nth-child(7) { animation-delay: 0.24s; }
+
+    .stat-panel.tone-cyan { --kpi-accent: #00d4ff; --kpi-accent-soft: rgba(0, 212, 255, 0.18); }
+    .stat-panel.tone-green { --kpi-accent: #22c55e; --kpi-accent-soft: rgba(34, 197, 94, 0.16); }
+    .stat-panel.tone-red { --kpi-accent: #ef4444; --kpi-accent-soft: rgba(239, 68, 68, 0.14); }
+    .stat-panel.tone-orange { --kpi-accent: #fbbf24; --kpi-accent-soft: rgba(251, 191, 36, 0.14); }
+    .stat-panel.tone-violet { --kpi-accent: #a855f7; --kpi-accent-soft: rgba(168, 85, 247, 0.16); }
+    .stat-panel.tone-slate { --kpi-accent: #9ca3af; --kpi-accent-soft: rgba(156, 163, 175, 0.12); }
+
+    .stat-panel-mark {
+      position: absolute; right: -6px; bottom: -10px; font-size: 4.6rem; line-height: 1;
+      color: var(--kpi-accent); opacity: 0.1; transform: rotate(-8deg); pointer-events: none; z-index: 0;
+    }
+    .stat-panel:hover .stat-panel-mark { opacity: 0.16; transform: rotate(-4deg) translateY(-2px); }
+    .stat-panel-head, .stat-panel-value, .stat-panel-meter, .stat-panel-foot { position: relative; z-index: 1; }
+    .stat-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+    .stat-panel-label {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .stat-panel-badge {
+      flex-shrink: 0; padding: 2px 6px; border-radius: 999px; font-size: 0.58rem; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      color: color-mix(in srgb, var(--kpi-accent) 88%, #fff);
+      background: color-mix(in srgb, var(--kpi-accent) 14%, transparent);
+      border: 1px solid color-mix(in srgb, var(--kpi-accent) 35%, transparent);
+    }
+    .stat-panel-value {
+      margin: 0; font-size: clamp(1.15rem, 0.7vw + 0.95rem, 1.45rem); font-weight: 700;
+      letter-spacing: 0.02em; line-height: 1.1; color: #f8fafc; font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 18px color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+    }
+    .stat-panel-meter {
+      height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden;
+    }
+    .stat-panel-meter span {
+      display: block; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--kpi-accent) 55%, #fff), var(--kpi-accent));
+      box-shadow: 0 0 10px color-mix(in srgb, var(--kpi-accent) 45%, transparent);
+    }
+    .stat-panel-foot { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+    .stat-panel-chip {
+      display: inline-flex; align-items: center; max-width: 100%; padding: 2px 7px; border-radius: 999px;
+      font-size: 0.64rem; font-weight: 600; color: rgba(226, 232, 240, 0.86);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .stat-panel-chip.soft {
+      color: color-mix(in srgb, var(--kpi-accent) 80%, #e2e8f0);
+      border-color: color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+      background: color-mix(in srgb, var(--kpi-accent) 10%, transparent);
     }
 
     .btn-secondary {
@@ -2471,92 +2630,6 @@ import {
     .btn-secondary:disabled {
       opacity: 0.5;
       cursor: not-allowed;
-    }
-
-    .btn-satellite {
-      background: rgba(0, 200, 83, 0.1);
-      border: 1px solid rgba(0, 200, 83, 0.3);
-      color: #00c853;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s ease;
-    }
-
-    .btn-satellite:hover {
-      background: rgba(0, 200, 83, 0.2);
-      border-color: rgba(0, 200, 83, 0.5);
-      box-shadow: 0 0 12px rgba(0, 200, 83, 0.15);
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin: 24px 0;
-    }
-
-    .stat-card {
-      background: rgba(10, 10, 20, 0.85);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .stat-card i {
-      font-size: 1.8rem;
-      color: #00f2fe;
-    }
-
-    .stat-card .value {
-      display: block;
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .stat-card.total { border-color: rgba(0, 212, 255, 0.3); }
-    .stat-card.total i { color: #00d4ff; }
-    .stat-card.total .value { color: #00d4ff; }
-
-    .stat-card.active { border-color: rgba(34, 197, 94, 0.3); }
-    .stat-card.active i { color: #22c55e; }
-    .stat-card.active .value { color: #22c55e; }
-
-    .stat-card.inactive { border-color: rgba(239, 68, 68, 0.3); }
-    .stat-card.inactive i { color: #ef4444; }
-    .stat-card.inactive .value { color: #ef4444; }
-
-    .stat-card.pending { border-color: rgba(251, 191, 36, 0.3); }
-    .stat-card.pending i { color: #fbbf24; }
-    .stat-card.pending .value { color: #fbbf24; }
-
-    .stat-card.suspended { border-color: rgba(168, 85, 247, 0.3); }
-    .stat-card.suspended i { color: #a855f7; }
-    .stat-card.suspended .value { color: #a855f7; }
-
-    .stat-card.archived { border-color: rgba(156, 163, 175, 0.3); }
-    .stat-card.archived i { color: #9ca3af; }
-    .stat-card.archived .value { color: #9ca3af; }
-
-    .stat-card.bulk { border-color: rgba(0, 242, 254, 0.3); }
-    .stat-card.bulk i { color: #00f2fe; }
-    .stat-card.bulk .value { color: #00f2fe; }
-    .stat-card.bulk:hover { border-color: rgba(0, 242, 254, 0.5); background: rgba(0, 242, 254, 0.05); }
-
-    .stat-card .label {
-      display: block;
-      font-size: 0.85rem;
-      color: #9ca3af;
-      margin-top: 4px;
     }
 
     .roster-tabs {
@@ -4832,6 +4905,100 @@ export class EmployeeRosterComponent implements OnInit {
     return this.employees().filter(e => e.status === status).length;
   }
 
+  private pctOfRoster(n: number, total: number): number {
+    return total > 0 ? Math.min(100, Math.round((n / total) * 100)) : 0;
+  }
+
+  rosterStatPanels = computed(() => {
+    const total = this.employees().length;
+    const active = this.getStatusCount('active');
+    const inactive = this.getStatusCount('inactive');
+    const pending = this.getStatusCount('pending');
+    const suspended = this.getStatusCount('suspended');
+    const archived = this.getStatusCount('archived');
+    const bulk = this.bulkEmployees().length;
+
+    return [
+      {
+        tone: 'cyan',
+        icon: 'bx-group',
+        label: 'Total Employees',
+        badge: 'Roster',
+        value: total,
+        meter: 100,
+        chip: 'All statuses',
+        soft: `${active} active`,
+        action: null as string | null
+      },
+      {
+        tone: 'green',
+        icon: 'bx-user-check',
+        label: 'Active',
+        badge: 'Live',
+        value: active,
+        meter: this.pctOfRoster(active, total),
+        chip: `${this.pctOfRoster(active, total)}%`,
+        soft: 'On roster',
+        action: null
+      },
+      {
+        tone: 'red',
+        icon: 'bx-user-x',
+        label: 'Inactive',
+        badge: 'Off',
+        value: inactive,
+        meter: this.pctOfRoster(inactive, total),
+        chip: `${this.pctOfRoster(inactive, total)}%`,
+        soft: 'Not active',
+        action: null
+      },
+      {
+        tone: 'orange',
+        icon: 'bx-time-five',
+        label: 'Pending',
+        badge: 'Queue',
+        value: pending,
+        meter: this.pctOfRoster(pending, total || 1),
+        chip: pending > 0 ? 'Needs review' : 'Clear',
+        soft: 'Awaiting',
+        action: null
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-block',
+        label: 'Suspended',
+        badge: 'Hold',
+        value: suspended,
+        meter: this.pctOfRoster(suspended, total || 1),
+        chip: suspended > 0 ? 'Restricted' : 'None',
+        soft: 'Access hold',
+        action: null
+      },
+      {
+        tone: 'slate',
+        icon: 'bx-archive',
+        label: 'Archive',
+        badge: 'Stored',
+        value: archived,
+        meter: this.pctOfRoster(archived, total),
+        chip: `${this.pctOfRoster(archived, total)}%`,
+        soft: 'Historical',
+        action: null
+      },
+      {
+        tone: 'cyan',
+        icon: 'bx-table',
+        label: 'Bulk Staging',
+        badge: 'Import',
+        value: bulk,
+        meter: Math.min(100, bulk),
+        chip: 'Open staging',
+        soft: bulk > 0 ? 'Click to review' : 'Empty',
+        action: 'bulk'
+      }
+    ];
+  });
+
   getFilteredDepartments(orgId: any): any[] {
     if (!orgId) return this.departments();
     return this.departments().filter(d => String(d.organizationId) === String(orgId));
@@ -4869,6 +5036,7 @@ export class EmployeeRosterComponent implements OnInit {
 
   private formDataLoaded = false;
   private requestedEditEmployeeId: number | null = null;
+  private requestedEditTab: 'personal' | 'employment' | 'financial' | 'integrations' | 'documents' | 'business' | null = null;
 
   ngOnInit() {
     this.loadRoster();
@@ -4881,6 +5049,12 @@ export class EmployeeRosterComponent implements OnInit {
       this.requestedEditEmployeeId = Number.isFinite(requestedEditId) && requestedEditId > 0
         ? requestedEditId
         : null;
+      const tab = String(p['editTab'] || '').trim().toLowerCase();
+      this.requestedEditTab =
+        tab === 'personal' || tab === 'employment' || tab === 'financial'
+        || tab === 'integrations' || tab === 'documents' || tab === 'business'
+          ? tab
+          : null;
       this.tryOpenRequestedProfileEdit();
     });
   }
@@ -4940,24 +5114,39 @@ export class EmployeeRosterComponent implements OnInit {
 
       this.employees.set(allRows);
       this.rosterPage.set(1);
-      this.tryOpenRequestedProfileEdit();
-      this.loading.set(false);
     } catch (err) {
       console.error('Failed to load roster:', err);
+      this.employees.set([]);
+    } finally {
       this.loading.set(false);
+      // Open deep-linked edit only after roster is on screen.
+      queueMicrotask(() => this.tryOpenRequestedProfileEdit());
     }
   }
 
   private tryOpenRequestedProfileEdit(): void {
     const requestedId = this.requestedEditEmployeeId;
     if (!requestedId) return;
+    if (this.loading()) return;
     const employee = this.employees().find((row) => Number(row?.id) === requestedId);
     if (!employee) return;
-    this.editEmployee(employee);
+
     this.requestedEditEmployeeId = null;
+    const tab = this.requestedEditTab;
+    this.requestedEditTab = null;
+
+    try {
+      this.editEmployee(employee);
+      if (tab) {
+        this.switchEditTab(tab);
+      }
+    } catch (err) {
+      console.error('Failed to open requested employee profile edit:', err);
+    }
+
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { editEmployeeId: null },
+      queryParams: { editEmployeeId: null, editTab: null },
       queryParamsHandling: 'merge',
       replaceUrl: true
     });
