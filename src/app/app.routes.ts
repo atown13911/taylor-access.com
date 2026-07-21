@@ -147,6 +147,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/compliance/tags-permits/tags-permits.component').then(m => m.TagsPermitsComponent)
       },
       {
+        path: 'compliance/office-assets',
+        loadComponent: () => import('./features/compliance/office-assets/office-assets.component').then(m => m.OfficeAssetsComponent)
+      },
+      {
         path: 'compliance/asset-assignments',
         redirectTo: 'compliance/tags-permits',
         pathMatch: 'full'

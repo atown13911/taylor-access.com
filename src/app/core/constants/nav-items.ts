@@ -129,6 +129,7 @@ export const ALL_NAV_ITEMS: NavItemDefinition[] = [
   { label: 'Vehicle Inspections', icon: 'bx-check-shield', route: '/compliance/vehicle-inspections' },
   { label: 'DOT Compliance', icon: 'bx-shield-alt-2', route: '/compliance/dot' },
   { label: 'Asset Assignments', icon: 'bx-badge-check', route: '/compliance/tags-permits' },
+  { label: 'Office Assets', icon: 'bx-desktop', route: '/compliance/office-assets' },
   // Landstar
   { label: 'Landstar Dashboard', icon: 'bxs-analyse', route: '/landstar-dashboard', section: 'Landstar' },
   { label: 'Load Board', icon: 'bx-list-check', route: '/landstar-loadboard' },

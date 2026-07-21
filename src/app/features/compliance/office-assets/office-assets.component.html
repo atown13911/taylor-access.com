@@ -1,0 +1,173 @@
+<div class="oa-page">
+  <div class="oa-header">
+    <div>
+      <h1><i class="bx bx-desktop"></i> Office Assets</h1>
+      <p class="oa-sub">Track company-issued office equipment by employee.</p>
+    </div>
+    <div class="oa-header-actions">
+      <button class="oa-btn" (click)="loadEmployees()" [disabled]="loading()">
+        <i class="bx bx-refresh"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="oa-stats">
+    @for (card of stats(); track card.label) {
+      <div class="oa-stat">
+        <i class="bx" [class]="card.icon"></i>
+        <div class="oa-stat-info">
+          <span class="oa-stat-val">{{ card.value }}</span>
+          <span class="oa-stat-lbl">{{ card.label }}</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="oa-tabs">
+    <button class="oa-tab" [class.active]="activeTab() === 'computers'" (click)="selectTab('computers')">
+      <i class="bx bx-laptop"></i> Computers
+    </button>
+    <button class="oa-tab" [class.active]="activeTab() === 'phones'" (click)="selectTab('phones')">
+      <i class="bx bx-mobile-alt"></i> Phones
+    </button>
+    <button class="oa-tab" [class.active]="activeTab() === 'access'" (click)="selectTab('access')">
+      <i class="bx bx-id-card"></i> Access
+    </button>
+  </div>
+
+  <div class="oa-filters">
+    <div class="oa-search">
+      <i class="bx bx-search"></i>
+      <input
+        type="text"
+        placeholder="Search employee, asset, email…"
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)">
+    </div>
+    <select class="oa-filter-select" [ngModel]="assignFilter()" (ngModelChange)="assignFilter.set($event)">
+      <option value="">All</option>
+      <option value="assigned">Assigned</option>
+      <option value="unassigned">Unassigned</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="oa-empty">Loading office assets…</div>
+  } @else if (filteredRows().length === 0) {
+    <div class="oa-empty">No employees match this filter.</div>
+  } @else {
+    <div class="oa-table-wrap">
+      <table class="oa-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Role / Dept</th>
+            <th>{{ primaryAssetLabel() }}</th>
+            @if (activeTab() === 'computers') {
+              <th>Monitor</th>
+              <th>Headset</th>
+            }
+            @if (activeTab() === 'access') {
+              <th>Keys / Fob</th>
+            }
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filteredRows(); track row.id) {
+            <tr>
+              <td>
+                <div class="oa-emp">
+                  <strong>{{ row.name }}</strong>
+                  @if (row.alias) {
+                    <span class="oa-alias">{{ row.alias }}</span>
+                  }
+                  <span class="oa-email">{{ row.email }}</span>
+                </div>
+              </td>
+              <td>
+                <div class="oa-role">
+                  <span>{{ row.jobTitle || row.role || '—' }}</span>
+                  <span class="oa-muted">{{ row.department?.name || '—' }}</span>
+                </div>
+              </td>
+              <td>
+                @if (primaryAssetValue(row)) {
+                  <span class="oa-asset">{{ primaryAssetValue(row) }}</span>
+                } @else {
+                  <span class="oa-muted">Not issued</span>
+                }
+              </td>
+              @if (activeTab() === 'computers') {
+                <td>{{ row.monitor || '—' }}</td>
+                <td>{{ row.headset || '—' }}</td>
+              }
+              @if (activeTab() === 'access') {
+                <td>{{ row.keysFob || '—' }}</td>
+              }
+              <td class="oa-notes">{{ row.equipmentNotes || '—' }}</td>
+              <td class="oa-actions">
+                <button class="oa-btn sm" (click)="openEdit(row)">
+                  <i class="bx bx-edit-alt"></i> Assign
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+@if (showEditModal() && editingEmployee()) {
+  <div class="oa-modal-overlay" (click)="closeEdit()">
+    <div class="oa-modal" (click)="$event.stopPropagation()">
+      <div class="oa-modal-header">
+        <div>
+          <h2>Assign Equipment</h2>
+          <p>{{ editingEmployee()?.name }}</p>
+        </div>
+        <button class="oa-icon-btn" (click)="closeEdit()"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="oa-modal-body">
+        <div class="oa-form-row">
+          <label>Laptop / Computer</label>
+          <input type="text" [(ngModel)]="editForm.laptop" placeholder="Make/model or asset tag">
+        </div>
+        <div class="oa-form-row">
+          <label>Issued Phone</label>
+          <input type="text" [(ngModel)]="editForm.issuedPhone" placeholder="Device model or IMEI">
+        </div>
+        <div class="oa-form-row">
+          <label>Access Badge</label>
+          <input type="text" [(ngModel)]="editForm.accessBadge" placeholder="Badge / card ID">
+        </div>
+        <div class="oa-form-grid">
+          <div class="oa-form-row">
+            <label>Monitor</label>
+            <input type="text" [(ngModel)]="editForm.monitor" placeholder="Make/model">
+          </div>
+          <div class="oa-form-row">
+            <label>Headset</label>
+            <input type="text" [(ngModel)]="editForm.headset" placeholder="Make/model">
+          </div>
+        </div>
+        <div class="oa-form-row">
+          <label>Keys / Fob</label>
+          <input type="text" [(ngModel)]="editForm.keysFob" placeholder="Key or fob ID">
+        </div>
+        <div class="oa-form-row">
+          <label>Notes</label>
+          <textarea rows="2" [(ngModel)]="editForm.equipmentNotes" placeholder="Serial numbers, condition, return status…"></textarea>
+        </div>
+      </div>
+      <div class="oa-modal-footer">
+        <button class="oa-btn" (click)="closeEdit()" [disabled]="saving()">Cancel</button>
+        <button class="oa-btn primary" (click)="saveEdit()" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save Assignment' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

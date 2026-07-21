@@ -36,6 +36,7 @@ const ALWAYS_ALLOWED_ROUTES = new Set([
   '/organizations',
   '/users',
   '/compliance/tags-permits',
+  '/compliance/office-assets',
   '/compliance/insurance',
   '/compliance/driver-database',
   '/compliance/dot',
