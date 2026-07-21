@@ -71,7 +71,7 @@ public class DispatchersController : ControllerBase
             }
         }
 
-        var (dispatchers, dispatcherSource) = await GetDispatchersByRoleIdAsync(4);
+        var (dispatchers, dispatcherSource) = await GetDispatchersAsync();
         var activeDispatchers = dispatchers
             .Where(d => !InactiveUserStatuses.Contains(d.Status ?? string.Empty))
             .OrderBy(d => d.Name)
@@ -529,6 +529,64 @@ public class DispatchersController : ControllerBase
         {
             return new Dictionary<int, DriverDispatchAssignmentWire>();
         }
+    }
+
+    private async Task<(List<DispatchUserWire> users, string source)> GetDispatchersAsync()
+    {
+        // Role ids are not stable across environments (dispatcher is 903 here, not 4).
+        var dispatcherRoleId = await _context.Roles
+            .AsNoTracking()
+            .Where(r => r.Name.ToLower() == "dispatcher")
+            .Select(r => (int?)r.Id)
+            .FirstOrDefaultAsync();
+
+        if (dispatcherRoleId.HasValue)
+        {
+            var byRoleJoin = await GetDispatchersByRoleIdAsync(dispatcherRoleId.Value);
+            if (byRoleJoin.users.Count > 0)
+                return byRoleJoin;
+        }
+
+        // UserRoles is often empty; Users.Role is the live source of truth.
+        var fromRoleColumn = await GetDispatchersFromUsersRoleColumnAsync();
+        if (fromRoleColumn.Count > 0)
+            return (fromRoleColumn, "users_role_column");
+
+        // Legacy fallback for older DBs that still used identity id 4.
+        return await GetDispatchersByRoleIdAsync(4);
+    }
+
+    private async Task<List<DispatchUserWire>> GetDispatchersFromUsersRoleColumnAsync()
+    {
+        var users = await _context.Users
+            .AsNoTracking()
+            .Where(u => u.Role != null && u.Role.ToLower().Contains("dispatcher"))
+            .GroupJoin(
+                _context.Positions.AsNoTracking(),
+                u => u.PositionId,
+                p => (int?)p.Id,
+                (u, positions) => new
+                {
+                    u.Id,
+                    u.Name,
+                    u.Email,
+                    Phone = u.Phone ?? u.WorkPhone ?? u.CellPhone,
+                    Title = positions.Select(p => p.Title).FirstOrDefault() ?? u.JobTitle,
+                    u.Status
+                }
+            )
+            .OrderBy(u => u.Name)
+            .ToListAsync();
+
+        return users.Select(u => new DispatchUserWire
+        {
+            Id = u.Id,
+            Name = u.Name ?? $"User {u.Id}",
+            Email = u.Email,
+            Phone = u.Phone,
+            Title = u.Title,
+            Status = u.Status
+        }).ToList();
     }
 
     private async Task<(List<DispatchUserWire> users, string source)> GetDispatchersByRoleIdAsync(int roleId)

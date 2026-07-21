@@ -187,10 +187,41 @@ export class DriverListComponent implements OnInit {
   dispatcherRows = computed(() => {
     const rows = this.availableDispatchUsers();
     const activeLandmarkAssigned = this.activeLandmarkDispatchDrivers();
-    return rows.map((u) => ({
-      ...u,
-      assignedDrivers: activeLandmarkAssigned.filter((d) => this.toNullableNumber(d.dispatchUserId) === u.id).length
-    }));
+    const byId = new Map<number, DispatchUserRow>();
+    const byName = new Map<string, number>();
+
+    for (const row of rows) {
+      byId.set(row.id, row);
+      const key = this.normalizePersonName(row.name);
+      if (key && !byName.has(key)) byName.set(key, row.id);
+    }
+
+    // Surface assignees that aren't Role=dispatcher (e.g. admins) using notes labels.
+    for (const driver of activeLandmarkAssigned) {
+      const assignedId = this.toNullableNumber(driver.dispatchUserId);
+      const tagLabel = this.extractDispatchTag(String(driver.notes ?? '')).label;
+      const nameKey = this.normalizePersonName(tagLabel);
+      if (nameKey && byName.has(nameKey)) continue;
+      if (assignedId && byId.has(assignedId)) continue;
+      if (!assignedId || !tagLabel) continue;
+
+      byId.set(assignedId, {
+        id: assignedId,
+        name: tagLabel,
+        email: '',
+        phone: '',
+        title: 'Dispatcher',
+        status: 'active'
+      });
+      byName.set(nameKey, assignedId);
+    }
+
+    return [...byId.values()]
+      .map((u) => ({
+        ...u,
+        assignedDrivers: activeLandmarkAssigned.filter((d) => this.driverMatchesDispatcher(d, u)).length
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   });
 
   dispatcherAssignedDrivers = computed(() => {
@@ -1655,40 +1686,35 @@ export class DriverListComponent implements OnInit {
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
     try {
-      const dispatcherRoleId = '4';
-      const roleUsersRes: any = await this.adminService.getUsersByRoleId(dispatcherRoleId).toPromise();
-      const users = this.asArray(roleUsersRes);
+      // Live source is Users.Role = "dispatcher". UserRoles is often empty and
+      // role ids are not stable (dispatcher is 903 here, not the old hardcoded 4).
+      const usersRes: any = await this.api.getUsers({ role: 'dispatcher', limit: 5000 }).toPromise();
+      let users = this.asArray(usersRes);
 
-      const candidates: DispatchUserRow[] = users
-        .map((user: any) => {
-          const userId = Number(user?.id);
-          if (!Number.isFinite(userId) || userId <= 0) return null;
+      if (users.length === 0) {
+        try {
+          const rolesRes: any = await this.adminService.getRoles().toPromise();
+          const roles = this.asArray(rolesRes);
+          const dispatcherRole = roles.find((role: any) => {
+            const name = String(role?.name ?? '').trim().toLowerCase();
+            return name === 'dispatcher' || name.includes('dispatcher');
+          });
+          const roleId = dispatcherRole?.id ?? dispatcherRole?.roleId;
+          if (roleId != null && String(roleId).trim() !== '') {
+            const roleUsersRes: any = await this.adminService.getUsersByRoleId(roleId).toPromise();
+            users = this.asArray(roleUsersRes);
+          }
+        } catch {
+          // Keep empty list if role lookup also fails.
+        }
+      }
 
-          const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
-          const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
-          const combinedName = `${firstName} ${lastName}`.trim();
+      const candidates = users
+        .map((user: any) => this.mapUserToDispatchRow(user))
+        .filter((row): row is DispatchUserRow => !!row && this.isUserRecordEligibleForDispatch(row))
+        .sort((a, b) => a.name.localeCompare(b.name));
 
-          return {
-            id: userId,
-            name: String(user?.name ?? user?.fullName ?? user?.displayName ?? '').trim() || combinedName || `User ${userId}`,
-            email: String(user?.email ?? user?.workEmail ?? '').trim(),
-            phone: String(user?.phone ?? user?.mobilePhone ?? user?.phoneNumber ?? user?.workPhone ?? '').trim(),
-            title: String(
-              user?.position ??
-              user?.jobPosition ??
-              user?.jobTitle ??
-              user?.title ??
-              user?.department ??
-              ''
-            ).trim() || 'Dispatcher',
-            status: String(user?.status ?? 'active').trim().toLowerCase() || 'active'
-          } as DispatchUserRow;
-        })
-        .filter((row): row is DispatchUserRow => !!row);
-
-      this.availableDispatchUsers.set(
-        candidates.sort((a, b) => a.name.localeCompare(b.name))
-      );
+      this.availableDispatchUsers.set(candidates);
       if (this.dispatchersView() && !this.selectedDispatcherId() && candidates.length > 0) {
         this.selectedDispatcherId.set(candidates[0].id);
       }
@@ -1698,6 +1724,49 @@ export class DriverListComponent implements OnInit {
     } finally {
       this.loadingDispatchUsers.set(false);
     }
+  }
+
+  private mapUserToDispatchRow(user: any): DispatchUserRow | null {
+    const userId = Number(user?.id);
+    if (!Number.isFinite(userId) || userId <= 0) return null;
+
+    const firstName = String(user?.firstName ?? user?.first_name ?? '').trim();
+    const lastName = String(user?.lastName ?? user?.last_name ?? '').trim();
+    const combinedName = `${firstName} ${lastName}`.trim();
+
+    return {
+      id: userId,
+      name: String(user?.name ?? user?.fullName ?? user?.displayName ?? '').trim() || combinedName || `User ${userId}`,
+      email: String(user?.email ?? user?.workEmail ?? '').trim(),
+      phone: String(user?.phone ?? user?.mobilePhone ?? user?.phoneNumber ?? user?.workPhone ?? '').trim(),
+      title: String(
+        user?.position ??
+        user?.jobPosition ??
+        user?.jobTitle ??
+        user?.title ??
+        user?.department ??
+        ''
+      ).trim() || 'Dispatcher',
+      status: String(user?.status ?? 'active').trim().toLowerCase() || 'active'
+    };
+  }
+
+  private normalizePersonName(value: string | null | undefined): string {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  private driverMatchesDispatcher(driver: DriverRow, dispatcher: DispatchUserRow): boolean {
+    const assignedId = this.toNullableNumber(driver.dispatchUserId);
+    if (assignedId === dispatcher.id) return true;
+
+    // Stale assignee ids often keep the correct name in the notes tag.
+    const tag = this.extractDispatchTag(String(driver.notes ?? ''));
+    if (!tag.label) return false;
+    return this.normalizePersonName(tag.label) === this.normalizePersonName(dispatcher.name);
   }
 
   private updateDispatchersViewFromRoute(routeUrl?: string): void {
@@ -1736,7 +1805,17 @@ export class DriverListComponent implements OnInit {
     const dispatcherId = this.toNullableNumber(driver.dispatchUserId);
     if (!dispatcherId) return '—';
     const match = this.availableDispatchUsers().find((u) => u.id === dispatcherId);
-    return match?.name || `Dispatcher ${dispatcherId}`;
+    if (match?.name) return match.name;
+
+    const tagLabel = this.extractDispatchTag(String(driver.notes ?? '')).label;
+    if (tagLabel) {
+      const byName = this.availableDispatchUsers().find(
+        (u) => this.normalizePersonName(u.name) === this.normalizePersonName(tagLabel)
+      );
+      return byName?.name || tagLabel;
+    }
+
+    return `Dispatcher ${dispatcherId}`;
   }
 
   assignableDriversForSelectedDispatcher(): DriverRow[] {
