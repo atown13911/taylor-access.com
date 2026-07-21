@@ -61,7 +61,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   showAddModal = signal(false);
   editingPermit = signal<any>(null);
   trailerModalTab = signal<'details' | 'photo'>('details');
-  trailerDrawerTab = signal<'agreement' | 'photos'>('agreement');
+  trailerDrawerTab = signal<'agreement' | 'photos' | 'history'>('agreement');
   selectedTrailerDrawer = signal<any | null>(null);
   showFuelCardDetailsModal = signal(false);
   showFuelCardAssignModal = signal(false);
@@ -81,6 +81,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   trailerDrawerPhotoPreviewUrl = signal<string | null>(null);
   trailerPhotoHistory = signal<any[]>([]);
   trailerPhotoHistoryLoading = signal(false);
+  trailerAssignmentHistory = signal<any[]>([]);
+  trailerAssignmentHistoryLoading = signal(false);
   private trailerPhotoMeta = signal<Record<string, {
     count: number;
     previewUrl: string | null;
@@ -890,6 +892,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     this.trailerDrawerTab.set('agreement');
     this.selectedTrailerDrawer.set(row);
     void this.loadTrailerPhotoHistory(row);
+    void this.loadTrailerAssignmentHistory(row);
   }
 
   closeTrailerDrawer(): void {
@@ -898,6 +901,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     this.setTrailerDrawerPhotoPreview(null);
     this.trailerPhotoHistory.set([]);
     this.trailerPhotoHistoryLoading.set(false);
+    this.trailerAssignmentHistory.set([]);
+    this.trailerAssignmentHistoryLoading.set(false);
   }
 
   openTrailerEditFromDrawer(): void {
@@ -1399,6 +1404,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       this.trailerPhotoFileName.set('');
       this.toast.success('Trailer photo uploaded', 'Success');
       await this.loadTrailerPhotoHistory(trailerId);
+      await this.loadTrailerAssignmentHistory(trailerId);
       await this.syncTrailerPhotoOverrides();
       this.loadData();
     } catch (err: any) {
@@ -1424,6 +1430,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     }
 
     await this.loadTrailerPhotoHistory(normalizedTrailerId);
+    await this.loadTrailerAssignmentHistory(normalizedTrailerId);
     await this.syncTrailerPhotoOverrides();
     this.loadData();
     this.trailerPhotoBatchUploading.set(false);
@@ -2604,6 +2611,73 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     } finally {
       this.trailerPhotoHistoryLoading.set(false);
     }
+  }
+
+  private async loadTrailerAssignmentHistory(source: any): Promise<void> {
+    const lookupKeys = typeof source === 'object' && source !== null
+      ? this.resolveTrailerAssignmentKeys(source)
+      : [String(source ?? '').trim()];
+    const id = lookupKeys.find(Boolean) || '';
+    if (!id) {
+      this.trailerAssignmentHistory.set([]);
+      return;
+    }
+
+    this.trailerAssignmentHistoryLoading.set(true);
+    try {
+      let rows: any[] = [];
+      for (const key of lookupKeys) {
+        const encodedTrailerId = encodeURIComponent(String(key).trim());
+        if (!encodedTrailerId) continue;
+        try {
+          const res: any = await firstValueFrom(
+            this.http.get<any>(`${this.apiUrl}/api/v1/trailer-assignments/${encodedTrailerId}/history`)
+          );
+          const batch = Array.isArray(res?.data) ? res.data : [];
+          if (batch.length) {
+            rows = batch;
+            break;
+          }
+        } catch {
+          // Try next alias.
+        }
+      }
+      this.trailerAssignmentHistory.set(rows);
+    } catch {
+      this.trailerAssignmentHistory.set([]);
+    } finally {
+      this.trailerAssignmentHistoryLoading.set(false);
+    }
+  }
+
+  formatAssignmentHistoryEvent(eventType: string | null | undefined): string {
+    switch (String(eventType || '').toLowerCase()) {
+      case 'assigned': return 'Assigned';
+      case 'unassigned': return 'Unassigned';
+      case 'updated': return 'Updated';
+      case 'deactivated': return 'Deactivated';
+      case 'reactivated': return 'Reactivated';
+      case 'photo_uploaded': return 'Photo uploaded';
+      case 'agreement_uploaded': return 'Agreement uploaded';
+      default: return String(eventType || 'Event');
+    }
+  }
+
+  assignmentHistoryEventClass(eventType: string | null | undefined): string {
+    const key = String(eventType || '').toLowerCase();
+    if (key === 'assigned' || key === 'reactivated') return 'assigned';
+    if (key === 'unassigned' || key === 'deactivated') return 'cleared';
+    if (key === 'photo_uploaded') return 'photo';
+    if (key === 'agreement_uploaded') return 'agreement';
+    return 'updated';
+  }
+
+  openHistoryPhoto(entry: any): void {
+    const photoId = Number(entry?.photoId);
+    if (!Number.isFinite(photoId) || photoId <= 0) return;
+    const rawUrl = this.normalizeTrailerPhotoUrl(entry?.photoUrl, entry?.trailerId)
+      || `${this.apiUrl}/api/v1/trailer-photos/photo/${photoId}/view`;
+    this.openPhotoUrlWithAuth(rawUrl, String(entry?.photoFileName || '').trim() || 'trailer-photo');
   }
 
   private async loadTrailerDrawerPreview(trailerId: string): Promise<void> {

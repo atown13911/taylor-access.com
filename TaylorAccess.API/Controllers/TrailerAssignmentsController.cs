@@ -100,6 +100,12 @@ public class TrailerAssignmentsController : ControllerBase
         var assignment = await _context.TrailerAssignments
             .FirstOrDefaultAsync(a => a.TrailerId == normalizedTrailerId && a.OrganizationId == organizationId);
 
+        var isNew = assignment == null;
+        var previousDriverId = assignment?.AssignedDriverId;
+        var previousDriverName = assignment?.AssignedDriverName;
+        var previousTruck = assignment?.AssignedTruckNumber;
+        var previousStatus = assignment?.TrailerStatus;
+
         if (assignment == null)
         {
             assignment = new TrailerAssignment
@@ -114,8 +120,114 @@ public class TrailerAssignmentsController : ControllerBase
         ApplyUpsert(assignment, request);
         assignment.UpdatedAt = DateTime.UtcNow;
 
+        AppendAssignmentChangeLog(
+            assignment,
+            user,
+            isNew,
+            previousDriverId,
+            previousDriverName,
+            previousTruck,
+            previousStatus);
+
         await _context.SaveChangesAsync();
         return Ok(new { data = MapAssignment(assignment) });
+    }
+
+    [HttpGet("{trailerId}/history")]
+    public async Task<ActionResult<object>> GetAssignmentHistory([FromRoute] string trailerId, [FromQuery] int limit = 200)
+    {
+        var user = await _currentUserService.GetUserAsync();
+        if (user == null) return Unauthorized(new { message = "User not authenticated" });
+
+        var normalizedTrailerId = NormalizeTrailerId(trailerId);
+        if (string.IsNullOrWhiteSpace(normalizedTrailerId))
+            return BadRequest(new { error = "Trailer id is required" });
+
+        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
+        var organizationId = user.OrganizationId ?? 0;
+
+        var assignmentQuery = FilterAssignmentsByUser(_context.TrailerAssignments.AsNoTracking(), user, hasUnrestrictedAccess);
+        var assignments = await assignmentQuery
+            .Where(a => a.TrailerId == normalizedTrailerId
+                || (a.PermitNumber != null && a.PermitNumber == normalizedTrailerId)
+                || (a.AssignedTruckNumber != null && a.AssignedTruckNumber == normalizedTrailerId))
+            .ToListAsync();
+
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { normalizedTrailerId };
+        foreach (var a in assignments)
+        {
+            if (!string.IsNullOrWhiteSpace(a.TrailerId)) aliases.Add(a.TrailerId);
+            if (!string.IsNullOrWhiteSpace(a.PermitNumber)) aliases.Add(a.PermitNumber);
+            if (!string.IsNullOrWhiteSpace(a.AssignedTruckNumber)) aliases.Add(a.AssignedTruckNumber);
+        }
+
+        var logQuery = _context.TrailerAssignmentLogs.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess)
+        {
+            logQuery = organizationId > 0
+                ? logQuery.Where(l => l.OrganizationId == organizationId || l.OrganizationId == 0)
+                : logQuery.Where(l => l.OrganizationId == 0);
+        }
+
+        var aliasList = aliases.ToList();
+        var rows = await logQuery
+            .Where(l => aliasList.Contains(l.TrailerId))
+            .OrderByDescending(l => l.CreatedAt)
+            .ThenByDescending(l => l.Id)
+            .Take(Math.Clamp(limit, 1, 500))
+            .ToListAsync();
+
+        // Include existing photos that pre-date the log table so History is useful immediately.
+        var loggedPhotoIds = rows
+            .Where(r => r.PhotoId.HasValue)
+            .Select(r => r.PhotoId!.Value)
+            .ToHashSet();
+
+        var photoQuery = _context.TrailerPhotos.AsNoTracking().AsQueryable();
+        if (!hasUnrestrictedAccess)
+        {
+            photoQuery = organizationId > 0
+                ? photoQuery.Where(p => p.OrganizationId == organizationId || p.OrganizationId == 0)
+                : photoQuery.Where(p => p.OrganizationId == 0);
+        }
+
+        var orphanPhotos = await photoQuery
+            .Where(p => aliasList.Contains(p.TrailerId) && !loggedPhotoIds.Contains(p.Id))
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(200)
+            .ToListAsync();
+
+        var combined = rows
+            .Select(l => (CreatedAt: l.CreatedAt, Row: MapLog(l)))
+            .Concat(orphanPhotos.Select(p => (
+                CreatedAt: p.CreatedAt,
+                Row: (object)new
+                {
+                    id = -p.Id,
+                    trailerId = p.TrailerId,
+                    organizationId = p.OrganizationId,
+                    eventType = "photo_uploaded",
+                    driverId = (int?)null,
+                    driverName = (string?)null,
+                    previousDriverId = (int?)null,
+                    previousDriverName = (string?)null,
+                    truckNumber = (string?)null,
+                    trailerStatus = (string?)null,
+                    photoId = (int?)p.Id,
+                    photoFileName = p.FileName,
+                    changedByUserId = p.UploadedByUserId,
+                    changedBy = p.UploadedBy,
+                    notes = "Historical photo",
+                    createdAt = p.CreatedAt,
+                    photoUrl = $"/api/v1/trailer-photos/photo/{p.Id}/view"
+                }
+            )))
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(Math.Clamp(limit, 1, 500))
+            .Select(x => x.Row)
+            .ToList();
+
+        return Ok(new { data = combined });
     }
 
     [HttpPost("{trailerId}/unassign-driver")]
@@ -147,10 +259,30 @@ public class TrailerAssignmentsController : ControllerBase
 
         foreach (var assignment in targets)
         {
+            var previousDriverId = assignment.AssignedDriverId;
+            var previousDriverName = assignment.AssignedDriverName;
+
             assignment.AssignedDriverId = null;
             assignment.AssignedDriverName = null;
             assignment.DriverOverride = true;
             assignment.UpdatedAt = DateTime.UtcNow;
+
+            if (previousDriverId.HasValue || !string.IsNullOrWhiteSpace(previousDriverName))
+            {
+                AddAssignmentLog(new TrailerAssignmentLog
+                {
+                    TrailerId = assignment.TrailerId,
+                    OrganizationId = assignment.OrganizationId,
+                    EventType = "unassigned",
+                    PreviousDriverId = previousDriverId,
+                    PreviousDriverName = previousDriverName,
+                    TruckNumber = assignment.AssignedTruckNumber,
+                    TrailerStatus = assignment.TrailerStatus,
+                    ChangedByUserId = user.Id > 0 ? user.Id : null,
+                    ChangedBy = ResolveActorName(user),
+                    Notes = "Driver unassigned"
+                });
+            }
         }
 
         await _context.SaveChangesAsync();
@@ -199,6 +331,9 @@ public class TrailerAssignmentsController : ControllerBase
 
         foreach (var assignment in targets)
         {
+            var previousDriverId = assignment.AssignedDriverId;
+            var previousDriverName = assignment.AssignedDriverName;
+
             if (assignment.AssignedDriverId.HasValue || !string.IsNullOrWhiteSpace(assignment.AssignedDriverName))
             {
                 assignment.LastAssignedDriverId = assignment.AssignedDriverId;
@@ -211,6 +346,22 @@ public class TrailerAssignmentsController : ControllerBase
             assignment.DriverOverride = true;
             assignment.InactivatedAt = DateTime.UtcNow;
             assignment.UpdatedAt = DateTime.UtcNow;
+
+            AddAssignmentLog(new TrailerAssignmentLog
+            {
+                TrailerId = assignment.TrailerId,
+                OrganizationId = assignment.OrganizationId,
+                EventType = "deactivated",
+                PreviousDriverId = previousDriverId,
+                PreviousDriverName = previousDriverName,
+                DriverId = assignment.LastAssignedDriverId,
+                DriverName = assignment.LastAssignedDriverName,
+                TruckNumber = assignment.AssignedTruckNumber,
+                TrailerStatus = "inactive",
+                ChangedByUserId = user.Id > 0 ? user.Id : null,
+                ChangedBy = ResolveActorName(user),
+                Notes = "Trailer moved to inactive"
+            });
         }
 
         await _context.SaveChangesAsync();
@@ -305,6 +456,21 @@ public class TrailerAssignmentsController : ControllerBase
         assignment.FileName = file.FileName;
         assignment.ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
         assignment.UpdatedAt = DateTime.UtcNow;
+
+        AddAssignmentLog(new TrailerAssignmentLog
+        {
+            TrailerId = assignment.TrailerId,
+            OrganizationId = assignment.OrganizationId,
+            EventType = "agreement_uploaded",
+            DriverId = assignment.AssignedDriverId,
+            DriverName = assignment.AssignedDriverName,
+            TruckNumber = assignment.AssignedTruckNumber,
+            TrailerStatus = assignment.TrailerStatus,
+            PhotoFileName = file.FileName,
+            ChangedByUserId = user.Id > 0 ? user.Id : null,
+            ChangedBy = ResolveActorName(user),
+            Notes = "Agreement document uploaded"
+        });
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Document uploaded", fileName = file.FileName, hasFile = true });
@@ -404,6 +570,127 @@ public class TrailerAssignmentsController : ControllerBase
         _context.TrailerAssignments.Add(assignment);
         return assignment;
     }
+
+    private void AppendAssignmentChangeLog(
+        TrailerAssignment assignment,
+        Models.User user,
+        bool isNew,
+        int? previousDriverId,
+        string? previousDriverName,
+        string? previousTruck,
+        string? previousStatus)
+    {
+        var driverChanged =
+            previousDriverId != assignment.AssignedDriverId
+            || !string.Equals(
+                previousDriverName ?? string.Empty,
+                assignment.AssignedDriverName ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase);
+
+        var truckChanged = !string.Equals(
+            previousTruck ?? string.Empty,
+            assignment.AssignedTruckNumber ?? string.Empty,
+            StringComparison.OrdinalIgnoreCase);
+
+        var statusChanged = !string.Equals(
+            previousStatus ?? string.Empty,
+            assignment.TrailerStatus ?? string.Empty,
+            StringComparison.OrdinalIgnoreCase);
+
+        if (!isNew && !driverChanged && !truckChanged && !statusChanged)
+            return;
+
+        string eventType;
+        string notes;
+        if (isNew)
+        {
+            eventType = assignment.AssignedDriverId.HasValue || !string.IsNullOrWhiteSpace(assignment.AssignedDriverName)
+                ? "assigned"
+                : "updated";
+            notes = "Trailer assignment record created";
+        }
+        else if (statusChanged
+                 && string.Equals(assignment.TrailerStatus, "active", StringComparison.OrdinalIgnoreCase)
+                 && string.Equals(previousStatus, "inactive", StringComparison.OrdinalIgnoreCase))
+        {
+            eventType = "reactivated";
+            notes = "Trailer reactivated";
+        }
+        else if (statusChanged
+                 && string.Equals(assignment.TrailerStatus, "inactive", StringComparison.OrdinalIgnoreCase))
+        {
+            eventType = "deactivated";
+            notes = "Trailer deactivated";
+        }
+        else if (driverChanged
+                 && (assignment.AssignedDriverId.HasValue || !string.IsNullOrWhiteSpace(assignment.AssignedDriverName)))
+        {
+            eventType = "assigned";
+            notes = previousDriverId.HasValue || !string.IsNullOrWhiteSpace(previousDriverName)
+                ? "Driver reassigned"
+                : "Driver assigned";
+        }
+        else if (driverChanged)
+        {
+            eventType = "unassigned";
+            notes = "Driver cleared";
+        }
+        else
+        {
+            eventType = "updated";
+            notes = truckChanged ? "Truck assignment updated" : "Trailer assignment updated";
+        }
+
+        AddAssignmentLog(new TrailerAssignmentLog
+        {
+            TrailerId = assignment.TrailerId,
+            OrganizationId = assignment.OrganizationId,
+            EventType = eventType,
+            DriverId = assignment.AssignedDriverId,
+            DriverName = assignment.AssignedDriverName,
+            PreviousDriverId = previousDriverId,
+            PreviousDriverName = previousDriverName,
+            TruckNumber = assignment.AssignedTruckNumber,
+            TrailerStatus = assignment.TrailerStatus,
+            ChangedByUserId = user.Id > 0 ? user.Id : null,
+            ChangedBy = ResolveActorName(user),
+            Notes = notes
+        });
+    }
+
+    private void AddAssignmentLog(TrailerAssignmentLog log)
+    {
+        log.CreatedAt = DateTime.UtcNow;
+        _context.TrailerAssignmentLogs.Add(log);
+    }
+
+    private static string ResolveActorName(Models.User user)
+    {
+        if (!string.IsNullOrWhiteSpace(user.Name)) return user.Name.Trim();
+        if (!string.IsNullOrWhiteSpace(user.Email)) return user.Email;
+        return $"User {user.Id}";
+    }
+
+    private static object MapLog(TrailerAssignmentLog log) => new
+    {
+        id = log.Id,
+        trailerId = log.TrailerId,
+        organizationId = log.OrganizationId,
+        eventType = log.EventType,
+        driverId = log.DriverId,
+        driverName = log.DriverName,
+        previousDriverId = log.PreviousDriverId,
+        previousDriverName = log.PreviousDriverName,
+        truckNumber = log.TruckNumber,
+        trailerStatus = log.TrailerStatus,
+        photoId = log.PhotoId,
+        photoFileName = log.PhotoFileName,
+        changedByUserId = log.ChangedByUserId,
+        changedBy = log.ChangedBy,
+        notes = log.Notes,
+        createdAt = log.CreatedAt,
+        photoUrl = log.PhotoId.HasValue ? $"/api/v1/trailer-photos/photo/{log.PhotoId.Value}/view" : null
+    };
 
     private static IQueryable<TrailerAssignment> FilterAssignmentsByUser(
         IQueryable<TrailerAssignment> query,

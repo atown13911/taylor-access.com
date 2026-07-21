@@ -649,6 +649,13 @@
           (click)="trailerDrawerTab.set('photos')">
           <i class="bx bx-images"></i> Photos
         </button>
+        <button
+          type="button"
+          class="tp-drawer-tab"
+          [class.active]="trailerDrawerTab() === 'history'"
+          (click)="trailerDrawerTab.set('history')">
+          <i class="bx bx-history"></i> History
+        </button>
       </div>
 
       @if (trailerDrawerTab() === 'agreement') {
@@ -692,7 +699,7 @@
             <p class="tp-drawer-agreement-help">Upload the leasing or rental agreement for this trailer.</p>
           }
         </div>
-      } @else {
+      } @else if (trailerDrawerTab() === 'photos') {
         <div class="tp-trailer-drawer-photo">
           @if (trailerDrawerPhotoPreviewUrl()) {
             <img [src]="trailerDrawerPhotoPreviewUrl()!" alt="Trailer photo">
@@ -753,6 +760,68 @@
                 }
               </tbody>
             </table>
+          }
+        </div>
+      } @else {
+        <div class="tp-trailer-history">
+          <div class="tp-trailer-photo-table-head">
+            <span>Assignment &amp; photo log</span>
+            <strong>{{ trailerAssignmentHistory().length }}</strong>
+          </div>
+          @if (trailerAssignmentHistoryLoading()) {
+            <div class="tp-trailer-photo-loading"><i class="bx bx-loader-alt bx-spin"></i> Loading history...</div>
+          } @else if (trailerAssignmentHistory().length === 0) {
+            <div class="tp-trailer-photo-empty">No assignment history yet. Future assigns, unassigns, and photo uploads will appear here.</div>
+          } @else {
+            <ul class="tp-history-list">
+              @for (entry of trailerAssignmentHistory(); track entry.id) {
+                <li class="tp-history-item" [attr.data-event]="assignmentHistoryEventClass(entry.eventType)">
+                  <div class="tp-history-badge" [class]="assignmentHistoryEventClass(entry.eventType)">
+                    {{ formatAssignmentHistoryEvent(entry.eventType) }}
+                  </div>
+                  <div class="tp-history-body">
+                    <div class="tp-history-main">
+                      @if (entry.eventType === 'photo_uploaded' || entry.eventType === 'agreement_uploaded') {
+                        <strong>{{ entry.photoFileName || 'File' }}</strong>
+                      } @else if (entry.driverName || entry.previousDriverName) {
+                        <strong>
+                          @if (entry.driverName) {
+                            {{ entry.driverName }}
+                          } @else {
+                            Unassigned
+                          }
+                        </strong>
+                        @if (entry.previousDriverName && entry.previousDriverName !== entry.driverName) {
+                          <span class="tp-history-prev">from {{ entry.previousDriverName }}</span>
+                        }
+                      } @else {
+                        <strong>{{ entry.notes || formatAssignmentHistoryEvent(entry.eventType) }}</strong>
+                      }
+                      @if (entry.truckNumber) {
+                        <span class="tp-history-truck">Truck {{ entry.truckNumber }}</span>
+                      }
+                    </div>
+                    <div class="tp-history-meta">
+                      <span>{{ formatDate(entry.createdAt) }}</span>
+                      @if (entry.changedBy) {
+                        <span>{{ entry.changedBy }}</span>
+                      }
+                      @if (entry.trailerStatus) {
+                        <span class="tp-history-status">{{ entry.trailerStatus }}</span>
+                      }
+                    </div>
+                    @if (entry.notes && entry.eventType !== 'photo_uploaded') {
+                      <p class="tp-history-notes">{{ entry.notes }}</p>
+                    }
+                  </div>
+                  @if (entry.photoId) {
+                    <button type="button" class="tp-icon-btn" title="View photo" (click)="openHistoryPhoto(entry)">
+                      <i class="bx bx-show"></i>
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
           }
         </div>
       }

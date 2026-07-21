@@ -622,6 +622,29 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""LastAssignedDriverName"" VARCHAR(150) NULL;
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""InactivatedAt"" TIMESTAMP NULL;
 
+        CREATE TABLE IF NOT EXISTS ""TrailerAssignmentLogs"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""TrailerId"" VARCHAR(100) NOT NULL,
+            ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+            ""EventType"" VARCHAR(40) NOT NULL,
+            ""DriverId"" INTEGER NULL,
+            ""DriverName"" VARCHAR(150) NULL,
+            ""PreviousDriverId"" INTEGER NULL,
+            ""PreviousDriverName"" VARCHAR(150) NULL,
+            ""TruckNumber"" VARCHAR(50) NULL,
+            ""TrailerStatus"" VARCHAR(20) NULL,
+            ""PhotoId"" INTEGER NULL,
+            ""PhotoFileName"" VARCHAR(255) NULL,
+            ""ChangedByUserId"" INTEGER NULL,
+            ""ChangedBy"" VARCHAR(150) NULL,
+            ""Notes"" text NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_TrailerAssignmentLogs_Org_TrailerId_CreatedAt""
+            ON ""TrailerAssignmentLogs"" (""OrganizationId"", ""TrailerId"", ""CreatedAt"" DESC);
+        CREATE INDEX IF NOT EXISTS ""IX_TrailerAssignmentLogs_TrailerId_CreatedAt""
+            ON ""TrailerAssignmentLogs"" (""TrailerId"", ""CreatedAt"" DESC);
+
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""ExpenseBasis"" VARCHAR(20) NULL;
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""PerIncidentDeductible"" DECIMAL(18,2) NULL;
         ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TerminationNotes"" TEXT NULL;

@@ -68,6 +68,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<CompanyPermit> CompanyPermits => Set<CompanyPermit>();
     public DbSet<TrailerPhoto> TrailerPhotos => Set<TrailerPhoto>();
     public DbSet<TrailerAssignment> TrailerAssignments => Set<TrailerAssignment>();
+    public DbSet<TrailerAssignmentLog> TrailerAssignmentLogs => Set<TrailerAssignmentLog>();
     public DbSet<Carrier> Carriers => Set<Carrier>();
     public DbSet<AppRole> AppRoles => Set<AppRole>();
 

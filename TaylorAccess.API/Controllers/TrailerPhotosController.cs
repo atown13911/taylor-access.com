@@ -236,7 +236,32 @@ public class TrailerPhotosController : ControllerBase
             UpdatedAt = DateTime.UtcNow
         };
         _context.TrailerPhotos.Add(photo);
+        await _context.SaveChangesAsync();
 
+        var currentAssignment = assignments
+            .Where(a =>
+                expandedIds.Contains(a.TrailerId)
+                || (!string.IsNullOrWhiteSpace(a.PermitNumber) && expandedIds.Contains(a.PermitNumber))
+                || (!string.IsNullOrWhiteSpace(a.AssignedTruckNumber) && expandedIds.Contains(a.AssignedTruckNumber)))
+            .OrderByDescending(a => a.UpdatedAt)
+            .FirstOrDefault();
+
+        _context.TrailerAssignmentLogs.Add(new TrailerAssignmentLog
+        {
+            TrailerId = photo.TrailerId,
+            OrganizationId = organizationId,
+            EventType = "photo_uploaded",
+            DriverId = currentAssignment?.AssignedDriverId,
+            DriverName = currentAssignment?.AssignedDriverName,
+            TruckNumber = currentAssignment?.AssignedTruckNumber,
+            TrailerStatus = currentAssignment?.TrailerStatus,
+            PhotoId = photo.Id,
+            PhotoFileName = photo.FileName,
+            ChangedByUserId = user.Id > 0 ? user.Id : null,
+            ChangedBy = !string.IsNullOrWhiteSpace(user.Email) ? user.Email : $"User {user.Id}",
+            Notes = "Trailer photo uploaded",
+            CreatedAt = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
 
         return Ok(new
