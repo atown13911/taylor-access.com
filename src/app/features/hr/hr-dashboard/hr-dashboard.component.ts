@@ -158,51 +158,63 @@ interface StatPanel {
             @if (deptChartData().length > 0) {
               <div class="chart-card">
                 <h3>By Department</h3>
-                <ngx-charts-bar-horizontal
-                  [results]="deptChartData()"
-                  [view]="[chartWidth, 280]"
-                  [scheme]="pieScheme"
-                  [xAxis]="true"
-                  [yAxis]="true"
-                  [showXAxisLabel]="true"
-                  [xAxisLabel]="'People'"
-                  (select)="onDepartmentChartSelect($event)"
-                  [animations]="true"
-                  [gradient]="true">
-                </ngx-charts-bar-horizontal>
+                <div class="hbar-list">
+                  @for (row of deptBarRows(); track row.name; let i = $index) {
+                    <button
+                      type="button"
+                      class="hbar-row"
+                      [class.active]="selectedDepartment() === row.name"
+                      (click)="onDepartmentChartSelect(row)">
+                      <div class="hbar-meta">
+                        <span class="hbar-label">{{ formatBreakdownLabel(row.name) }}</span>
+                        <span class="hbar-value">{{ row.value }}</span>
+                      </div>
+                      <div class="hbar-track">
+                        <span class="hbar-fill tone-{{ i % 8 }}" [style.width.%]="row.pct"></span>
+                      </div>
+                    </button>
+                  }
+                </div>
               </div>
             }
             @if (roleChartData().length > 0) {
               <div class="chart-card">
                 <h3>By Role</h3>
-                <ngx-charts-bar-horizontal
-                  [results]="roleChartData()"
-                  [view]="[chartWidth, 280]"
-                  [scheme]="roleScheme"
-                  [xAxis]="true"
-                  [yAxis]="true"
-                  [showXAxisLabel]="true"
-                  [xAxisLabel]="'People'"
-                  (select)="onRoleChartSelect($event)"
-                  [animations]="true"
-                  [gradient]="true">
-                </ngx-charts-bar-horizontal>
+                <div class="hbar-list">
+                  @for (row of roleBarRows(); track row.name; let i = $index) {
+                    <button
+                      type="button"
+                      class="hbar-row"
+                      [class.active]="selectedRole() === row.name"
+                      (click)="onRoleChartSelect(row)">
+                      <div class="hbar-meta">
+                        <span class="hbar-label">{{ formatBreakdownLabel(row.name) }}</span>
+                        <span class="hbar-value">{{ row.value }}</span>
+                      </div>
+                      <div class="hbar-track">
+                        <span class="hbar-fill tone-{{ i % 8 }}" [style.width.%]="row.pct"></span>
+                      </div>
+                    </button>
+                  }
+                </div>
               </div>
             }
             @if (driverStatusChart().length > 0) {
               <div class="chart-card">
                 <h3>Driver Status</h3>
-                <ngx-charts-bar-horizontal
-                  [results]="driverStatusChart()"
-                  [view]="[chartWidth, 280]"
-                  [scheme]="driverScheme"
-                  [xAxis]="true"
-                  [yAxis]="true"
-                  [showXAxisLabel]="true"
-                  [xAxisLabel]="'Drivers'"
-                  [animations]="true"
-                  [gradient]="true">
-                </ngx-charts-bar-horizontal>
+                <div class="hbar-list">
+                  @for (row of driverBarRows(); track row.name; let i = $index) {
+                    <div class="hbar-row static">
+                      <div class="hbar-meta">
+                        <span class="hbar-label">{{ formatBreakdownLabel(row.name) }}</span>
+                        <span class="hbar-value">{{ row.value }}</span>
+                      </div>
+                      <div class="hbar-track">
+                        <span class="hbar-fill tone-{{ i % 8 }}" [style.width.%]="row.pct"></span>
+                      </div>
+                    </div>
+                  }
+                </div>
               </div>
             }
           </div>
@@ -414,6 +426,76 @@ interface StatPanel {
     .chart-card h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 14px; font-weight: 500; }
     .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
 
+    .hbar-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .hbar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 100%;
+      padding: 0;
+      border: none;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      color: inherit;
+    }
+    .hbar-row.static { cursor: default; }
+    .hbar-row:not(.static):hover .hbar-label,
+    .hbar-row.active .hbar-label { color: #e0f7ff; }
+    .hbar-row:not(.static):hover .hbar-track,
+    .hbar-row.active .hbar-track {
+      box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.28);
+    }
+    .hbar-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .hbar-label {
+      font-size: 0.78rem;
+      color: #c5d0dc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .hbar-value {
+      flex-shrink: 0;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #f8fafc;
+      font-variant-numeric: tabular-nums;
+    }
+    .hbar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+    .hbar-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      min-width: 4px;
+      transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .hbar-fill.tone-0 { background: linear-gradient(90deg, #7c3aed, #a855f7); }
+    .hbar-fill.tone-1 { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+    .hbar-fill.tone-2 { background: linear-gradient(90deg, #0e7490, #22d3ee); }
+    .hbar-fill.tone-3 { background: linear-gradient(90deg, #047857, #34d399); }
+    .hbar-fill.tone-4 { background: linear-gradient(90deg, #a16207, #facc15); }
+    .hbar-fill.tone-5 { background: linear-gradient(90deg, #c2410c, #fb923c); }
+    .hbar-fill.tone-6 { background: linear-gradient(90deg, #be123c, #fb7185); }
+    .hbar-fill.tone-7 { background: linear-gradient(90deg, #6d28d9, #c084fc); }
+
     .alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
     .alert-card {
       background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
@@ -532,10 +614,22 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   roleChartData = signal<ChartPoint[]>([]);
   driverStatusChart = signal<ChartPoint[]>([]);
   headcountData = signal<ChartPoint[]>([]);
-  chartWidth = 360;
   wideChartWidth = 960;
 
   headcountChartData = computed(() => [{ name: 'Headcount', series: this.headcountData() }]);
+
+  private toBarRows(points: ChartPoint[]) {
+    const max = Math.max(...points.map((p) => p.value), 1);
+    return points.map((p) => ({
+      name: p.name,
+      value: p.value,
+      pct: Math.max(4, Math.round((p.value / max) * 100))
+    }));
+  }
+
+  deptBarRows = computed(() => this.toBarRows(this.deptChartData()));
+  roleBarRows = computed(() => this.toBarRows(this.roleChartData()));
+  driverBarRows = computed(() => this.toBarRows(this.driverStatusChart()));
 
   headcountDelta30d = computed(() => {
     const points = this.headcountData();
@@ -755,18 +849,6 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     return items.slice(0, 4);
   });
 
-  pieScheme: Color = {
-    name: 'pie', selectable: true, group: ScaleType.Ordinal,
-    domain: ['#00e5ff', '#a855f7', '#00ff88', '#ffaa00', '#ff2a6d', '#818cf8', '#06b6d4', '#f97316']
-  };
-  roleScheme: Color = {
-    name: 'role', selectable: true, group: ScaleType.Ordinal,
-    domain: ['#a855f7', '#818cf8', '#06b6d4', '#00e5ff', '#00ff88', '#ffaa00', '#f97316', '#ff2a6d']
-  };
-  driverScheme: Color = {
-    name: 'driver', selectable: true, group: ScaleType.Ordinal,
-    domain: ['#00ff88', '#ffaa00', '#a78bfa', '#ff2a6d']
-  };
   areaScheme: Color = {
     name: 'area', selectable: true, group: ScaleType.Ordinal, domain: ['#00ff88']
   };
@@ -783,7 +865,6 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   updateChartWidth(): void {
     const w = window.innerWidth;
-    this.chartWidth = w > 1400 ? 360 : w > 1100 ? 320 : Math.max(280, w - 80);
     this.wideChartWidth = Math.max(320, Math.min(1100, w - 80));
   }
 
@@ -1122,6 +1203,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     const [y, m] = month.split('-');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[parseInt(m, 10) - 1] ?? m} ${String(y).slice(2)}`;
+  }
+
+  formatBreakdownLabel(value: string): string {
+    return String(value ?? '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   timeAgo(dateStr: string): string {
