@@ -155,11 +155,57 @@
             Drayage
           </button>
         </div>
+        <div class="dispatchers-driver-toolbar">
+          <div class="dispatchers-search">
+            <i class='bx bx-search'></i>
+            <input
+              type="text"
+              placeholder="Search name, phone, email, license, truck, dispatcher..."
+              [ngModel]="dispatcherDriverSearch()"
+              (ngModelChange)="dispatcherDriverSearch.set($event)"
+            >
+          </div>
+          <select
+            class="dispatchers-filter-select"
+            [ngModel]="dispatcherAssignmentFilter()"
+            (ngModelChange)="dispatcherAssignmentFilter.set($event)">
+            <option value="all">All assignments</option>
+            <option value="assigned">Assigned</option>
+            <option value="unassigned">Unassigned</option>
+          </select>
+          <select
+            class="dispatchers-filter-select"
+            [ngModel]="dispatcherTypeFilter()"
+            (ngModelChange)="dispatcherTypeFilter.set($event)">
+            <option value="all">All types</option>
+            @for (type of dispatcherDriverTypeOptions(); track type) {
+              <option [value]="type">{{ formatDriverType(type) }}</option>
+            }
+          </select>
+          <select
+            class="dispatchers-filter-select"
+            [ngModel]="dispatcherScopeFilter()"
+            (ngModelChange)="dispatcherScopeFilter.set($event)"
+            [disabled]="!selectedDispatcherId()">
+            <option value="all">All drivers</option>
+            <option value="selected">Selected dispatcher</option>
+          </select>
+          <span class="dispatchers-result-count">
+            {{ filteredDispatcherDrivers().length }}
+            / {{ dispatcherAssignedDrivers().length }}
+          </span>
+        </div>
         @if (dispatcherAssignedDrivers().length === 0) {
           <div class="empty-state compact">
             <i class='bx bx-car'></i>
             <h3>No {{ dispatchersDriverTab() === 'otr' ? 'Landmark OTR' : 'Landmark Drayage' }} drivers</h3>
             <p>No {{ dispatchersDriverTab() === 'otr' ? 'Landmark OTR' : 'Landmark Drayage' }} drivers are available right now.</p>
+          </div>
+        } @else if (filteredDispatcherDrivers().length === 0) {
+          <div class="empty-state compact">
+            <i class='bx bx-search-alt'></i>
+            <h3>No matching drivers</h3>
+            <p>No drivers match your current search or filters.</p>
           </div>
         } @else {
           <table class="data-table">
@@ -179,7 +225,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (driver of dispatcherAssignedDrivers(); track driver.id) {
+              @for (driver of filteredDispatcherDrivers(); track driver.id) {
                 <tr (click)="selectDriverRow(driver)" [class.selected]="selectedDriver()?.id === driver.id" style="cursor:pointer">
                   <td class="name-cell">
                     <div class="avatar">{{ driver.name.charAt(0) }}</div>

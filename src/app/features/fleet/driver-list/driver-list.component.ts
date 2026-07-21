@@ -69,6 +69,10 @@ export class DriverListComponent implements OnInit {
   dispatchersView = signal(false);
   dispatchersDriverTab = signal<'otr' | 'drayage'>('otr');
   selectedDispatcherId = signal<number | null>(null);
+  dispatcherDriverSearch = signal('');
+  dispatcherAssignmentFilter = signal<'all' | 'assigned' | 'unassigned'>('all');
+  dispatcherTypeFilter = signal<'all' | string>('all');
+  dispatcherScopeFilter = signal<'all' | 'selected'>('all');
   showAssignDriverModal = signal(false);
   assignDriverSaving = signal(false);
   assignDriverId = signal<string | null>(null);
@@ -250,6 +254,55 @@ export class DriverListComponent implements OnInit {
     return this.dispatchersDriverTab() === 'drayage'
       ? this.landmarkDrayageDrivers()
       : this.landmarkOtrDrivers();
+  });
+
+  dispatcherDriverTypeOptions = computed(() => {
+    const types = new Set<string>();
+    for (const driver of this.dispatcherAssignedDrivers()) {
+      const type = String(driver.type || '').trim();
+      if (type) types.add(type);
+    }
+    return [...types].sort((a, b) => a.localeCompare(b));
+  });
+
+  filteredDispatcherDrivers = computed(() => {
+    const query = this.dispatcherDriverSearch().trim().toLowerCase();
+    const assignment = this.dispatcherAssignmentFilter();
+    const type = this.dispatcherTypeFilter();
+    const scope = this.dispatcherScopeFilter();
+    const selectedId = this.selectedDispatcherId();
+    let pool = this.dispatcherAssignedDrivers();
+
+    if (assignment === 'assigned') {
+      pool = pool.filter((d) => this.hasDispatcherAssignment(d));
+    } else if (assignment === 'unassigned') {
+      pool = pool.filter((d) => !this.hasDispatcherAssignment(d));
+    }
+
+    if (type !== 'all') {
+      pool = pool.filter((d) => String(d.type || '').trim() === type);
+    }
+
+    if (scope === 'selected' && selectedId) {
+      const selected = this.dispatcherRows().find((d) => d.id === selectedId);
+      pool = pool.filter((d) => {
+        if (this.toNullableNumber(d.dispatchUserId) === selectedId) return true;
+        return selected ? this.driverMatchesDispatcher(d, selected) : false;
+      });
+    }
+
+    if (!query) return pool;
+    return pool.filter((d) => {
+      const dispatcherName = this.resolveDispatcherName(d).toLowerCase();
+      return (
+        d.name.toLowerCase().includes(query) ||
+        d.phone.includes(query) ||
+        d.email?.toLowerCase().includes(query) ||
+        d.licenseNumber?.toLowerCase().includes(query) ||
+        String(d.truckNumber || '').toLowerCase().includes(query) ||
+        dispatcherName.includes(query)
+      );
+    });
   });
 
   landmarkOtrDrivers = computed(() =>
@@ -652,6 +705,7 @@ export class DriverListComponent implements OnInit {
 
   setDispatchersDriverTab(tab: 'otr' | 'drayage'): void {
     this.dispatchersDriverTab.set(tab);
+    this.dispatcherDriverSearch.set('');
   }
 
   private reconcileDriverFleetNames(): void {
