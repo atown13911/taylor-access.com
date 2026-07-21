@@ -3,10 +3,11 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { catchError, lastValueFrom, of } from 'rxjs';
-import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { environment } from '../../../../environments/environment';
 
 interface ChartPoint { name: string; value: number; }
+interface HeadcountSnapshot { month: string; value: number; }
+interface WavePoint { key: string; label: string; value: number; x: number; y: number; }
 interface ActivityItem {
   id: string;
   icon: string;
@@ -57,7 +58,7 @@ interface StatPanel {
 @Component({
   selector: 'app-hr-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, NgxChartsModule],
+  imports: [CommonModule, RouterLink],
   template: `
     <div class="hr-dashboard">
       <div class="page-header">
@@ -256,17 +257,60 @@ interface StatPanel {
       <div class="chart-section">
         <h2><i class="bx bx-trending-up"></i> Headcount Trend</h2>
         <div class="chart-card wide">
-          @if (headcountData().length > 0) {
-            <ngx-charts-area-chart
-              [results]="headcountChartData()"
-              [view]="[wideChartWidth, 260]"
-              [scheme]="areaScheme"
-              [xAxis]="true"
-              [yAxis]="true"
-              [autoScale]="true"
-              [gradient]="true"
-              [animations]="true">
-            </ngx-charts-area-chart>
+          @if (headcountWave().points.length > 0) {
+            <div class="wave-chart" [style.--wave-w.px]="wideChartWidth">
+              <svg
+                class="wave-svg"
+                [attr.viewBox]="'0 0 ' + waveView.w + ' ' + waveView.h"
+                preserveAspectRatio="xMidYMid meet"
+                role="img"
+                aria-label="Monthly headcount trend">
+                <defs>
+                  <linearGradient id="headcountWaveFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#00ff88" stop-opacity="0.45"></stop>
+                    <stop offset="55%" stop-color="#00ff88" stop-opacity="0.16"></stop>
+                    <stop offset="100%" stop-color="#00ff88" stop-opacity="0.02"></stop>
+                  </linearGradient>
+                  <linearGradient id="headcountWaveStroke" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="#34d399"></stop>
+                    <stop offset="100%" stop-color="#00ff88"></stop>
+                  </linearGradient>
+                  <filter id="headcountGlow" x="-20%" y="-40%" width="140%" height="180%">
+                    <feGaussianBlur stdDeviation="3.5" result="blur"></feGaussianBlur>
+                    <feMerge>
+                      <feMergeNode in="blur"></feMergeNode>
+                      <feMergeNode in="SourceGraphic"></feMergeNode>
+                    </feMerge>
+                  </filter>
+                </defs>
+
+                @for (tick of headcountWave().yTicks; track tick.label) {
+                  <line
+                    class="wave-grid"
+                    [attr.x1]="waveView.padL"
+                    [attr.x2]="waveView.w - waveView.padR"
+                    [attr.y1]="tick.y"
+                    [attr.y2]="tick.y">
+                  </line>
+                  <text class="wave-y-label" [attr.x]="waveView.padL - 8" [attr.y]="tick.y + 4" text-anchor="end">{{ tick.label }}</text>
+                }
+
+                <path class="wave-area" [attr.d]="headcountWave().areaPath" fill="url(#headcountWaveFill)"></path>
+                <path
+                  class="wave-line"
+                  [attr.d]="headcountWave().linePath"
+                  fill="none"
+                  stroke="url(#headcountWaveStroke)"
+                  stroke-width="3"
+                  filter="url(#headcountGlow)">
+                </path>
+
+                @for (pt of headcountWave().points; track pt.key) {
+                  <circle class="wave-dot" [attr.cx]="pt.x" [attr.cy]="pt.y" r="4.5"></circle>
+                  <text class="wave-x-label" [attr.x]="pt.x" [attr.y]="waveView.h - 10" text-anchor="middle">{{ pt.label }}</text>
+                }
+              </svg>
+            </div>
           } @else {
             <div class="chart-empty">No headcount trend data yet</div>
           }
@@ -469,6 +513,24 @@ interface StatPanel {
     .chart-card h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 14px; font-weight: 500; }
     .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
 
+    .wave-chart {
+      width: 100%;
+      max-width: var(--wave-w, 960px);
+      height: 280px;
+      margin: 0 auto;
+    }
+    .wave-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+    .wave-grid { stroke: rgba(255, 255, 255, 0.06); stroke-width: 1; }
+    .wave-y-label { fill: #888; font-size: 11px; font-family: inherit; }
+    .wave-x-label { fill: #9ca3af; font-size: 11px; font-family: inherit; }
+    .wave-line { stroke-linecap: round; stroke-linejoin: round; }
+    .wave-dot {
+      fill: #0b1220;
+      stroke: #00ff88;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.55));
+    }
+
     .vbar-chart {
       display: flex;
       align-items: flex-end;
@@ -575,10 +637,6 @@ interface StatPanel {
     }
     .filter-chip.clear-all { background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #ddd6fe; }
 
-    ::ng-deep .ngx-charts text { fill: #aaa !important; }
-    ::ng-deep .ngx-charts .gridline-path { stroke: rgba(255, 255, 255, 0.06) !important; }
-    ::ng-deep .ngx-charts .tick text { fill: #888 !important; font-size: 10px !important; }
-
     .quick-actions { margin-bottom: 32px; }
     .quick-actions h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; text-shadow: 0 0 18px rgba(0, 229, 255, 0.25); }
     .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
@@ -662,10 +720,9 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   deptChartData = signal<ChartPoint[]>([]);
   roleChartData = signal<ChartPoint[]>([]);
   driverStatusChart = signal<ChartPoint[]>([]);
-  headcountData = signal<ChartPoint[]>([]);
+  headcountSnapshots = signal<HeadcountSnapshot[]>([]);
   wideChartWidth = 960;
-
-  headcountChartData = computed(() => [{ name: 'Headcount', series: this.headcountData() }]);
+  readonly waveView = { w: 1000, h: 280, padL: 52, padR: 20, padT: 18, padB: 40 };
 
   private toBarRows(points: ChartPoint[]) {
     const max = Math.max(...points.map((p) => p.value), 1);
@@ -680,8 +737,52 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   roleBarRows = computed(() => this.toBarRows(this.roleChartData()));
   driverBarRows = computed(() => this.toBarRows(this.driverStatusChart()));
 
+  /** Last 12 months, gaps filled, drawn as a smooth wave. */
+  headcountWave = computed(() => {
+    const monthly = this.buildMonthlyHeadcountSeries(this.headcountSnapshots());
+    const view = this.waveView;
+    if (!monthly.length) {
+      return { points: [] as WavePoint[], linePath: '', areaPath: '', yTicks: [] as { y: number; label: string }[] };
+    }
+
+    const values = monthly.map((m) => m.value);
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    const pad = Math.max(2, Math.ceil((maxV - minV) * 0.12) || 2);
+    const yMin = Math.max(0, Math.floor(minV - pad));
+    const yMax = Math.ceil(maxV + pad);
+    const plotW = view.w - view.padL - view.padR;
+    const plotH = view.h - view.padT - view.padB;
+    const n = monthly.length;
+    const xAt = (i: number) => view.padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    const yAt = (v: number) => view.padT + (1 - (v - yMin) / Math.max(yMax - yMin, 1)) * plotH;
+
+    const points: WavePoint[] = monthly.map((m, i) => ({
+      key: m.month,
+      label: this.formatMonthShort(m.month),
+      value: m.value,
+      x: xAt(i),
+      y: yAt(m.value)
+    }));
+
+    const linePath = this.smoothWavePath(points);
+    const baseY = view.h - view.padB;
+    const areaPath = points.length
+      ? `${linePath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`
+      : '';
+
+    const tickCount = 5;
+    const yTicks = Array.from({ length: tickCount }, (_, i) => {
+      const t = i / (tickCount - 1);
+      const value = Math.round(yMax - t * (yMax - yMin));
+      return { y: yAt(value), label: String(value) };
+    });
+
+    return { points, linePath, areaPath, yTicks };
+  });
+
   headcountDelta30d = computed(() => {
-    const points = this.headcountData();
+    const points = this.headcountWave().points;
     if (points.length < 2) return '0';
     const delta = (points[points.length - 1]?.value ?? 0) - (points[0]?.value ?? 0);
     return delta > 0 ? `+${delta}` : `${delta}`;
@@ -958,10 +1059,6 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     return items.slice(0, 4);
   });
 
-  areaScheme: Color = {
-    name: 'area', selectable: true, group: ScaleType.Ordinal, domain: ['#00ff88']
-  };
-
   ngOnInit(): void {
     this.updateChartWidth();
     window.addEventListener('resize', this.resizeHandler);
@@ -1175,13 +1272,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   async loadSnapshots(): Promise<void> {
     const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-snapshots`);
-    const snaps = this.asArray(res).slice(0, 12).reverse();
-    this.headcountData.set(
-      snaps.map((s: any) => ({
-        name: this.formatMonth(String(s.month ?? '')),
+    const snaps = this.asArray(res)
+      .map((s: any) => ({
+        month: this.normalizeMonthKey(String(s.month ?? '')),
         value: Number(s.activeCount ?? 0)
       }))
-    );
+      .filter((s) => !!s.month)
+      .sort((a, b) => a.month.localeCompare(b.month));
+    this.headcountSnapshots.set(snaps);
   }
 
   async loadEmployeePopulation(): Promise<void> {
@@ -1312,6 +1410,103 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     const [y, m] = month.split('-');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${months[parseInt(m, 10) - 1] ?? m} ${String(y).slice(2)}`;
+  }
+
+  formatMonthShort(month: string): string {
+    if (!month) return '';
+    const m = parseInt(month.split('-')[1] ?? '0', 10);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[m - 1] ?? month;
+  }
+
+  private normalizeMonthKey(raw: string): string {
+    const s = String(raw ?? '').trim();
+    if (/^\d{4}-\d{2}$/.test(s)) return s;
+    const d = new Date(s);
+    if (!Number.isFinite(d.getTime())) return '';
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+
+  /** Build the last 12 calendar months; interpolate across missing snapshot months. */
+  private buildMonthlyHeadcountSeries(snaps: HeadcountSnapshot[]): HeadcountSnapshot[] {
+    if (!snaps.length) return [];
+
+    const byMonth = new Map(snaps.map((s) => [s.month, s.value]));
+    const end = new Date();
+    end.setDate(1);
+    const months: string[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+
+    const known = months
+      .map((month, index) => (byMonth.has(month) ? { index, value: byMonth.get(month)! } : null))
+      .filter((x): x is { index: number; value: number } => !!x);
+
+    // If no snapshot falls in the window, use nearest known values across the full history.
+    if (!known.length) {
+      const first = snaps[0];
+      const last = snaps[snaps.length - 1];
+      return months.map((month) => {
+        if (month <= first.month) return { month, value: first.value };
+        if (month >= last.month) return { month, value: last.value };
+        // interpolate between surrounding history points
+        let lo = snaps[0];
+        let hi = snaps[snaps.length - 1];
+        for (let i = 0; i < snaps.length; i++) {
+          if (snaps[i].month <= month) lo = snaps[i];
+          if (snaps[i].month >= month) {
+            hi = snaps[i];
+            break;
+          }
+        }
+        if (lo.month === hi.month) return { month, value: lo.value };
+        const t = this.monthIndex(month) - this.monthIndex(lo.month);
+        const span = Math.max(1, this.monthIndex(hi.month) - this.monthIndex(lo.month));
+        return { month, value: Math.round(lo.value + ((hi.value - lo.value) * t) / span) };
+      });
+    }
+
+    const filled = months.map((month, index) => {
+      if (byMonth.has(month)) return { month, value: byMonth.get(month)! };
+
+      let prev = known.filter((k) => k.index < index).pop();
+      let next = known.find((k) => k.index > index);
+      if (!prev && next) return { month, value: next.value };
+      if (prev && !next) return { month, value: prev.value };
+      if (!prev || !next) return { month, value: snaps[snaps.length - 1].value };
+
+      const span = Math.max(1, next.index - prev.index);
+      const t = (index - prev.index) / span;
+      return { month, value: Math.round(prev.value + (next.value - prev.value) * t) };
+    });
+
+    return filled;
+  }
+
+  private monthIndex(month: string): number {
+    const [y, m] = month.split('-').map((n) => parseInt(n, 10));
+    return y * 12 + (m - 1);
+  }
+
+  private smoothWavePath(points: WavePoint[]): string {
+    if (!points.length) return '';
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i - 1] ?? points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] ?? p2;
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
   }
 
   formatBreakdownLabel(value: string): string {
