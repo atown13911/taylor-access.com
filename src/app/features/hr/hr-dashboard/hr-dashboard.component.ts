@@ -1,30 +1,46 @@
-import { Component, signal, computed, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { lastValueFrom, catchError, of } from 'rxjs';
+import { catchError, lastValueFrom, of } from 'rxjs';
+import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { environment } from '../../../../environments/environment';
-import { NgxChartsModule, Color, ScaleType } from '@swimlane/ngx-charts';
-
-interface RosterSummary {
-  totalEmployees: number;
-  activeEmployees: number;
-  byDepartment: { department: string; count: number }[];
-  byRole: { role: string; count: number }[];
-}
-
-interface SessionDashboard {
-  dailyHours: { date: string; totalHours: number; sessionCount: number }[];
-  employeeHoursThisWeek: { name: string; hours: number }[];
-  clockInDistribution: { morning: number; afternoon: number; evening: number; night: number };
-  uniqueUsersToday: number;
-  totalSessionsToday: number;
-}
 
 interface ChartPoint { name: string; value: number; }
-interface ActivityItem { id: string; icon: string; title: string; description: string; time: string; date: Date; category: string; }
-interface ActionAlert { id: string; level: 'high' | 'medium' | 'low'; icon: string; title: string; detail: string; }
-interface InsightItem { id: string; tone: 'positive' | 'warning' | 'neutral'; title: string; detail: string; }
+interface ActivityItem {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  time: string;
+  date: Date;
+  category: string;
+}
+interface ActionAlert {
+  id: string;
+  level: 'high' | 'medium' | 'low';
+  icon: string;
+  title: string;
+  detail: string;
+  route?: string;
+}
+interface InsightItem {
+  id: string;
+  tone: 'positive' | 'warning' | 'neutral';
+  title: string;
+  detail: string;
+}
+interface StatPanel {
+  tone: 'cyan' | 'green' | 'orange' | 'violet';
+  icon: string;
+  label: string;
+  badge: string;
+  value: string | number;
+  meter: number;
+  chip: string;
+  soft: string;
+  route?: string;
+}
 
 @Component({
   selector: 'app-hr-dashboard',
@@ -34,125 +50,83 @@ interface InsightItem { id: string; tone: 'positive' | 'warning' | 'neutral'; ti
     <div class="hr-dashboard">
       <div class="page-header">
         <div>
-          <h1><i class="bx bx-group"></i> HR Dashboard</h1>
-          <p>Human Resources & Payroll Management</p>
+          <h1><i class="bx bx-group"></i> Taylor Access</h1>
+          <p>Workforce, fleet, compliance, and payroll at a glance</p>
         </div>
-        <button class="btn-refresh" (click)="loadAll()" [disabled]="loading()">
+        <button class="btn-refresh" type="button" (click)="loadAll()" [disabled]="loading()">
           <i class="bx" [class.bx-refresh]="!loading()" [class.bx-loader-alt]="loading()" [class.bx-spin]="loading()"></i>
           Refresh
         </button>
       </div>
 
-      <!-- Stats Grid -->
-      <div class="stats-grid">
-        <div class="stat-card total">
-          <i class="bx bx-group stat-icon"></i>
-          <div><span class="stat-value">{{ stats().totalEmployees }}</span><span class="stat-label">Total Employees</span></div>
-        </div>
-        <div class="stat-card active-card">
-          <i class="bx bx-user-check stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ stats().activeEmployees }}</span>
-            <span class="stat-label">Active</span>
-            <span class="stat-delta" [class.up]="activeEmployeesDelta() >= 0" [class.down]="activeEmployeesDelta() < 0">{{ activeEmployeesDeltaLabel() }}</span>
-          </div>
-        </div>
-        <div class="stat-card timeoff">
-          <i class="bx bx-calendar-event stat-icon"></i>
-          <div><span class="stat-value">{{ stats().pendingTimeOff }}</span><span class="stat-label">Pending Time Off</span></div>
-        </div>
-        <div class="stat-card attendance">
-          <i class="bx bx-time-five stat-icon"></i>
-          <div><span class="stat-value">{{ dashStats()?.uniqueUsersToday ?? stats().presentToday }}</span><span class="stat-label">Logged In Today</span></div>
-        </div>
-        <div class="stat-card payroll">
-          <i class="bx bx-money stat-icon"></i>
-          <div><span class="stat-value">{{ stats().pendingPaychecks }}</span><span class="stat-label">Pending Paychecks</span></div>
-        </div>
-        <a routerLink="/hr/roster" [queryParams]="{tab: 'bulk'}" class="stat-card staging clickable">
-          <i class="bx bx-table stat-icon"></i>
-          <div><span class="stat-value">{{ stats().bulkStaging }}</span><span class="stat-label">Bulk Staging</span></div>
-        </a>
-        <div class="stat-card inactive">
-          <i class="bx bx-user-x stat-icon"></i>
-          <div><span class="stat-value">{{ inactiveEmployees() }}</span><span class="stat-label">Inactive</span></div>
-        </div>
-        <div class="stat-card sessioncount">
-          <i class="bx bx-pulse stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ dashStats()?.totalSessionsToday ?? 0 }}</span>
-            <span class="stat-label">Sessions Today</span>
-            <span class="stat-delta" [class.up]="sessionsDeltaVsYesterday() >= 0" [class.down]="sessionsDeltaVsYesterday() < 0">{{ sessionsDeltaLabel() }}</span>
-          </div>
-        </div>
-        <div class="stat-card login-rate">
-          <i class="bx bx-signal-5 stat-icon"></i>
-          <div><span class="stat-value">{{ loginCoveragePercent() }}%</span><span class="stat-label">Login Coverage</span></div>
-        </div>
-        <div class="stat-card avg-hours">
-          <i class="bx bx-line-chart-down stat-icon"></i>
-          <div>
-            <span class="stat-value">{{ averageDailyHours30d() }}</span>
-            <span class="stat-label">Avg Hours / Day</span>
-            <span class="stat-delta" [class.up]="hoursDeltaVsYesterday() >= 0" [class.down]="hoursDeltaVsYesterday() < 0">{{ hoursDeltaLabel() }}</span>
-          </div>
-        </div>
-        <div class="stat-card peak-shift">
-          <i class="bx bx-timer stat-icon"></i>
-          <div><span class="stat-value">{{ peakShiftLabel() }}</span><span class="stat-label">Peak Login Window</span></div>
-        </div>
-        <div class="stat-card lead-dept">
-          <i class="bx bx-building-house stat-icon"></i>
-          <div><span class="stat-value">{{ topDepartmentName() }}</span><span class="stat-label">Largest Department</span></div>
-        </div>
-        <div class="stat-card lead-role">
-          <i class="bx bx-id-card stat-icon"></i>
-          <div><span class="stat-value">{{ topRoleName() }}</span><span class="stat-label">Largest Role</span></div>
-        </div>
-        <div class="stat-card growth">
-          <i class="bx bx-trending-up stat-icon"></i>
-          <div><span class="stat-value">{{ headcountDelta30d() }}</span><span class="stat-label">30d Headcount Delta</span></div>
-        </div>
-        <div class="stat-card training">
-          <i class="bx bx-book-open stat-icon"></i>
-          <div><span class="stat-value">{{ trainingCoveragePercent() }}%</span><span class="stat-label">Training Coverage</span></div>
-        </div>
-        <div class="stat-card absence">
-          <i class="bx bx-calendar-x stat-icon"></i>
-          <div><span class="stat-value">{{ absenteeismProxyPercent() }}%</span><span class="stat-label">Absenteeism Risk</span></div>
-        </div>
-        <div class="stat-card pending-actions">
-          <i class="bx bx-error-circle stat-icon"></i>
-          <div><span class="stat-value">{{ pendingActionsTotal() }}</span><span class="stat-label">Pending Actions</span></div>
-        </div>
+      <div class="stats-bar" aria-label="Taylor Access snapshot">
+        @for (panel of statPanels(); track panel.label) {
+          @if (panel.route) {
+            <a class="stat-panel" [routerLink]="panel.route" [ngClass]="'tone-' + panel.tone">
+              <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ panel.label }}</span>
+                <span class="stat-panel-badge">{{ panel.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ panel.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ panel.chip }}</span>
+                <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+              </footer>
+            </a>
+          } @else {
+            <article class="stat-panel" [ngClass]="'tone-' + panel.tone">
+              <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ panel.label }}</span>
+                <span class="stat-panel-badge">{{ panel.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ panel.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ panel.chip }}</span>
+                <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+              </footer>
+            </article>
+          }
+        }
       </div>
 
-      <!-- Action Needed -->
       <div class="chart-section">
         <h2><i class="bx bx-bell"></i> Action Needed</h2>
         @if (actionAlerts().length > 0) {
           <div class="alert-grid">
             @for (alert of actionAlerts(); track alert.id) {
-              <div class="alert-card" [class.level-high]="alert.level === 'high'" [class.level-medium]="alert.level === 'medium'" [class.level-low]="alert.level === 'low'">
-                <div class="alert-icon"><i class="bx" [class]="alert.icon"></i></div>
-                <div class="alert-copy">
-                  <strong>{{ alert.title }}</strong>
-                  <span>{{ alert.detail }}</span>
+              @if (alert.route) {
+                <a class="alert-card" [routerLink]="alert.route" [class]="'level-' + alert.level">
+                  <div class="alert-icon"><i class="bx" [ngClass]="alert.icon"></i></div>
+                  <div class="alert-copy">
+                    <strong>{{ alert.title }}</strong>
+                    <span>{{ alert.detail }}</span>
+                  </div>
+                </a>
+              } @else {
+                <div class="alert-card" [class]="'level-' + alert.level">
+                  <div class="alert-icon"><i class="bx" [ngClass]="alert.icon"></i></div>
+                  <div class="alert-copy">
+                    <strong>{{ alert.title }}</strong>
+                    <span>{{ alert.detail }}</span>
+                  </div>
                 </div>
-              </div>
+              }
             }
           </div>
         } @else {
-          <div class="chart-card"><div class="chart-empty">No critical alerts right now</div></div>
+          <div class="chart-card"><div class="chart-empty">No critical items right now</div></div>
         }
       </div>
 
-      <!-- AI Insights -->
       <div class="chart-section">
-        <h2><i class="bx bx-bot"></i> AI Insights</h2>
+        <h2><i class="bx bx-bulb"></i> Ops Insights</h2>
         <div class="insight-grid">
-          @for (insight of aiInsights(); track insight.id) {
-            <div class="insight-card" [class.tone-positive]="insight.tone === 'positive'" [class.tone-warning]="insight.tone === 'warning'" [class.tone-neutral]="insight.tone === 'neutral'">
+          @for (insight of opsInsights(); track insight.id) {
+            <div class="insight-card" [class]="'tone-' + insight.tone">
               <strong>{{ insight.title }}</strong>
               <span>{{ insight.detail }}</span>
             </div>
@@ -160,77 +134,38 @@ interface InsightItem { id: string; tone: 'positive' | 'warning' | 'neutral'; ti
         </div>
       </div>
 
-      <!-- Row 2: Work Hours Charts -->
-      <div class="chart-section">
-        <h2><i class="bx bx-line-chart"></i> Work Hours</h2>
-        <div class="chart-grid-2">
-          <div class="chart-card">
-            <h3>Daily Work Hours (Last 30 Days)</h3>
-            @if (dailyHoursData().length > 0) {
-              <ngx-charts-line-chart
-                [results]="dailyHoursChartData()"
-                [view]="[chartWidth, 250]"
-                [scheme]="lineScheme"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="false"
-                [showYAxisLabel]="true"
-                [yAxisLabel]="'Hours'"
-                [autoScale]="true"
-                [animations]="true"
-                [gradient]="true">
-              </ngx-charts-line-chart>
-            } @else {
-              <div class="chart-empty">No session data yet</div>
-            }
-          </div>
-          <div class="chart-card">
-            <h3>Top Employees This Week (Hours)</h3>
-            @if (employeeHoursData().length > 0) {
-              <ngx-charts-bar-horizontal
-                [results]="employeeHoursData()"
-                [view]="[chartWidth, 250]"
-                [scheme]="barScheme"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [xAxisLabel]="'Hours'"
-                [gradient]="true">
-              </ngx-charts-bar-horizontal>
-            } @else {
-              <div class="chart-empty">No data this week</div>
-            }
-          </div>
-        </div>
-      </div>
-
-      <!-- Row 3: Workforce Breakdown -->
-      @if (deptChartData().length > 0 || roleChartData().length > 0) {
+      @if (deptChartData().length > 0 || roleChartData().length > 0 || driverStatusChart().length > 0) {
         <div class="chart-section">
-          <h2><i class="bx bx-bar-chart-alt-2"></i> Workforce Breakdown</h2>
+          <h2><i class="bx bx-bar-chart-alt-2"></i> Workforce Mix</h2>
           <div class="breakdown-filters">
             @if (selectedDepartment()) {
-              <button class="filter-chip" (click)="clearDepartmentFilter()"><i class="bx bx-building-house"></i> Dept: {{ selectedDepartment() }} <i class="bx bx-x"></i></button>
+              <button type="button" class="filter-chip" (click)="clearDepartmentFilter()">
+                <i class="bx bx-building-house"></i> Dept: {{ selectedDepartment() }} <i class="bx bx-x"></i>
+              </button>
             }
             @if (selectedRole()) {
-              <button class="filter-chip" (click)="clearRoleFilter()"><i class="bx bx-id-card"></i> Role: {{ selectedRole() }} <i class="bx bx-x"></i></button>
+              <button type="button" class="filter-chip" (click)="clearRoleFilter()">
+                <i class="bx bx-id-card"></i> Role: {{ selectedRole() }} <i class="bx bx-x"></i>
+              </button>
             }
             @if (selectedDepartment() || selectedRole()) {
-              <button class="filter-chip clear-all" (click)="clearWorkforceFilters()"><i class="bx bx-reset"></i> Clear Filters</button>
+              <button type="button" class="filter-chip clear-all" (click)="clearWorkforceFilters()">
+                <i class="bx bx-reset"></i> Clear Filters
+              </button>
             }
           </div>
-          <div class="chart-grid-2">
+          <div class="chart-grid-3">
             @if (deptChartData().length > 0) {
               <div class="chart-card">
                 <h3>By Department</h3>
                 <ngx-charts-bar-horizontal
                   [results]="deptChartData()"
-                  [view]="[chartWidth, 300]"
+                  [view]="[chartWidth, 280]"
                   [scheme]="pieScheme"
                   [xAxis]="true"
                   [yAxis]="true"
                   [showXAxisLabel]="true"
-                  [xAxisLabel]="'Employees'"
+                  [xAxisLabel]="'People'"
                   (select)="onDepartmentChartSelect($event)"
                   [animations]="true"
                   [gradient]="true">
@@ -242,13 +177,29 @@ interface InsightItem { id: string; tone: 'positive' | 'warning' | 'neutral'; ti
                 <h3>By Role</h3>
                 <ngx-charts-bar-horizontal
                   [results]="roleChartData()"
-                  [view]="[chartWidth, 300]"
+                  [view]="[chartWidth, 280]"
                   [scheme]="roleScheme"
                   [xAxis]="true"
                   [yAxis]="true"
                   [showXAxisLabel]="true"
-                  [xAxisLabel]="'Employees'"
+                  [xAxisLabel]="'People'"
                   (select)="onRoleChartSelect($event)"
+                  [animations]="true"
+                  [gradient]="true">
+                </ngx-charts-bar-horizontal>
+              </div>
+            }
+            @if (driverStatusChart().length > 0) {
+              <div class="chart-card">
+                <h3>Driver Status</h3>
+                <ngx-charts-bar-horizontal
+                  [results]="driverStatusChart()"
+                  [view]="[chartWidth, 280]"
+                  [scheme]="driverScheme"
+                  [xAxis]="true"
+                  [yAxis]="true"
+                  [showXAxisLabel]="true"
+                  [xAxisLabel]="'Drivers'"
                   [animations]="true"
                   [gradient]="true">
                 </ngx-charts-bar-horizontal>
@@ -258,72 +209,61 @@ interface InsightItem { id: string; tone: 'positive' | 'warning' | 'neutral'; ti
         </div>
       }
 
-      <!-- Row 4: Clock-In Distribution -->
       <div class="chart-section">
-        <h2><i class="bx bx-time"></i> Clock-In Patterns (Today)</h2>
-        <div class="chart-grid-2">
-          <div class="chart-card">
-            <h3>Login Time Distribution</h3>
-            @if (clockInData().length > 0) {
-              <ngx-charts-bar-vertical
-                [results]="clockInData()"
-                [view]="[chartWidth, 250]"
-                [scheme]="clockScheme"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [xAxisLabel]="'Time of Day'"
-                [showYAxisLabel]="true"
-                [yAxisLabel]="'Logins'"
-                [gradient]="true"
-                [animations]="true">
-              </ngx-charts-bar-vertical>
-            } @else {
-              <div class="chart-empty">No logins today</div>
-            }
-          </div>
-          <div class="chart-card">
-            <h3>Headcount Trend</h3>
-            @if (headcountData().length > 0) {
-              <ngx-charts-area-chart
-                [results]="headcountChartData()"
-                [view]="[chartWidth, 250]"
-                [scheme]="areaScheme"
-                [xAxis]="true"
-                [yAxis]="true"
-                [autoScale]="true"
-                [gradient]="true"
-                [animations]="true">
-              </ngx-charts-area-chart>
-            } @else {
-              <div class="chart-empty">No trend data</div>
-            }
-          </div>
+        <h2><i class="bx bx-trending-up"></i> Headcount Trend</h2>
+        <div class="chart-card wide">
+          @if (headcountData().length > 0) {
+            <ngx-charts-area-chart
+              [results]="headcountChartData()"
+              [view]="[wideChartWidth, 260]"
+              [scheme]="areaScheme"
+              [xAxis]="true"
+              [yAxis]="true"
+              [autoScale]="true"
+              [gradient]="true"
+              [animations]="true">
+            </ngx-charts-area-chart>
+          } @else {
+            <div class="chart-empty">No headcount trend data yet</div>
+          }
         </div>
       </div>
 
-      <!-- Quick Actions -->
       <div class="quick-actions">
         <h2>Quick Actions</h2>
         <div class="action-grid">
-          <a routerLink="/hr/paychecks" class="action-card"><i class="bx bx-money"></i><span>Process Payroll</span>
-            @if (stats().pendingPaychecks > 0) { <span class="action-badge paycheck-badge">{{ stats().pendingPaychecks }}</span> }
+          <a routerLink="/hr/payroll" class="action-card">
+            <i class="bx bx-money"></i><span>Payroll</span>
+            @if (metrics().pendingPaychecks > 0) {
+              <span class="action-badge">{{ metrics().pendingPaychecks }}</span>
+            }
           </a>
-          <a routerLink="/hr/time-off" class="action-card"><i class="bx bx-calendar-event"></i><span>Review Time Off</span>
-            @if (stats().pendingTimeOff > 0) { <span class="action-badge timeoff-badge">{{ stats().pendingTimeOff }}</span> }
+          <a routerLink="/hr/time-off" class="action-card">
+            <i class="bx bx-calendar-event"></i><span>Time Off</span>
+            @if (metrics().pendingTimeOff > 0) {
+              <span class="action-badge">{{ metrics().pendingTimeOff }}</span>
+            }
           </a>
-          <a routerLink="/hr/time-clock" class="action-card"><i class="bx bx-time-five"></i><span>Time Clock</span></a>
-          <a routerLink="/hr/documents" class="action-card"><i class="bx bx-folder"></i><span>HR Documents</span></a>
-          <a routerLink="/hr/roster" class="action-card"><i class="bx bx-id-card"></i><span>Employee Roster</span></a>
-          <a routerLink="/compliance/dot" class="action-card"><i class="bx bx-shield-alt-2"></i><span>DOT Compliance</span></a>
+          <a routerLink="/drivers" class="action-card"><i class="bx bx-id-card"></i><span>Drivers</span></a>
+          <a routerLink="/dispatchers" class="action-card"><i class="bx bx-broadcast"></i><span>Dispatchers</span></a>
+          <a routerLink="/hr/applicants" class="action-card">
+            <i class="bx bx-user-plus"></i><span>Applicants</span>
+            @if (metrics().openApplicants > 0) {
+              <span class="action-badge">{{ metrics().openApplicants }}</span>
+            }
+          </a>
+          <a routerLink="/compliance/tags-permits" class="action-card"><i class="bx bx-trailer"></i><span>Trailers</span></a>
+          <a routerLink="/compliance/driver-database" class="action-card"><i class="bx bx-shield-alt-2"></i><span>Compliance</span></a>
+          <a routerLink="/hr/roster" class="action-card"><i class="bx bx-group"></i><span>Employee Roster</span></a>
         </div>
       </div>
 
-      <!-- Recent Activity -->
       <div class="recent-section">
         <h2>Recent Activity</h2>
         @if (recentActivity().length === 0) {
-          <div class="activity-list"><div class="activity-empty"><i class="bx bx-history"></i><span>No recent activity found</span></div></div>
+          <div class="activity-list">
+            <div class="activity-empty"><i class="bx bx-history"></i><span>No recent activity found</span></div>
+          </div>
         } @else {
           <div class="activity-list">
             @for (activity of recentActivity(); track activity.id) {
@@ -343,133 +283,221 @@ interface InsightItem { id: string; tone: 'positive' | 'warning' | 'neutral'; ti
   `,
   styles: [`
     .hr-dashboard { padding: 24px; }
-    .page-header { display: flex; justify-content: space-between; align-items: flex-start; }
-    .page-header h1 { color: #00f2fe; font-size: 2rem; margin: 0 0 8px 0; display: flex; align-items: center; gap: 12px; text-shadow: 0 0 20px rgba(0,242,254,0.5); }
+
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 8px; }
+    .page-header h1 {
+      color: #00f2fe; font-size: 2rem; margin: 0 0 8px; display: flex; align-items: center; gap: 12px;
+      text-shadow: 0 0 20px rgba(0, 242, 254, 0.5);
+    }
     .page-header p { color: #9ca3af; margin: 0; }
-    .btn-refresh { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; border: 1px solid rgba(0,242,254,0.3); background: rgba(0,242,254,0.1); color: #00f2fe; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
-    .btn-refresh:hover:not(:disabled) { background: rgba(0,242,254,0.2); }
+    .btn-refresh {
+      padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;
+      border: 1px solid rgba(0, 242, 254, 0.3); background: rgba(0, 242, 254, 0.1); color: #00f2fe;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-refresh:hover:not(:disabled) { background: rgba(0, 242, 254, 0.2); }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; margin: 20px 0 28px; }
-    .stat-card {
-      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
-      padding: 14px 12px; display: flex; align-items: center; gap: 10px; transition: all 0.3s ease;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-      min-height: 84px;
+    @keyframes stat-panel-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    .stat-card:hover { transform: translateY(-3px); box-shadow: 0 0 25px rgba(0,242,254,0.2); }
-    .stat-card.clickable { cursor: pointer; text-decoration: none; }
-    .stat-icon { font-size: 1.35rem; }
-    .stat-value { font-size: 1.15rem; font-weight: 700; display: block; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
-    .stat-label { font-size: 0.66rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
-    .stat-delta { display: block; margin-top: 3px; font-size: 0.68rem; font-weight: 600; color: #93c5fd; }
-    .stat-delta.up { color: #22c55e; }
-    .stat-delta.down { color: #f97316; }
-    .stat-card.total .stat-icon, .stat-card.total .stat-value { color: #00d4ff; }
-    .stat-card.active-card .stat-icon, .stat-card.active-card .stat-value { color: #22c55e; }
-    .stat-card.timeoff .stat-icon, .stat-card.timeoff .stat-value { color: #fbbf24; }
-    .stat-card.attendance .stat-icon, .stat-card.attendance .stat-value { color: #a855f7; }
-    .stat-card.payroll .stat-icon, .stat-card.payroll .stat-value { color: #3b82f6; }
-    .stat-card.staging .stat-icon, .stat-card.staging .stat-value { color: #00f2fe; }
-    .stat-card.inactive .stat-icon, .stat-card.inactive .stat-value { color: #fb7185; }
-    .stat-card.sessioncount .stat-icon, .stat-card.sessioncount .stat-value { color: #60a5fa; }
-    .stat-card.login-rate .stat-icon, .stat-card.login-rate .stat-value { color: #2dd4bf; }
-    .stat-card.avg-hours .stat-icon, .stat-card.avg-hours .stat-value { color: #facc15; }
-    .stat-card.peak-shift .stat-icon, .stat-card.peak-shift .stat-value { color: #c084fc; }
-    .stat-card.lead-dept .stat-icon, .stat-card.lead-dept .stat-value { color: #22d3ee; }
-    .stat-card.lead-role .stat-icon, .stat-card.lead-role .stat-value { color: #38bdf8; }
-    .stat-card.growth .stat-icon, .stat-card.growth .stat-value { color: #34d399; }
-    .stat-card.training .stat-icon, .stat-card.training .stat-value { color: #14b8a6; }
-    .stat-card.absence .stat-icon, .stat-card.absence .stat-value { color: #f59e0b; }
-    .stat-card.pending-actions .stat-icon, .stat-card.pending-actions .stat-value { color: #ef4444; }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0 28px;
+    }
+    @media (max-width: 1200px) { .stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .stats-bar { grid-template-columns: 1fr; } }
+
+    .stat-panel {
+      --kpi-accent: #67e8f9;
+      --kpi-accent-soft: rgba(0, 212, 255, 0.16);
+      position: relative; overflow: hidden; isolation: isolate;
+      display: flex; flex-direction: column; gap: 10px;
+      min-width: 0; min-height: 148px; padding: 16px 16px 14px 18px;
+      border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(120% 90% at 100% 0%, var(--kpi-accent-soft), transparent 55%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.05), transparent 46%),
+        rgba(10, 13, 22, 0.92);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 32px rgba(0, 0, 0, 0.32);
+      animation: stat-panel-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+      text-decoration: none; color: inherit;
+    }
+    .stat-panel::before {
+      content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px;
+      border-radius: 0 4px 4px 0;
+      background: linear-gradient(180deg, var(--kpi-accent), transparent 95%);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--kpi-accent) 55%, transparent);
+    }
+    .stat-panel:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--kpi-accent) 42%, rgba(255, 255, 255, 0.08));
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.06) inset,
+        0 0 28px color-mix(in srgb, var(--kpi-accent) 14%, transparent),
+        0 18px 36px rgba(0, 0, 0, 0.36);
+    }
+    .stat-panel:nth-child(1) { animation-delay: 0s; }
+    .stat-panel:nth-child(2) { animation-delay: 0.05s; }
+    .stat-panel:nth-child(3) { animation-delay: 0.1s; }
+    .stat-panel:nth-child(4) { animation-delay: 0.15s; }
+    .stat-panel:nth-child(5) { animation-delay: 0.2s; }
+    .stat-panel:nth-child(6) { animation-delay: 0.25s; }
+    .stat-panel:nth-child(7) { animation-delay: 0.3s; }
+    .stat-panel:nth-child(8) { animation-delay: 0.35s; }
+    .stat-panel.tone-cyan { --kpi-accent: #00d4ff; --kpi-accent-soft: rgba(0, 212, 255, 0.18); }
+    .stat-panel.tone-green { --kpi-accent: #00ff88; --kpi-accent-soft: rgba(0, 255, 136, 0.16); }
+    .stat-panel.tone-orange { --kpi-accent: #ffaa00; --kpi-accent-soft: rgba(255, 170, 0, 0.16); }
+    .stat-panel.tone-violet { --kpi-accent: #a78bfa; --kpi-accent-soft: rgba(167, 139, 250, 0.16); }
+
+    .stat-panel-mark {
+      position: absolute; right: -6px; bottom: -10px; font-size: 5.2rem; line-height: 1;
+      color: var(--kpi-accent); opacity: 0.09; transform: rotate(-8deg); pointer-events: none; z-index: 0;
+    }
+    .stat-panel:hover .stat-panel-mark { opacity: 0.14; transform: rotate(-4deg) translateY(-2px); }
+    .stat-panel-head, .stat-panel-value, .stat-panel-meter, .stat-panel-foot { position: relative; z-index: 1; }
+    .stat-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    .stat-panel-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .stat-panel-badge {
+      flex-shrink: 0; padding: 2px 7px; border-radius: 999px; font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: color-mix(in srgb, var(--kpi-accent) 88%, #fff);
+      background: color-mix(in srgb, var(--kpi-accent) 14%, transparent);
+      border: 1px solid color-mix(in srgb, var(--kpi-accent) 35%, transparent);
+    }
+    .stat-panel-value {
+      margin: 2px 0 0; font-size: clamp(1.25rem, 0.8vw + 1rem, 1.65rem); font-weight: 700;
+      letter-spacing: 0.02em; line-height: 1.1; color: #f8fafc; font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 22px color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+    }
+    .stat-panel-meter {
+      height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden;
+    }
+    .stat-panel-meter span {
+      display: block; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--kpi-accent) 55%, #fff), var(--kpi-accent));
+      box-shadow: 0 0 10px color-mix(in srgb, var(--kpi-accent) 45%, transparent);
+      transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .stat-panel-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+    .stat-panel-chip {
+      display: inline-flex; align-items: center; max-width: 100%; padding: 3px 8px; border-radius: 999px;
+      font-size: 0.68rem; font-weight: 600; color: rgba(226, 232, 240, 0.86);
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .stat-panel-chip.soft {
+      color: color-mix(in srgb, var(--kpi-accent) 80%, #e2e8f0);
+      border-color: color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+      background: color-mix(in srgb, var(--kpi-accent) 10%, transparent);
+    }
 
     .chart-section { margin-bottom: 32px; }
-    .chart-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; i { color: var(--cyan); } }
-    .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .chart-section h2 {
+      color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .chart-section h2 i { color: #00e5ff; }
+    .chart-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .chart-card {
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px; padding: 18px; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    .chart-card.wide { padding: 20px; }
+    .chart-card h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 14px; font-weight: 500; }
+    .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
+
     .alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
     .alert-card {
-      background: rgba(255,255,255,0.04); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-      border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 12px;
-      display: flex; align-items: center; gap: 10px; min-height: 72px;
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px;
+      min-height: 72px; text-decoration: none; color: inherit;
     }
     .alert-card.level-high { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 16px rgba(239, 68, 68, 0.14); }
     .alert-card.level-medium { border-color: rgba(245, 158, 11, 0.45); box-shadow: 0 0 16px rgba(245, 158, 11, 0.1); }
     .alert-card.level-low { border-color: rgba(45, 212, 191, 0.35); }
-    .alert-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(0, 242, 254, 0.12); color: #67e8f9; font-size: 1.05rem; }
+    .alert-icon {
+      width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+      background: rgba(0, 242, 254, 0.12); color: #67e8f9; font-size: 1.05rem;
+    }
     .alert-copy { display: flex; flex-direction: column; gap: 2px; }
     .alert-copy strong { color: #e6f7ff; font-size: 0.83rem; }
     .alert-copy span { color: #9ca3af; font-size: 0.76rem; }
+
     .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
     .insight-card {
-      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px;
-      padding: 12px; display: flex; flex-direction: column; gap: 4px;
+      background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px;
     }
     .insight-card strong { color: #e6f7ff; font-size: 0.84rem; }
     .insight-card span { color: #a5b4c3; font-size: 0.78rem; }
-    .insight-card.tone-positive { border-color: rgba(34, 197, 94, 0.35); box-shadow: 0 0 14px rgba(34, 197, 94, 0.11); }
-    .insight-card.tone-warning { border-color: rgba(245, 158, 11, 0.45); box-shadow: 0 0 14px rgba(245, 158, 11, 0.1); }
+    .insight-card.tone-positive { border-color: rgba(34, 197, 94, 0.35); }
+    .insight-card.tone-warning { border-color: rgba(245, 158, 11, 0.45); }
     .insight-card.tone-neutral { border-color: rgba(56, 189, 248, 0.25); }
+
     .breakdown-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .filter-chip {
-      border: 1px solid rgba(0,242,254,0.28); background: rgba(0,242,254,0.09); color: #a5f3fc;
+      border: 1px solid rgba(0, 242, 254, 0.28); background: rgba(0, 242, 254, 0.09); color: #a5f3fc;
       border-radius: 999px; padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 6px;
       cursor: pointer;
     }
     .filter-chip.clear-all { background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #ddd6fe; }
-    .chart-card {
-      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px; overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-      h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 16px; font-weight: 500; }
-    }
-    .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
 
-    ::ng-deep .ngx-charts { text { fill: #aaa !important; } .gridline-path { stroke: rgba(255,255,255,0.06) !important; } }
+    ::ng-deep .ngx-charts text { fill: #aaa !important; }
+    ::ng-deep .ngx-charts .gridline-path { stroke: rgba(255, 255, 255, 0.06) !important; }
     ::ng-deep .ngx-charts .tick text { fill: #888 !important; font-size: 10px !important; }
-    ::ng-deep .ngx-charts .label { fill: #ccc !important; font-size: 11px !important; }
-    ::ng-deep ngx-charts-line-chart, ::ng-deep ngx-charts-bar-horizontal, ::ng-deep ngx-charts-pie-chart,
-    ::ng-deep ngx-charts-bar-vertical, ::ng-deep ngx-charts-area-chart { display: block; position: relative; z-index: 0; }
 
     .quick-actions { margin-bottom: 32px; }
     .quick-actions h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
-    .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
     .action-card {
-      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;
-      padding: 20px; text-align: center; cursor: pointer; text-decoration: none;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-      transition: all 0.3s; position: relative;
-      i { font-size: 2rem; color: var(--cyan); }
-      span { color: #ccc; font-size: 0.82rem; font-weight: 500; }
-      &:hover { border-color: var(--cyan); transform: translateY(-2px); box-shadow: 0 0 20px rgba(0,212,255,0.15); }
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;
+      padding: 18px; text-align: center; text-decoration: none; display: flex; flex-direction: column;
+      align-items: center; gap: 10px; position: relative; transition: all 0.25s;
     }
-    .action-badge { position: absolute; top: 8px; right: 8px; background: #ff2a6d; color: #fff; font-size: 0.65rem; padding: 2px 6px; border-radius: 8px; font-weight: 700; }
+    .action-card i { font-size: 1.8rem; color: #00e5ff; }
+    .action-card span { color: #ccc; font-size: 0.82rem; font-weight: 500; }
+    .action-card:hover { border-color: #00e5ff; transform: translateY(-2px); box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+    .action-badge {
+      position: absolute; top: 8px; right: 8px; background: #ff2a6d; color: #fff;
+      font-size: 0.65rem; padding: 2px 6px; border-radius: 8px; font-weight: 700;
+    }
 
     .recent-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
     .activity-list {
-      background: rgba(255,255,255,0.04); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; overflow: hidden;
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px; overflow: hidden;
     }
-    .activity-empty { padding: 40px; text-align: center; color: #555; display: flex; flex-direction: column; align-items: center; gap: 8px; i { font-size: 2rem; } }
-    .activity-item { display: flex; align-items: flex-start; gap: 14px; padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
-    .activity-item:hover { background: rgba(255,255,255,0.02); }
+    .activity-empty {
+      padding: 40px; text-align: center; color: #555; display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+    }
+    .activity-empty i { font-size: 2rem; }
+    .activity-item {
+      display: flex; align-items: flex-start; gap: 14px; padding: 14px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
     .activity-item:last-child { border-bottom: none; }
     .activity-icon-wrap {
-      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      &.timeoff { background: rgba(251,191,36,0.15); color: #fbbf24; }
-      &.paycheck { background: rgba(59,130,246,0.15); color: #3b82f6; }
-      &.document { background: rgba(0,212,255,0.15); color: #00d4ff; }
-      &.attendance { background: rgba(168,85,247,0.15); color: #a855f7; }
+      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0;
     }
-    .activity-content { display: flex; flex-direction: column; gap: 2px;
-      strong { color: #e0f7ff; font-size: 0.85rem; }
-      span { color: #888; font-size: 0.8rem; }
-      .time { font-size: 0.72rem; color: #555; }
-    }
+    .activity-icon-wrap.timeoff { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .activity-icon-wrap.document { background: rgba(0, 212, 255, 0.15); color: #00d4ff; }
+    .activity-icon-wrap.applicant { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .activity-content { display: flex; flex-direction: column; gap: 2px; }
+    .activity-content strong { color: #e0f7ff; font-size: 0.85rem; }
+    .activity-content span { color: #888; font-size: 0.8rem; }
+    .activity-content .time { font-size: 0.72rem; color: #555; }
 
-    @media (max-width: 900px) { .chart-grid-2 { grid-template-columns: 1fr; } }
-    @media (max-width: 640px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .action-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 1100px) { .chart-grid-3 { grid-template-columns: 1fr; } }
   `]
 })
 export class HrDashboardComponent implements OnInit, OnDestroy {
@@ -478,248 +506,270 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   private resizeHandler = () => this.updateChartWidth();
 
   loading = signal(false);
-  stats = signal({ totalEmployees: 0, activeEmployees: 0, pendingTimeOff: 0, presentToday: 0, pendingPaychecks: 0, bulkStaging: 0 });
-  dashStats = signal<SessionDashboard | null>(null);
+  metrics = signal({
+    totalEmployees: 0,
+    activeEmployees: 0,
+    activeDrivers: 0,
+    totalDrivers: 0,
+    dispatchers: 0,
+    driversWithDispatcher: 0,
+    openApplicants: 0,
+    pendingTimeOff: 0,
+    pendingPaychecks: 0,
+    bulkStaging: 0,
+    complianceAtRisk: 0,
+    trailersActive: 0,
+    trailersUnassigned: 0,
+    docsExpiring: 0,
+    docsExpired: 0
+  });
+
   recentActivity = signal<ActivityItem[]>([]);
-  hrDocs = signal<any[]>([]);
   employeePopulation = signal<any[]>([]);
   selectedDepartment = signal<string | null>(null);
   selectedRole = signal<string | null>(null);
-
-  dailyHoursData = signal<ChartPoint[]>([]);
-  employeeHoursData = signal<ChartPoint[]>([]);
   deptChartData = signal<ChartPoint[]>([]);
   roleChartData = signal<ChartPoint[]>([]);
-  clockInData = signal<ChartPoint[]>([]);
+  driverStatusChart = signal<ChartPoint[]>([]);
   headcountData = signal<ChartPoint[]>([]);
+  chartWidth = 360;
+  wideChartWidth = 960;
 
-  chartWidth = 480;
+  headcountChartData = computed(() => [{ name: 'Headcount', series: this.headcountData() }]);
 
-  dailyHoursChartData = computed(() =>
-    [{ name: 'Hours', series: this.dailyHoursData() }]
-  );
-
-  headcountChartData = computed(() =>
-    [{ name: 'Headcount', series: this.headcountData() }]
-  );
-  inactiveEmployees = computed(() =>
-    Math.max((this.stats().totalEmployees ?? 0) - (this.stats().activeEmployees ?? 0), 0)
-  );
-  loginCoveragePercent = computed(() => {
-    const active = this.stats().activeEmployees ?? 0;
-    if (active <= 0) return 0;
-    const loggedIn = this.dashStats()?.uniqueUsersToday ?? 0;
-    return Math.min(100, Math.round((loggedIn / active) * 100));
-  });
-  averageDailyHours30d = computed(() => {
-    const rows = this.dailyHoursData();
-    if (!rows.length) return '0.0';
-    const total = rows.reduce((sum, row) => sum + (row.value ?? 0), 0);
-    return (total / rows.length).toFixed(1);
-  });
-  peakShiftLabel = computed(() => {
-    const dist = this.dashStats()?.clockInDistribution;
-    if (!dist) return 'N/A';
-    const buckets: { name: string; value: number }[] = [
-      { name: 'Morning', value: dist.morning ?? 0 },
-      { name: 'Afternoon', value: dist.afternoon ?? 0 },
-      { name: 'Evening', value: dist.evening ?? 0 },
-      { name: 'Night', value: dist.night ?? 0 }
-    ];
-    const top = buckets.sort((a, b) => b.value - a.value)[0];
-    return top.value > 0 ? top.name : 'N/A';
-  });
-  topDepartmentName = computed(() => this.deptChartData()[0]?.name ?? 'N/A');
-  topRoleName = computed(() => this.roleChartData()[0]?.name ?? 'N/A');
   headcountDelta30d = computed(() => {
     const points = this.headcountData();
     if (points.length < 2) return '0';
     const delta = (points[points.length - 1]?.value ?? 0) - (points[0]?.value ?? 0);
     return delta > 0 ? `+${delta}` : `${delta}`;
   });
-  activeEmployeesDelta = computed(() => {
-    const points = this.headcountData();
-    if (points.length < 2) return 0;
-    return (points[points.length - 1]?.value ?? 0) - (points[points.length - 2]?.value ?? 0);
+
+  private pct(n: number, d: number): number {
+    return d > 0 ? Math.min(100, Math.round((n / d) * 100)) : 0;
+  }
+
+  statPanels = computed<StatPanel[]>(() => {
+    const m = this.metrics();
+    const inactiveEmployees = Math.max(m.totalEmployees - m.activeEmployees, 0);
+    const assignedDriversPct = this.pct(m.driversWithDispatcher, m.activeDrivers || m.totalDrivers);
+    const unassignedTrailersPct = this.pct(m.trailersUnassigned, m.trailersActive || 1);
+    const compliancePct = this.pct(m.complianceAtRisk, m.activeDrivers || m.totalDrivers || 1);
+
+    return [
+      {
+        tone: 'cyan',
+        icon: 'bx-group',
+        label: 'Active Employees',
+        badge: 'Office',
+        value: m.activeEmployees,
+        meter: this.pct(m.activeEmployees, m.totalEmployees || 1),
+        chip: `${inactiveEmployees} inactive`,
+        soft: `${m.totalEmployees} total`,
+        route: '/hr/roster'
+      },
+      {
+        tone: 'green',
+        icon: 'bx-id-card',
+        label: 'Active Drivers',
+        badge: 'Fleet',
+        value: m.activeDrivers,
+        meter: this.pct(m.activeDrivers, m.totalDrivers || 1),
+        chip: `${m.totalDrivers} on roster`,
+        soft: `${this.pct(m.activeDrivers, m.totalDrivers || 1)}% active`,
+        route: '/drivers'
+      },
+      {
+        tone: 'orange',
+        icon: 'bx-broadcast',
+        label: 'Dispatchers',
+        badge: 'Ops',
+        value: m.dispatchers,
+        meter: m.dispatchers > 0 ? 100 : 0,
+        chip: `${m.driversWithDispatcher} drivers linked`,
+        soft: `${assignedDriversPct}% coverage`,
+        route: '/dispatchers'
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-user-plus',
+        label: 'Open Applicants',
+        badge: 'Hiring',
+        value: m.openApplicants,
+        meter: Math.min(100, m.openApplicants),
+        chip: 'In pipeline',
+        soft: 'Needs review',
+        route: '/hr/applicants'
+      },
+      {
+        tone: 'orange',
+        icon: 'bx-calendar-event',
+        label: 'Pending Time Off',
+        badge: 'PTO',
+        value: m.pendingTimeOff,
+        meter: Math.min(100, m.pendingTimeOff * 12),
+        chip: 'Awaiting approval',
+        soft: m.pendingTimeOff > 0 ? 'Action needed' : 'Clear',
+        route: '/hr/time-off'
+      },
+      {
+        tone: 'cyan',
+        icon: 'bx-money',
+        label: 'Pending Paychecks',
+        badge: 'Payroll',
+        value: m.pendingPaychecks,
+        meter: Math.min(100, m.pendingPaychecks * 10),
+        chip: m.bulkStaging > 0 ? `${m.bulkStaging} staging` : 'Queue',
+        soft: m.pendingPaychecks > 0 ? 'Review payroll' : 'Caught up',
+        route: '/hr/payroll'
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-shield-alt-2',
+        label: 'Compliance At Risk',
+        badge: 'DOT',
+        value: m.complianceAtRisk,
+        meter: compliancePct,
+        chip: `${m.docsExpired} expired docs`,
+        soft: `${m.docsExpiring} expiring`,
+        route: '/compliance/driver-database'
+      },
+      {
+        tone: 'green',
+        icon: 'bx-trailer',
+        label: 'Unassigned Trailers',
+        badge: 'Assets',
+        value: m.trailersUnassigned,
+        meter: unassignedTrailersPct,
+        chip: `${m.trailersActive} active`,
+        soft: `${unassignedTrailersPct}% open`,
+        route: '/compliance/tags-permits'
+      }
+    ];
   });
-  activeEmployeesDeltaLabel = computed(() => {
-    const d = this.activeEmployeesDelta();
-    return d > 0 ? `+${d} MoM` : d < 0 ? `${d} MoM` : '0 MoM';
-  });
-  sessionsDeltaVsYesterday = computed(() => {
-    const rows = this.dashStats()?.dailyHours ?? [];
-    if (rows.length < 2) return 0;
-    const today = rows[rows.length - 1]?.sessionCount ?? 0;
-    const prev = rows[rows.length - 2]?.sessionCount ?? 0;
-    return today - prev;
-  });
-  sessionsDeltaLabel = computed(() => {
-    const d = this.sessionsDeltaVsYesterday();
-    return d > 0 ? `+${d} vs yesterday` : d < 0 ? `${d} vs yesterday` : 'flat vs yesterday';
-  });
-  hoursDeltaVsYesterday = computed(() => {
-    const rows = this.dashStats()?.dailyHours ?? [];
-    if (rows.length < 2) return 0;
-    const today = rows[rows.length - 1]?.totalHours ?? 0;
-    const prev = rows[rows.length - 2]?.totalHours ?? 0;
-    return Number((today - prev).toFixed(1));
-  });
-  hoursDeltaLabel = computed(() => {
-    const d = this.hoursDeltaVsYesterday();
-    return d > 0 ? `+${d}h vs yesterday` : d < 0 ? `${d}h vs yesterday` : 'flat vs yesterday';
-  });
-  trainingCoveragePercent = computed(() => {
-    const active = this.stats().activeEmployees ?? 0;
-    if (active <= 0) return 0;
-    const docs = this.hrDocs();
-    const trainingDocs = docs.filter((d: any) => {
-      const category = String(d?.category ?? d?.subCategory ?? d?.documentType ?? '').toLowerCase();
-      return category.includes('training') || category.includes('entry_level') || category.includes('orientation');
-    });
-    if (!trainingDocs.length) return 0;
-    const uniqueEmployees = new Set(
-      trainingDocs
-        .map((d: any) => d?.employeeId ?? d?.driverId ?? d?.userId)
-        .filter((id: any) => id !== null && id !== undefined && `${id}`.trim() !== '')
-    ).size;
-    const covered = uniqueEmployees > 0 ? uniqueEmployees : trainingDocs.length;
-    return Math.min(100, Math.round((covered / active) * 100));
-  });
-  absenteeismProxyPercent = computed(() => {
-    const active = this.stats().activeEmployees ?? 0;
-    if (active <= 0) return 0;
-    return Math.min(100, Math.round(((this.stats().pendingTimeOff ?? 0) / active) * 100));
-  });
-  pendingActionsTotal = computed(() =>
-    (this.stats().pendingTimeOff ?? 0)
-    + (this.stats().pendingPaychecks ?? 0)
-    + this.expiringDocsCount()
-    + this.expiredDocsCount()
-  );
-  expiringDocsCount = computed(() => {
-    const now = Date.now();
-    const in90 = now + (90 * 24 * 60 * 60 * 1000);
-    return this.hrDocs().filter((d: any) => {
-      const status = String(d?.status ?? '').toLowerCase();
-      if (status === 'expiring') return true;
-      const expiry = d?.expiryDate ?? d?.expirationDate;
-      if (!expiry) return false;
-      const t = new Date(expiry).getTime();
-      return Number.isFinite(t) && t >= now && t <= in90;
-    }).length;
-  });
-  expiredDocsCount = computed(() => {
-    const now = Date.now();
-    return this.hrDocs().filter((d: any) => {
-      const status = String(d?.status ?? '').toLowerCase();
-      if (status === 'expired') return true;
-      const expiry = d?.expiryDate ?? d?.expirationDate;
-      if (!expiry) return false;
-      const t = new Date(expiry).getTime();
-      return Number.isFinite(t) && t < now;
-    }).length;
-  });
+
   actionAlerts = computed<ActionAlert[]>(() => {
+    const m = this.metrics();
     const alerts: ActionAlert[] = [];
-    if (this.expiredDocsCount() > 0) {
+    if (m.docsExpired > 0) {
       alerts.push({
         id: 'expired-docs',
         level: 'high',
         icon: 'bx-error',
-        title: `${this.expiredDocsCount()} compliance docs expired`,
-        detail: 'Prioritize renewals to reduce compliance exposure.'
+        title: `${m.docsExpired} HR/compliance docs expired`,
+        detail: 'Renew expired documents to reduce compliance exposure.',
+        route: '/hr/documents'
       });
     }
-    if (this.expiringDocsCount() > 0) {
+    if (m.complianceAtRisk > 0) {
       alerts.push({
-        id: 'expiring-docs',
-        level: 'medium',
-        icon: 'bx-time-five',
-        title: `${this.expiringDocsCount()} docs expiring in 90 days`,
-        detail: 'Schedule reminders and owner follow-ups now.'
+        id: 'compliance-risk',
+        level: 'high',
+        icon: 'bx-shield-x',
+        title: `${m.complianceAtRisk} drivers need compliance attention`,
+        detail: 'Review expired or missing compliance items on the driver board.',
+        route: '/compliance/driver-database'
       });
     }
-    if ((this.stats().pendingPaychecks ?? 0) > 0) {
+    if (m.pendingPaychecks > 0) {
       alerts.push({
-        id: 'pending-paychecks',
+        id: 'pending-pay',
         level: 'high',
         icon: 'bx-money-withdraw',
-        title: `${this.stats().pendingPaychecks} pending paychecks`,
-        detail: 'Payroll queue requires immediate review.'
+        title: `${m.pendingPaychecks} pending paychecks`,
+        detail: 'Payroll queue needs review before pay run.',
+        route: '/hr/payroll'
       });
     }
-    if ((this.stats().pendingTimeOff ?? 0) > 0) {
+    if (m.pendingTimeOff > 0) {
       alerts.push({
-        id: 'pending-timeoff',
+        id: 'pending-pto',
         level: 'medium',
         icon: 'bx-calendar-exclamation',
-        title: `${this.stats().pendingTimeOff} time-off requests pending`,
-        detail: 'Approve or deny requests before schedule lock.'
+        title: `${m.pendingTimeOff} time-off requests pending`,
+        detail: 'Approve or deny before schedules lock.',
+        route: '/hr/time-off'
       });
     }
-    if (this.loginCoveragePercent() < 35 && (this.stats().activeEmployees ?? 0) > 10) {
+    if (m.openApplicants > 0) {
       alerts.push({
-        id: 'low-login-coverage',
+        id: 'applicants',
+        level: 'medium',
+        icon: 'bx-user-plus',
+        title: `${m.openApplicants} applicants in pipeline`,
+        detail: 'Move candidates forward or close stale applications.',
+        route: '/hr/applicants'
+      });
+    }
+    if (m.trailersUnassigned > 0) {
+      alerts.push({
+        id: 'trailers',
         level: 'low',
-        icon: 'bx-line-chart-down',
-        title: `Low daily login coverage (${this.loginCoveragePercent()}%)`,
-        detail: 'Compare shift rosters against clock-in behavior.'
+        icon: 'bx-trailer',
+        title: `${m.trailersUnassigned} active trailers unassigned`,
+        detail: 'Assign drivers or move unused trailers to inactive.',
+        route: '/compliance/tags-permits'
       });
     }
     return alerts.slice(0, 6);
   });
-  aiInsights = computed<InsightItem[]>(() => {
-    const items: InsightItem[] = [];
-    const coverage = this.loginCoveragePercent();
-    const training = this.trainingCoveragePercent();
-    const absenteeism = this.absenteeismProxyPercent();
-    const pending = this.pendingActionsTotal();
-    const headcountDelta = this.headcountDelta30d();
-    const isGrowth = headcountDelta.startsWith('+');
 
-    if (pending > 0) {
-      items.push({
-        id: 'pending-actions',
-        tone: 'warning',
-        title: `${pending} actionable items are open`,
-        detail: 'Resolve payroll, time-off, and document expirations to reduce operational risk.'
-      });
-    }
+  opsInsights = computed<InsightItem[]>(() => {
+    const m = this.metrics();
+    const items: InsightItem[] = [];
+    const driverCoverage = this.pct(m.driversWithDispatcher, m.activeDrivers || 1);
+    const activeDriverPct = this.pct(m.activeDrivers, m.totalDrivers || 1);
+    const delta = this.headcountDelta30d();
+
     items.push({
-      id: 'coverage',
-      tone: coverage >= 55 ? 'positive' : 'warning',
-      title: `Daily login coverage is ${coverage}%`,
-      detail: coverage >= 55 ? 'Engagement is healthy for current active headcount.' : 'Below target baseline; compare by shift and manager groups.'
+      id: 'dispatch-coverage',
+      tone: driverCoverage >= 80 ? 'positive' : driverCoverage >= 50 ? 'neutral' : 'warning',
+      title: `${driverCoverage}% of active drivers have a dispatcher`,
+      detail: driverCoverage >= 80
+        ? 'Dispatcher coverage looks solid across the Landmark roster.'
+        : 'Assign remaining Landmark drivers so dispatch ownership is clear.'
     });
     items.push({
-      id: 'training',
-      tone: training >= 70 ? 'positive' : 'warning',
-      title: `Training coverage is ${training}%`,
-      detail: training >= 70 ? 'Current completion level supports compliance posture.' : 'Training completion appears low; prioritize critical certifications.'
+      id: 'driver-health',
+      tone: activeDriverPct >= 70 ? 'positive' : 'warning',
+      title: `${m.activeDrivers} of ${m.totalDrivers} drivers are active`,
+      detail: activeDriverPct >= 70
+        ? 'Fleet availability is healthy for current operations.'
+        : 'Review inactive drivers and onboarding status.'
     });
     items.push({
       id: 'headcount',
-      tone: isGrowth ? 'positive' : 'neutral',
-      title: `Headcount trend: ${headcountDelta} over 30 days`,
-      detail: isGrowth ? 'Growth trend is positive; validate onboarding quality and 90-day retention.' : 'Flat/negative trend detected; monitor attrition drivers by role and department.'
+      tone: delta.startsWith('+') ? 'positive' : 'neutral',
+      title: `Headcount trend: ${delta} over recent snapshots`,
+      detail: delta.startsWith('+')
+        ? 'Headcount is growing — confirm onboarding and 90-day retention.'
+        : 'Headcount is flat or down — watch attrition by role and department.'
     });
-    if (absenteeism > 10) {
+    if (m.complianceAtRisk > 0 || m.docsExpiring > 0) {
       items.push({
-        id: 'absence',
+        id: 'compliance',
         tone: 'warning',
-        title: `Absenteeism proxy at ${absenteeism}%`,
-        detail: 'Pending time-off volume is elevated versus active employee count.'
+        title: 'Compliance pressure is elevated',
+        detail: `${m.complianceAtRisk} drivers at risk and ${m.docsExpiring} docs expiring within 90 days.`
       });
     }
-    return items.slice(0, 5);
+    return items.slice(0, 4);
   });
 
-  lineScheme: Color = { name: 'line', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
-  barScheme: Color = { name: 'bar', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff'] };
-  pieScheme: Color = { name: 'pie', selectable: true, group: ScaleType.Ordinal, domain: ['#00e5ff', '#a855f7', '#00ff88', '#ffaa00', '#ff2a6d', '#818cf8', '#06b6d4', '#f97316', '#22c55e', '#ec4899'] };
-  roleScheme: Color = { name: 'role', selectable: true, group: ScaleType.Ordinal, domain: ['#a855f7', '#818cf8', '#06b6d4', '#00e5ff', '#00ff88', '#ffaa00', '#f97316', '#ff2a6d', '#22c55e', '#ec4899'] };
-  clockScheme: Color = { name: 'clock', selectable: true, group: ScaleType.Ordinal, domain: ['#ffaa00', '#00e5ff', '#a855f7', '#1a1a4e'] };
-  areaScheme: Color = { name: 'area', selectable: true, group: ScaleType.Ordinal, domain: ['#00ff88'] };
+  pieScheme: Color = {
+    name: 'pie', selectable: true, group: ScaleType.Ordinal,
+    domain: ['#00e5ff', '#a855f7', '#00ff88', '#ffaa00', '#ff2a6d', '#818cf8', '#06b6d4', '#f97316']
+  };
+  roleScheme: Color = {
+    name: 'role', selectable: true, group: ScaleType.Ordinal,
+    domain: ['#a855f7', '#818cf8', '#06b6d4', '#00e5ff', '#00ff88', '#ffaa00', '#f97316', '#ff2a6d']
+  };
+  driverScheme: Color = {
+    name: 'driver', selectable: true, group: ScaleType.Ordinal,
+    domain: ['#00ff88', '#ffaa00', '#a78bfa', '#ff2a6d']
+  };
+  areaScheme: Color = {
+    name: 'area', selectable: true, group: ScaleType.Ordinal, domain: ['#00ff88']
+  };
 
   ngOnInit(): void {
     this.updateChartWidth();
@@ -733,21 +783,25 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   updateChartWidth(): void {
     const w = window.innerWidth;
-    this.chartWidth = w > 1400 ? 580 : w > 1000 ? 480 : w > 700 ? 400 : w - 80;
+    this.chartWidth = w > 1400 ? 360 : w > 1100 ? 320 : Math.max(280, w - 80);
+    this.wideChartWidth = Math.max(320, Math.min(1100, w - 80));
   }
 
-  async loadAll() {
+  async loadAll(): Promise<void> {
     this.loading.set(true);
     try {
       await Promise.all([
         this.loadRosterSummary(),
+        this.loadDriversAndDispatchers(),
+        this.loadApplicants(),
+        this.loadTrailers(),
+        this.loadCompliance(),
         this.loadTimeOff(),
         this.loadPaychecks(),
         this.loadStaging(),
-        this.loadDashboardStats(),
+        this.loadHrDocs(),
         this.loadSnapshots(),
         this.loadEmployeePopulation(),
-        this.loadHrDocsInsights(),
         this.loadRecentActivity()
       ]);
     } finally {
@@ -758,101 +812,238 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   private async fetch<T>(url: string): Promise<T | null> {
     try {
       return await lastValueFrom(
-        this.http.get<T>(url).pipe(catchError(err => { console.error(`Dashboard fetch failed: ${url}`, err); return of(null as any); }))
+        this.http.get<T>(url).pipe(catchError(() => of(null as any)))
       );
-    } catch (err) {
-      console.error(`Dashboard fetch error: ${url}`, err);
+    } catch {
       return null;
     }
   }
 
-  async loadRosterSummary() {
-    const res = await this.fetch<RosterSummary>(`${this.apiUrl}/api/v1/employee-roster/summary`);
+  private asArray(payload: any): any[] {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.results)) return payload.results;
+    return [];
+  }
+
+  private isActiveStatus(value: unknown): boolean {
+    const s = String(value ?? '').trim().toLowerCase();
+    return !s || ['active', 'available', 'assigned', 'dispatched', 'current', 'hired'].includes(s);
+  }
+
+  private isInactiveStatus(value: unknown): boolean {
+    const s = String(value ?? '').trim().toLowerCase();
+    return ['inactive', 'terminated', 'archived', 'off-duty', 'off duty', 'disabled'].includes(s);
+  }
+
+  private hasDispatcher(driver: any): boolean {
+    const id = Number(driver?.dispatchUserId ?? driver?.dispatcherId ?? driver?.assignedDispatcherId);
+    if (Number.isFinite(id) && id > 0) return true;
+    const notes = String(driver?.notes ?? '');
+    return /\[dispatch-assignee-id:\d+/i.test(notes);
+  }
+
+  async loadRosterSummary(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-roster/summary`);
     if (!res) return;
-    this.stats.update(s => ({ ...s, totalEmployees: res.totalEmployees ?? 0, activeEmployees: res.activeEmployees ?? 0 }));
+    this.metrics.update((m) => ({
+      ...m,
+      totalEmployees: Number(res.totalEmployees ?? 0),
+      activeEmployees: Number(res.activeEmployees ?? 0)
+    }));
     if (this.employeePopulation().length === 0) {
-      const depts = (res.byDepartment ?? []).sort((a, b) => b.count - a.count);
-      const roles = (res.byRole ?? []).sort((a, b) => b.count - a.count);
-      this.deptChartData.set(depts.slice(0, 10).map(d => ({ name: d.department || 'Unassigned', value: d.count })));
-      this.roleChartData.set(roles.slice(0, 10).map(r => ({ name: r.role || 'Unassigned', value: r.count })));
+      const depts = (res.byDepartment ?? []).sort((a: any, b: any) => b.count - a.count);
+      const roles = (res.byRole ?? []).sort((a: any, b: any) => b.count - a.count);
+      this.deptChartData.set(depts.slice(0, 10).map((d: any) => ({ name: d.department || 'Unassigned', value: d.count })));
+      this.roleChartData.set(roles.slice(0, 10).map((r: any) => ({ name: r.role || 'Unassigned', value: r.count })));
     }
   }
 
-  async loadTimeOff() {
-    const res = await this.fetch<{ data: any[]; total?: number }>(`${this.apiUrl}/api/v1/time-off/requests?status=pending&pageSize=100`);
-    this.stats.update(s => ({ ...s, pendingTimeOff: res?.data?.length ?? res?.total ?? 0 }));
+  async loadDriversAndDispatchers(): Promise<void> {
+    const [driversRes, usersRes] = await Promise.all([
+      this.fetch<any>(`${this.apiUrl}/api/v1/drivers?limit=5000`),
+      this.fetch<any>(`${this.apiUrl}/api/v1/users?role=dispatcher&limit=500`)
+    ]);
+    const drivers = this.asArray(driversRes);
+    const activeDrivers = drivers.filter((d) => this.isActiveStatus(d?.status) && !this.isInactiveStatus(d?.status));
+    const withDispatcher = activeDrivers.filter((d) => this.hasDispatcher(d)).length;
+    const statusCounts = new Map<string, number>();
+    for (const d of drivers) {
+      const label = this.isInactiveStatus(d?.status)
+        ? 'Inactive'
+        : this.isActiveStatus(d?.status)
+          ? 'Active'
+          : String(d?.status || 'Other');
+      statusCounts.set(label, (statusCounts.get(label) ?? 0) + 1);
+    }
+    this.driverStatusChart.set(
+      Array.from(statusCounts.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8)
+    );
+
+    let dispatchers = this.asArray(usersRes).filter((u) => {
+      const role = String(u?.role ?? u?.Role ?? '').toLowerCase();
+      return role.includes('dispatch');
+    });
+    if (dispatchers.length === 0) {
+      const allUsers = await this.fetch<any>(`${this.apiUrl}/api/v1/users?limit=2000`);
+      dispatchers = this.asArray(allUsers).filter((u) => {
+        const role = String(u?.role ?? u?.Role ?? '').toLowerCase();
+        return role.includes('dispatch');
+      });
+    }
+
+    this.metrics.update((m) => ({
+      ...m,
+      totalDrivers: drivers.length,
+      activeDrivers: activeDrivers.length,
+      driversWithDispatcher: withDispatcher,
+      dispatchers: dispatchers.length
+    }));
   }
 
-  async loadPaychecks() {
-    const res = await this.fetch<{ data: any[]; total?: number }>(`${this.apiUrl}/api/v1/paychecks?status=pending&pageSize=100`);
-    this.stats.update(s => ({ ...s, pendingPaychecks: res?.data?.length ?? res?.total ?? 0 }));
+  async loadApplicants(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/applicants/records?includeCv=false`);
+    const rows = this.asArray(res);
+    const closed = new Set(['hired', 'rejected', 'declined', 'withdrawn', 'closed', 'archived']);
+    const open = rows.filter((r) => !closed.has(String(r?.status ?? '').toLowerCase())).length;
+    this.metrics.update((m) => ({ ...m, openApplicants: open }));
   }
 
-  async loadStaging() {
-    const res = await this.fetch<{ data: any[]; total?: number }>(`${this.apiUrl}/api/v1/employee-data/staging`);
-    this.stats.update(s => ({ ...s, bulkStaging: res?.data?.length ?? res?.total ?? 0 }));
+  async loadTrailers(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/trailer-assignments?limit=2000`);
+    const rows = this.asArray(res);
+    const active = rows.filter((r) => {
+      const status = String(r?.trailerStatus ?? 'active').toLowerCase();
+      return status === 'active' || status === '';
+    });
+    const unassigned = active.filter((r) => {
+      const id = Number(r?.assignedDriverId);
+      const name = String(r?.assignedDriverName ?? '').trim();
+      return !(Number.isFinite(id) && id > 0) && !name;
+    }).length;
+    this.metrics.update((m) => ({
+      ...m,
+      trailersActive: active.length,
+      trailersUnassigned: unassigned
+    }));
   }
 
-  async loadDashboardStats() {
-    const res = await this.fetch<SessionDashboard>(`${this.apiUrl}/api/v1/sessions/dashboard`);
-    if (!res) return;
-    this.dashStats.set(res);
+  async loadCompliance(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/drivers/compliance-board?limit=10000`);
+    const rows = this.asArray(res);
+    const atRisk = rows.filter((r) => {
+      const status = String(r?.overallStatus ?? r?.status ?? r?.complianceStatus ?? '').toLowerCase();
+      return status.includes('expired') || status.includes('missing') || status.includes('expiring') || status.includes('at_risk') || status.includes('risk');
+    }).length;
+    this.metrics.update((m) => ({ ...m, complianceAtRisk: atRisk }));
+  }
 
-    this.dailyHoursData.set(
-      (res.dailyHours ?? []).map(d => ({
-        name: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        value: d.totalHours ?? 0
+  async loadTimeOff(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/time-off/requests?status=pending&pageSize=100`);
+    this.metrics.update((m) => ({
+      ...m,
+      pendingTimeOff: this.asArray(res).length || Number(res?.total ?? 0)
+    }));
+  }
+
+  async loadPaychecks(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/paychecks?status=pending&pageSize=100`);
+    this.metrics.update((m) => ({
+      ...m,
+      pendingPaychecks: this.asArray(res).length || Number(res?.total ?? 0)
+    }));
+  }
+
+  async loadStaging(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-data/staging`);
+    this.metrics.update((m) => ({
+      ...m,
+      bulkStaging: this.asArray(res).length || Number(res?.total ?? 0)
+    }));
+  }
+
+  async loadHrDocs(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-documents?pageSize=250`);
+    const docs = this.asArray(res);
+    const now = Date.now();
+    const in90 = now + 90 * 24 * 60 * 60 * 1000;
+    let expiring = 0;
+    let expired = 0;
+    for (const d of docs) {
+      const status = String(d?.status ?? '').toLowerCase();
+      const expiry = d?.expiryDate ?? d?.expirationDate;
+      const t = expiry ? new Date(expiry).getTime() : NaN;
+      if (status === 'expired' || (Number.isFinite(t) && t < now)) expired++;
+      else if (status === 'expiring' || (Number.isFinite(t) && t >= now && t <= in90)) expiring++;
+    }
+    this.metrics.update((m) => ({ ...m, docsExpiring: expiring, docsExpired: expired }));
+  }
+
+  async loadSnapshots(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-snapshots`);
+    const snaps = this.asArray(res).slice(0, 12).reverse();
+    this.headcountData.set(
+      snaps.map((s: any) => ({
+        name: this.formatMonth(String(s.month ?? '')),
+        value: Number(s.activeCount ?? 0)
       }))
     );
+  }
 
-    this.employeeHoursData.set(
-      (res.employeeHoursThisWeek ?? []).map(e => ({ name: e.name, value: e.hours }))
+  async loadEmployeePopulation(): Promise<void> {
+    const res = await this.fetch<any>(`${this.apiUrl}/api/v1/employee-roster?limit=500`);
+    const employees = this.asArray(res).filter(
+      (e: any) => String(e?.status ?? '').toLowerCase() === 'active' || !e?.status
     );
+    this.employeePopulation.set(employees);
+    this.applyWorkforceFilters();
+  }
 
-    const dist = res.clockInDistribution ?? { morning: 0, afternoon: 0, evening: 0, night: 0 };
-    this.clockInData.set([
-      { name: 'Morning (5-12)', value: dist.morning },
-      { name: 'Afternoon (12-5)', value: dist.afternoon },
-      { name: 'Evening (5-9)', value: dist.evening },
-      { name: 'Night (9-5)', value: dist.night }
+  async loadRecentActivity(): Promise<void> {
+    const [timeOffRes, docsRes, applicantsRes] = await Promise.all([
+      this.fetch<any>(`${this.apiUrl}/api/v1/time-off/requests?pageSize=5`),
+      this.fetch<any>(`${this.apiUrl}/api/v1/employee-documents?pageSize=5`),
+      this.fetch<any>(`${this.apiUrl}/api/v1/applicants/records?includeCv=false`)
     ]);
-  }
-
-  async loadSnapshots() {
-    const res = await this.fetch<{ data: { month: string; activeCount: number }[] }>(`${this.apiUrl}/api/v1/employee-snapshots`);
-    const snaps = (res?.data ?? []).slice(0, 12).reverse();
-    this.headcountData.set(snaps.map(s => ({ name: this.formatMonth(s.month), value: s.activeCount ?? 0 })));
-  }
-
-  async loadRecentActivity() {
     const activities: ActivityItem[] = [];
 
-    const [timeOffRes, docsRes] = await Promise.all([
-      this.fetch<{ data: any[] }>(`${this.apiUrl}/api/v1/time-off/requests?pageSize=5`),
-      this.fetch<{ data: any[] }>(`${this.apiUrl}/api/v1/employee-documents?pageSize=5`)
-    ]);
-
-    for (const r of (timeOffRes?.data ?? [])) {
+    for (const r of this.asArray(timeOffRes).slice(0, 5)) {
       activities.push({
-        id: 'to-' + r.id,
+        id: `to-${r.id}`,
         icon: r.status === 'approved' ? 'bx-check-circle' : r.status === 'denied' ? 'bx-x-circle' : 'bx-calendar-event',
-        title: `Time Off ${r.status === 'approved' ? 'Approved' : r.status === 'denied' ? 'Denied' : 'Requested'}`,
-        description: `${r.employeeName ?? 'Employee'} - ${r.startDate ? new Date(r.startDate).toLocaleDateString() : ''}`,
+        title: `Time Off ${String(r.status ?? 'requested')}`,
+        description: `${r.employeeName ?? 'Employee'}`,
         time: this.timeAgo(r.createdAt ?? r.requestedAt),
         date: new Date(r.createdAt ?? r.requestedAt ?? 0),
         category: 'timeoff'
       });
     }
-
-    for (const d of (docsRes?.data ?? [])) {
+    for (const d of this.asArray(docsRes).slice(0, 5)) {
       activities.push({
-        id: 'doc-' + d.id,
+        id: `doc-${d.id}`,
         icon: 'bx-file',
         title: 'Document Uploaded',
-        description: `${d.documentType ?? d.fileName ?? 'Document'} - ${d.employeeName ?? 'Employee'}`,
+        description: `${d.documentType ?? d.fileName ?? 'Document'} — ${d.employeeName ?? 'Employee'}`,
         time: this.timeAgo(d.createdAt ?? d.uploadedAt),
         date: new Date(d.createdAt ?? d.uploadedAt ?? 0),
         category: 'document'
+      });
+    }
+    for (const a of this.asArray(applicantsRes)
+      .sort((x, y) => new Date(y?.appliedDate ?? y?.createdAt ?? 0).getTime() - new Date(x?.appliedDate ?? x?.createdAt ?? 0).getTime())
+      .slice(0, 4)) {
+      activities.push({
+        id: `app-${a.id}`,
+        icon: 'bx-user-plus',
+        title: 'Applicant Update',
+        description: `${a.name ?? a.applicantName ?? 'Applicant'} — ${a.status ?? 'submitted'}`,
+        time: this.timeAgo(a.appliedDate ?? a.createdAt),
+        date: new Date(a.appliedDate ?? a.createdAt ?? 0),
+        category: 'applicant'
       });
     }
 
@@ -860,49 +1051,37 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     this.recentActivity.set(activities.slice(0, 10));
   }
 
-  async loadHrDocsInsights() {
-    const res = await this.fetch<{ data: any[] }>(`${this.apiUrl}/api/v1/employee-documents?pageSize=250`);
-    this.hrDocs.set(res?.data ?? []);
-  }
-
-  async loadEmployeePopulation() {
-    const res = await this.fetch<{ data: any[] }>(`${this.apiUrl}/api/v1/employee-roster?limit=500`);
-    const employees = (res?.data ?? []).filter((e: any) => String(e?.status ?? '').toLowerCase() === 'active' || !e?.status);
-    this.employeePopulation.set(employees);
-    this.applyWorkforceFilters();
-  }
-
-  onDepartmentChartSelect(event: any) {
+  onDepartmentChartSelect(event: any): void {
     const name = event?.name ? String(event.name) : null;
     if (!name) return;
     this.selectedDepartment.set(this.selectedDepartment() === name ? null : name);
     this.applyWorkforceFilters();
   }
 
-  onRoleChartSelect(event: any) {
+  onRoleChartSelect(event: any): void {
     const name = event?.name ? String(event.name) : null;
     if (!name) return;
     this.selectedRole.set(this.selectedRole() === name ? null : name);
     this.applyWorkforceFilters();
   }
 
-  clearDepartmentFilter() {
+  clearDepartmentFilter(): void {
     this.selectedDepartment.set(null);
     this.applyWorkforceFilters();
   }
 
-  clearRoleFilter() {
+  clearRoleFilter(): void {
     this.selectedRole.set(null);
     this.applyWorkforceFilters();
   }
 
-  clearWorkforceFilters() {
+  clearWorkforceFilters(): void {
     this.selectedDepartment.set(null);
     this.selectedRole.set(null);
     this.applyWorkforceFilters();
   }
 
-  private applyWorkforceFilters() {
+  private applyWorkforceFilters(): void {
     const employees = this.employeePopulation();
     if (!employees.length) return;
 
@@ -942,7 +1121,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     if (!month) return '';
     const [y, m] = month.split('-');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[parseInt(m, 10) - 1]} ${y.slice(2)}`;
+    return `${months[parseInt(m, 10) - 1] ?? m} ${String(y).slice(2)}`;
   }
 
   timeAgo(dateStr: string): string {
