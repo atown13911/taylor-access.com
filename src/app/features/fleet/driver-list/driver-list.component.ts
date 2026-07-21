@@ -623,9 +623,8 @@ export class DriverListComponent implements OnInit {
         const fleets = [...new Set(mapped.filter(d => d.fleetName !== '—').map(d => d.fleetName))];
         this.fleetName.set(fleets.length === 1 ? fleets[0] : '');
 
-        if (this.dispatchersView() && !this.selectedDispatcherId()) {
-          const roster = this.dispatcherRows();
-          if (roster.length > 0) this.selectedDispatcherId.set(roster[0].id);
+        if (this.dispatchersView()) {
+          this.ensureSelectedDispatcherInRoster();
         }
 
         if (!options.silent) {
@@ -1898,9 +1897,8 @@ export class DriverListComponent implements OnInit {
       const candidates = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
       this.availableDispatchUsers.set(candidates);
 
-      const roster = this.dispatcherRows();
-      if (this.dispatchersView() && !this.selectedDispatcherId() && roster.length > 0) {
-        this.selectedDispatcherId.set(roster[0].id);
+      if (this.dispatchersView()) {
+        this.ensureSelectedDispatcherInRoster();
       }
       this.dispatchUsersLoaded = true;
     } catch {
@@ -1986,12 +1984,25 @@ export class DriverListComponent implements OnInit {
     this.selectedDispatcherId.set(dispatcherId);
   }
 
+  /** Keep selection on a Landmark roster id after pool remaps stale assignee tags. */
+  private ensureSelectedDispatcherInRoster(): void {
+    const roster = this.dispatcherRows();
+    if (roster.length === 0) {
+      this.selectedDispatcherId.set(null);
+      return;
+    }
+    const selected = this.selectedDispatcherId();
+    if (!selected || !roster.some((row) => row.id === selected)) {
+      this.selectedDispatcherId.set(roster[0].id);
+    }
+  }
+
   selectedDispatcherName(): string {
     const id = this.selectedDispatcherId();
     if (!id) return 'No dispatcher selected';
-    const match = this.dispatcherRows().find((u) => u.id === id)
-      || this.availableDispatchUsers().find((u) => u.id === id);
-    return match?.name || `Dispatcher ${id}`;
+    const rosterMatch = this.dispatcherRows().find((u) => u.id === id);
+    if (rosterMatch?.name) return rosterMatch.name;
+    return 'No dispatcher selected';
   }
 
   hasDispatcherAssignment(driver: DriverRow): boolean {

@@ -141,59 +141,64 @@
             </button>
           </div>
         </div>
-        <div class="dispatchers-driver-tabs">
-          <button
-            class="dispatchers-driver-tab"
-            [class.active]="dispatchersDriverTab() === 'otr'"
-            (click)="setDispatchersDriverTab('otr')">
-            OTR
-          </button>
-          <button
-            class="dispatchers-driver-tab"
-            [class.active]="dispatchersDriverTab() === 'drayage'"
-            (click)="setDispatchersDriverTab('drayage')">
-            Drayage
-          </button>
-        </div>
-        <div class="dispatchers-driver-toolbar">
-          <div class="dispatchers-search">
-            <i class='bx bx-search'></i>
-            <input
-              type="text"
-              placeholder="Search name, phone, email, license, truck, dispatcher..."
-              [ngModel]="dispatcherDriverSearch()"
-              (ngModelChange)="dispatcherDriverSearch.set($event)"
-            >
+        <div class="dispatchers-driver-controls">
+          <div class="dispatchers-driver-tabs">
+            <button
+              type="button"
+              class="dispatchers-driver-tab"
+              [class.active]="dispatchersDriverTab() === 'otr'"
+              (click)="setDispatchersDriverTab('otr')">
+              OTR
+            </button>
+            <button
+              type="button"
+              class="dispatchers-driver-tab"
+              [class.active]="dispatchersDriverTab() === 'drayage'"
+              (click)="setDispatchersDriverTab('drayage')">
+              Drayage
+            </button>
           </div>
-          <select
-            class="dispatchers-filter-select"
-            [ngModel]="dispatcherAssignmentFilter()"
-            (ngModelChange)="dispatcherAssignmentFilter.set($event)">
-            <option value="all">All assignments</option>
-            <option value="assigned">Assigned</option>
-            <option value="unassigned">Unassigned</option>
-          </select>
-          <select
-            class="dispatchers-filter-select"
-            [ngModel]="dispatcherTypeFilter()"
-            (ngModelChange)="dispatcherTypeFilter.set($event)">
-            <option value="all">All types</option>
-            @for (type of dispatcherDriverTypeOptions(); track type) {
-              <option [value]="type">{{ formatDriverType(type) }}</option>
-            }
-          </select>
-          <select
-            class="dispatchers-filter-select"
-            [ngModel]="dispatcherScopeFilter()"
-            (ngModelChange)="dispatcherScopeFilter.set($event)"
-            [disabled]="!selectedDispatcherId()">
-            <option value="all">All drivers</option>
-            <option value="selected">Selected dispatcher</option>
-          </select>
-          <span class="dispatchers-result-count">
-            {{ filteredDispatcherDrivers().length }}
-            / {{ dispatcherAssignedDrivers().length }}
-          </span>
+          <div class="dispatchers-driver-toolbar" role="search" aria-label="Filter Landmark drivers">
+            <div class="dispatchers-search">
+              <i class='bx bx-search' aria-hidden="true"></i>
+              <input
+                type="search"
+                autocomplete="off"
+                placeholder="Search name, phone, email, license, truck, dispatcher..."
+                [ngModel]="dispatcherDriverSearch()"
+                (ngModelChange)="dispatcherDriverSearch.set($event)"
+              >
+            </div>
+            <select
+              class="dispatchers-filter-select"
+              [ngModel]="dispatcherAssignmentFilter()"
+              (ngModelChange)="dispatcherAssignmentFilter.set($event)">
+              <option value="all">All assignments</option>
+              <option value="assigned">Assigned</option>
+              <option value="unassigned">Unassigned</option>
+            </select>
+            <select
+              class="dispatchers-filter-select"
+              [ngModel]="dispatcherTypeFilter()"
+              (ngModelChange)="dispatcherTypeFilter.set($event)">
+              <option value="all">All types</option>
+              @for (type of dispatcherDriverTypeOptions(); track type) {
+                <option [value]="type">{{ formatDriverType(type) }}</option>
+              }
+            </select>
+            <select
+              class="dispatchers-filter-select"
+              [ngModel]="dispatcherScopeFilter()"
+              (ngModelChange)="dispatcherScopeFilter.set($event)"
+              [disabled]="!selectedDispatcherId()">
+              <option value="all">All drivers</option>
+              <option value="selected">Selected dispatcher</option>
+            </select>
+            <span class="dispatchers-result-count">
+              {{ filteredDispatcherDrivers().length }}
+              / {{ dispatcherAssignedDrivers().length }}
+            </span>
+          </div>
         </div>
         @if (dispatcherAssignedDrivers().length === 0) {
           <div class="empty-state compact">
