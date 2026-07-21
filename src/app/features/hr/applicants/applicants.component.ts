@@ -231,38 +231,21 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
         || (positionStateFilter() === 'historical' && historicalViewMode() === 'applicants')
       ) {
         <div class="pipeline-tiles dashboard-tiles">
-          <article class="pipeline-tile total">
-            <div class="pipeline-tile-head">
-              <span>Total</span>
-              <i class='bx bx-group'></i>
-            </div>
-            <strong>{{ tableTotalCount() }}</strong>
-            <small>All visible applicants</small>
-          </article>
-          <article class="pipeline-tile working">
-            <div class="pipeline-tile-head">
-              <span>Working</span>
-              <i class='bx bx-loader-circle'></i>
-            </div>
-            <strong>{{ tableWorkingCount() }}</strong>
-            <small>Active pipeline</small>
-          </article>
-          <article class="pipeline-tile rejected">
-            <div class="pipeline-tile-head">
-              <span>Rejected</span>
-              <i class='bx bx-x-circle'></i>
-            </div>
-            <strong>{{ tableRejectedCount() }}</strong>
-            <small>Closed out</small>
-          </article>
-          <article class="pipeline-tile hired">
-            <div class="pipeline-tile-head">
-              <span>Hired</span>
-              <i class='bx bx-check-shield'></i>
-            </div>
-            <strong>{{ tableHiredCount() }}</strong>
-            <small>Successfully onboarded</small>
-          </article>
+          @for (panel of pipelineStatPanels(); track panel.label) {
+            <article class="stat-panel" [ngClass]="'tone-' + panel.tone">
+              <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ panel.label }}</span>
+                <span class="stat-panel-badge">{{ panel.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ panel.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ panel.chip }}</span>
+                <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+              </footer>
+            </article>
+          }
         </div>
       }
 
@@ -1765,42 +1748,50 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
   `,
   styles: [`
     .applicants-page { padding: 24px; }
-    .applicant-mode-tabs-header { display: inline-flex; gap: 10px; margin-bottom: 12px; }
+    .applicant-mode-tabs-header { display: inline-flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; padding: 5px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(10, 13, 22, 0.75); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
     .applicant-mode-tab {
-      background: #111827;
+      position: relative;
+      background: transparent;
       color: #9fb2c8;
-      border: 1px solid #2a2a4e;
+      border: 1px solid transparent;
       border-radius: 999px;
-      padding: 9px 18px;
+      padding: 9px 16px;
       cursor: pointer;
-      font-size: 0.92rem;
+      font-size: 0.88rem;
       font-weight: 700;
       letter-spacing: 0.02em;
-      transition: all 0.15s ease;
+      transition: all 0.18s ease;
     }
-    .applicant-mode-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.14); box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.25) inset; }
-    .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; } } p { margin: 4px 0 0; color: #8aa0b8; } }
+    .applicant-mode-tab:hover { color: #e2e8f0; background: rgba(148, 163, 184, 0.1); }
+    .applicant-mode-tab.active {
+      color: #e0f7ff;
+      border-color: rgba(0, 212, 255, 0.45);
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.22), rgba(0, 128, 255, 0.12));
+      box-shadow: 0 0 18px rgba(0, 212, 255, 0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .page-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; h1 { margin: 0; color: #fff; display: flex; align-items: center; gap: 10px; i { color: #00d4ff; filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.45)); } } p { margin: 4px 0 0; color: #8aa0b8; } }
     .page-header-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
     .btn-primary { background: linear-gradient(135deg, #00d4ff, #0080ff); border: none; color: #0a0a14; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
     .btn-secondary { background: #253049; border: none; color: #dbeafe; border-radius: 8px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
     .btn-danger { background: #3b1118; border: 1px solid #7f1d1d; color: #fecaca; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; margin-right: auto; }
-    .position-state-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
-    .state-tab { background: #111827; color: #9fb2c8; border: 1px solid #2a2a4e; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 0.84rem; }
-    .state-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
+    .position-state-tabs { display: inline-flex; gap: 6px; margin-bottom: 12px; padding: 4px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(10, 13, 22, 0.72); }
+    .state-tab { background: transparent; color: #9fb2c8; border: 1px solid transparent; border-radius: 999px; padding: 7px 14px; cursor: pointer; font-size: 0.84rem; font-weight: 700; transition: all 0.15s ease; }
+    .state-tab:hover { color: #e2e8f0; background: rgba(148, 163, 184, 0.1); }
+    .state-tab.active { border-color: rgba(0, 212, 255, 0.45); color: #d9f6ff; background: rgba(0, 212, 255, 0.16); box-shadow: 0 0 14px rgba(0, 212, 255, 0.2); }
     .historical-banner { margin-bottom: 10px; border: 1px solid #2a2a4e; background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(16, 25, 44, 0.9)); border-radius: 10px; padding: 10px 12px; color: #b9d5f6; font-size: 0.85rem; }
     .position-group-tabs { display: inline-flex; gap: 8px; }
-    .position-group-tabs-header { margin: 0; padding: 4px; border: 1px solid #27344f; border-radius: 999px; background: rgba(15, 23, 42, 0.75); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
-    .group-tab { background: transparent; color: #9fb2c8; border: 1px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; transition: all 120ms ease; }
-    .group-tab i { font-size: 0.95rem; }
+    .position-group-tabs-header { margin: 0; padding: 5px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; background: rgba(10, 13, 22, 0.78); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 0 20px rgba(0, 212, 255, 0.06); }
+    .group-tab { background: transparent; color: #9fb2c8; border: 1px solid transparent; border-radius: 999px; padding: 8px 14px; cursor: pointer; font-size: 0.82rem; font-weight: 700; display: inline-flex; align-items: center; gap: 7px; transition: all 160ms ease; }
+    .group-tab i { font-size: 1rem; }
     .office-tab i { color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.35); }
     .fleet-tab i { color: #38bdf8; text-shadow: 0 0 8px rgba(56, 189, 248, 0.35); }
     .group-tab:hover { color: #d0e7ff; background: rgba(148, 163, 184, 0.1); }
     .office-tab:hover i { color: #fcd34d; text-shadow: 0 0 12px rgba(252, 211, 77, 0.55); }
     .fleet-tab:hover i { color: #67e8f9; text-shadow: 0 0 12px rgba(103, 232, 249, 0.55); }
-    .group-tab.active { border-color: rgba(0, 212, 255, 0.45); color: #d9f6ff; background: rgba(0, 212, 255, 0.18); }
-    .office-tab.active { border-color: rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.16); box-shadow: 0 0 14px rgba(251, 191, 36, 0.22); }
+    .group-tab.active { color: #f8fafc; }
+    .office-tab.active { border-color: rgba(251, 191, 36, 0.55); background: linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(245, 158, 11, 0.1)); box-shadow: 0 0 18px rgba(251, 191, 36, 0.28); }
     .office-tab.active i { color: #facc15; text-shadow: 0 0 14px rgba(250, 204, 21, 0.7); }
-    .fleet-tab.active { border-color: rgba(56, 189, 248, 0.5); background: rgba(56, 189, 248, 0.16); box-shadow: 0 0 14px rgba(56, 189, 248, 0.22); }
+    .fleet-tab.active { border-color: rgba(56, 189, 248, 0.55); background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(14, 165, 233, 0.1)); box-shadow: 0 0 18px rgba(56, 189, 248, 0.28); }
     .fleet-tab.active i { color: #22d3ee; text-shadow: 0 0 14px rgba(34, 211, 238, 0.7); }
     .goals-view { display: flex; flex-direction: column; gap: 10px; }
     .goals-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -1910,8 +1901,8 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .position-state.all { color: #cbd5e1; border-color: #334155; background: rgba(51, 65, 85, 0.25); }
     .add-position-btn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; }
     .filters { display: flex; gap: 10px; margin: 10px 0 14px; align-items: center; flex-wrap: wrap; input, select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 8px 10px; } input { min-width: 280px; } }
-    .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 2px; }
-    .dashboard-tiles { margin: 0 0 10px; }
+    .pipeline-tiles { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 2px; }
+    .dashboard-tiles { margin: 0 0 14px; }
     .pipeline-tile { position: relative; border: 1px solid #2a2a4e; border-radius: 12px; padding: 11px 12px 10px; background: linear-gradient(180deg, #111b2f 0%, #0f172a 100%); display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 24px rgba(2, 6, 23, 0.3); overflow: hidden; transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease; }
     .pipeline-tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, rgba(125, 211, 252, 0.95), rgba(45, 212, 191, 0.85)); opacity: 0.9; }
     .pipeline-tile:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 14px 28px rgba(2, 6, 23, 0.34); }
@@ -1930,6 +1921,93 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .pipeline-tile.hired { border-color: rgba(34, 197, 94, 0.35); }
     .pipeline-tile.hired::before { background: linear-gradient(90deg, #22c55e, #4ade80); }
     .pipeline-tile.hired i { color: #4ade80; background: rgba(74, 222, 128, 0.12); border-color: rgba(74, 222, 128, 0.26); }
+
+    @keyframes stat-panel-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .dashboard-tiles .stat-panel {
+      --kpi-accent: #67e8f9;
+      --kpi-accent-soft: rgba(0, 212, 255, 0.16);
+      position: relative; overflow: hidden; isolation: isolate;
+      display: flex; flex-direction: column; gap: 8px;
+      min-width: 0; min-height: 132px; padding: 14px 14px 12px 16px;
+      border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(120% 90% at 100% 0%, var(--kpi-accent-soft), transparent 55%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.05), transparent 46%),
+        rgba(10, 13, 22, 0.92);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 0 20px color-mix(in srgb, var(--kpi-accent) 16%, transparent),
+        0 12px 28px rgba(0, 0, 0, 0.3);
+      animation: stat-panel-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      text-align: left; color: inherit; font: inherit;
+    }
+    .dashboard-tiles .stat-panel::before {
+      content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+      border-radius: 0 4px 4px 0;
+      background: linear-gradient(180deg, var(--kpi-accent), transparent 95%);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--kpi-accent) 70%, transparent);
+    }
+    .dashboard-tiles .stat-panel:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--kpi-accent) 48%, rgba(255, 255, 255, 0.08));
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.06) inset,
+        0 0 32px color-mix(in srgb, var(--kpi-accent) 26%, transparent),
+        0 16px 32px rgba(0, 0, 0, 0.34);
+    }
+    .dashboard-tiles .stat-panel:nth-child(1) { animation-delay: 0s; }
+    .dashboard-tiles .stat-panel:nth-child(2) { animation-delay: 0.04s; }
+    .dashboard-tiles .stat-panel:nth-child(3) { animation-delay: 0.08s; }
+    .dashboard-tiles .stat-panel:nth-child(4) { animation-delay: 0.12s; }
+    .dashboard-tiles .stat-panel.tone-cyan { --kpi-accent: #00d4ff; --kpi-accent-soft: rgba(0, 212, 255, 0.18); }
+    .dashboard-tiles .stat-panel.tone-green { --kpi-accent: #22c55e; --kpi-accent-soft: rgba(34, 197, 94, 0.16); }
+    .dashboard-tiles .stat-panel.tone-red { --kpi-accent: #ef4444; --kpi-accent-soft: rgba(239, 68, 68, 0.14); }
+    .dashboard-tiles .stat-panel.tone-violet { --kpi-accent: #a855f7; --kpi-accent-soft: rgba(168, 85, 247, 0.16); }
+    .dashboard-tiles .stat-panel-mark {
+      position: absolute; right: -6px; bottom: -10px; font-size: 4.6rem; line-height: 1;
+      color: var(--kpi-accent); opacity: 0.1; transform: rotate(-8deg); pointer-events: none; z-index: 0;
+    }
+    .dashboard-tiles .stat-panel:hover .stat-panel-mark { opacity: 0.16; transform: rotate(-4deg) translateY(-2px); }
+    .dashboard-tiles .stat-panel-head,
+    .dashboard-tiles .stat-panel-value,
+    .dashboard-tiles .stat-panel-meter,
+    .dashboard-tiles .stat-panel-foot { position: relative; z-index: 1; }
+    .dashboard-tiles .stat-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+    .dashboard-tiles .stat-panel-label {
+      font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dashboard-tiles .stat-panel-badge {
+      flex-shrink: 0; padding: 2px 6px; border-radius: 999px; font-size: 0.58rem; font-weight: 700;
+      letter-spacing: 0.05em; text-transform: uppercase;
+      color: color-mix(in srgb, var(--kpi-accent) 88%, #fff);
+      background: color-mix(in srgb, var(--kpi-accent) 14%, transparent);
+      border: 1px solid color-mix(in srgb, var(--kpi-accent) 35%, transparent);
+    }
+    .dashboard-tiles .stat-panel-value {
+      margin: 0; font-size: clamp(1.15rem, 0.7vw + 0.95rem, 1.45rem); font-weight: 700;
+      letter-spacing: 0.02em; line-height: 1.1; color: #f8fafc; font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 18px color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+    }
+    .dashboard-tiles .stat-panel-meter {
+      height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden;
+    }
+    .dashboard-tiles .stat-panel-meter span {
+      display: block; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--kpi-accent) 55%, #fff), var(--kpi-accent));
+      box-shadow: 0 0 10px color-mix(in srgb, var(--kpi-accent) 45%, transparent);
+    }
+    .dashboard-tiles .stat-panel-foot { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+    .dashboard-tiles .stat-panel-chip {
+      padding: 2px 7px; border-radius: 999px; font-size: 0.62rem; font-weight: 600;
+      color: rgba(248, 250, 252, 0.92); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .dashboard-tiles .stat-panel-chip.soft { color: rgba(203, 213, 225, 0.85); background: transparent; }
+
     @media (max-width: 1180px) { .pipeline-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 680px) { .pipeline-tiles { grid-template-columns: 1fr; } }
     .pipeline-tabs { display: inline-flex; gap: 6px; margin-right: 2px; }
@@ -2483,6 +2561,58 @@ export class ApplicantsComponent implements OnInit, OnDestroy {
   tableWorkingCount = computed(() => this.tableScopeRows().filter((r) => r.status !== 'rejected').length);
   tableRejectedCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'rejected').length);
   tableHiredCount = computed(() => this.tableScopeRows().filter((r) => r.status === 'hired').length);
+
+  pipelineStatPanels = computed(() => {
+    const total = this.tableTotalCount();
+    const working = this.tableWorkingCount();
+    const rejected = this.tableRejectedCount();
+    const hired = this.tableHiredCount();
+    const denom = total || 1;
+    const pct = (n: number) => Math.round((n / denom) * 100);
+    return [
+      {
+        tone: 'cyan',
+        icon: 'bx-group',
+        label: 'Total',
+        badge: 'Pipeline',
+        value: total,
+        meter: 100,
+        chip: 'All visible',
+        soft: `${working} working`
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-loader-circle',
+        label: 'Working',
+        badge: 'Active',
+        value: working,
+        meter: pct(working),
+        chip: `${pct(working)}%`,
+        soft: 'In process'
+      },
+      {
+        tone: 'red',
+        icon: 'bx-x-circle',
+        label: 'Rejected',
+        badge: 'Closed',
+        value: rejected,
+        meter: pct(rejected),
+        chip: `${pct(rejected)}%`,
+        soft: 'Closed out'
+      },
+      {
+        tone: 'green',
+        icon: 'bx-check-shield',
+        label: 'Hired',
+        badge: 'Won',
+        value: hired,
+        meter: pct(hired),
+        chip: `${pct(hired)}%`,
+        soft: 'Onboarded'
+      }
+    ];
+  });
+
   goalGroupRows = computed(() => {
     const targetGroup = this.positionGroupFilter();
     return this.rows().filter((row) => {
