@@ -181,7 +181,7 @@ interface StatPanel {
         </div>
       </div>
 
-      @if (deptChartData().length > 0 || roleChartData().length > 0 || driverStatusChart().length > 0) {
+      @if (deptChartData().length > 0 || roleChartData().length > 0 || driverTenureWave().points.length > 0) {
         <div class="chart-section">
           <h2><i class="bx bx-bar-chart-alt-2"></i> Workforce Mix</h2>
           <div class="breakdown-filters">
@@ -244,19 +244,56 @@ interface StatPanel {
                 </div>
               </div>
             }
-            @if (driverStatusChart().length > 0) {
+            @if (driverTenureWave().points.length > 0) {
               <div class="chart-card">
                 <h3>Driver Length of Employment</h3>
-                <div class="vbar-chart">
-                  @for (row of driverBarRows(); track row.name; let i = $index) {
-                    <div class="vbar-col static" [title]="row.name + ': ' + row.value">
-                      <span class="vbar-value">{{ row.value }}</span>
-                      <div class="vbar-track">
-                        <span class="vbar-fill tone-{{ i % 8 }}" [style.height.%]="row.pct"></span>
-                      </div>
-                      <span class="vbar-label">{{ row.name }}</span>
-                    </div>
-                  }
+                <div class="tenure-wave">
+                  <svg
+                    class="tenure-wave-svg"
+                    [attr.viewBox]="'0 0 ' + tenureView.w + ' ' + tenureView.h"
+                    preserveAspectRatio="xMidYMid meet"
+                    role="img"
+                    aria-label="Driver length of employment distribution">
+                    <defs>
+                      <linearGradient id="tenureFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.4"></stop>
+                        <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.03"></stop>
+                      </linearGradient>
+                      <filter id="tenureGlow" x="-20%" y="-40%" width="140%" height="180%">
+                        <feGaussianBlur stdDeviation="2" result="blur"></feGaussianBlur>
+                        <feMerge>
+                          <feMergeNode in="blur"></feMergeNode>
+                          <feMergeNode in="SourceGraphic"></feMergeNode>
+                        </feMerge>
+                      </filter>
+                    </defs>
+                    @for (tick of driverTenureWave().yTicks; track tick.label) {
+                      <line
+                        class="tenure-grid"
+                        [attr.x1]="tenureView.padL"
+                        [attr.x2]="tenureView.w - tenureView.padR"
+                        [attr.y1]="tick.y"
+                        [attr.y2]="tick.y">
+                      </line>
+                      <text class="tenure-y" [attr.x]="tenureView.padL - 6" [attr.y]="tick.y + 3" text-anchor="end">{{ tick.label }}</text>
+                    }
+                    <path class="tenure-area" [attr.d]="driverTenureWave().areaPath" fill="url(#tenureFill)"></path>
+                    <path
+                      class="tenure-line"
+                      [attr.d]="driverTenureWave().linePath"
+                      fill="none"
+                      stroke="#a78bfa"
+                      stroke-width="2.6"
+                      filter="url(#tenureGlow)">
+                    </path>
+                    @for (pt of driverTenureWave().points; track pt.key) {
+                      <circle class="tenure-dot" [attr.cx]="pt.x" [attr.cy]="pt.y" r="4">
+                        <title>{{ pt.label }}: {{ pt.value }}</title>
+                      </circle>
+                      <text class="tenure-value" [attr.x]="pt.x" [attr.y]="pt.y - 10" text-anchor="middle">{{ pt.value }}</text>
+                      <text class="tenure-x" [attr.x]="pt.x" [attr.y]="tenureView.h - 8" text-anchor="middle">{{ pt.label }}</text>
+                    }
+                  </svg>
                 </div>
               </div>
             }
@@ -688,6 +725,17 @@ interface StatPanel {
     .chart-card h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 14px; font-weight: 500; }
     .chart-empty { text-align: center; padding: 40px; color: #555; font-size: 0.85rem; }
 
+    .tenure-wave { width: 100%; height: 260px; }
+    .tenure-wave-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+    .tenure-grid { stroke: rgba(255, 255, 255, 0.06); stroke-width: 1; }
+    .tenure-y, .tenure-x { fill: #8b93a7; font-size: 10px; font-family: inherit; }
+    .tenure-value { fill: #e2e8f0; font-size: 11px; font-weight: 700; font-family: inherit; }
+    .tenure-line { stroke-linecap: round; stroke-linejoin: round; }
+    .tenure-dot {
+      fill: #0b1220; stroke: #a78bfa; stroke-width: 2.2;
+      filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.55));
+    }
+
     .wave-chart {
       width: 100%;
       max-width: none;
@@ -916,7 +964,47 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   deptBarRows = computed(() => this.toBarRows(this.deptChartData()));
   roleBarRows = computed(() => this.toBarRows(this.roleChartData()));
-  driverBarRows = computed(() => this.toBarRows(this.driverStatusChart()));
+  readonly tenureView = { w: 420, h: 260, padL: 36, padR: 16, padT: 28, padB: 36 };
+
+  /** Tenure distribution as a smooth line — better for ordered buckets than bars. */
+  driverTenureWave = computed(() => {
+    const rows = this.driverStatusChart().filter((r) => r.name !== 'Unknown' || r.value > 0);
+    const view = this.tenureView;
+    if (!rows.length) {
+      return { points: [] as WavePoint[], linePath: '', areaPath: '', yTicks: [] as { y: number; label: string }[] };
+    }
+
+    const values = rows.map((r) => r.value);
+    const maxV = Math.max(...values, 1);
+    const yMax = Math.ceil(maxV * 1.15) || 1;
+    const plotW = view.w - view.padL - view.padR;
+    const plotH = view.h - view.padT - view.padB;
+    const n = rows.length;
+    const xAt = (i: number) => view.padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    const yAt = (v: number) => view.padT + (1 - v / yMax) * plotH;
+    const baseY = view.h - view.padB;
+
+    const points: WavePoint[] = rows.map((r, i) => ({
+      key: r.name,
+      label: r.name,
+      value: r.value,
+      x: xAt(i),
+      y: yAt(r.value)
+    }));
+    const linePath = this.smoothWavePath(points);
+    const areaPath = points.length
+      ? `${linePath} L ${points[points.length - 1].x} ${baseY} L ${points[0].x} ${baseY} Z`
+      : '';
+
+    const tickCount = 4;
+    const yTicks = Array.from({ length: tickCount }, (_, i) => {
+      const t = i / (tickCount - 1);
+      const value = Math.round(yMax * (1 - t));
+      return { y: yAt(value), label: String(value) };
+    });
+
+    return { points, linePath, areaPath, yTicks };
+  });
 
   /** Multi-series monthly wave: Roles, Positions, Fleet, or Total. */
   headcountWave = computed(() => {
