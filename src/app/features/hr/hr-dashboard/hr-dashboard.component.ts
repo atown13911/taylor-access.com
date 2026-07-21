@@ -246,15 +246,15 @@ interface StatPanel {
             }
             @if (driverStatusChart().length > 0) {
               <div class="chart-card">
-                <h3>Driver Status</h3>
+                <h3>Driver Length of Employment</h3>
                 <div class="vbar-chart">
                   @for (row of driverBarRows(); track row.name; let i = $index) {
-                    <div class="vbar-col static" [title]="formatBreakdownLabel(row.name) + ': ' + row.value">
+                    <div class="vbar-col static" [title]="row.name + ': ' + row.value">
                       <span class="vbar-value">{{ row.value }}</span>
                       <div class="vbar-track">
                         <span class="vbar-fill tone-{{ i % 8 }}" [style.height.%]="row.pct"></span>
                       </div>
-                      <span class="vbar-label">{{ formatBreakdownLabel(row.name) }}</span>
+                      <span class="vbar-label">{{ row.name }}</span>
                     </div>
                   }
                 </div>
@@ -1470,21 +1470,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     const drivers = this.asArray(driversRes);
     const activeDrivers = drivers.filter((d) => this.isActiveStatus(d?.status) && !this.isInactiveStatus(d?.status));
     const withDispatcher = activeDrivers.filter((d) => this.hasDispatcher(d)).length;
-    const statusCounts = new Map<string, number>();
-    for (const d of drivers) {
-      const label = this.isInactiveStatus(d?.status)
-        ? 'Inactive'
-        : this.isActiveStatus(d?.status)
-          ? 'Active'
-          : String(d?.status || 'Other');
-      statusCounts.set(label, (statusCounts.get(label) ?? 0) + 1);
-    }
-    this.driverStatusChart.set(
-      Array.from(statusCounts.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 8)
-    );
+    this.driverStatusChart.set(this.buildDriverTenureBuckets(activeDrivers));
 
     let dispatchers = this.asArray(usersRes).filter((u) => {
       const role = String(u?.role ?? u?.Role ?? '').toLowerCase();
@@ -1506,6 +1492,42 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       dispatchers: dispatchers.length
     }));
     this.driverPopulation.set(drivers);
+  }
+
+  private buildDriverTenureBuckets(drivers: any[]): ChartPoint[] {
+    const buckets: Array<{ name: string; minMonths: number; maxMonths: number | null }> = [
+      { name: '< 6 mo', minMonths: 0, maxMonths: 6 },
+      { name: '6–12 mo', minMonths: 6, maxMonths: 12 },
+      { name: '1–2 yr', minMonths: 12, maxMonths: 24 },
+      { name: '2–5 yr', minMonths: 24, maxMonths: 60 },
+      { name: '5+ yr', minMonths: 60, maxMonths: null }
+    ];
+    const counts = new Map<string, number>(buckets.map((b) => [b.name, 0]));
+    let unknown = 0;
+    const now = Date.now();
+
+    for (const d of drivers) {
+      const start = this.driverStartDate(d);
+      if (!start) {
+        unknown += 1;
+        continue;
+      }
+      const months = Math.max(0, (now - start.getTime()) / (1000 * 60 * 60 * 24 * 30.4375));
+      const bucket = buckets.find((b) => months >= b.minMonths && (b.maxMonths == null || months < b.maxMonths));
+      if (bucket) counts.set(bucket.name, (counts.get(bucket.name) ?? 0) + 1);
+      else unknown += 1;
+    }
+
+    const rows = buckets.map((b) => ({ name: b.name, value: counts.get(b.name) ?? 0 }));
+    if (unknown > 0) rows.push({ name: 'Unknown', value: unknown });
+    return rows;
+  }
+
+  private driverStartDate(driver: any): Date | null {
+    const raw = driver?.hireDate ?? driver?.HireDate ?? driver?.createdAt ?? driver?.CreatedAt ?? '';
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isFinite(d.getTime()) ? d : null;
   }
 
   async loadApplicants(): Promise<void> {
