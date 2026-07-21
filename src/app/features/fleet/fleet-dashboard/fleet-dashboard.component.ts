@@ -2,7 +2,6 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { geoAlbersUsa, geoPath } from 'd3-geo';
 import * as topojson from 'topojson-client';
 import { environment } from '../../../../environments/environment';
@@ -49,24 +48,27 @@ interface ActionAlert {
   route?: string;
 }
 
-interface ChartPoint {
-  name: string;
-  value: number;
-}
-
-interface CandlestickPoint {
-  dateKey: string;
-  label: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
+interface WavePoint2D {
+  x: number;
+  y: number;
 }
 
 interface FleetApplicantRow {
   position: string;
   appliedDate: string;
   state: string | null;
+}
+
+interface DriverTrendRow {
+  startMonth: string;
+  state: string | null;
+}
+
+interface PipelineSeries {
+  months: string[];
+  applicantsMonthly: number[];
+  applicantsCumulative: number[];
+  activeDrivers: number[];
 }
 
 interface UsStateShape {
@@ -81,7 +83,7 @@ interface UsStateShape {
 @Component({
   selector: 'app-fleet-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, NgxChartsModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './fleet-dashboard.component.html',
   styleUrls: ['./fleet-dashboard.component.scss']
 })
@@ -92,24 +94,18 @@ export class FleetDashboardComponent implements OnInit {
   loading = signal(false);
   error = signal<string | null>(null);
   lastUpdated = signal<Date | null>(null);
-  fleetApplicantDensityData = signal<ChartPoint[]>([]);
-  fleetApplicantCandlestickData = signal<CandlestickPoint[]>([]);
   fleetApplicantCount = signal(0);
   fleetApplicantStateCounts = signal<Map<string, number>>(new Map());
   currentDriverStateCounts = signal<Map<string, number>>(new Map());
+  pipelineSeries = signal<PipelineSeries | null>(null);
   usStateShapes = signal<UsStateShape[]>([]);
   usMapLoading = signal(false);
   usMapError = signal<string | null>(null);
   readonly applicantDensityYear = new Date().getFullYear();
   readonly usMapViewBox = '0 0 960 600';
+  readonly pipelineView = { w: 1040, h: 320, padL: 48, padR: 48, padT: 18, padB: 40 };
   private usMapLoaded = false;
   private readonly usAtlasUrl = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
-  readonly fleetApplicantDensityScheme: Color = {
-    name: 'fleet-applicant-density',
-    selectable: true,
-    group: ScaleType.Ordinal,
-    domain: ['#38bdf8']
-  };
 
   stats = signal<FleetDashboardStats>({
     totalDrivers: 0,
@@ -336,51 +332,18 @@ export class FleetDashboardComponent implements OnInit {
     return items.slice(0, 4);
   });
 
-  readonly fleetApplicantDensityChartData = computed(() => [
-    { name: 'Fleet Applicant Density', series: this.fleetApplicantDensityData() }
-  ]);
+  readonly comparisonWindowLabel = computed(() => `YTD ${this.applicantDensityYear} (monthly)`);
 
-  readonly applicantDensityWindowLabel = computed(() => {
-    return `YTD ${this.applicantDensityYear} (daily candlesticks)`;
-  });
-
-  readonly candlestickChartWidth = 1040;
-  readonly candlestickChartHeight = 320;
-  readonly candlestickPaddingLeft = 46;
-  readonly candlestickPaddingRight = 14;
-  readonly candlestickPaddingTop = 14;
-  readonly candlestickPaddingBottom = 34;
-
-  readonly candlestickMax = computed(() => {
-    const data = this.fleetApplicantCandlestickData();
-    if (data.length === 0) return 1;
-    return Math.max(...data.map((d) => d.high), 1);
-  });
-
-  readonly candlestickXTicks = computed(() => {
-    const points = this.fleetApplicantCandlestickData();
-    const ticks: Array<{ index: number; label: string }> = [];
-    for (let i = 0; i < points.length; i++) {
-      const current = points[i];
-      const previous = i > 0 ? points[i - 1] : null;
-      const monthChanged = !previous || current.dateKey.slice(0, 7) !== previous.dateKey.slice(0, 7);
-      if (monthChanged) ticks.push({ index: i, label: current.label });
+  readonly peakApplicantMonthLabel = computed(() => {
+    const series = this.pipelineSeries();
+    if (!series?.months.length) return 'N/A';
+    let peakIdx = 0;
+    for (let i = 1; i < series.applicantsMonthly.length; i++) {
+      if ((series.applicantsMonthly[i] ?? 0) > (series.applicantsMonthly[peakIdx] ?? 0)) peakIdx = i;
     }
-    if (ticks.length > 0 && ticks[ticks.length - 1]?.index !== points.length - 1) {
-      const last = points[points.length - 1];
-      ticks.push({ index: points.length - 1, label: last.label });
-    }
-    return ticks;
-  });
-
-  readonly candlestickYTicks = computed(() => {
-    const max = this.candlestickMax();
-    const segments = 5;
-    const ticks: number[] = [];
-    for (let i = 0; i <= segments; i++) {
-      ticks.push(Math.round((max / segments) * i));
-    }
-    return ticks;
+    const month = series.months[peakIdx];
+    const count = series.applicantsMonthly[peakIdx] ?? 0;
+    return count > 0 ? `${this.formatMonthShort(month)} (${count})` : 'N/A';
   });
 
   readonly topStateBreakdown = computed(() => {
@@ -397,11 +360,97 @@ export class FleetDashboardComponent implements OnInit {
     return entries.map(([state, count]) => ({ state, count }));
   });
 
-  readonly peakDensityLabel = computed(() => {
-    const points = this.fleetApplicantCandlestickData();
-    if (points.length === 0) return 'N/A';
-    const peak = points.reduce((best, point) => (point.high > best.high ? point : best), points[0]);
-    return peak?.label || 'N/A';
+  readonly pipelineWave = computed(() => {
+    const series = this.pipelineSeries();
+    const view = this.pipelineView;
+    if (!series?.months.length) {
+      return {
+        hasData: false,
+        kpis: [] as Array<{ label: string; value: string | number; soft: string; tone: string }>,
+        leftTicks: [] as Array<{ y: number; label: string }>,
+        rightTicks: [] as Array<{ y: number; label: string }>,
+        points: [] as Array<{
+          key: string;
+          label: string;
+          x: number;
+          apps: number;
+          monthApps: number;
+          drivers: number;
+          appsY: number;
+          driversY: number;
+        }>,
+        applicantsPath: '',
+        applicantsArea: '',
+        driversPath: '',
+        driversArea: ''
+      };
+    }
+
+    const leftMax = Math.max(...series.applicantsCumulative, 1);
+    const rightMax = Math.max(...series.activeDrivers, 1);
+    const plotW = view.w - view.padL - view.padR;
+    const plotH = view.h - view.padT - view.padB;
+    const n = series.months.length;
+    const xAt = (i: number) => view.padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    const yLeft = (v: number) => view.padT + (1 - v / leftMax) * plotH;
+    const yRight = (v: number) => view.padT + (1 - v / rightMax) * plotH;
+    const baseY = view.h - view.padB;
+
+    const appPts: WavePoint2D[] = series.applicantsCumulative.map((v, i) => ({ x: xAt(i), y: yLeft(v) }));
+    const drvPts: WavePoint2D[] = series.activeDrivers.map((v, i) => ({ x: xAt(i), y: yRight(v) }));
+
+    const applicantsPath = this.smoothPath(appPts);
+    const driversPath = this.smoothPath(drvPts);
+    const closeArea = (path: string, pts: WavePoint2D[]) =>
+      pts.length ? `${path} L ${pts[pts.length - 1].x} ${baseY} L ${pts[0].x} ${baseY} Z` : '';
+
+    const tickCount = 5;
+    const leftTicks = Array.from({ length: tickCount }, (_, i) => {
+      const t = i / (tickCount - 1);
+      const value = Math.round(leftMax * (1 - t));
+      return { y: yLeft(value), label: String(value) };
+    });
+    const rightTicks = Array.from({ length: tickCount }, (_, i) => {
+      const t = i / (tickCount - 1);
+      const value = Math.round(rightMax * (1 - t));
+      return { y: yRight(value), label: String(value) };
+    });
+
+    const latestApps = series.applicantsCumulative[series.applicantsCumulative.length - 1] ?? 0;
+    const latestDrivers = series.activeDrivers[series.activeDrivers.length - 1] ?? 0;
+    const latestMonthApps = series.applicantsMonthly[series.applicantsMonthly.length - 1] ?? 0;
+    const ratio = latestDrivers > 0 ? (latestApps / latestDrivers).toFixed(1) : '—';
+
+    return {
+      hasData: true,
+      kpis: [
+        { label: 'Applicants YTD', value: latestApps, soft: `${latestMonthApps} this month`, tone: 'cyan' },
+        { label: 'Active Drivers', value: latestDrivers, soft: 'Current roster', tone: 'violet' },
+        { label: 'Apps / Driver', value: ratio, soft: 'Pipeline pressure', tone: 'orange' },
+        {
+          label: 'Peak Month',
+          value: this.peakApplicantMonthLabel(),
+          soft: 'Highest inflow',
+          tone: 'green'
+        }
+      ],
+      leftTicks,
+      rightTicks,
+      points: series.months.map((month, i) => ({
+        key: month,
+        label: this.formatMonthShort(month),
+        x: xAt(i),
+        apps: series.applicantsCumulative[i] ?? 0,
+        monthApps: series.applicantsMonthly[i] ?? 0,
+        drivers: series.activeDrivers[i] ?? 0,
+        appsY: yLeft(series.applicantsCumulative[i] ?? 0),
+        driversY: yRight(series.activeDrivers[i] ?? 0)
+      })),
+      applicantsPath,
+      applicantsArea: closeArea(applicantsPath, appPts),
+      driversPath,
+      driversArea: closeArea(driversPath, drvPts)
+    };
   });
 
   ngOnInit(): void {
@@ -488,11 +537,10 @@ export class FleetDashboardComponent implements OnInit {
       this.lastUpdated.set(new Date());
     } catch {
       this.error.set('Unable to load fleet dashboard data right now.');
-      this.fleetApplicantDensityData.set([]);
-      this.fleetApplicantCandlestickData.set([]);
       this.fleetApplicantCount.set(0);
       this.fleetApplicantStateCounts.set(new Map());
       this.currentDriverStateCounts.set(new Map());
+      this.pipelineSeries.set(null);
       this.usStateShapes.set([]);
     } finally {
       this.loading.set(false);
@@ -543,16 +591,14 @@ export class FleetDashboardComponent implements OnInit {
     const positionsGroupMap = this.buildPositionGroupMap(positionsPayload);
     const applicantRows = this.parseFleetApplicants(recordsPayload);
     const fleetApplicants = applicantRows.filter((row) => this.isFleetPosition(row.position, positionsGroupMap));
-    const densityPoints = this.buildDensityPointsYtdWeekly(fleetApplicants);
-    const candlesticks = this.buildDailyCandlesticks(fleetApplicants);
     const applicantStateCounts = this.buildStateCounts(fleetApplicants);
     const currentDriverStateCounts = this.buildCurrentDriverStateCounts(driverPayload);
+    const driverTrendRows = this.parseDriverTrendRows(driverPayload);
 
     this.fleetApplicantCount.set(fleetApplicants.length);
-    this.fleetApplicantDensityData.set(densityPoints);
-    this.fleetApplicantCandlestickData.set(candlesticks);
     this.fleetApplicantStateCounts.set(applicantStateCounts);
     this.currentDriverStateCounts.set(currentDriverStateCounts);
+    this.pipelineSeries.set(this.buildPipelineSeries(fleetApplicants, driverTrendRows));
     void this.refreshUsMap(applicantStateCounts, currentDriverStateCounts);
   }
 
@@ -592,37 +638,89 @@ export class FleetDashboardComponent implements OnInit {
     return fleetKeywords.some((keyword) => normalized.includes(keyword));
   }
 
-  private buildDensityPointsYtdWeekly(rows: FleetApplicantRow[]): ChartPoint[] {
-    const start = new Date(this.applicantDensityYear, 0, 1);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(0, 0, 0, 0);
-    const ytdEnd = end.getFullYear() === this.applicantDensityYear ? end : new Date(this.applicantDensityYear, 11, 31);
-    ytdEnd.setHours(0, 0, 0, 0);
-
-    const weeklyCounts = new Map<number, number>();
-    for (const row of rows) {
-      const parsed = this.parseDateOnly(row.appliedDate);
-      if (!parsed || parsed < start || parsed > ytdEnd) continue;
-      const weekStart = this.startOfWeek(parsed);
-      const key = weekStart.getTime();
-      weeklyCounts.set(key, (weeklyCounts.get(key) ?? 0) + 1);
+  private buildPipelineSeries(applicants: FleetApplicantRow[], drivers: DriverTrendRow[]): PipelineSeries {
+    const year = this.applicantDensityYear;
+    const now = new Date();
+    const endMonth = now.getFullYear() === year ? now.getMonth() : 11;
+    const months: string[] = [];
+    for (let m = 0; m <= endMonth; m++) {
+      months.push(`${year}-${String(m + 1).padStart(2, '0')}`);
     }
 
-    const points: ChartPoint[] = [];
-    let cursor = this.startOfWeek(start);
-    const endWeek = this.startOfWeek(ytdEnd);
-    while (cursor <= endWeek) {
-      const key = cursor.getTime();
-      points.push({
-        name: this.formatChartWeekLabel(cursor),
-        value: weeklyCounts.get(key) ?? 0
+    const applicantsMonthly = months.map((month) =>
+      applicants.filter((a) => a.appliedDate.slice(0, 7) === month).length
+    );
+
+    let running = 0;
+    const applicantsCumulative = applicantsMonthly.map((n) => {
+      running += n;
+      return running;
+    });
+
+    const activeDrivers = months.map(
+      (month) => drivers.filter((d) => !d.startMonth || d.startMonth <= month).length
+    );
+
+    return { months, applicantsMonthly, applicantsCumulative, activeDrivers };
+  }
+
+  private parseDriverTrendRows(payload: unknown[]): DriverTrendRow[] {
+    const rows: DriverTrendRow[] = [];
+    for (const item of payload) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      const status = this.normalizeText(row['status'] ?? row['Status']).toLowerCase();
+      if (this.isInactiveStatus(status)) continue;
+      if (status && !this.isActiveStatus(status) && status !== 'current') continue;
+
+      const hire = row['hireDate'] ?? row['HireDate'];
+      const created = row['createdAt'] ?? row['CreatedAt'];
+      let startMonth = '';
+      if (hire != null && String(hire)) {
+        startMonth = this.normalizeMonthKey(String(hire));
+      }
+      if (!startMonth && created != null) {
+        startMonth = this.normalizeMonthKey(String(created));
+      }
+      rows.push({
+        startMonth,
+        state: this.extractDriverState(row)
       });
-      cursor = new Date(cursor);
-      cursor.setDate(cursor.getDate() + 7);
     }
+    return rows;
+  }
 
-    return this.smoothDensity(points, 2);
+  private normalizeMonthKey(raw: string): string {
+    const s = String(raw ?? '').trim();
+    if (/^\d{4}-\d{2}$/.test(s)) return s;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 7);
+    const d = new Date(s);
+    if (!Number.isFinite(d.getTime())) return '';
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+
+  private formatMonthShort(month: string): string {
+    const m = parseInt(month.split('-')[1] ?? '0', 10);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[m - 1] ?? month;
+  }
+
+  private smoothPath(points: WavePoint2D[]): string {
+    if (!points.length) return '';
+    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i - 1] ?? points[i];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[i + 2] ?? p2;
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
   }
 
   private buildStateCounts(rows: FleetApplicantRow[]): Map<string, number> {
@@ -653,118 +751,6 @@ export class FleetDashboardComponent implements OnInit {
       counts.set(state, (counts.get(state) ?? 0) + 1);
     }
     return counts;
-  }
-
-  private buildDailyCandlesticks(rows: FleetApplicantRow[]): CandlestickPoint[] {
-    const start = new Date(this.applicantDensityYear, 0, 1);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setHours(0, 0, 0, 0);
-    const ytdEnd = end.getFullYear() === this.applicantDensityYear ? end : new Date(this.applicantDensityYear, 11, 31);
-    ytdEnd.setHours(0, 0, 0, 0);
-
-    const counts = new Map<string, number>();
-    for (const row of rows) {
-      const parsed = this.parseDateOnly(row.appliedDate);
-      if (!parsed || parsed < start || parsed > ytdEnd) continue;
-      const key = this.formatDateOnly(parsed);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-
-    const points: CandlestickPoint[] = [];
-    let cursor = new Date(start);
-    let previousClose = 0;
-    while (cursor <= ytdEnd) {
-      const key = this.formatDateOnly(cursor);
-      const close = counts.get(key) ?? 0;
-      const open = previousClose;
-
-      const prevDate = new Date(cursor);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const nextDate = new Date(cursor);
-      nextDate.setDate(nextDate.getDate() + 1);
-      const prevCount = counts.get(this.formatDateOnly(prevDate)) ?? open;
-      const nextCount = counts.get(this.formatDateOnly(nextDate)) ?? close;
-      const high = Math.max(open, close, prevCount, nextCount);
-      const low = Math.min(open, close, prevCount, nextCount);
-
-      points.push({
-        dateKey: key,
-        label: this.formatChartWeekLabel(cursor),
-        open,
-        high,
-        low,
-        close
-      });
-
-      previousClose = close;
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    return points;
-  }
-
-  private smoothDensity(points: ChartPoint[], radius: number): ChartPoint[] {
-    if (points.length === 0) return [];
-    const smoothed: ChartPoint[] = [];
-
-    for (let i = 0; i < points.length; i++) {
-      let weightedSum = 0;
-      let totalWeight = 0;
-
-      for (let offset = -radius; offset <= radius; offset++) {
-        const index = i + offset;
-        if (index < 0 || index >= points.length) continue;
-        const weight = radius + 1 - Math.abs(offset);
-        weightedSum += (points[index]?.value ?? 0) * weight;
-        totalWeight += weight;
-      }
-
-      smoothed.push({
-        name: points[i]?.name ?? '',
-        value: totalWeight > 0 ? Number((weightedSum / totalWeight).toFixed(2)) : 0
-      });
-    }
-
-    return smoothed;
-  }
-
-  getCandleX(index: number): number {
-    const points = this.fleetApplicantCandlestickData();
-    const innerWidth = this.candlestickChartWidth - this.candlestickPaddingLeft - this.candlestickPaddingRight;
-    if (points.length <= 1) return this.candlestickPaddingLeft;
-    return this.candlestickPaddingLeft + ((innerWidth * index) / (points.length - 1));
-  }
-
-  getCandleY(value: number): number {
-    const max = this.candlestickMax();
-    const innerHeight = this.candlestickChartHeight - this.candlestickPaddingTop - this.candlestickPaddingBottom;
-    const safeMax = Math.max(max, 1);
-    const ratio = Math.max(0, Math.min(1, value / safeMax));
-    return this.candlestickPaddingTop + (innerHeight * (1 - ratio));
-  }
-
-  getCandleBodyWidth(): number {
-    const points = this.fleetApplicantCandlestickData();
-    const innerWidth = this.candlestickChartWidth - this.candlestickPaddingLeft - this.candlestickPaddingRight;
-    if (points.length <= 1) return 4;
-    const step = innerWidth / (points.length - 1);
-    return Math.max(2, Math.min(10, step * 0.65));
-  }
-
-  getCandleBodyY(point: CandlestickPoint): number {
-    return this.getCandleY(Math.max(point.open, point.close));
-  }
-
-  getCandleBodyHeight(point: CandlestickPoint): number {
-    const h = Math.abs(this.getCandleY(point.open) - this.getCandleY(point.close));
-    return Math.max(1.2, h);
-  }
-
-  getCandleBodyClass(point: CandlestickPoint): string {
-    if (point.close > point.open) return 'candle-up';
-    if (point.close < point.open) return 'candle-down';
-    return 'candle-flat';
   }
 
   private normalizeText(value: unknown): string {
@@ -909,29 +895,6 @@ export class FleetDashboardComponent implements OnInit {
     if (Number.isNaN(parsed.getTime())) return '';
     parsed.setHours(0, 0, 0, 0);
     return this.formatDateOnly(parsed);
-  }
-
-  private parseDateOnly(value: string): Date | null {
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-    parsed.setHours(0, 0, 0, 0);
-    return parsed;
-  }
-
-  private startOfWeek(date: Date): Date {
-    const copy = new Date(date);
-    const day = copy.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    copy.setDate(copy.getDate() + diff);
-    copy.setHours(0, 0, 0, 0);
-    return copy;
-  }
-
-  private formatChartWeekLabel(date: Date): string {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: '2-digit'
-    }).format(date);
   }
 
   private formatDateOnly(date: Date): string {

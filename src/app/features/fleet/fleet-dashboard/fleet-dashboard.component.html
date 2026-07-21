@@ -50,41 +50,89 @@
 
   <section class="card density-card">
     <div class="density-header">
-      <h2><i class="bx bx-line-chart"></i> Fleet Applicant Density Curve</h2>
+      <div>
+        <h2><i class="bx bx-git-compare"></i> Applicants vs Active Drivers</h2>
+        <p class="density-subtitle">Monthly pipeline inflow against active driver roster growth</p>
+      </div>
       <div class="density-meta">
-        <span>{{ fleetApplicantCount() }} fleet applicants</span>
-        <span>Window: {{ applicantDensityWindowLabel() }}</span>
-        <span>Peak: {{ peakDensityLabel() }}</span>
+        <span class="meta-applicants">{{ fleetApplicantCount() }} applicants YTD</span>
+        <span class="meta-drivers">{{ stats().activeDrivers }} active drivers</span>
+        <span>Window: {{ comparisonWindowLabel() }}</span>
+        <span>Peak apps: {{ peakApplicantMonthLabel() }}</span>
       </div>
     </div>
-    <div class="density-visual-shell">
-      @if (fleetApplicantCandlestickData().length > 0) {
-        <svg class="candlestick-chart" [attr.viewBox]="'0 0 ' + candlestickChartWidth + ' ' + candlestickChartHeight" role="img" aria-label="Daily applicant candlestick chart">
-          @for (yTick of candlestickYTicks(); track yTick) {
-            <line class="candle-gridline" [attr.x1]="candlestickPaddingLeft" [attr.y1]="getCandleY(yTick)" [attr.x2]="candlestickChartWidth - candlestickPaddingRight" [attr.y2]="getCandleY(yTick)"></line>
-            <text class="candle-y-label" [attr.x]="candlestickPaddingLeft - 8" [attr.y]="getCandleY(yTick) + 4">{{ yTick }}</text>
+
+    @if (pipelineWave().hasData) {
+      <div class="compare-kpis">
+        @for (kpi of pipelineWave().kpis; track kpi.label) {
+          <article class="compare-kpi" [ngClass]="'tone-' + kpi.tone">
+            <span class="compare-kpi-label">{{ kpi.label }}</span>
+            <strong class="compare-kpi-value">{{ kpi.value }}</strong>
+            <span class="compare-kpi-soft">{{ kpi.soft }}</span>
+          </article>
+        }
+      </div>
+
+      <div class="density-visual-shell">
+        <div class="wave-legend">
+          <span class="wave-legend-item applicants"><i class="wave-swatch"></i> Cumulative Applicants</span>
+          <span class="wave-legend-item drivers"><i class="wave-swatch"></i> Active Drivers</span>
+        </div>
+        <svg
+          class="pipeline-wave"
+          [attr.viewBox]="'0 0 ' + pipelineView.w + ' ' + pipelineView.h"
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="Applicants versus active drivers monthly comparison">
+          <defs>
+            <linearGradient id="appsFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.38"></stop>
+              <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.02"></stop>
+            </linearGradient>
+            <linearGradient id="driversFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.32"></stop>
+              <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.02"></stop>
+            </linearGradient>
+            <filter id="pipelineGlow" x="-20%" y="-40%" width="140%" height="180%">
+              <feGaussianBlur stdDeviation="2.2" result="blur"></feGaussianBlur>
+              <feMerge>
+                <feMergeNode in="blur"></feMergeNode>
+                <feMergeNode in="SourceGraphic"></feMergeNode>
+              </feMerge>
+            </filter>
+          </defs>
+
+          @for (tick of pipelineWave().leftTicks; track tick.label) {
+            <line class="wave-grid" [attr.x1]="pipelineView.padL" [attr.x2]="pipelineView.w - pipelineView.padR" [attr.y1]="tick.y" [attr.y2]="tick.y"></line>
+            <text class="wave-y-label left" [attr.x]="pipelineView.padL - 8" [attr.y]="tick.y + 4" text-anchor="end">{{ tick.label }}</text>
+          }
+          @for (tick of pipelineWave().rightTicks; track tick.label) {
+            <text class="wave-y-label right" [attr.x]="pipelineView.w - pipelineView.padR + 8" [attr.y]="tick.y + 4" text-anchor="start">{{ tick.label }}</text>
           }
 
-          @for (tick of candlestickXTicks(); track tick.index) {
-            <line class="candle-tick-line" [attr.x1]="getCandleX(tick.index)" [attr.y1]="candlestickChartHeight - candlestickPaddingBottom" [attr.x2]="getCandleX(tick.index)" [attr.y2]="candlestickChartHeight - candlestickPaddingBottom + 4"></line>
-            <text class="candle-x-label" [attr.x]="getCandleX(tick.index)" [attr.y]="candlestickChartHeight - 8">{{ tick.label }}</text>
-          }
+          <path class="wave-area" [attr.d]="pipelineWave().applicantsArea" fill="url(#appsFill)"></path>
+          <path class="wave-line applicants" [attr.d]="pipelineWave().applicantsPath" fill="none" stroke="#38bdf8" stroke-width="2.8" filter="url(#pipelineGlow)"></path>
+          <path class="wave-area" [attr.d]="pipelineWave().driversArea" fill="url(#driversFill)"></path>
+          <path class="wave-line drivers" [attr.d]="pipelineWave().driversPath" fill="none" stroke="#a78bfa" stroke-width="2.8" filter="url(#pipelineGlow)"></path>
 
-          @for (point of fleetApplicantCandlestickData(); track point.dateKey; let i = $index) {
-            <line class="candle-wick" [attr.x1]="getCandleX(i)" [attr.y1]="getCandleY(point.high)" [attr.x2]="getCandleX(i)" [attr.y2]="getCandleY(point.low)"></line>
-            <rect [attr.class]="'candle-body ' + getCandleBodyClass(point)"
-              [attr.x]="getCandleX(i) - (getCandleBodyWidth() / 2)"
-              [attr.y]="getCandleBodyY(point)"
-              [attr.width]="getCandleBodyWidth()"
-              [attr.height]="getCandleBodyHeight(point)">
-              <title>{{ point.dateKey }}: open {{ point.open }}, high {{ point.high }}, low {{ point.low }}, close {{ point.close }}</title>
-            </rect>
+          @for (pt of pipelineWave().points; track pt.key) {
+            <circle class="wave-dot applicants" [attr.cx]="pt.x" [attr.cy]="pt.appsY" r="3.6">
+              <title>{{ pt.label }}: {{ pt.apps }} cumulative applicants ({{ pt.monthApps }} new)</title>
+            </circle>
+            <circle class="wave-dot drivers" [attr.cx]="pt.x" [attr.cy]="pt.driversY" r="3.6">
+              <title>{{ pt.label }}: {{ pt.drivers }} active drivers</title>
+            </circle>
+            <text class="wave-x-label" [attr.x]="pt.x" [attr.y]="pipelineView.h - 10" text-anchor="middle">{{ pt.label }}</text>
           }
         </svg>
-      } @else {
-        <div class="chart-empty">No fleet applicant trend data available yet.</div>
-      }
-    </div>
+        <div class="axis-hint">
+          <span>Left axis: cumulative applicants</span>
+          <span>Right axis: active drivers</span>
+        </div>
+      </div>
+    } @else {
+      <div class="chart-empty">No applicant / driver trend data available yet.</div>
+    }
   </section>
 
   <section class="card state-heatmap-card">
