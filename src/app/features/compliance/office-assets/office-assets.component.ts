@@ -69,16 +69,68 @@ export class OfficeAssetsComponent implements OnInit {
 
   stats = computed(() => {
     const list = this.employees().filter((e: any) => String(e?.status || '').toLowerCase() !== 'terminated');
+    const total = list.length || 1;
     const withLaptop = list.filter((e: any) => !!String(e?.laptop || '').trim()).length;
     const withPhone = list.filter((e: any) => !!String(e?.issuedPhone || '').trim()).length;
     const withBadge = list.filter((e: any) => !!String(e?.accessBadge || '').trim()).length;
+    const pct = (n: number) => Math.round((n / total) * 100);
+
     return [
-      { label: 'Employees', value: list.length, icon: 'bx-group' },
-      { label: 'Computers Issued', value: withLaptop, icon: 'bx-laptop' },
-      { label: 'Phones Issued', value: withPhone, icon: 'bx-mobile-alt' },
-      { label: 'Badges Issued', value: withBadge, icon: 'bx-id-card' }
+      {
+        key: 'employees' as const,
+        label: 'Employees',
+        value: list.length,
+        icon: 'bx-group',
+        tone: 'cyan',
+        badge: 'Roster',
+        meter: 100,
+        chip: `${list.length} active`,
+        soft: 'Office headcount'
+      },
+      {
+        key: 'computers' as const,
+        label: 'Computers Issued',
+        value: withLaptop,
+        icon: 'bx-laptop',
+        tone: withLaptop ? 'green' : 'orange',
+        badge: withLaptop ? 'Assigned' : 'Open',
+        meter: pct(withLaptop),
+        chip: `${pct(withLaptop)}% coverage`,
+        soft: `${list.length - withLaptop} unassigned`
+      },
+      {
+        key: 'phones' as const,
+        label: 'Phones Issued',
+        value: withPhone,
+        icon: 'bx-mobile-alt',
+        tone: withPhone ? 'violet' : 'orange',
+        badge: withPhone ? 'Assigned' : 'Open',
+        meter: pct(withPhone),
+        chip: `${pct(withPhone)}% coverage`,
+        soft: `${list.length - withPhone} unassigned`
+      },
+      {
+        key: 'access' as const,
+        label: 'Badges Issued',
+        value: withBadge,
+        icon: 'bx-id-card',
+        tone: withBadge ? 'green' : 'slate',
+        badge: withBadge ? 'Assigned' : 'Open',
+        meter: pct(withBadge),
+        chip: `${pct(withBadge)}% coverage`,
+        soft: `${list.length - withBadge} unassigned`
+      }
     ];
   });
+
+  onStatClick(key: 'employees' | 'computers' | 'phones' | 'access'): void {
+    if (key === 'employees') {
+      this.assignFilter.set('');
+      return;
+    }
+    this.selectTab(key);
+    this.assignFilter.set('assigned');
+  }
 
   ngOnInit(): void {
     this.loadEmployees();

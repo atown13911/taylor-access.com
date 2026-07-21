@@ -12,14 +12,20 @@
   </div>
 
   <div class="oa-stats">
-    @for (card of stats(); track card.label) {
-      <div class="oa-stat">
-        <i class="bx" [class]="card.icon"></i>
-        <div class="oa-stat-info">
-          <span class="oa-stat-val">{{ card.value }}</span>
-          <span class="oa-stat-lbl">{{ card.label }}</span>
-        </div>
-      </div>
+    @for (panel of stats(); track panel.key) {
+      <button type="button" class="stat-panel" [ngClass]="'tone-' + panel.tone" (click)="onStatClick(panel.key)">
+        <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+        <header class="stat-panel-head">
+          <span class="stat-panel-label">{{ panel.label }}</span>
+          <span class="stat-panel-badge">{{ panel.badge }}</span>
+        </header>
+        <p class="stat-panel-value">{{ panel.value }}</p>
+        <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+        <footer class="stat-panel-foot">
+          <span class="stat-panel-chip">{{ panel.chip }}</span>
+          <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+        </footer>
+      </button>
     }
   </div>
 
