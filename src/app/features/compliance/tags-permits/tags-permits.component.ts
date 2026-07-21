@@ -491,10 +491,34 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   getTrailerAssignmentStatus(p: any): 'active' | 'inactive' | 'returned' | 'closed_out' {
+    // Taylor Access assignment status must win over Assets status / last-driver display name.
+    const explicitStatus = String(p?.assignmentStatus ?? p?.trailerStatus ?? '').trim().toLowerCase();
+
+    if (explicitStatus === 'return' || explicitStatus === 'returned') {
+      return 'returned';
+    }
+    if (
+      explicitStatus === 'closed out'
+      || explicitStatus === 'closed_out'
+      || explicitStatus === 'closedout'
+      || explicitStatus === 'closed-out'
+    ) {
+      return 'closed_out';
+    }
+    if (explicitStatus === 'inactive') {
+      return 'inactive';
+    }
+    if (explicitStatus === 'active') {
+      return 'active';
+    }
+
+    // Historical last-driver labels must not keep a trailer on the Active tab.
+    if (p?.historicalDriver) {
+      return 'inactive';
+    }
+
     const rawStatus = String(
-      p?.assignmentStatus
-      ?? p?.trailerStatus
-      ?? p?.driverAssignmentStatus
+      p?.driverAssignmentStatus
       ?? p?.status
       ?? ''
     ).trim().toLowerCase();
@@ -502,7 +526,12 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     if (rawStatus === 'return' || rawStatus === 'returned') {
       return 'returned';
     }
-    if (rawStatus === 'closed out' || rawStatus === 'closed_out' || rawStatus === 'closedout' || rawStatus === 'closed-out') {
+    if (
+      rawStatus === 'closed out'
+      || rawStatus === 'closed_out'
+      || rawStatus === 'closedout'
+      || rawStatus === 'closed-out'
+    ) {
       return 'closed_out';
     }
 
@@ -1889,13 +1918,14 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       vendorLabel: this.getTrailerVendorLabel(assignment.vendor || t?.vendor || t?.lessor || t?.leasingVendor || t?.provider),
       chargeFrequency: assignment.chargeFrequency || t?.chargeFrequency || t?.billingFrequency || t?.rateFrequency || t?.frequency || 'monthly',
       trailerStatus: resolvedTrailerStatus,
+      assignmentStatus: resolvedTrailerStatus,
       assignedDriverId: resolvedAssignedDriverId,
       assignedDriverName: displayDriverName,
       historicalDriver: isInactiveStatus && !resolvedAssignedDriverName && !!historicalDriverName,
       lastAssignedDriverName: assignment.lastAssignedDriverName ?? '',
       inactivatedAt: assignment.inactivatedAt ?? null,
       assignedTruckNumber: assignment.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
-      status: t?.status || (resolvedAssignedDriverId ? 'active' : 'expiring'),
+      status: resolvedTrailerStatus,
       notes: assignment.notes || t?.notes || '',
       photoUrl: resolvedPhotoUrl,
       hasFile: agreement.hasFile,
@@ -1928,13 +1958,14 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       vendorLabel: this.getTrailerVendorLabel(assignment.vendor),
       chargeFrequency: assignment.chargeFrequency || 'monthly',
       trailerStatus: status,
+      assignmentStatus: status,
       assignedDriverId: assignment.assignedDriverId ?? null,
       assignedDriverName: displayDriverName,
       historicalDriver: isInactiveStatus && !activeDriverName && !!historicalDriverName,
       lastAssignedDriverName: assignment.lastAssignedDriverName ?? '',
       inactivatedAt: assignment.inactivatedAt ?? null,
       assignedTruckNumber: assignment.assignedTruckNumber || assignment.permitNumber || key,
-      status: 'expiring',
+      status,
       notes: assignment.notes || '',
       photoUrl: null,
       hasFile: agreement.hasFile,
@@ -2149,6 +2180,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       }
       await this.loadTrailerAssignmentsFromApi(keys);
       await this.syncTrailerPhotoOverrides();
+      this.trailerSubTab.set('inactive');
       this.toast.success('Trailer moved to inactive. Photos and assignment history preserved.', 'Status updated');
     } catch {
       this.toast.error('Failed to move trailer to inactive', 'Status update');
