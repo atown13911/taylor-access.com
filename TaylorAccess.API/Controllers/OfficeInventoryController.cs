@@ -83,7 +83,7 @@ public class OfficeInventoryController : ControllerBase
         if (type == null)
             return BadRequest(new { error = "Invalid assetType. Use computer, phone, monitor, headset, badge, or keys." });
 
-        var tag = (body.AssetTag || "").Trim();
+        var tag = (body.AssetTag ?? "").Trim();
         if (string.IsNullOrWhiteSpace(tag))
             return BadRequest(new { error = "Asset tag is required." });
 
@@ -327,7 +327,7 @@ public class OfficeInventoryController : ControllerBase
 
     private static string? NormalizeType(string? raw)
     {
-        var type = (raw || "").Trim().ToLowerInvariant();
+        var type = (raw ?? "").Trim().ToLowerInvariant();
         return AllowedTypes.Contains(type) ? type : null;
     }
 
