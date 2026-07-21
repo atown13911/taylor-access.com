@@ -83,13 +83,13 @@ public class OfficeInventoryController : ControllerBase
         if (type == null)
             return BadRequest(new { error = "Invalid assetType. Use computer, phone, monitor, headset, badge, or keys." });
 
-        var tag = (body.AssetTag ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(tag))
-            return BadRequest(new { error = "Asset tag is required." });
-
         var orgId = await ResolveOrgIdAsync(body.OrganizationId);
         if (!orgId.HasValue)
             return BadRequest(new { error = "Organization is required." });
+
+        var tag = (body.AssetTag ?? "").Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(tag))
+            tag = await GenerateNextAssetTagAsync(orgId.Value, type);
 
         var duplicate = await _context.OfficeInventoryItems
             .AnyAsync(i => i.OrganizationId == orgId.Value && i.AssetTag == tag);
@@ -317,6 +317,50 @@ public class OfficeInventoryController : ControllerBase
             DisplayName = BuildDisplayName(i.AssetTag, i.Label, i.Make, i.Model)
         };
     }
+
+    private async Task<string> GenerateNextAssetTagAsync(int organizationId, string assetType)
+    {
+        var prefix = AssetTypePrefix(assetType);
+        var existing = await _context.OfficeInventoryItems
+            .AsNoTracking()
+            .Where(i => i.OrganizationId == organizationId && i.AssetType == assetType)
+            .Select(i => i.AssetTag)
+            .ToListAsync();
+
+        var maxSeq = 0;
+        var prefixWithDash = prefix + "-";
+        foreach (var tag in existing)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) continue;
+            var value = tag.Trim().ToUpperInvariant();
+            if (!value.StartsWith(prefixWithDash, StringComparison.OrdinalIgnoreCase)) continue;
+            var suffix = value[prefixWithDash.Length..];
+            if (int.TryParse(suffix, out var seq) && seq > maxSeq)
+                maxSeq = seq;
+        }
+
+        // Retry a few times in case of concurrent creates.
+        for (var attempt = 1; attempt <= 25; attempt++)
+        {
+            var candidate = $"{prefix}-{(maxSeq + attempt):D4}";
+            var taken = await _context.OfficeInventoryItems
+                .AnyAsync(i => i.OrganizationId == organizationId && i.AssetTag == candidate);
+            if (!taken) return candidate;
+        }
+
+        return $"{prefix}-{DateTime.UtcNow:yyMMddHHmmss}";
+    }
+
+    private static string AssetTypePrefix(string assetType) => assetType switch
+    {
+        "computer" => "CMP",
+        "phone" => "PHN",
+        "monitor" => "MON",
+        "headset" => "HDS",
+        "badge" => "BDG",
+        "keys" => "KEY",
+        _ => "AST"
+    };
 
     private async Task<int?> ResolveOrgIdAsync(int? requested)
     {

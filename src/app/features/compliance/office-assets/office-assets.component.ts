@@ -375,16 +375,11 @@ export class OfficeAssetsComponent implements OnInit {
   }
 
   async saveInventory(): Promise<void> {
-    if (!this.inventoryForm.assetTag.trim()) {
-      this.toast.error('Asset tag is required');
-      return;
-    }
-
     this.saving.set(true);
     try {
-      const payload = {
+      const existing = this.editingInventory();
+      const payload: any = {
         assetType: this.inventoryForm.assetType,
-        assetTag: this.inventoryForm.assetTag.trim(),
         label: this.inventoryForm.label.trim(),
         make: this.inventoryForm.make.trim(),
         model: this.inventoryForm.model.trim(),
@@ -392,13 +387,17 @@ export class OfficeAssetsComponent implements OnInit {
         notes: this.inventoryForm.notes.trim(),
         status: this.inventoryForm.status
       };
-      const existing = this.editingInventory();
+      // Asset tags are system-generated on create; never overwrite on edit.
+      if (!existing?.id) {
+        payload.assetTag = '';
+      }
       if (existing?.id) {
         await this.http.put(`${this.apiUrl}/api/v1/office-inventory/${existing.id}`, payload).toPromise();
         this.toast.success('Inventory item updated');
       } else {
-        await this.http.post(`${this.apiUrl}/api/v1/office-inventory`, payload).toPromise();
-        this.toast.success('Inventory item added');
+        const res: any = await this.http.post(`${this.apiUrl}/api/v1/office-inventory`, payload).toPromise();
+        const tag = res?.data?.assetTag;
+        this.toast.success(tag ? `Asset added as ${tag}` : 'Inventory item added');
       }
       this.closeInventoryModal();
       await this.loadInventory();

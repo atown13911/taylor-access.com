@@ -293,15 +293,19 @@
         <div class="oa-form-grid">
           <div class="oa-form-row">
             <label>Type</label>
-            <select [(ngModel)]="inventoryForm.assetType">
+            <select [(ngModel)]="inventoryForm.assetType" [disabled]="!!editingInventory()">
               @for (t of inventoryTypes; track t.value) {
                 <option [value]="t.value">{{ t.label }}</option>
               }
             </select>
           </div>
           <div class="oa-form-row">
-            <label>Asset Tag *</label>
-            <input type="text" [(ngModel)]="inventoryForm.assetTag" placeholder="e.g. LAP-001">
+            <label>Asset Tag</label>
+            @if (editingInventory()) {
+              <input type="text" [ngModel]="inventoryForm.assetTag" readonly class="readonly">
+            } @else {
+              <input type="text" value="Auto-generated on save" disabled class="readonly">
+            }
           </div>
         </div>
         <div class="oa-form-row">
