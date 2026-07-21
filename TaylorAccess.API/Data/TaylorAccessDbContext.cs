@@ -66,6 +66,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<OAuthRefreshToken> OAuthRefreshTokens => Set<OAuthRefreshToken>();
     public DbSet<AppRoleAssignment> AppRoleAssignments => Set<AppRoleAssignment>();
     public DbSet<CompanyPermit> CompanyPermits => Set<CompanyPermit>();
+    public DbSet<OfficeInventoryItem> OfficeInventoryItems => Set<OfficeInventoryItem>();
     public DbSet<TrailerPhoto> TrailerPhotos => Set<TrailerPhoto>();
     public DbSet<TrailerAssignment> TrailerAssignments => Set<TrailerAssignment>();
     public DbSet<TrailerAssignmentLog> TrailerAssignmentLogs => Set<TrailerAssignmentLog>();

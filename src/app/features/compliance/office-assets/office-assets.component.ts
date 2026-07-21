@@ -5,9 +5,27 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrganizationContextService } from '../../../core/services/organization-context.service';
+import { ConfirmService } from '../../../core/services/confirm.service';
 
-type OfficeTab = 'computers' | 'phones' | 'access';
+type OfficeTab = 'inventory' | 'computers' | 'phones' | 'access';
 type AssignFilter = '' | 'assigned' | 'unassigned';
+type InventoryType = 'computer' | 'phone' | 'monitor' | 'headset' | 'badge' | 'keys';
+
+interface InventoryItem {
+  id: number;
+  organizationId: number;
+  assetType: InventoryType | string;
+  assetTag: string;
+  label?: string | null;
+  make?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  status: string;
+  assignedUserId?: number | null;
+  assignedUserName?: string | null;
+  notes?: string | null;
+  displayName?: string;
+}
 
 @Component({
   selector: 'app-office-assets',
@@ -20,29 +38,56 @@ export class OfficeAssetsComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private orgContext = inject(OrganizationContextService);
+  private confirm = inject(ConfirmService);
   private apiUrl = environment.apiUrl;
 
   activeTab = signal<OfficeTab>('computers');
   loading = signal(false);
+  inventoryLoading = signal(false);
   saving = signal(false);
   employees = signal<any[]>([]);
+  inventory = signal<InventoryItem[]>([]);
   searchTerm = signal('');
   assignFilter = signal<AssignFilter>('');
+  inventoryTypeFilter = signal<'' | InventoryType>('');
 
   showEditModal = signal(false);
   editingEmployee = signal<any | null>(null);
   editForm = {
-    laptop: '',
-    issuedPhone: '',
-    accessBadge: '',
-    headset: '',
-    monitor: '',
-    keysFob: '',
+    computerId: null as number | null,
+    phoneId: null as number | null,
+    monitorId: null as number | null,
+    headsetId: null as number | null,
+    badgeId: null as number | null,
+    keysId: null as number | null,
     equipmentNotes: ''
   };
 
+  showInventoryModal = signal(false);
+  editingInventory = signal<InventoryItem | null>(null);
+  inventoryForm = {
+    assetType: 'computer' as InventoryType,
+    assetTag: '',
+    label: '',
+    make: '',
+    model: '',
+    serialNumber: '',
+    notes: '',
+    status: 'available'
+  };
+
+  readonly inventoryTypes: { value: InventoryType; label: string }[] = [
+    { value: 'computer', label: 'Computer' },
+    { value: 'phone', label: 'Phone' },
+    { value: 'monitor', label: 'Monitor' },
+    { value: 'headset', label: 'Headset' },
+    { value: 'badge', label: 'Access Badge' },
+    { value: 'keys', label: 'Keys / Fob' }
+  ];
+
   filteredRows = computed(() => {
     const tab = this.activeTab();
+    if (tab === 'inventory') return [];
     const search = this.searchTerm().trim().toLowerCase();
     const filter = this.assignFilter();
     let rows = this.employees().filter((e: any) => String(e?.status || '').toLowerCase() !== 'terminated');
@@ -67,78 +112,103 @@ export class OfficeAssetsComponent implements OnInit {
     return rows.sort((a: any, b: any) => String(a?.name || '').localeCompare(String(b?.name || '')));
   });
 
+  filteredInventory = computed(() => {
+    const type = this.inventoryTypeFilter();
+    const search = this.searchTerm().trim().toLowerCase();
+    let rows = [...this.inventory()];
+    if (type) rows = rows.filter((i) => i.assetType === type);
+    if (search) {
+      rows = rows.filter((i) => {
+        const blob = [
+          i.assetTag, i.label, i.make, i.model, i.serialNumber, i.displayName, i.assignedUserName, i.notes, i.status
+        ].map((v) => String(v || '').toLowerCase()).join(' ');
+        return blob.includes(search);
+      });
+    }
+    return rows;
+  });
+
   stats = computed(() => {
     const list = this.employees().filter((e: any) => String(e?.status || '').toLowerCase() !== 'terminated');
-    const total = list.length || 1;
-    const withLaptop = list.filter((e: any) => !!String(e?.laptop || '').trim()).length;
-    const withPhone = list.filter((e: any) => !!String(e?.issuedPhone || '').trim()).length;
-    const withBadge = list.filter((e: any) => !!String(e?.accessBadge || '').trim()).length;
-    const pct = (n: number) => Math.round((n / total) * 100);
+    const inv = this.inventory().filter((i) => i.status !== 'retired');
+    const computers = inv.filter((i) => i.assetType === 'computer');
+    const phones = inv.filter((i) => i.assetType === 'phone');
+    const badges = inv.filter((i) => i.assetType === 'badge');
+    const issuedComputers = computers.filter((i) => i.status === 'assigned' || !!i.assignedUserId).length;
+    const issuedPhones = phones.filter((i) => i.status === 'assigned' || !!i.assignedUserId).length;
+    const issuedBadges = badges.filter((i) => i.status === 'assigned' || !!i.assignedUserId).length;
+    const available = inv.filter((i) => i.status === 'available' && !i.assignedUserId).length;
+    const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
 
     return [
       {
-        key: 'employees' as const,
-        label: 'Employees',
-        value: list.length,
-        icon: 'bx-group',
+        key: 'inventory' as const,
+        label: 'Inventory',
+        value: inv.length,
+        icon: 'bx-package',
         tone: 'cyan',
-        badge: 'Roster',
+        badge: 'Stock',
         meter: 100,
-        chip: `${list.length} active`,
-        soft: 'Office headcount'
+        chip: `${available} available`,
+        soft: `${inv.length - available} assigned`
       },
       {
         key: 'computers' as const,
         label: 'Computers Issued',
-        value: withLaptop,
+        value: issuedComputers,
         icon: 'bx-laptop',
-        tone: withLaptop ? 'green' : 'orange',
-        badge: withLaptop ? 'Assigned' : 'Open',
-        meter: pct(withLaptop),
-        chip: `${pct(withLaptop)}% coverage`,
-        soft: `${list.length - withLaptop} unassigned`
+        tone: issuedComputers ? 'green' : 'orange',
+        badge: computers.length ? 'Fleet' : 'Open',
+        meter: pct(issuedComputers, computers.length || 1),
+        chip: `${computers.length} in stock`,
+        soft: `${Math.max(0, computers.length - issuedComputers)} free`
       },
       {
         key: 'phones' as const,
         label: 'Phones Issued',
-        value: withPhone,
+        value: issuedPhones,
         icon: 'bx-mobile-alt',
-        tone: withPhone ? 'violet' : 'orange',
-        badge: withPhone ? 'Assigned' : 'Open',
-        meter: pct(withPhone),
-        chip: `${pct(withPhone)}% coverage`,
-        soft: `${list.length - withPhone} unassigned`
+        tone: issuedPhones ? 'violet' : 'orange',
+        badge: phones.length ? 'Fleet' : 'Open',
+        meter: pct(issuedPhones, phones.length || 1),
+        chip: `${phones.length} in stock`,
+        soft: `${Math.max(0, phones.length - issuedPhones)} free`
       },
       {
         key: 'access' as const,
         label: 'Badges Issued',
-        value: withBadge,
+        value: issuedBadges,
         icon: 'bx-id-card',
-        tone: withBadge ? 'green' : 'slate',
-        badge: withBadge ? 'Assigned' : 'Open',
-        meter: pct(withBadge),
-        chip: `${pct(withBadge)}% coverage`,
-        soft: `${list.length - withBadge} unassigned`
+        tone: issuedBadges ? 'green' : 'slate',
+        badge: badges.length ? 'Fleet' : 'Open',
+        meter: pct(issuedBadges, badges.length || 1),
+        chip: `${badges.length} in stock`,
+        soft: `${list.length} employees`
       }
     ];
   });
 
-  onStatClick(key: 'employees' | 'computers' | 'phones' | 'access'): void {
-    if (key === 'employees') {
+  onStatClick(key: 'inventory' | 'computers' | 'phones' | 'access'): void {
+    this.selectTab(key);
+    if (key === 'inventory') {
       this.assignFilter.set('');
       return;
     }
-    this.selectTab(key);
     this.assignFilter.set('assigned');
   }
 
   ngOnInit(): void {
-    this.loadEmployees();
+    void this.refreshAll();
+  }
+
+  async refreshAll(): Promise<void> {
+    await Promise.all([this.loadEmployees(), this.loadInventory()]);
   }
 
   selectTab(tab: OfficeTab): void {
     this.activeTab.set(tab);
     this.assignFilter.set('');
+    if (tab !== 'inventory') this.inventoryTypeFilter.set('');
   }
 
   primaryAssetValue(employee: any, tab: OfficeTab = this.activeTab()): string {
@@ -152,6 +222,30 @@ export class OfficeAssetsComponent implements OnInit {
     if (tab === 'phones') return 'Issued Phone';
     if (tab === 'access') return 'Access Badge';
     return 'Laptop / Computer';
+  }
+
+  typeLabel(type: string): string {
+    return this.inventoryTypes.find((t) => t.value === type)?.label || type;
+  }
+
+  optionsFor(type: InventoryType, selectedId: number | null): InventoryItem[] {
+    const employeeId = this.editingEmployee()?.id;
+    return this.inventory()
+      .filter((i) => i.assetType === type)
+      .filter((i) => {
+        if (selectedId && i.id === selectedId) return true;
+        if (i.status === 'retired') return false;
+        if (!i.assignedUserId) return true;
+        return employeeId != null && Number(i.assignedUserId) === Number(employeeId);
+      })
+      .sort((a, b) => String(a.displayName || a.assetTag).localeCompare(String(b.displayName || b.assetTag)));
+  }
+
+  findAssignedId(userId: number, type: InventoryType): number | null {
+    const match = this.inventory().find(
+      (i) => i.assetType === type && Number(i.assignedUserId) === Number(userId)
+    );
+    return match?.id ?? null;
   }
 
   async loadEmployees(): Promise<void> {
@@ -182,15 +276,29 @@ export class OfficeAssetsComponent implements OnInit {
     }
   }
 
+  async loadInventory(): Promise<void> {
+    this.inventoryLoading.set(true);
+    try {
+      const url = this.orgContext.addOrgParam(`${this.apiUrl}/api/v1/office-inventory?limit=2000`);
+      const res: any = await this.http.get(url).toPromise();
+      this.inventory.set(Array.isArray(res?.data) ? res.data : []);
+    } catch (err) {
+      console.error('Failed to load office inventory:', err);
+      this.inventory.set([]);
+    } finally {
+      this.inventoryLoading.set(false);
+    }
+  }
+
   openEdit(employee: any): void {
     this.editingEmployee.set(employee);
     this.editForm = {
-      laptop: employee?.laptop || '',
-      issuedPhone: employee?.issuedPhone || '',
-      accessBadge: employee?.accessBadge || '',
-      headset: employee?.headset || '',
-      monitor: employee?.monitor || '',
-      keysFob: employee?.keysFob || '',
+      computerId: this.findAssignedId(employee.id, 'computer'),
+      phoneId: this.findAssignedId(employee.id, 'phone'),
+      monitorId: this.findAssignedId(employee.id, 'monitor'),
+      headsetId: this.findAssignedId(employee.id, 'headset'),
+      badgeId: this.findAssignedId(employee.id, 'badge'),
+      keysId: this.findAssignedId(employee.id, 'keys'),
       equipmentNotes: employee?.equipmentNotes || ''
     };
     this.showEditModal.set(true);
@@ -207,39 +315,115 @@ export class OfficeAssetsComponent implements OnInit {
 
     this.saving.set(true);
     try {
-      await this.http.put(`${this.apiUrl}/api/v1/users/${employee.id}`, {
-        laptop: this.editForm.laptop,
-        issuedPhone: this.editForm.issuedPhone,
-        accessBadge: this.editForm.accessBadge,
-        headset: this.editForm.headset,
-        monitor: this.editForm.monitor,
-        keysFob: this.editForm.keysFob,
+      const res: any = await this.http.post(`${this.apiUrl}/api/v1/office-inventory/assign`, {
+        userId: employee.id,
+        computerId: this.editForm.computerId || null,
+        phoneId: this.editForm.phoneId || null,
+        monitorId: this.editForm.monitorId || null,
+        headsetId: this.editForm.headsetId || null,
+        badgeId: this.editForm.badgeId || null,
+        keysId: this.editForm.keysId || null,
         equipmentNotes: this.editForm.equipmentNotes
       }).toPromise();
 
+      const data = res?.data || {};
       this.employees.update((list) =>
         list.map((row) =>
           row.id === employee.id
             ? {
                 ...row,
-                laptop: this.editForm.laptop,
-                issuedPhone: this.editForm.issuedPhone,
-                accessBadge: this.editForm.accessBadge,
-                headset: this.editForm.headset,
-                monitor: this.editForm.monitor,
-                keysFob: this.editForm.keysFob,
-                equipmentNotes: this.editForm.equipmentNotes
+                laptop: data.laptop ?? null,
+                issuedPhone: data.issuedPhone ?? null,
+                accessBadge: data.accessBadge ?? null,
+                headset: data.headset ?? null,
+                monitor: data.monitor ?? null,
+                keysFob: data.keysFob ?? null,
+                equipmentNotes: data.equipmentNotes ?? null
               }
             : row
         )
       );
+      await this.loadInventory();
       this.toast.success(`Updated equipment for ${employee.name}`);
       this.closeEdit();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save office asset assignment:', err);
-      this.toast.error('Failed to save equipment assignment');
+      this.toast.error(err?.error?.error || 'Failed to save equipment assignment');
     } finally {
       this.saving.set(false);
+    }
+  }
+
+  openInventoryModal(item?: InventoryItem): void {
+    this.editingInventory.set(item || null);
+    this.inventoryForm = {
+      assetType: (item?.assetType as InventoryType) || 'computer',
+      assetTag: item?.assetTag || '',
+      label: item?.label || '',
+      make: item?.make || '',
+      model: item?.model || '',
+      serialNumber: item?.serialNumber || '',
+      notes: item?.notes || '',
+      status: item?.status || 'available'
+    };
+    this.showInventoryModal.set(true);
+  }
+
+  closeInventoryModal(): void {
+    this.showInventoryModal.set(false);
+    this.editingInventory.set(null);
+  }
+
+  async saveInventory(): Promise<void> {
+    if (!this.inventoryForm.assetTag.trim()) {
+      this.toast.error('Asset tag is required');
+      return;
+    }
+
+    this.saving.set(true);
+    try {
+      const payload = {
+        assetType: this.inventoryForm.assetType,
+        assetTag: this.inventoryForm.assetTag.trim(),
+        label: this.inventoryForm.label.trim(),
+        make: this.inventoryForm.make.trim(),
+        model: this.inventoryForm.model.trim(),
+        serialNumber: this.inventoryForm.serialNumber.trim(),
+        notes: this.inventoryForm.notes.trim(),
+        status: this.inventoryForm.status
+      };
+      const existing = this.editingInventory();
+      if (existing?.id) {
+        await this.http.put(`${this.apiUrl}/api/v1/office-inventory/${existing.id}`, payload).toPromise();
+        this.toast.success('Inventory item updated');
+      } else {
+        await this.http.post(`${this.apiUrl}/api/v1/office-inventory`, payload).toPromise();
+        this.toast.success('Inventory item added');
+      }
+      this.closeInventoryModal();
+      await this.loadInventory();
+    } catch (err: any) {
+      console.error('Failed to save inventory item:', err);
+      this.toast.error(err?.error?.error || 'Failed to save inventory item');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async deleteInventory(item: InventoryItem): Promise<void> {
+    const ok = await this.confirm.show({
+      message: `Remove ${item.displayName || item.assetTag} from inventory?`,
+      type: 'danger',
+      confirmText: 'Delete'
+    });
+    if (!ok) return;
+
+    try {
+      await this.http.delete(`${this.apiUrl}/api/v1/office-inventory/${item.id}`).toPromise();
+      this.toast.success('Inventory item deleted');
+      await this.loadInventory();
+    } catch (err: any) {
+      this.toast.error(err?.error?.error || 'Failed to delete inventory item');
     }
   }
 }

@@ -657,6 +657,28 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""KeysFob"" VARCHAR(100) NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EquipmentNotes"" VARCHAR(500) NULL;
 
+        CREATE TABLE IF NOT EXISTS ""OfficeInventoryItems"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""OrganizationId"" INTEGER NOT NULL,
+            ""AssetType"" VARCHAR(40) NOT NULL,
+            ""AssetTag"" VARCHAR(100) NOT NULL,
+            ""Label"" VARCHAR(200) NULL,
+            ""Make"" VARCHAR(100) NULL,
+            ""Model"" VARCHAR(100) NULL,
+            ""SerialNumber"" VARCHAR(100) NULL,
+            ""Status"" VARCHAR(30) NOT NULL DEFAULT 'available',
+            ""AssignedUserId"" INTEGER NULL,
+            ""Notes"" VARCHAR(500) NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_OfficeInventoryItems_Org_AssetTag""
+            ON ""OfficeInventoryItems"" (""OrganizationId"", ""AssetTag"");
+        CREATE INDEX IF NOT EXISTS ""IX_OfficeInventoryItems_Org_Type_Status""
+            ON ""OfficeInventoryItems"" (""OrganizationId"", ""AssetType"", ""Status"");
+        CREATE INDEX IF NOT EXISTS ""IX_OfficeInventoryItems_AssignedUserId""
+            ON ""OfficeInventoryItems"" (""AssignedUserId"");
+
         CREATE TABLE IF NOT EXISTS ""InsuranceFleetDriverPeriodOverrides"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL,
