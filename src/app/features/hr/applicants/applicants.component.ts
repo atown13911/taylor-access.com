@@ -2106,7 +2106,31 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     .pipeline-tab.active { border-color: #00d4ff; color: #d9f6ff; background: rgba(0, 212, 255, 0.12); }
     .sync-error { margin: -4px 0 10px; color: #fda4af; font-size: 0.82rem; }
     .table-top-actions { display: flex; justify-content: flex-end; margin: 14px 0 18px; }
-    .table-wrap { border: 1px solid #2a2a4e; border-radius: 10px; overflow: hidden; }
+    .table-wrap {
+      position: relative;
+      isolation: isolate;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      overflow: hidden;
+      background:
+        linear-gradient(165deg, rgba(255, 255, 255, 0.07), transparent 42%),
+        rgba(12, 18, 32, 0.48);
+      backdrop-filter: blur(18px) saturate(140%);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.08) inset,
+        0 0 0 1px rgba(0, 212, 255, 0.06) inset,
+        0 18px 40px rgba(0, 0, 0, 0.35);
+    }
+    .table-wrap::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+      pointer-events: none;
+      z-index: 2;
+    }
     .report-view { margin-top: 6px; }
     .report-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .applicant-mode-tabs-inline { display: inline-flex; gap: 8px; margin-right: 4px; }
@@ -2135,18 +2159,70 @@ type BubbleSeriesPoint = { name: string; x: number; y: number; r: number };
     ::ng-deep .ngx-charts .label { fill: #cbd5e1 !important; font-size: 11px !important; }
     ::ng-deep ngx-charts-bar-vertical, ::ng-deep ngx-charts-bar-horizontal, ::ng-deep ngx-charts-pie-chart, ::ng-deep ngx-charts-bubble-chart, ::ng-deep ngx-charts-line-chart { display: block; position: relative; z-index: 0; }
     table { width: 100%; border-collapse: collapse; }
+    .table-wrap th {
+      text-align: left;
+      padding: 12px;
+      background: rgba(8, 12, 22, 0.35);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: rgba(148, 163, 184, 0.92);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .table-wrap td {
+      padding: 12px;
+      color: #d1d5db;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      vertical-align: top;
+    }
+    .table-wrap tbody tr:last-child td { border-bottom: none; }
     th { text-align: left; padding: 12px; background: #0d0d1a; color: #8aa0b8; font-size: 0.75rem; text-transform: uppercase; border-bottom: 1px solid #2a2a4e; }
     td { padding: 12px; color: #d1d5db; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
-    .applicant-row { cursor: pointer; }
-    .applicant-row.selected td { background: rgba(0, 212, 255, 0.08); }
+    .applicant-row { cursor: pointer; transition: background 140ms ease; }
+    .applicant-row:hover td { background: rgba(255, 255, 255, 0.03); }
+    .applicant-row.selected td {
+      background: linear-gradient(90deg, rgba(0, 212, 255, 0.14), rgba(0, 212, 255, 0.04) 55%, transparent);
+      box-shadow: inset 3px 0 0 #22d3ee;
+    }
+    .table-wrap td select {
+      background: rgba(255, 255, 255, 0.05);
+      color: #d1d5db;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 6px 8px;
+      backdrop-filter: blur(6px);
+    }
+    .table-wrap td select:focus {
+      outline: none;
+      border-color: rgba(0, 212, 255, 0.45);
+      box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.12);
+    }
     td select { background: #111827; color: #d1d5db; border: 1px solid #2a2a4e; border-radius: 8px; padding: 6px 8px; }
     .action-icons { display: flex; gap: 6px; }
     .icon-btn { border: 1px solid #2a2a4e; background: #111827; color: #cbd5e1; border-radius: 6px; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .table-wrap .icon-btn {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(6px);
+    }
+    .table-wrap .icon-btn:hover {
+      border-color: rgba(0, 212, 255, 0.45);
+      background: rgba(0, 212, 255, 0.12);
+      color: #e0f7ff;
+    }
     .icon-btn:hover { border-color: #4b5c84; color: #fff; }
     .icon-btn.warn:hover { border-color: #f59e0b; color: #fde68a; }
     .icon-btn.success:hover { border-color: #22c55e; color: #86efac; }
     .icon-btn.danger:hover { border-color: #ef4444; color: #fecaca; }
     .cv-link-btn { background: transparent; color: #7dd3fc; border: none; text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.86rem; }
+    .table-wrap .position-pill {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(6px);
+    }
     .position-pill { display: inline-flex; align-items: center; border-radius: 999px; border: 1px solid #2a2a4e; padding: 3px 10px; font-size: 0.78rem; color: #d1d5db; background: rgba(17,24,39,0.8); }
     .position-pill.has-color { border-color: var(--position-color, #2a2a4e); background: var(--position-color-soft, rgba(56, 189, 248, 0.16)); color: #f8fafc; }
     .empty { text-align: center; color: #8aa0b8; padding: 20px; }
