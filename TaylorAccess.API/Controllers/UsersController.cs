@@ -328,6 +328,13 @@ public class UsersController : ControllerBase
             user.HairColor = request.HairColor ?? user.HairColor;
             user.Ethnicity = request.Ethnicity ?? user.Ethnicity;
             user.Religion = request.Religion ?? user.Religion;
+            user.Laptop = request.Laptop ?? user.Laptop;
+            user.IssuedPhone = request.IssuedPhone ?? user.IssuedPhone;
+            user.AccessBadge = request.AccessBadge ?? user.AccessBadge;
+            user.Headset = request.Headset ?? user.Headset;
+            user.Monitor = request.Monitor ?? user.Monitor;
+            user.KeysFob = request.KeysFob ?? user.KeysFob;
+            user.EquipmentNotes = request.EquipmentNotes ?? user.EquipmentNotes;
             user.Phone = request.Phone ?? user.Phone;
             user.WorkPhone = request.WorkPhone ?? user.WorkPhone;
             user.WorkPhoneCountry = request.WorkPhoneCountry ?? user.WorkPhoneCountry;
@@ -622,6 +629,13 @@ public record UpdateUserRequest(
     string? HairColor,
     string? Ethnicity,
     string? Religion,
+    string? Laptop,
+    string? IssuedPhone,
+    string? AccessBadge,
+    string? Headset,
+    string? Monitor,
+    string? KeysFob,
+    string? EquipmentNotes,
     string? Phone,
     string? WorkPhone,
     string? WorkPhoneCountry,

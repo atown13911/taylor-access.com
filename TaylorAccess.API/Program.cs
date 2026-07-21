@@ -649,6 +649,14 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""PerIncidentDeductible"" DECIMAL(18,2) NULL;
         ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TerminationNotes"" TEXT NULL;
 
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Laptop"" VARCHAR(200) NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IssuedPhone"" VARCHAR(200) NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""AccessBadge"" VARCHAR(100) NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Headset"" VARCHAR(100) NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Monitor"" VARCHAR(100) NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""KeysFob"" VARCHAR(100) NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EquipmentNotes"" VARCHAR(500) NULL;
+
         CREATE TABLE IF NOT EXISTS ""InsuranceFleetDriverPeriodOverrides"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL,

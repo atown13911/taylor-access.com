@@ -548,6 +548,13 @@ public class UserDto
     public string? HairColor { get; set; }
     public string? Ethnicity { get; set; }
     public string? Religion { get; set; }
+    public string? Laptop { get; set; }
+    public string? IssuedPhone { get; set; }
+    public string? AccessBadge { get; set; }
+    public string? Headset { get; set; }
+    public string? Monitor { get; set; }
+    public string? KeysFob { get; set; }
+    public string? EquipmentNotes { get; set; }
     public string Email { get; set; }
     public string? PersonalEmail { get; set; }
     public string? Phone { get; set; }
@@ -609,6 +616,13 @@ public class UserDto
         HairColor = user.HairColor;
         Ethnicity = user.Ethnicity;
         Religion = user.Religion;
+        Laptop = user.Laptop;
+        IssuedPhone = user.IssuedPhone;
+        AccessBadge = user.AccessBadge;
+        Headset = user.Headset;
+        Monitor = user.Monitor;
+        KeysFob = user.KeysFob;
+        EquipmentNotes = user.EquipmentNotes;
         Email = user.Email;
         PersonalEmail = user.PersonalEmail;
         Phone = user.Phone;

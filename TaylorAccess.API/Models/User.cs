@@ -41,6 +41,27 @@ public class User
     [MaxLength(100)]
     public string? Religion { get; set; }
 
+    [MaxLength(200)]
+    public string? Laptop { get; set; }
+
+    [MaxLength(200)]
+    public string? IssuedPhone { get; set; }
+
+    [MaxLength(100)]
+    public string? AccessBadge { get; set; }
+
+    [MaxLength(100)]
+    public string? Headset { get; set; }
+
+    [MaxLength(100)]
+    public string? Monitor { get; set; }
+
+    [MaxLength(100)]
+    public string? KeysFob { get; set; }
+
+    [MaxLength(500)]
+    public string? EquipmentNotes { get; set; }
+
     [Required]
     [MaxLength(255)]
     public string Email { get; set; } = string.Empty;

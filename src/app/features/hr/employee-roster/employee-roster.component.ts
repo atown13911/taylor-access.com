@@ -624,6 +624,39 @@ import {
                 </div>
               </div>
 
+              <!-- Equipment -->
+              <div class="detail-section">
+                <h3><i class="bx bx-laptop"></i> Equipment</h3>
+                <div class="detail-row">
+                  <span class="detail-label">Laptop:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.laptop || 'Not issued' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Issued Phone:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.issuedPhone || 'Not issued' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Access Badge:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.accessBadge || 'Not issued' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Headset:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.headset || 'Not issued' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Monitor:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.monitor || 'Not issued' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Keys / Fob:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.keysFob || 'Not issued' }}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Notes:</span>
+                  <span class="detail-value">{{ selectedEmployee()?.equipmentNotes || 'None' }}</span>
+                </div>
+              </div>
+
               <!-- Payroll summary (read-only) -->
               <div class="detail-section full-width payroll-summary-section">
                 <h3><i class="bx bx-calculator"></i> Payroll Summary</h3>
@@ -2082,6 +2115,45 @@ import {
                       <option value="Prefer not to say">Prefer not to say</option>
                     </select>
                   </div>
+                </div>
+              </div>
+
+              <!-- Equipment -->
+              <div class="form-section">
+                <h3>Equipment</h3>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Laptop</label>
+                    <input type="text" [(ngModel)]="editingEmployee.laptop" placeholder="Make/model or asset tag" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Issued Phone</label>
+                    <input type="text" [(ngModel)]="editingEmployee.issuedPhone" placeholder="Device model or IMEI" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Access Badge</label>
+                    <input type="text" [(ngModel)]="editingEmployee.accessBadge" placeholder="Badge / card ID" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Headset</label>
+                    <input type="text" [(ngModel)]="editingEmployee.headset" placeholder="Make/model" class="form-input">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Monitor</label>
+                    <input type="text" [(ngModel)]="editingEmployee.monitor" placeholder="Make/model or asset tag" class="form-input">
+                  </div>
+                  <div class="form-group">
+                    <label>Keys / Fob</label>
+                    <input type="text" [(ngModel)]="editingEmployee.keysFob" placeholder="Key or fob ID" class="form-input">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Equipment Notes</label>
+                  <textarea [(ngModel)]="editingEmployee.equipmentNotes" rows="2" placeholder="Serial numbers, condition, return status…" class="form-input"></textarea>
                 </div>
               </div>
 
@@ -5455,6 +5527,13 @@ export class EmployeeRosterComponent implements OnInit {
       hairColor: employee.hairColor,
       ethnicity: employee.ethnicity,
       religion: employee.religion,
+      laptop: employee.laptop || '',
+      issuedPhone: employee.issuedPhone || '',
+      accessBadge: employee.accessBadge || '',
+      headset: employee.headset || '',
+      monitor: employee.monitor || '',
+      keysFob: employee.keysFob || '',
+      equipmentNotes: employee.equipmentNotes || '',
       email: employee.email,
       personalEmail: employee.personalEmail,
       zoomEmail: employee.zoomEmail || '',
@@ -5883,6 +5962,13 @@ export class EmployeeRosterComponent implements OnInit {
         hairColor: this.editingEmployee.hairColor,
         ethnicity: this.editingEmployee.ethnicity,
         religion: this.editingEmployee.religion,
+        laptop: this.editingEmployee.laptop,
+        issuedPhone: this.editingEmployee.issuedPhone,
+        accessBadge: this.editingEmployee.accessBadge,
+        headset: this.editingEmployee.headset,
+        monitor: this.editingEmployee.monitor,
+        keysFob: this.editingEmployee.keysFob,
+        equipmentNotes: this.editingEmployee.equipmentNotes,
         email: this.editingEmployee.email,
         personalEmail: this.editingEmployee.personalEmail,
         zoomEmail: this.editingEmployee.zoomEmail,
