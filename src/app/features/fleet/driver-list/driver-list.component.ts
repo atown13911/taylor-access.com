@@ -284,16 +284,6 @@ export class DriverListComponent implements OnInit {
     };
   });
 
-  stats = computed(() => {
-    const all = this.drivers();
-    return {
-      total: all.length,
-      active: all.filter(d => this.isActiveStatus(d.status)).length,
-      dispatched: all.filter(d => this.isDispatchedStatus(d.status)).length,
-      offDuty: all.filter(d => this.isInactiveStatus(d.status)).length
-    };
-  });
-
   dispatcherStats = computed(() => {
     const dispatchers = this.dispatcherRows();
     const totalDispatchers = dispatchers.length;
@@ -301,12 +291,127 @@ export class DriverListComponent implements OnInit {
     const eligibleLandmarkDrivers = this.activeLandmarkDispatchDrivers();
     const driversWithDispatcher = eligibleLandmarkDrivers.filter((d) => this.toNullableNumber(d.dispatchUserId) !== null).length;
     const unassignedDrivers = Math.max(eligibleLandmarkDrivers.length - driversWithDispatcher, 0);
+    const driverTotal = eligibleLandmarkDrivers.length;
+    const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
     return {
       totalDispatchers,
       dispatchersWithAssignedDrivers,
       driversWithDispatcher,
-      unassignedDrivers
+      unassignedDrivers,
+      assignedDispatcherPct: pct(dispatchersWithAssignedDrivers, totalDispatchers),
+      driversAssignedPct: pct(driversWithDispatcher, driverTotal),
+      driversUnassignedPct: pct(unassignedDrivers, driverTotal)
     };
+  });
+
+  stats = computed(() => {
+    const all = this.drivers();
+    const total = all.length;
+    const active = all.filter(d => this.isActiveStatus(d.status)).length;
+    const dispatched = all.filter(d => this.isDispatchedStatus(d.status)).length;
+    const offDuty = all.filter(d => this.isInactiveStatus(d.status)).length;
+    const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
+    return {
+      total,
+      active,
+      dispatched,
+      offDuty,
+      activePct: pct(active, total),
+      dispatchedPct: pct(dispatched, total),
+      offDutyPct: pct(offDuty, total)
+    };
+  });
+
+  statPanels = computed(() => {
+    if (this.dispatchersView()) {
+      const s = this.dispatcherStats();
+      return [
+        {
+          tone: 'cyan',
+          icon: 'bx-group',
+          label: 'Total Dispatchers',
+          badge: 'Roster',
+          value: s.totalDispatchers,
+          meter: 100,
+          chip: `${s.dispatchersWithAssignedDrivers} with drivers`,
+          soft: `${s.totalDispatchers} total`
+        },
+        {
+          tone: 'green',
+          icon: 'bx-check-circle',
+          label: 'Dispatchers Assigned',
+          badge: 'Coverage',
+          value: s.dispatchersWithAssignedDrivers,
+          meter: s.assignedDispatcherPct,
+          chip: `${s.assignedDispatcherPct}% of roster`,
+          soft: `${Math.max(s.totalDispatchers - s.dispatchersWithAssignedDrivers, 0)} idle`
+        },
+        {
+          tone: 'orange',
+          icon: 'bx-navigation',
+          label: 'Drivers Assigned',
+          badge: 'Linked',
+          value: s.driversWithDispatcher,
+          meter: s.driversAssignedPct,
+          chip: `${s.driversAssignedPct}% of Landmark`,
+          soft: `${s.driversWithDispatcher} linked`
+        },
+        {
+          tone: 'violet',
+          icon: 'bx-moon',
+          label: 'Drivers Unassigned',
+          badge: 'Open',
+          value: s.unassignedDrivers,
+          meter: s.driversUnassignedPct,
+          chip: `${s.driversUnassignedPct}% open`,
+          soft: 'Need dispatcher'
+        }
+      ];
+    }
+
+    const s = this.stats();
+    return [
+      {
+        tone: 'cyan',
+        icon: 'bx-group',
+        label: 'Total Drivers',
+        badge: 'Fleet',
+        value: s.total,
+        meter: 100,
+        chip: `${s.active} active`,
+        soft: `${s.activePct}%`
+      },
+      {
+        tone: 'green',
+        icon: 'bx-check-circle',
+        label: 'Active',
+        badge: 'Ready',
+        value: s.active,
+        meter: s.activePct,
+        chip: `${s.activePct}% of roster`,
+        soft: `${s.total - s.active} other`
+      },
+      {
+        tone: 'orange',
+        icon: 'bx-navigation',
+        label: 'Dispatched',
+        badge: 'On road',
+        value: s.dispatched,
+        meter: s.dispatchedPct,
+        chip: `${s.dispatchedPct}% of roster`,
+        soft: `${s.dispatched} loads`
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-moon',
+        label: 'Off Duty',
+        badge: 'Idle',
+        value: s.offDuty,
+        meter: s.offDutyPct,
+        chip: `${s.offDutyPct}% of roster`,
+        soft: 'Not available'
+      }
+    ];
   });
 
   ngOnInit(): void {

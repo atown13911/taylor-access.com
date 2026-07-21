@@ -25,36 +25,25 @@
     }
   </div>
 
-  <!-- Stats -->
-  <div class="stats-bar">
-    <div class="stat-card">
-      <div class="stat-icon total"><i class='bx bx-group'></i></div>
-      <div class="stat-info">
-        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().totalDispatchers : stats().total }}</span>
-        <span class="stat-label">{{ dispatchersView() ? 'Total Dispatchers' : 'Total Drivers' }}</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon active"><i class='bx bx-check-circle'></i></div>
-      <div class="stat-info">
-        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().dispatchersWithAssignedDrivers : stats().active }}</span>
-        <span class="stat-label">{{ dispatchersView() ? 'Dispatchers Assigned' : 'Active' }}</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon dispatched"><i class='bx bx-navigation'></i></div>
-      <div class="stat-info">
-        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().driversWithDispatcher : stats().dispatched }}</span>
-        <span class="stat-label">{{ dispatchersView() ? 'Drivers Assigned' : 'Dispatched' }}</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon off-duty"><i class='bx bx-moon'></i></div>
-      <div class="stat-info">
-        <span class="stat-value">{{ dispatchersView() ? dispatcherStats().unassignedDrivers : stats().offDuty }}</span>
-        <span class="stat-label">{{ dispatchersView() ? 'Drivers Unassigned' : 'Off Duty' }}</span>
-      </div>
-    </div>
+  <!-- Infographic panels -->
+  <div class="stats-bar" [attr.aria-label]="dispatchersView() ? 'Dispatcher snapshot' : 'Driver snapshot'">
+    @for (panel of statPanels(); track panel.label) {
+      <article class="stat-panel" [ngClass]="'tone-' + panel.tone">
+        <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+        <header class="stat-panel-head">
+          <span class="stat-panel-label">{{ panel.label }}</span>
+          <span class="stat-panel-badge">{{ panel.badge }}</span>
+        </header>
+        <p class="stat-panel-value">{{ panel.value }}</p>
+        <div class="stat-panel-meter" aria-hidden="true">
+          <span [style.width.%]="panel.meter"></span>
+        </div>
+        <footer class="stat-panel-foot">
+          <span class="stat-panel-chip">{{ panel.chip }}</span>
+          <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+        </footer>
+      </article>
+    }
   </div>
 
   @if (!dispatchersView()) {
