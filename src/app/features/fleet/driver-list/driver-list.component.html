@@ -131,7 +131,7 @@
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="6" class="empty-row">No users with the dispatcher role were found.</td>
+                  <td colspan="6" class="empty-row">No Landmark dispatcher assignments were found.</td>
                 </tr>
               }
             }
@@ -574,7 +574,7 @@
               <label>Dispatch Assignment</label>
               <select [ngModel]="driverForm().dispatchUserId" (ngModelChange)="updateField('dispatchUserId', $event ? +$event : null)">
                 <option [ngValue]="null">— Unassigned —</option>
-                @for (dispatcher of availableDispatchUsers(); track dispatcher.id) {
+                @for (dispatcher of dispatcherAssignOptions(); track dispatcher.id) {
                   <option [ngValue]="dispatcher.id">{{ dispatcher.name }}{{ dispatcher.email ? ' (' + dispatcher.email + ')' : '' }}</option>
                 }
               </select>
