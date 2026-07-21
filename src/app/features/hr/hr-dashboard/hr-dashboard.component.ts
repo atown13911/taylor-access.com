@@ -17,7 +17,7 @@ interface WaveSeries {
   points: WavePoint[];
   latest: number;
 }
-type HeadcountMode = 'roles' | 'positions' | 'total';
+type HeadcountMode = 'roles' | 'positions' | 'fleet' | 'total';
 interface ActivityItem {
   id: string;
   icon: string;
@@ -270,6 +270,7 @@ interface StatPanel {
           <div class="wave-mode-toggle" role="tablist" aria-label="Headcount breakdown">
             <button type="button" role="tab" [class.active]="headcountMode() === 'roles'" (click)="setHeadcountMode('roles')">Roles</button>
             <button type="button" role="tab" [class.active]="headcountMode() === 'positions'" (click)="setHeadcountMode('positions')">Positions</button>
+            <button type="button" role="tab" [class.active]="headcountMode() === 'fleet'" (click)="setHeadcountMode('fleet')">Fleet</button>
             <button type="button" role="tab" [class.active]="headcountMode() === 'total'" (click)="setHeadcountMode('total')">Total</button>
           </div>
         </div>
@@ -288,63 +289,94 @@ interface StatPanel {
                 </button>
               }
             </div>
-            <div class="wave-chart" [style.--wave-w.px]="wideChartWidth">
-              <svg
-                class="wave-svg"
-                [attr.viewBox]="'0 0 ' + waveView.w + ' ' + waveView.h"
-                preserveAspectRatio="xMidYMid meet"
-                role="img"
-                [attr.aria-label]="'Monthly headcount by ' + headcountMode()">
-                <defs>
-                  <filter id="headcountGlow" x="-20%" y="-40%" width="140%" height="180%">
-                    <feGaussianBlur stdDeviation="2.2" result="blur"></feGaussianBlur>
-                    <feMerge>
-                      <feMergeNode in="blur"></feMergeNode>
-                      <feMergeNode in="SourceGraphic"></feMergeNode>
-                    </feMerge>
-                  </filter>
-                  @for (s of headcountWave().series; track s.key) {
-                    <linearGradient [attr.id]="'waveFill-' + s.key" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" [attr.stop-color]="s.color" stop-opacity="0.28"></stop>
-                      <stop offset="100%" [attr.stop-color]="s.color" stop-opacity="0.02"></stop>
-                    </linearGradient>
-                  }
-                </defs>
-
-                @for (tick of headcountWave().yTicks; track tick.label) {
-                  <line
-                    class="wave-grid"
-                    [attr.x1]="waveView.padL"
-                    [attr.x2]="waveView.w - waveView.padR"
-                    [attr.y1]="tick.y"
-                    [attr.y2]="tick.y">
-                  </line>
-                  <text class="wave-y-label" [attr.x]="waveView.padL - 8" [attr.y]="tick.y + 4" text-anchor="end">{{ tick.label }}</text>
+            <div class="wave-layout">
+              <aside class="wave-side left" aria-label="Series summary">
+                <h4>{{ headcountSummary().leftTitle }}</h4>
+                @for (row of headcountSummary().leftRows; track row.key) {
+                  <div class="wave-side-row">
+                    <div class="wave-side-row-top">
+                      <span class="wave-side-dot" [style.background]="row.color"></span>
+                      <span class="wave-side-name">{{ row.name }}</span>
+                      <strong>{{ row.value }}</strong>
+                    </div>
+                    <div class="wave-side-meter"><span [style.width.%]="row.pct" [style.background]="row.color"></span></div>
+                    <div class="wave-side-meta">
+                      <span>{{ row.pct }}%</span>
+                      <span [class.up]="row.delta > 0" [class.down]="row.delta < 0">{{ row.deltaLabel }}</span>
+                    </div>
+                  </div>
                 }
+              </aside>
 
-                @for (s of headcountWave().series; track s.key) {
-                  @if (!hiddenWaveSeries().has(s.key)) {
-                    <path class="wave-area" [attr.d]="s.areaPath" [attr.fill]="'url(#waveFill-' + s.key + ')'"></path>
-                    <path
-                      class="wave-line"
-                      [attr.d]="s.linePath"
-                      fill="none"
-                      [attr.stroke]="s.color"
-                      stroke-width="2.5"
-                      filter="url(#headcountGlow)">
-                    </path>
-                    @for (pt of s.points; track pt.key) {
-                      <circle class="wave-dot" [attr.cx]="pt.x" [attr.cy]="pt.y" r="3.2" [attr.fill]="s.color" [attr.stroke]="s.color">
-                        <title>{{ s.name }} · {{ pt.label }}: {{ pt.value }}</title>
-                      </circle>
+              <div class="wave-chart" [style.--wave-w.px]="wideChartWidth">
+                <svg
+                  class="wave-svg"
+                  [attr.viewBox]="'0 0 ' + waveView.w + ' ' + waveView.h"
+                  preserveAspectRatio="xMidYMid meet"
+                  role="img"
+                  [attr.aria-label]="'Monthly headcount by ' + headcountMode()">
+                  <defs>
+                    <filter id="headcountGlow" x="-20%" y="-40%" width="140%" height="180%">
+                      <feGaussianBlur stdDeviation="2.2" result="blur"></feGaussianBlur>
+                      <feMerge>
+                        <feMergeNode in="blur"></feMergeNode>
+                        <feMergeNode in="SourceGraphic"></feMergeNode>
+                      </feMerge>
+                    </filter>
+                    @for (s of headcountWave().series; track s.key) {
+                      <linearGradient [attr.id]="'waveFill-' + s.key" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" [attr.stop-color]="s.color" stop-opacity="0.28"></stop>
+                        <stop offset="100%" [attr.stop-color]="s.color" stop-opacity="0.02"></stop>
+                      </linearGradient>
+                    }
+                  </defs>
+
+                  @for (tick of headcountWave().yTicks; track tick.label) {
+                    <line
+                      class="wave-grid"
+                      [attr.x1]="waveView.padL"
+                      [attr.x2]="waveView.w - waveView.padR"
+                      [attr.y1]="tick.y"
+                      [attr.y2]="tick.y">
+                    </line>
+                    <text class="wave-y-label" [attr.x]="waveView.padL - 8" [attr.y]="tick.y + 4" text-anchor="end">{{ tick.label }}</text>
+                  }
+
+                  @for (s of headcountWave().series; track s.key) {
+                    @if (!hiddenWaveSeries().has(s.key)) {
+                      <path class="wave-area" [attr.d]="s.areaPath" [attr.fill]="'url(#waveFill-' + s.key + ')'"></path>
+                      <path
+                        class="wave-line"
+                        [attr.d]="s.linePath"
+                        fill="none"
+                        [attr.stroke]="s.color"
+                        stroke-width="2.5"
+                        filter="url(#headcountGlow)">
+                      </path>
+                      @for (pt of s.points; track pt.key) {
+                        <circle class="wave-dot" [attr.cx]="pt.x" [attr.cy]="pt.y" r="3.2" [attr.fill]="s.color" [attr.stroke]="s.color">
+                          <title>{{ s.name }} · {{ pt.label }}: {{ pt.value }}</title>
+                        </circle>
+                      }
                     }
                   }
-                }
 
-                @for (pt of headcountWave().xLabels; track pt.key) {
-                  <text class="wave-x-label" [attr.x]="pt.x" [attr.y]="waveView.h - 10" text-anchor="middle">{{ pt.label }}</text>
+                  @for (pt of headcountWave().xLabels; track pt.key) {
+                    <text class="wave-x-label" [attr.x]="pt.x" [attr.y]="waveView.h - 10" text-anchor="middle">{{ pt.label }}</text>
+                  }
+                </svg>
+              </div>
+
+              <aside class="wave-side right" aria-label="Trend summary">
+                <h4>{{ headcountSummary().rightTitle }}</h4>
+                @for (kpi of headcountSummary().rightKpis; track kpi.label) {
+                  <div class="wave-side-kpi" [ngClass]="'tone-' + kpi.tone">
+                    <span class="wave-side-kpi-label">{{ kpi.label }}</span>
+                    <strong class="wave-side-kpi-value">{{ kpi.value }}</strong>
+                    <span class="wave-side-kpi-soft">{{ kpi.soft }}</span>
+                  </div>
                 }
-              </svg>
+              </aside>
             </div>
           } @else {
             <div class="chart-empty">No headcount trend data yet</div>
@@ -574,6 +606,76 @@ interface StatPanel {
       width: 8px; height: 8px; border-radius: 999px; display: inline-block;
       box-shadow: 0 0 8px currentColor;
     }
+
+    .wave-layout {
+      display: grid;
+      grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(160px, 200px);
+      gap: 14px;
+      align-items: stretch;
+    }
+    @media (max-width: 1100px) {
+      .wave-layout { grid-template-columns: 1fr; }
+    }
+
+    .wave-side {
+      display: flex; flex-direction: column; gap: 10px;
+      padding: 12px; border-radius: 12px;
+      border: 1px solid rgba(0, 229, 255, 0.14);
+      background: rgba(8, 14, 26, 0.55);
+      min-height: 280px;
+    }
+    .wave-side h4 {
+      margin: 0 0 2px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: rgba(226, 232, 240, 0.7);
+    }
+    .wave-side-row { display: flex; flex-direction: column; gap: 4px; }
+    .wave-side-row-top {
+      display: flex; align-items: center; gap: 6px; min-width: 0;
+    }
+    .wave-side-row-top strong {
+      margin-left: auto; font-variant-numeric: tabular-nums; color: #f8fafc; font-size: 0.85rem;
+    }
+    .wave-side-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+    .wave-side-name {
+      font-size: 0.74rem; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .wave-side-meter {
+      height: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden;
+    }
+    .wave-side-meter span { display: block; height: 100%; border-radius: inherit; }
+    .wave-side-meta {
+      display: flex; justify-content: space-between; gap: 8px;
+      font-size: 0.68rem; color: rgba(148, 163, 184, 0.95);
+    }
+    .wave-side-meta .up { color: #34d399; }
+    .wave-side-meta .down { color: #fb7185; }
+
+    .wave-side-kpi {
+      --kpi-accent: #00d4ff;
+      padding: 10px; border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+      background:
+        radial-gradient(120% 100% at 100% 0%, color-mix(in srgb, var(--kpi-accent) 14%, transparent), transparent 55%),
+        rgba(255, 255, 255, 0.03);
+    }
+    .wave-side-kpi.tone-cyan { --kpi-accent: #00d4ff; }
+    .wave-side-kpi.tone-green { --kpi-accent: #00ff88; }
+    .wave-side-kpi.tone-orange { --kpi-accent: #ffaa00; }
+    .wave-side-kpi.tone-violet { --kpi-accent: #a78bfa; }
+    .wave-side-kpi-label {
+      display: block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em;
+      text-transform: uppercase; color: rgba(226, 232, 240, 0.68);
+    }
+    .wave-side-kpi-value {
+      display: block; margin-top: 4px; font-size: 1.05rem; color: #f8fafc;
+      text-shadow: 0 0 14px color-mix(in srgb, var(--kpi-accent) 28%, transparent);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .wave-side-kpi-soft {
+      display: block; margin-top: 2px; font-size: 0.7rem;
+      color: color-mix(in srgb, var(--kpi-accent) 72%, #e2e8f0);
+    }
+
     .chart-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
     .chart-card, .glow-panel {
       background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(0, 229, 255, 0.14);
@@ -588,9 +690,10 @@ interface StatPanel {
 
     .wave-chart {
       width: 100%;
-      max-width: var(--wave-w, 960px);
+      max-width: none;
       height: 300px;
-      margin: 0 auto;
+      margin: 0;
+      min-width: 0;
     }
     .wave-svg { width: 100%; height: 100%; display: block; overflow: visible; }
     .wave-grid { stroke: rgba(255, 255, 255, 0.06); stroke-width: 1; }
@@ -787,6 +890,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
 
   recentActivity = signal<ActivityItem[]>([]);
   employeePopulation = signal<any[]>([]);
+  driverPopulation = signal<any[]>([]);
   selectedDepartment = signal<string | null>(null);
   selectedRole = signal<string | null>(null);
   deptChartData = signal<ChartPoint[]>([]);
@@ -814,7 +918,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
   roleBarRows = computed(() => this.toBarRows(this.roleChartData()));
   driverBarRows = computed(() => this.toBarRows(this.driverStatusChart()));
 
-  /** Multi-series monthly wave: Roles, Positions, or Total. */
+  /** Multi-series monthly wave: Roles, Positions, Fleet, or Total. */
   headcountWave = computed(() => {
     const mode = this.headcountMode();
     const view = this.waveView;
@@ -828,7 +932,9 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     const rawSeries =
       mode === 'total'
         ? this.buildTotalSeries(months)
-        : this.buildBreakdownSeries(months, mode);
+        : mode === 'fleet'
+          ? this.buildFleetSeries(months)
+          : this.buildBreakdownSeries(months, mode);
 
     if (!rawSeries.length) return empty;
 
@@ -884,6 +990,97 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     });
 
     return { series, xLabels, yTicks };
+  });
+
+  headcountSummary = computed(() => {
+    const mode = this.headcountMode();
+    const wave = this.headcountWave();
+    const visible = wave.series.filter((s) => !this.hiddenWaveSeries().has(s.key));
+    const totalLatest = visible.reduce((sum, s) => sum + s.latest, 0);
+    const leftTitle =
+      mode === 'fleet' ? 'Fleet Mix' : mode === 'positions' ? 'Top Positions' : mode === 'total' ? 'Headcount' : 'Top Roles';
+
+    const leftRows = visible.slice(0, 6).map((s) => {
+      const first = s.points[0]?.value ?? 0;
+      const delta = s.latest - first;
+      const pct = totalLatest > 0 ? Math.round((s.latest / totalLatest) * 100) : 0;
+      return {
+        key: s.key,
+        name: s.name,
+        color: s.color,
+        value: s.latest,
+        pct,
+        delta,
+        deltaLabel: delta > 0 ? `+${delta} 12mo` : delta < 0 ? `${delta} 12mo` : 'flat 12mo'
+      };
+    });
+
+    const leader = visible[0];
+    const totalFirst = visible.reduce((sum, s) => sum + (s.points[0]?.value ?? 0), 0);
+    const totalDelta = totalLatest - totalFirst;
+    const m = this.metrics();
+
+    const rightKpis =
+      mode === 'fleet'
+        ? [
+            { label: 'Active Drivers', value: m.activeDrivers, soft: `${m.totalDrivers} on roster`, tone: 'green' },
+            {
+              label: 'Dispatch Coverage',
+              value: `${this.pct(m.driversWithDispatcher, m.activeDrivers || 1)}%`,
+              soft: `${m.driversWithDispatcher} linked`,
+              tone: 'orange'
+            },
+            {
+              label: 'Unassigned',
+              value: Math.max(m.activeDrivers - m.driversWithDispatcher, 0),
+              soft: 'Need dispatcher',
+              tone: 'cyan'
+            },
+            {
+              label: 'Compliance Risk',
+              value: m.complianceAtRisk,
+              soft: 'At risk drivers',
+              tone: 'violet'
+            }
+          ]
+        : [
+            {
+              label: 'Shown Total',
+              value: totalLatest,
+              soft: `${visible.length} series`,
+              tone: 'cyan'
+            },
+            {
+              label: 'Leading',
+              value: leader?.name ?? '—',
+              soft: leader ? `${leader.latest} people` : 'n/a',
+              tone: 'green'
+            },
+            {
+              label: '12-Mo Change',
+              value: totalDelta > 0 ? `+${totalDelta}` : `${totalDelta}`,
+              soft: totalFirst > 0 ? `from ${totalFirst}` : 'baseline',
+              tone: totalDelta >= 0 ? 'orange' : 'violet'
+            },
+            {
+              label: mode === 'total' ? 'Snapshot Delta' : 'Share Leader',
+              value:
+                mode === 'total'
+                  ? this.headcountDelta30d()
+                  : leader && totalLatest > 0
+                    ? `${Math.round((leader.latest / totalLatest) * 100)}%`
+                    : '—',
+              soft: mode === 'total' ? 'First → last' : 'Of visible mix',
+              tone: 'violet'
+            }
+          ];
+
+    return {
+      leftTitle,
+      leftRows,
+      rightTitle: mode === 'fleet' ? 'Fleet Pulse' : 'Trend Pulse',
+      rightKpis
+    };
   });
 
   headcountDelta30d = computed(() => {
@@ -1308,6 +1505,7 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       driversWithDispatcher: withDispatcher,
       dispatchers: dispatchers.length
     }));
+    this.driverPopulation.set(drivers);
   }
 
   async loadApplicants(): Promise<void> {
@@ -1600,6 +1798,57 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       });
     }
 
+    return this.rankAndCapSeries(tallies, months);
+  }
+
+  /** Fleet series: Active / Inactive / Assigned / Unassigned over hire timeline. */
+  private buildFleetSeries(months: string[]): Array<{ key: string; name: string; values: number[] }> {
+    const drivers = this.driverPopulation();
+    if (!drivers.length) return [];
+
+    const buckets: Array<{ key: string; name: string; match: (d: any) => boolean }> = [
+      {
+        key: 'active',
+        name: 'Active',
+        match: (d) => this.isActiveStatus(d?.status) && !this.isInactiveStatus(d?.status)
+      },
+      {
+        key: 'inactive',
+        name: 'Inactive',
+        match: (d) => this.isInactiveStatus(d?.status)
+      },
+      {
+        key: 'assigned',
+        name: 'Dispatcher Linked',
+        match: (d) =>
+          this.isActiveStatus(d?.status) && !this.isInactiveStatus(d?.status) && this.hasDispatcher(d)
+      },
+      {
+        key: 'unassigned',
+        name: 'Unassigned',
+        match: (d) =>
+          this.isActiveStatus(d?.status) && !this.isInactiveStatus(d?.status) && !this.hasDispatcher(d)
+      }
+    ];
+
+    return buckets.map((bucket) => {
+      const values = months.map((month) => {
+        let count = 0;
+        for (const d of drivers) {
+          if (!bucket.match(d)) continue;
+          const startKey = this.employeeStartMonth(d);
+          if (!startKey || startKey <= month) count += 1;
+        }
+        return count;
+      });
+      return { key: bucket.key, name: bucket.name, values };
+    });
+  }
+
+  private rankAndCapSeries(
+    tallies: Map<string, number[]>,
+    months: string[]
+  ): Array<{ key: string; name: string; values: number[] }> {
     const ranked = Array.from(tallies.entries())
       .map(([name, values]) => ({
         key: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
