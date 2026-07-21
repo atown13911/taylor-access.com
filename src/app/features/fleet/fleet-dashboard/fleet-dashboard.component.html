@@ -14,49 +14,38 @@
     <div class="banner error">{{ error() }}</div>
   }
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <i class="bx bx-id-card stat-icon"></i>
-      <div>
-        <span class="stat-value">{{ stats().totalDrivers }}</span>
-        <span class="stat-label">Total Drivers</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <i class="bx bx-user-check stat-icon"></i>
-      <div>
-        <span class="stat-value">{{ stats().activeDrivers }}</span>
-        <span class="stat-label">Active Drivers</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <i class="bx bx-user-x stat-icon"></i>
-      <div>
-        <span class="stat-value">{{ stats().inactiveDrivers }}</span>
-        <span class="stat-label">Inactive Drivers</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <i class="bx bxs-truck stat-icon"></i>
-      <div>
-        <span class="stat-value">{{ stats().totalCarriers }}</span>
-        <span class="stat-label">Total Carriers</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <i class="bx bx-check-shield stat-icon"></i>
-      <div>
-        <span class="stat-value">{{ stats().activeCarriers }}</span>
-        <span class="stat-label">Active Carriers</span>
-      </div>
-    </div>
-    <div class="stat-card">
-      <i class="bx bx-collection stat-icon"></i>
-      <div>
-        <span class="stat-value">{{ stats().totalFleets }}</span>
-        <span class="stat-label">Fleet Entities</span>
-      </div>
-    </div>
+  <div class="stats-bar" aria-label="Fleet snapshot">
+    @for (panel of statPanels(); track panel.label) {
+      @if (panel.route) {
+        <a class="stat-panel" [routerLink]="panel.route" [ngClass]="'tone-' + panel.tone">
+          <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+          <header class="stat-panel-head">
+            <span class="stat-panel-label">{{ panel.label }}</span>
+            <span class="stat-panel-badge">{{ panel.badge }}</span>
+          </header>
+          <p class="stat-panel-value">{{ panel.value }}</p>
+          <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+          <footer class="stat-panel-foot">
+            <span class="stat-panel-chip">{{ panel.chip }}</span>
+            <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+          </footer>
+        </a>
+      } @else {
+        <article class="stat-panel" [ngClass]="'tone-' + panel.tone">
+          <i class="bx stat-panel-mark" [ngClass]="panel.icon" aria-hidden="true"></i>
+          <header class="stat-panel-head">
+            <span class="stat-panel-label">{{ panel.label }}</span>
+            <span class="stat-panel-badge">{{ panel.badge }}</span>
+          </header>
+          <p class="stat-panel-value">{{ panel.value }}</p>
+          <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="panel.meter"></span></div>
+          <footer class="stat-panel-foot">
+            <span class="stat-panel-chip">{{ panel.chip }}</span>
+            <span class="stat-panel-chip soft">{{ panel.soft }}</span>
+          </footer>
+        </article>
+      }
+    }
   </div>
 
   <section class="card density-card">
@@ -148,13 +137,41 @@
   </section>
 
   <div class="content-grid">
-    <section class="card">
-      <h2><i class="bx bx-list-check"></i> Action Needed</h2>
-      <ul>
-        @for (item of actionItems(); track item) {
-          <li>{{ item }}</li>
+    <section class="card action-section">
+      <h2><i class="bx bx-bell"></i> Action Needed</h2>
+      <div class="alert-grid">
+        @for (alert of actionAlerts(); track alert.id) {
+          @if (alert.route) {
+            <a class="stat-panel action-panel" [routerLink]="alert.route" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
+              <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ alert.label }}</span>
+                <span class="stat-panel-badge">{{ alert.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ alert.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ alert.chip }}</span>
+                <span class="stat-panel-chip soft">{{ alert.soft }}</span>
+              </footer>
+            </a>
+          } @else {
+            <article class="stat-panel action-panel" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
+              <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ alert.label }}</span>
+                <span class="stat-panel-badge">{{ alert.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ alert.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ alert.chip }}</span>
+                <span class="stat-panel-chip soft">{{ alert.soft }}</span>
+              </footer>
+            </article>
+          }
         }
-      </ul>
+      </div>
     </section>
 
     <section class="card">

@@ -11,9 +11,42 @@ interface FleetDashboardStats {
   totalDrivers: number;
   activeDrivers: number;
   inactiveDrivers: number;
+  driversWithDispatcher: number;
+  driversUnassigned: number;
+  dispatchers: number;
   totalCarriers: number;
   activeCarriers: number;
   totalFleets: number;
+  trailersActive: number;
+  trailersUnassigned: number;
+  complianceAtRisk: number;
+  fleetApplicants: number;
+}
+
+interface StatPanel {
+  tone: 'cyan' | 'green' | 'orange' | 'violet';
+  icon: string;
+  label: string;
+  badge: string;
+  value: string | number;
+  meter: number;
+  chip: string;
+  soft: string;
+  route?: string;
+}
+
+interface ActionAlert {
+  id: string;
+  level: 'high' | 'medium' | 'low';
+  tone: 'cyan' | 'green' | 'orange' | 'violet';
+  icon: string;
+  label: string;
+  badge: string;
+  value: string | number;
+  meter: number;
+  chip: string;
+  soft: string;
+  route?: string;
 }
 
 interface ChartPoint {
@@ -82,28 +115,225 @@ export class FleetDashboardComponent implements OnInit {
     totalDrivers: 0,
     activeDrivers: 0,
     inactiveDrivers: 0,
+    driversWithDispatcher: 0,
+    driversUnassigned: 0,
+    dispatchers: 0,
     totalCarriers: 0,
     activeCarriers: 0,
-    totalFleets: 0
+    totalFleets: 0,
+    trailersActive: 0,
+    trailersUnassigned: 0,
+    complianceAtRisk: 0,
+    fleetApplicants: 0
   });
 
   readonly quickLinks = [
     { label: 'Driver Roster', icon: 'bx bx-id-card', route: '/drivers', detail: 'Manage driver records and status.' },
+    { label: 'Dispatchers', icon: 'bx bx-broadcast', route: '/dispatchers', detail: 'Coverage and driver assignments.' },
     { label: 'Carriers', icon: 'bx bxs-truck', route: '/carriers', detail: 'View and update carrier profiles.' },
     { label: 'Fleet Entities', icon: 'bx bx-collection', route: '/fleet-entities', detail: 'Manage fleets, divisions, and terminals.' },
-    { label: 'Asset Assignments', icon: 'bx bx-badge-check', route: '/compliance/tags-permits', detail: 'Review trailer and assignment compliance.' }
+    { label: 'Asset Assignments', icon: 'bx bx-badge-check', route: '/compliance/tags-permits', detail: 'Review trailer and assignment compliance.' },
+    { label: 'Compliance Board', icon: 'bx bx-shield-alt-2', route: '/compliance/driver-database', detail: 'Drivers at risk and document status.' }
   ];
 
-  readonly actionItems = computed(() => {
+  private pct(n: number, d: number): number {
+    return d > 0 ? Math.min(100, Math.round((n / d) * 100)) : 0;
+  }
+
+  readonly statPanels = computed<StatPanel[]>(() => {
     const s = this.stats();
-    const items: string[] = [];
+    const assignedPct = this.pct(s.driversWithDispatcher, s.activeDrivers || s.totalDrivers || 1);
+    const unassignedPct = this.pct(s.driversUnassigned, s.activeDrivers || s.totalDrivers || 1);
+    const trailerOpenPct = this.pct(s.trailersUnassigned, s.trailersActive || 1);
+    const compliancePct = this.pct(s.complianceAtRisk, s.activeDrivers || s.totalDrivers || 1);
+    const activePct = this.pct(s.activeDrivers, s.totalDrivers || 1);
 
-    if (s.totalFleets === 0) items.push('No fleets created yet. Add your first fleet entity.');
-    if (s.inactiveDrivers > 0) items.push(`${s.inactiveDrivers} drivers are currently inactive and may need review.`);
-    if (s.totalCarriers > s.activeCarriers) items.push(`${s.totalCarriers - s.activeCarriers} carriers are not active.`);
-    if (items.length === 0) items.push('Fleet health looks good. No immediate action items.');
+    return [
+      {
+        tone: 'green',
+        icon: 'bx-id-card',
+        label: 'Active Drivers',
+        badge: 'Roster',
+        value: s.activeDrivers,
+        meter: activePct,
+        chip: `${s.totalDrivers} on file`,
+        soft: `${activePct}% active`,
+        route: '/drivers'
+      },
+      {
+        tone: 'orange',
+        icon: 'bx-broadcast',
+        label: 'Dispatch Coverage',
+        badge: 'Ops',
+        value: `${assignedPct}%`,
+        meter: assignedPct,
+        chip: `${s.driversWithDispatcher} linked`,
+        soft: `${s.dispatchers} dispatchers`,
+        route: '/dispatchers'
+      },
+      {
+        tone: 'cyan',
+        icon: 'bx-user-x',
+        label: 'Unassigned Drivers',
+        badge: 'Coverage',
+        value: s.driversUnassigned,
+        meter: unassignedPct,
+        chip: `${s.activeDrivers} active`,
+        soft: unassignedPct > 0 ? 'Needs dispatcher' : 'Fully covered',
+        route: '/dispatchers'
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-shield-alt-2',
+        label: 'Compliance At Risk',
+        badge: 'DOT',
+        value: s.complianceAtRisk,
+        meter: compliancePct,
+        chip: `${compliancePct}% of roster`,
+        soft: s.complianceAtRisk > 0 ? 'Review board' : 'Clear',
+        route: '/compliance/driver-database'
+      },
+      {
+        tone: 'green',
+        icon: 'bx-trailer',
+        label: 'Unassigned Trailers',
+        badge: 'Assets',
+        value: s.trailersUnassigned,
+        meter: trailerOpenPct,
+        chip: `${s.trailersActive} active`,
+        soft: `${trailerOpenPct}% open`,
+        route: '/compliance/tags-permits'
+      },
+      {
+        tone: 'cyan',
+        icon: 'bx-user-plus',
+        label: 'Fleet Applicants',
+        badge: 'Hiring',
+        value: s.fleetApplicants,
+        meter: Math.min(100, s.fleetApplicants),
+        chip: 'In pipeline',
+        soft: s.fleetApplicants > 0 ? 'Recruiting' : 'None open',
+        route: '/hr/applicants'
+      },
+      {
+        tone: 'orange',
+        icon: 'bx-collection',
+        label: 'Fleet Entities',
+        badge: 'Org',
+        value: s.totalFleets,
+        meter: s.totalFleets > 0 ? 100 : 0,
+        chip: `${s.totalCarriers} carriers`,
+        soft: `${s.activeCarriers} carriers active`,
+        route: '/fleet-entities'
+      },
+      {
+        tone: 'violet',
+        icon: 'bx-user-minus',
+        label: 'Inactive Drivers',
+        badge: 'Status',
+        value: s.inactiveDrivers,
+        meter: this.pct(s.inactiveDrivers, s.totalDrivers || 1),
+        chip: `${s.totalDrivers} total`,
+        soft: s.inactiveDrivers > 0 ? 'May need review' : 'None',
+        route: '/drivers'
+      }
+    ];
+  });
 
-    return items;
+  readonly actionAlerts = computed<ActionAlert[]>(() => {
+    const s = this.stats();
+    const items: ActionAlert[] = [];
+
+    if (s.driversUnassigned > 0) {
+      items.push({
+        id: 'unassigned-drivers',
+        level: s.driversUnassigned > 10 ? 'high' : 'medium',
+        tone: 'orange',
+        icon: 'bx-broadcast',
+        label: 'Drivers Need Dispatcher',
+        badge: 'Coverage',
+        value: s.driversUnassigned,
+        meter: this.pct(s.driversUnassigned, s.activeDrivers || 1),
+        chip: `${s.activeDrivers} active`,
+        soft: 'Assign coverage',
+        route: '/dispatchers'
+      });
+    }
+    if (s.complianceAtRisk > 0) {
+      items.push({
+        id: 'compliance',
+        level: s.complianceAtRisk > 5 ? 'high' : 'medium',
+        tone: 'violet',
+        icon: 'bx-shield-alt-2',
+        label: 'Compliance Pressure',
+        badge: 'DOT',
+        value: s.complianceAtRisk,
+        meter: this.pct(s.complianceAtRisk, s.activeDrivers || s.totalDrivers || 1),
+        chip: 'At risk',
+        soft: 'Open board',
+        route: '/compliance/driver-database'
+      });
+    }
+    if (s.trailersUnassigned > 0) {
+      items.push({
+        id: 'trailers',
+        level: 'medium',
+        tone: 'green',
+        icon: 'bx-trailer',
+        label: 'Open Trailer Slots',
+        badge: 'Assets',
+        value: s.trailersUnassigned,
+        meter: this.pct(s.trailersUnassigned, s.trailersActive || 1),
+        chip: `${s.trailersActive} active`,
+        soft: 'Assign assets',
+        route: '/compliance/tags-permits'
+      });
+    }
+    if (s.fleetApplicants > 0) {
+      items.push({
+        id: 'applicants',
+        level: 'low',
+        tone: 'cyan',
+        icon: 'bx-user-plus',
+        label: 'Fleet Hiring Pipeline',
+        badge: 'Recruit',
+        value: s.fleetApplicants,
+        meter: Math.min(100, s.fleetApplicants),
+        chip: 'Applicants',
+        soft: 'Review candidates',
+        route: '/hr/applicants'
+      });
+    }
+    if (s.totalFleets === 0) {
+      items.push({
+        id: 'fleets',
+        level: 'medium',
+        tone: 'orange',
+        icon: 'bx-collection',
+        label: 'No Fleet Entities',
+        badge: 'Setup',
+        value: 0,
+        meter: 0,
+        chip: 'Missing org',
+        soft: 'Create first fleet',
+        route: '/fleet-entities'
+      });
+    }
+    if (items.length === 0) {
+      items.push({
+        id: 'healthy',
+        level: 'low',
+        tone: 'green',
+        icon: 'bx-check-circle',
+        label: 'Fleet Health',
+        badge: 'OK',
+        value: 'Clear',
+        meter: 100,
+        chip: 'No blockers',
+        soft: 'Looking good'
+      });
+    }
+    return items.slice(0, 4);
   });
 
   readonly fleetApplicantDensityChartData = computed(() => [
@@ -183,27 +413,76 @@ export class FleetDashboardComponent implements OnInit {
     this.error.set(null);
 
     try {
-      const [totalDrivers, activeDrivers, inactiveDrivers, carriers, fleets, applicantRows, applicantPositions, driverRows] = await Promise.all([
-        this.fetchTotal('/api/v1/drivers?limit=1'),
-        this.fetchTotal('/api/v1/drivers?status=active&limit=1'),
-        this.fetchTotal('/api/v1/drivers?status=inactive&limit=1'),
+      const [
+        carriers,
+        fleets,
+        applicantRows,
+        applicantPositions,
+        driverRows,
+        trailerRows,
+        complianceRows,
+        dispatcherRows
+      ] = await Promise.all([
         this.fetchDataArray('/api/v1/carriers'),
         this.fetchDataArray('/api/v1/fleets'),
         this.fetchDataArray('/api/v1/applicants/records?includeCv=false'),
         this.fetchDataArray('/api/v1/applicants/positions'),
-        this.fetchDataArray('/api/v1/drivers?limit=5000')
+        this.fetchDataArray('/api/v1/drivers?limit=5000'),
+        this.fetchDataArray('/api/v1/trailer-assignments?limit=2000'),
+        this.fetchDataArray('/api/v1/drivers/compliance-board?limit=10000'),
+        this.fetchDispatchers()
       ]);
 
       const totalCarriers = carriers.length;
-      const activeCarriers = carriers.filter(c => String(c?.status ?? '').toLowerCase() === 'active').length;
+      const activeCarriers = carriers.filter((c) => String(c?.status ?? '').toLowerCase() === 'active').length;
+
+      const totalDrivers = driverRows.length;
+      const activeDriversList = driverRows.filter(
+        (d) => this.isActiveStatus(d?.status) && !this.isInactiveStatus(d?.status)
+      );
+      const inactiveDrivers = driverRows.filter((d) => this.isInactiveStatus(d?.status)).length;
+      const driversWithDispatcher = activeDriversList.filter((d) => this.hasDispatcher(d)).length;
+      const driversUnassigned = Math.max(activeDriversList.length - driversWithDispatcher, 0);
+
+      const activeTrailers = trailerRows.filter((r) => {
+        const status = String(r?.trailerStatus ?? 'active').toLowerCase();
+        return status === 'active' || status === '';
+      });
+      const trailersUnassigned = activeTrailers.filter((r) => {
+        const id = Number(r?.assignedDriverId);
+        const name = String(r?.assignedDriverName ?? '').trim();
+        return !(Number.isFinite(id) && id > 0) && !name;
+      }).length;
+
+      const complianceAtRisk = complianceRows.filter((r) => {
+        const status = String(r?.overallStatus ?? r?.status ?? r?.complianceStatus ?? '').toLowerCase();
+        return (
+          status.includes('expired') ||
+          status.includes('missing') ||
+          status.includes('expiring') ||
+          status.includes('at_risk') ||
+          status.includes('risk')
+        );
+      }).length;
+
+      const positionsGroupMap = this.buildPositionGroupMap(applicantPositions);
+      const applicantParsed = this.parseFleetApplicants(applicantRows);
+      const fleetApplicants = applicantParsed.filter((row) => this.isFleetPosition(row.position, positionsGroupMap));
 
       this.stats.set({
         totalDrivers,
-        activeDrivers,
+        activeDrivers: activeDriversList.length,
         inactiveDrivers,
+        driversWithDispatcher,
+        driversUnassigned,
+        dispatchers: dispatcherRows.length,
         totalCarriers,
         activeCarriers,
-        totalFleets: fleets.length
+        totalFleets: fleets.length,
+        trailersActive: activeTrailers.length,
+        trailersUnassigned,
+        complianceAtRisk,
+        fleetApplicants: fleetApplicants.length
       });
       this.updateFleetApplicantInsights(applicantRows, applicantPositions, driverRows);
       this.lastUpdated.set(new Date());
@@ -220,16 +499,44 @@ export class FleetDashboardComponent implements OnInit {
     }
   }
 
-  private async fetchTotal(path: string): Promise<number> {
-    const response: any = await this.http.get(`${this.apiUrl}${path}`).toPromise();
-    if (typeof response?.total === 'number') return response.total;
-    if (Array.isArray(response?.data)) return response.data.length;
-    return 0;
+  private async fetchDispatchers(): Promise<any[]> {
+    let dispatchers = (await this.fetchDataArray('/api/v1/users?role=dispatcher&limit=500')).filter((u) => {
+      const role = String(u?.role ?? u?.Role ?? '').toLowerCase();
+      return role.includes('dispatch');
+    });
+    if (dispatchers.length === 0) {
+      dispatchers = (await this.fetchDataArray('/api/v1/users?limit=2000')).filter((u) => {
+        const role = String(u?.role ?? u?.Role ?? '').toLowerCase();
+        return role.includes('dispatch');
+      });
+    }
+    return dispatchers;
+  }
+
+  private isActiveStatus(value: unknown): boolean {
+    const s = String(value ?? '').trim().toLowerCase();
+    return !s || ['active', 'available', 'assigned', 'dispatched', 'current', 'hired'].includes(s);
+  }
+
+  private isInactiveStatus(value: unknown): boolean {
+    const s = String(value ?? '').trim().toLowerCase();
+    return ['inactive', 'terminated', 'archived', 'off-duty', 'off duty', 'disabled'].includes(s);
+  }
+
+  private hasDispatcher(driver: any): boolean {
+    const id = Number(driver?.dispatchUserId ?? driver?.dispatcherId ?? driver?.assignedDispatcherId);
+    if (Number.isFinite(id) && id > 0) return true;
+    const notes = String(driver?.notes ?? '');
+    return /\[dispatch-assignee-id:\d+/i.test(notes);
   }
 
   private async fetchDataArray(path: string): Promise<any[]> {
     const response: any = await this.http.get(`${this.apiUrl}${path}`).toPromise();
-    return Array.isArray(response?.data) ? response.data : [];
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.items)) return response.items;
+    if (Array.isArray(response?.results)) return response.results;
+    return [];
   }
 
   private updateFleetApplicantInsights(recordsPayload: unknown[], positionsPayload: unknown[], driverPayload: unknown[]): void {
