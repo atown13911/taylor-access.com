@@ -189,10 +189,23 @@ export class DriverListComponent implements OnInit {
     const activeLandmarkAssigned = this.activeLandmarkDispatchDrivers();
     const byKey = new Map<string, DispatchUserRow & { assignedDrivers: number }>();
 
-    // Roster is Landmark assignees only (not every company user with Role=dispatcher).
+    // Stale tags sometimes omit |name: — learn id→label from siblings first.
+    const labelByAssigneeId = new Map<number, string>();
     for (const driver of activeLandmarkAssigned) {
       const assignedId = this.toNullableNumber(driver.dispatchUserId);
       const tagLabel = this.extractDispatchTag(String(driver.notes ?? '')).label;
+      if (!assignedId || !tagLabel) continue;
+      if (!labelByAssigneeId.has(assignedId)) {
+        labelByAssigneeId.set(assignedId, tagLabel);
+      }
+    }
+
+    // Roster is Landmark assignees only (not every company user with Role=dispatcher).
+    for (const driver of activeLandmarkAssigned) {
+      const assignedId = this.toNullableNumber(driver.dispatchUserId);
+      const tagLabel =
+        this.extractDispatchTag(String(driver.notes ?? '')).label ||
+        (assignedId ? labelByAssigneeId.get(assignedId) ?? null : null);
       if (!assignedId && !tagLabel) continue;
 
       const nameKey = tagLabel
@@ -1775,10 +1788,22 @@ export class DriverListComponent implements OnInit {
     const assignedId = this.toNullableNumber(driver.dispatchUserId);
     if (assignedId === dispatcher.id) return true;
 
-    // Stale assignee ids often keep the correct name in the notes tag.
     const tag = this.extractDispatchTag(String(driver.notes ?? ''));
-    if (!tag.label) return false;
-    return this.normalizePersonName(tag.label) === this.normalizePersonName(dispatcher.name);
+    const label = tag.label || this.resolveAssigneeLabelForId(assignedId);
+    if (!label) return false;
+    return this.normalizePersonName(label) === this.normalizePersonName(dispatcher.name);
+  }
+
+  /** Fill missing |name: on stale assignee tags using labels seen on other drivers. */
+  private resolveAssigneeLabelForId(assigneeId: number | null): string | null {
+    if (!assigneeId) return null;
+    for (const driver of this.activeLandmarkDispatchDrivers()) {
+      const id = this.toNullableNumber(driver.dispatchUserId);
+      if (id !== assigneeId) continue;
+      const label = this.extractDispatchTag(String(driver.notes ?? '')).label;
+      if (label) return label;
+    }
+    return null;
   }
 
   private updateDispatchersViewFromRoute(routeUrl?: string): void {
