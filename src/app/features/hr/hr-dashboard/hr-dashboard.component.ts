@@ -19,15 +19,27 @@ interface ActivityItem {
 interface ActionAlert {
   id: string;
   level: 'high' | 'medium' | 'low';
+  tone: 'cyan' | 'green' | 'orange' | 'violet';
   icon: string;
-  title: string;
+  label: string;
+  badge: string;
+  value: string | number;
+  meter: number;
+  chip: string;
+  soft: string;
   detail: string;
   route?: string;
 }
 interface InsightItem {
   id: string;
   tone: 'positive' | 'warning' | 'neutral';
-  title: string;
+  icon: string;
+  label: string;
+  badge: string;
+  value: string | number;
+  meter: number;
+  chip: string;
+  soft: string;
   detail: string;
 }
 interface StatPanel {
@@ -99,26 +111,40 @@ interface StatPanel {
           <div class="alert-grid">
             @for (alert of actionAlerts(); track alert.id) {
               @if (alert.route) {
-                <a class="alert-card" [routerLink]="alert.route" [class]="'level-' + alert.level">
-                  <div class="alert-icon"><i class="bx" [ngClass]="alert.icon"></i></div>
-                  <div class="alert-copy">
-                    <strong>{{ alert.title }}</strong>
-                    <span>{{ alert.detail }}</span>
-                  </div>
+                <a class="stat-panel action-panel" [routerLink]="alert.route" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
+                  <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
+                  <header class="stat-panel-head">
+                    <span class="stat-panel-label">{{ alert.label }}</span>
+                    <span class="stat-panel-badge">{{ alert.badge }}</span>
+                  </header>
+                  <p class="stat-panel-value">{{ alert.value }}</p>
+                  <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
+                  <footer class="stat-panel-foot">
+                    <span class="stat-panel-chip">{{ alert.chip }}</span>
+                    <span class="stat-panel-chip soft">{{ alert.soft }}</span>
+                  </footer>
+                  <p class="action-panel-detail">{{ alert.detail }}</p>
                 </a>
               } @else {
-                <div class="alert-card" [class]="'level-' + alert.level">
-                  <div class="alert-icon"><i class="bx" [ngClass]="alert.icon"></i></div>
-                  <div class="alert-copy">
-                    <strong>{{ alert.title }}</strong>
-                    <span>{{ alert.detail }}</span>
-                  </div>
-                </div>
+                <article class="stat-panel action-panel" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
+                  <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
+                  <header class="stat-panel-head">
+                    <span class="stat-panel-label">{{ alert.label }}</span>
+                    <span class="stat-panel-badge">{{ alert.badge }}</span>
+                  </header>
+                  <p class="stat-panel-value">{{ alert.value }}</p>
+                  <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
+                  <footer class="stat-panel-foot">
+                    <span class="stat-panel-chip">{{ alert.chip }}</span>
+                    <span class="stat-panel-chip soft">{{ alert.soft }}</span>
+                  </footer>
+                  <p class="action-panel-detail">{{ alert.detail }}</p>
+                </article>
               }
             }
           </div>
         } @else {
-          <div class="chart-card"><div class="chart-empty">No critical items right now</div></div>
+          <div class="chart-card glow-panel"><div class="chart-empty">No critical items right now</div></div>
         }
       </div>
 
@@ -126,10 +152,20 @@ interface StatPanel {
         <h2><i class="bx bx-bulb"></i> Ops Insights</h2>
         <div class="insight-grid">
           @for (insight of opsInsights(); track insight.id) {
-            <div class="insight-card" [class]="'tone-' + insight.tone">
-              <strong>{{ insight.title }}</strong>
-              <span>{{ insight.detail }}</span>
-            </div>
+            <article class="stat-panel insight-panel" [ngClass]="'tone-' + (insight.tone === 'positive' ? 'green' : insight.tone === 'warning' ? 'orange' : 'cyan')">
+              <i class="bx stat-panel-mark" [ngClass]="insight.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ insight.label }}</span>
+                <span class="stat-panel-badge">{{ insight.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ insight.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="insight.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ insight.chip }}</span>
+                <span class="stat-panel-chip soft">{{ insight.soft }}</span>
+              </footer>
+              <p class="action-panel-detail">{{ insight.detail }}</p>
+            </article>
           }
         </div>
       </div>
@@ -302,8 +338,12 @@ interface StatPanel {
       padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600;
       border: 1px solid rgba(0, 242, 254, 0.3); background: rgba(0, 242, 254, 0.1); color: #00f2fe;
       display: inline-flex; align-items: center; gap: 6px;
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.18);
     }
-    .btn-refresh:hover:not(:disabled) { background: rgba(0, 242, 254, 0.2); }
+    .btn-refresh:hover:not(:disabled) {
+      background: rgba(0, 242, 254, 0.2);
+      box-shadow: 0 0 24px rgba(0, 242, 254, 0.32);
+    }
     .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
 
     @keyframes stat-panel-in {
@@ -331,7 +371,10 @@ interface StatPanel {
         radial-gradient(120% 90% at 100% 0%, var(--kpi-accent-soft), transparent 55%),
         linear-gradient(165deg, rgba(255, 255, 255, 0.05), transparent 46%),
         rgba(10, 13, 22, 0.92);
-      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 32px rgba(0, 0, 0, 0.32);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 0 22px color-mix(in srgb, var(--kpi-accent) 18%, transparent),
+        0 14px 32px rgba(0, 0, 0, 0.32);
       animation: stat-panel-in 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
       transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
       text-decoration: none; color: inherit;
@@ -340,14 +383,14 @@ interface StatPanel {
       content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px;
       border-radius: 0 4px 4px 0;
       background: linear-gradient(180deg, var(--kpi-accent), transparent 95%);
-      box-shadow: 0 0 12px color-mix(in srgb, var(--kpi-accent) 55%, transparent);
+      box-shadow: 0 0 14px color-mix(in srgb, var(--kpi-accent) 70%, transparent);
     }
     .stat-panel:hover {
       transform: translateY(-2px);
-      border-color: color-mix(in srgb, var(--kpi-accent) 42%, rgba(255, 255, 255, 0.08));
+      border-color: color-mix(in srgb, var(--kpi-accent) 50%, rgba(255, 255, 255, 0.08));
       box-shadow:
         0 1px 0 rgba(255, 255, 255, 0.06) inset,
-        0 0 28px color-mix(in srgb, var(--kpi-accent) 14%, transparent),
+        0 0 36px color-mix(in srgb, var(--kpi-accent) 28%, transparent),
         0 18px 36px rgba(0, 0, 0, 0.36);
     }
     .stat-panel:nth-child(1) { animation-delay: 0s; }
@@ -411,12 +454,16 @@ interface StatPanel {
     .chart-section { margin-bottom: 32px; }
     .chart-section h2 {
       color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; display: flex; align-items: center; gap: 8px;
+      text-shadow: 0 0 18px rgba(0, 229, 255, 0.25);
     }
-    .chart-section h2 i { color: #00e5ff; }
+    .chart-section h2 i { color: #00e5ff; filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45)); }
     .chart-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-    .chart-card {
-      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px; padding: 18px; overflow: hidden; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    .chart-card, .glow-panel {
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(0, 229, 255, 0.14);
+      border-radius: 14px; padding: 18px; overflow: hidden;
+      box-shadow:
+        0 0 24px rgba(0, 229, 255, 0.08),
+        0 8px 32px rgba(0, 0, 0, 0.15);
     }
     .chart-card.wide { padding: 20px; }
     .chart-card h3 { color: #ccc; font-size: 0.85rem; margin: 0 0 14px; font-weight: 500; }
@@ -500,39 +547,31 @@ interface StatPanel {
     .vbar-fill.tone-6 { background: linear-gradient(180deg, #fb7185, #be123c); }
     .vbar-fill.tone-7 { background: linear-gradient(180deg, #c084fc, #6d28d9); }
 
-    .alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-    .alert-card {
-      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
-      border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 10px;
-      min-height: 72px; text-decoration: none; color: inherit;
+    .alert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    .action-panel, .insight-panel { min-height: 178px; }
+    .action-panel-detail {
+      position: relative; z-index: 1; margin: 2px 0 0;
+      font-size: 0.72rem; line-height: 1.35; color: rgba(180, 198, 214, 0.88);
     }
-    .alert-card.level-high { border-color: rgba(239, 68, 68, 0.45); box-shadow: 0 0 16px rgba(239, 68, 68, 0.14); }
-    .alert-card.level-medium { border-color: rgba(245, 158, 11, 0.45); box-shadow: 0 0 16px rgba(245, 158, 11, 0.1); }
-    .alert-card.level-low { border-color: rgba(45, 212, 191, 0.35); }
-    .alert-icon {
-      width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-      background: rgba(0, 242, 254, 0.12); color: #67e8f9; font-size: 1.05rem;
+    .stat-panel.level-high {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 0 28px color-mix(in srgb, var(--kpi-accent) 32%, transparent),
+        0 14px 32px rgba(0, 0, 0, 0.32);
     }
-    .alert-copy { display: flex; flex-direction: column; gap: 2px; }
-    .alert-copy strong { color: #e6f7ff; font-size: 0.83rem; }
-    .alert-copy span { color: #9ca3af; font-size: 0.76rem; }
-
-    .insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-    .insight-card {
-      background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.09);
-      border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px;
+    .stat-panel.level-medium {
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.05) inset,
+        0 0 24px color-mix(in srgb, var(--kpi-accent) 24%, transparent),
+        0 14px 32px rgba(0, 0, 0, 0.32);
     }
-    .insight-card strong { color: #e6f7ff; font-size: 0.84rem; }
-    .insight-card span { color: #a5b4c3; font-size: 0.78rem; }
-    .insight-card.tone-positive { border-color: rgba(34, 197, 94, 0.35); }
-    .insight-card.tone-warning { border-color: rgba(245, 158, 11, 0.45); }
-    .insight-card.tone-neutral { border-color: rgba(56, 189, 248, 0.25); }
 
     .breakdown-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .filter-chip {
       border: 1px solid rgba(0, 242, 254, 0.28); background: rgba(0, 242, 254, 0.09); color: #a5f3fc;
       border-radius: 999px; padding: 4px 10px; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 6px;
-      cursor: pointer;
+      cursor: pointer; box-shadow: 0 0 14px rgba(0, 229, 255, 0.12);
     }
     .filter-chip.clear-all { background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #ddd6fe; }
 
@@ -541,25 +580,31 @@ interface StatPanel {
     ::ng-deep .ngx-charts .tick text { fill: #888 !important; font-size: 10px !important; }
 
     .quick-actions { margin-bottom: 32px; }
-    .quick-actions h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
+    .quick-actions h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; text-shadow: 0 0 18px rgba(0, 229, 255, 0.25); }
     .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
     .action-card {
-      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(0, 229, 255, 0.16); border-radius: 12px;
       padding: 18px; text-align: center; text-decoration: none; display: flex; flex-direction: column;
       align-items: center; gap: 10px; position: relative; transition: all 0.25s;
+      box-shadow: 0 0 18px rgba(0, 229, 255, 0.1);
     }
-    .action-card i { font-size: 1.8rem; color: #00e5ff; }
+    .action-card i { font-size: 1.8rem; color: #00e5ff; filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45)); }
     .action-card span { color: #ccc; font-size: 0.82rem; font-weight: 500; }
-    .action-card:hover { border-color: #00e5ff; transform: translateY(-2px); box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+    .action-card:hover {
+      border-color: #00e5ff; transform: translateY(-2px);
+      box-shadow: 0 0 28px rgba(0, 212, 255, 0.28);
+    }
     .action-badge {
       position: absolute; top: 8px; right: 8px; background: #ff2a6d; color: #fff;
       font-size: 0.65rem; padding: 2px 6px; border-radius: 8px; font-weight: 700;
+      box-shadow: 0 0 12px rgba(255, 42, 109, 0.45);
     }
 
-    .recent-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; }
+    .recent-section h2 { color: #e0f7ff; font-size: 1.1rem; margin: 0 0 16px; text-shadow: 0 0 18px rgba(0, 229, 255, 0.25); }
     .activity-list {
-      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(0, 229, 255, 0.14);
       border-radius: 14px; overflow: hidden;
+      box-shadow: 0 0 24px rgba(0, 229, 255, 0.08);
     }
     .activity-empty {
       padding: 40px; text-align: center; color: #555; display: flex; flex-direction: column;
@@ -752,8 +797,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       alerts.push({
         id: 'expired-docs',
         level: 'high',
+        tone: 'orange',
         icon: 'bx-error',
-        title: `${m.docsExpired} HR/compliance docs expired`,
+        label: 'Expired Documents',
+        badge: 'Urgent',
+        value: m.docsExpired,
+        meter: Math.min(100, m.docsExpired * 8),
+        chip: `${m.docsExpiring} expiring`,
+        soft: 'Renew now',
         detail: 'Renew expired documents to reduce compliance exposure.',
         route: '/hr/documents'
       });
@@ -762,8 +813,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       alerts.push({
         id: 'compliance-risk',
         level: 'high',
+        tone: 'violet',
         icon: 'bx-shield-x',
-        title: `${m.complianceAtRisk} drivers need compliance attention`,
+        label: 'Compliance At Risk',
+        badge: 'DOT',
+        value: m.complianceAtRisk,
+        meter: this.pct(m.complianceAtRisk, m.activeDrivers || m.totalDrivers || 1),
+        chip: `${m.activeDrivers} active drivers`,
+        soft: 'Board review',
         detail: 'Review expired or missing compliance items on the driver board.',
         route: '/compliance/driver-database'
       });
@@ -772,8 +829,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       alerts.push({
         id: 'pending-pay',
         level: 'high',
+        tone: 'cyan',
         icon: 'bx-money-withdraw',
-        title: `${m.pendingPaychecks} pending paychecks`,
+        label: 'Pending Paychecks',
+        badge: 'Payroll',
+        value: m.pendingPaychecks,
+        meter: Math.min(100, m.pendingPaychecks * 10),
+        chip: m.bulkStaging > 0 ? `${m.bulkStaging} staging` : 'Queue open',
+        soft: 'Needs review',
         detail: 'Payroll queue needs review before pay run.',
         route: '/hr/payroll'
       });
@@ -782,8 +845,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       alerts.push({
         id: 'pending-pto',
         level: 'medium',
+        tone: 'orange',
         icon: 'bx-calendar-exclamation',
-        title: `${m.pendingTimeOff} time-off requests pending`,
+        label: 'Pending Time Off',
+        badge: 'PTO',
+        value: m.pendingTimeOff,
+        meter: Math.min(100, m.pendingTimeOff * 12),
+        chip: 'Awaiting approval',
+        soft: 'Schedule lock',
         detail: 'Approve or deny before schedules lock.',
         route: '/hr/time-off'
       });
@@ -792,8 +861,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       alerts.push({
         id: 'applicants',
         level: 'medium',
+        tone: 'violet',
         icon: 'bx-user-plus',
-        title: `${m.openApplicants} applicants in pipeline`,
+        label: 'Applicants In Pipeline',
+        badge: 'Hiring',
+        value: m.openApplicants,
+        meter: Math.min(100, Math.round(m.openApplicants / 30)),
+        chip: 'Open records',
+        soft: 'Advance or close',
         detail: 'Move candidates forward or close stale applications.',
         route: '/hr/applicants'
       });
@@ -802,8 +877,14 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       alerts.push({
         id: 'trailers',
         level: 'low',
+        tone: 'green',
         icon: 'bx-trailer',
-        title: `${m.trailersUnassigned} active trailers unassigned`,
+        label: 'Unassigned Trailers',
+        badge: 'Assets',
+        value: m.trailersUnassigned,
+        meter: this.pct(m.trailersUnassigned, m.trailersActive || 1),
+        chip: `${m.trailersActive} active`,
+        soft: 'Assign or park',
         detail: 'Assign drivers or move unused trailers to inactive.',
         route: '/compliance/tags-permits'
       });
@@ -821,7 +902,13 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     items.push({
       id: 'dispatch-coverage',
       tone: driverCoverage >= 80 ? 'positive' : driverCoverage >= 50 ? 'neutral' : 'warning',
-      title: `${driverCoverage}% of active drivers have a dispatcher`,
+      icon: 'bx-broadcast',
+      label: 'Dispatcher Coverage',
+      badge: 'Ops',
+      value: `${driverCoverage}%`,
+      meter: driverCoverage,
+      chip: `${m.driversWithDispatcher} linked`,
+      soft: `${m.activeDrivers} active`,
       detail: driverCoverage >= 80
         ? 'Dispatcher coverage looks solid across the Landmark roster.'
         : 'Assign remaining Landmark drivers so dispatch ownership is clear.'
@@ -829,7 +916,13 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     items.push({
       id: 'driver-health',
       tone: activeDriverPct >= 70 ? 'positive' : 'warning',
-      title: `${m.activeDrivers} of ${m.totalDrivers} drivers are active`,
+      icon: 'bx-id-card',
+      label: 'Driver Availability',
+      badge: 'Fleet',
+      value: m.activeDrivers,
+      meter: activeDriverPct,
+      chip: `${activeDriverPct}% active`,
+      soft: `${m.totalDrivers} total`,
       detail: activeDriverPct >= 70
         ? 'Fleet availability is healthy for current operations.'
         : 'Review inactive drivers and onboarding status.'
@@ -837,7 +930,13 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     items.push({
       id: 'headcount',
       tone: delta.startsWith('+') ? 'positive' : 'neutral',
-      title: `Headcount trend: ${delta} over recent snapshots`,
+      icon: 'bx-trending-up',
+      label: 'Headcount Trend',
+      badge: '30d',
+      value: delta,
+      meter: delta.startsWith('+') ? 78 : 42,
+      chip: 'Snapshot delta',
+      soft: 'Workforce',
       detail: delta.startsWith('+')
         ? 'Headcount is growing — confirm onboarding and 90-day retention.'
         : 'Headcount is flat or down — watch attrition by role and department.'
@@ -846,7 +945,13 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
       items.push({
         id: 'compliance',
         tone: 'warning',
-        title: 'Compliance pressure is elevated',
+        icon: 'bx-shield-alt-2',
+        label: 'Compliance Pressure',
+        badge: 'Watch',
+        value: m.complianceAtRisk,
+        meter: this.pct(m.complianceAtRisk + m.docsExpiring, (m.activeDrivers || 1) + m.docsExpiring),
+        chip: `${m.docsExpiring} docs soon`,
+        soft: 'At risk',
         detail: `${m.complianceAtRisk} drivers at risk and ${m.docsExpiring} docs expiring within 90 days.`
       });
     }
