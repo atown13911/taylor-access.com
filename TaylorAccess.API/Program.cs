@@ -108,8 +108,8 @@ else
 builder.Services.AddDbContext<TaylorAccessDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// JWT Authentication — accept both Taylor Access and Portal signing keys.
-// This avoids blanket 401s when clients present Portal-issued tokens.
+// JWT Authentication — accept Access, Portal, Gateway, and Accounting signing keys.
+// Suite apps (Accounting timeclock tracker) present Portal or Accounting-issued tokens.
 var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
     ?? builder.Configuration["Jwt:SecretKey"]
     ?? "VanTacRailwaySecretKey123456789012345678901234567890";
@@ -117,13 +117,29 @@ var gatewayJwtKey = Environment.GetEnvironmentVariable("TTAC_JWT_SECRET_KEY") ??
 var portalJwtKey = Environment.GetEnvironmentVariable("PORTAL_JWT_SECRET")
     ?? Environment.GetEnvironmentVariable("TTAC_PORTAL_JWT_SECRET")
     ?? string.Empty;
+// Accounting local/SSO tokens (suite interaction tracker hits open/taylor-access timeclock).
+var accountingJwtKey = Environment.GetEnvironmentVariable("ACCOUNTING_JWT_SECRET")
+    ?? Environment.GetEnvironmentVariable("TTAC_ACCOUNTING_JWT_SECRET")
+    ?? Environment.GetEnvironmentVariable("JWT_SECRET")
+    ?? string.Empty;
+var accountingPortalJwtKey = Environment.GetEnvironmentVariable("ACCOUNTING_PORTAL_JWT_SECRET")
+    ?? Environment.GetEnvironmentVariable("TTAC_ACCOUNTING_PORTAL_JWT_SECRET")
+    ?? string.Empty;
 var signingKeys = new List<SecurityKey>();
-if (!string.IsNullOrWhiteSpace(jwtKey))
-    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)));
-if (!string.IsNullOrWhiteSpace(gatewayJwtKey) && !string.Equals(gatewayJwtKey, jwtKey, StringComparison.Ordinal))
-    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(gatewayJwtKey)));
-if (!string.IsNullOrWhiteSpace(portalJwtKey) && !string.Equals(portalJwtKey, jwtKey, StringComparison.Ordinal))
-    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(portalJwtKey)));
+void AddSigningKey(string? key)
+{
+    if (string.IsNullOrWhiteSpace(key)) return;
+    if (signingKeys.Any(existing =>
+            existing is SymmetricSecurityKey sym
+            && sym.Key.AsSpan().SequenceEqual(Encoding.UTF8.GetBytes(key))))
+        return;
+    signingKeys.Add(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)));
+}
+AddSigningKey(jwtKey);
+AddSigningKey(gatewayJwtKey);
+AddSigningKey(portalJwtKey);
+AddSigningKey(accountingJwtKey);
+AddSigningKey(accountingPortalJwtKey);
 
 // Safety valve: disable strict portal-access DB status enforcement by default to avoid
 // mass 401 lockouts when cross-service identity/user-sync data is temporarily inconsistent.
