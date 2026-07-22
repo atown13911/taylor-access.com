@@ -547,7 +547,17 @@ import {
 
         <div class="payroll-modal-roster-hint">
           <i class="bx bx-info-circle"></i>
-          Taxes, benefits, and withholding are managed in Employee Roster. Edit via <strong>Edit Employee → Financial</strong>.
+          <div class="payroll-modal-roster-hint-body">
+            <span>Taxes, benefits, and withholding are managed in Employee Roster.</span>
+            <button
+              type="button"
+              class="payroll-btn payroll-btn-link"
+              [disabled]="!selectedEmployeeDetails()?.id"
+              (click)="openEmployeeRosterFinancialEdit()">
+              <i class="bx bx-edit-alt"></i>
+              Edit in profile
+            </button>
+          </div>
         </div>
 
         <section class="payroll-modal-section payroll-modal-section--setup">
@@ -779,6 +789,14 @@ import {
 
         <div class="payroll-modal-actions">
           <button type="button" class="payroll-btn" (click)="closePayrollDetails()">Cancel</button>
+          <button
+            type="button"
+            class="payroll-btn"
+            [disabled]="!selectedEmployeeDetails()?.id"
+            (click)="openEmployeeRosterFinancialEdit()">
+            <i class="bx bx-user"></i>
+            Edit profile
+          </button>
           <button type="button" class="payroll-btn payroll-btn-primary" [disabled]="savingDetails()" (click)="savePayrollDetails()">
             @if (savingDetails()) {
               Saving...
@@ -1841,6 +1859,20 @@ import {
       font-size: 0.78rem;
       line-height: 1.4;
     }
+    .payroll-modal-roster-hint-body {
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.55rem;
+      min-width: 0;
+    }
+    .payroll-btn-link {
+      padding: 0.35rem 0.7rem;
+      font-size: 0.74rem;
+      white-space: nowrap;
+    }
     .payroll-readonly-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2541,6 +2573,19 @@ export class PayrollComponent implements OnInit {
     this.detailsModalOpen.set(false);
     this.selectedEmployeeDetails.set(null);
     this.savingDetails.set(false);
+  }
+
+  openEmployeeRosterFinancialEdit(): void {
+    const emp = this.selectedEmployeeDetails();
+    const employeeId = Number(emp?.id || 0);
+    if (!Number.isFinite(employeeId) || employeeId <= 0) return;
+    this.closePayrollDetails();
+    void this.router.navigate(['/hr/roster'], {
+      queryParams: {
+        editEmployeeId: employeeId,
+        editTab: 'financial'
+      }
+    });
   }
 
   openCreateInvoiceModal(emp: any): void {

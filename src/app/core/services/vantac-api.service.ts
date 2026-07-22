@@ -373,4 +373,22 @@ export class VanTacApiService {
   ): Observable<any> {
     return this.http.post(`${this.baseUrl}/api/v1/insurance-fleet-driver-overrides/bulk-migrate`, { items });
   }
+
+  // Insurance charging snapshots & accounting invoice cache
+  getInsuranceChargingSnapshot(periodType: string, periodKey: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-charging/snapshots`, {
+      params: { periodType, periodKey }
+    });
+  }
+  upsertInsuranceChargingSnapshot(data: any): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-charging/snapshots`, data);
+  }
+  getInsuranceAccountingInvoiceCache(monthApplicable: string): Observable<any> {
+    return this.http.get(`${this.baseUrl}/api/v1/insurance-charging/accounting-invoices`, {
+      params: { monthApplicable }
+    });
+  }
+  upsertInsuranceAccountingInvoiceCache(data: { monthApplicable: string; invoices: any[]; fetchedAt?: string }): Observable<any> {
+    return this.http.put(`${this.baseUrl}/api/v1/insurance-charging/accounting-invoices`, data);
+  }
 }

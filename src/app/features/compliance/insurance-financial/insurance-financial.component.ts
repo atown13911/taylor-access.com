@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpBackend, HttpClient } from '@angular/common/http';
@@ -83,6 +83,31 @@ interface FleetCostBreakdownData {
   lines: FleetCalculationLine[];
   driverChargesAnnual: number;
   companyCostAnnual: number;
+}
+
+interface StoredChargingSnapshot {
+  periodType: string;
+  periodKey: string;
+  activeTruckCount: number;
+  activeDriverHeadcount: number;
+  driverChargesAnnual: number;
+  companyCostAnnual: number;
+  driverChargesPeriod: number;
+  companyCostPeriod: number;
+  totalPeriod: number;
+  summaryLines: FleetCalculationLine[];
+  matrix?: {
+    columns: EnrollmentMatrixColumn[];
+    rows: EnrollmentMatrixRow[];
+    totals: {
+      columnTotals: Record<string, number>;
+      rowTotals: Record<number, number>;
+      grandTotal: number;
+    };
+  };
+  reportMeta?: Record<string, unknown>;
+  computedAt?: string;
+  updatedAt?: string;
 }
 
 interface SummaryPeriodOption {
@@ -286,7 +311,20 @@ export class InsuranceFinancialComponent implements OnInit {
   fleetDriverOverrides = signal<Record<string, Record<string, FleetDriverOverrideState>>>({});
   private readonly fleetDriverOverridesStorageKey = 'insurance_fleet_driver_overrides_v1';
   private readonly fleetDriverOverridesMigratedKey = 'insurance_fleet_driver_overrides_migrated_v1';
+  persistedChargingSnapshot = signal<StoredChargingSnapshot | null>(null);
+  loadingChargingSnapshot = signal(false);
+  private chargingSnapshotSaveTimer: ReturnType<typeof setTimeout> | null = null;
   expandedTypes = signal<Set<string>>(new Set());
+
+  private readonly chargingSnapshotSaveEffect = effect(() => {
+    if (this.pageTab() !== 'charging') return;
+    if (this.loadingCharging() || this.loadingFleetDriverOverrides() || this.loadingPolicies()) return;
+    this.summaryPeriodTab();
+    this.summarySpecificPeriod();
+    this.fleetCostBreakdownData();
+    this.enrollmentMatrixRows();
+    this.scheduleChargingSnapshotSave();
+  });
 
   toggleTypeExpand(type: string): void {
     this.expandedTypes.update(s => {
@@ -573,6 +611,21 @@ export class InsuranceFinancialComponent implements OnInit {
     this.loadingAccountingInvoices.set(true);
     this.accountingInvoices.set([]);
 
+    const cacheKey = this.getAccountingInvoiceCacheKey();
+    try {
+      const cached: any = await firstValueFrom(
+        this.api.getInsuranceAccountingInvoiceCache(cacheKey)
+      );
+      const cachedRows = Array.isArray(cached?.data) ? cached.data as AccountingVendorInvoice[] : [];
+      if (cachedRows.length) {
+        this.accountingInvoices.set(cachedRows);
+        this.loadingAccountingInvoices.set(false);
+        return;
+      }
+    } catch {
+      // Fall through to live Taylor Accounting fetch.
+    }
+
     try {
       const token = await this.getAccountingApiToken();
       if (!token) {
@@ -600,6 +653,13 @@ export class InsuranceFinancialComponent implements OnInit {
         );
 
       this.accountingInvoices.set(filtered);
+
+      void firstValueFrom(this.api.upsertInsuranceAccountingInvoiceCache({
+        monthApplicable: cacheKey,
+        invoices: filtered,
+        fetchedAt: new Date().toISOString()
+      })).catch(() => undefined);
+
       if (!filtered.length) {
         this.toast.info(`No insurance vendor invoices with month applicable ${this.getSummarySpecificPeriodLabel()} were found.`, 'No Invoices');
       }
@@ -838,6 +898,19 @@ export class InsuranceFinancialComponent implements OnInit {
     this.chargingDrivers();
     this.fleetDriverOverrides();
     this.policies();
+    this.persistedChargingSnapshot();
+
+    const { periodType, periodKey } = this.getFleetOverridePeriodParts();
+    const persisted = this.persistedChargingSnapshot();
+    const usePersisted = (this.loadingCharging() || this.loadingFleetDriverOverrides() || this.loadingChargingSnapshot())
+      && persisted
+      && persisted.periodType === periodType
+      && persisted.periodKey === periodKey;
+
+    if (usePersisted && persisted) {
+      return this.breakdownFromSnapshot(persisted);
+    }
+
     return this.buildFleetCostBreakdown();
   });
 
@@ -959,6 +1032,11 @@ export class InsuranceFinancialComponent implements OnInit {
   );
 
   enrollmentMatrixColumns = computed((): EnrollmentMatrixColumn[] => {
+    const persistedMatrix = this.getPersistedMatrixForCurrentPeriod();
+    if (persistedMatrix?.columns?.length) {
+      return persistedMatrix.columns;
+    }
+
     const columns: EnrollmentMatrixColumn[] = [];
 
     for (const group of this.groupedByType()) {
@@ -980,6 +1058,11 @@ export class InsuranceFinancialComponent implements OnInit {
   enrollmentMatrixRows = computed((): EnrollmentMatrixRow[] => {
     this.summaryPeriodTab();
     this.summarySpecificPeriod();
+    const persistedMatrix = this.getPersistedMatrixForCurrentPeriod();
+    if (persistedMatrix?.rows?.length) {
+      return persistedMatrix.rows;
+    }
+
     const columns = this.enrollmentMatrixColumns();
     if (!columns.length) return [];
 
@@ -1024,6 +1107,11 @@ export class InsuranceFinancialComponent implements OnInit {
 
   enrollmentMatrixTotals = computed(() => {
     this.summaryPeriodTab();
+    const persistedMatrix = this.getPersistedMatrixForCurrentPeriod();
+    if (persistedMatrix?.totals) {
+      return persistedMatrix.totals;
+    }
+
     const rows = this.enrollmentMatrixRows();
     const columns = this.enrollmentMatrixColumns();
     const columnTotals: Record<string, number> = {};
@@ -1106,6 +1194,10 @@ export class InsuranceFinancialComponent implements OnInit {
   setPageTab(tab: PageTab): void {
     this.pageTab.set(tab);
     if (tab === 'charging') {
+      void Promise.all([
+        this.loadFleetDriverOverridesForCurrentPeriod(),
+        this.loadChargingSnapshotFromApi()
+      ]);
       this.loadChargingData();
     }
   }
@@ -1231,7 +1323,10 @@ export class InsuranceFinancialComponent implements OnInit {
 
   private async initializeFleetDriverOverrides(): Promise<void> {
     await this.migrateLocalFleetDriverOverridesIfNeeded();
-    await this.loadFleetDriverOverridesForCurrentPeriod();
+    await Promise.all([
+      this.loadFleetDriverOverridesForCurrentPeriod(),
+      this.loadChargingSnapshotFromApi()
+    ]);
   }
 
   private async migrateLocalFleetDriverOverridesIfNeeded(): Promise<void> {
@@ -1334,6 +1429,134 @@ export class InsuranceFinancialComponent implements OnInit {
     return `${this.summaryPeriodTab()}:${this.summarySpecificPeriod()}`;
   }
 
+  private breakdownFromSnapshot(snapshot: StoredChargingSnapshot): FleetCostBreakdownData {
+    return {
+      activeDriverCount: snapshot.activeTruckCount,
+      activeDriverHeadcount: snapshot.activeDriverHeadcount,
+      lines: snapshot.summaryLines || [],
+      driverChargesAnnual: snapshot.driverChargesAnnual,
+      companyCostAnnual: snapshot.companyCostAnnual
+    };
+  }
+
+  private getPersistedMatrixForCurrentPeriod(): StoredChargingSnapshot['matrix'] | null {
+    this.persistedChargingSnapshot();
+    this.loadingCharging();
+    this.loadingFleetDriverOverrides();
+    this.loadingChargingSnapshot();
+
+    if (!this.loadingCharging() && !this.loadingFleetDriverOverrides() && !this.loadingChargingSnapshot()) {
+      return null;
+    }
+
+    const { periodType, periodKey } = this.getFleetOverridePeriodParts();
+    const persisted = this.persistedChargingSnapshot();
+    if (!persisted || persisted.periodType !== periodType || persisted.periodKey !== periodKey) {
+      return null;
+    }
+
+    return persisted.matrix || null;
+  }
+
+  private mapApiChargingSnapshot(data: any): StoredChargingSnapshot {
+    return {
+      periodType: String(data.periodType || ''),
+      periodKey: String(data.periodKey || ''),
+      activeTruckCount: Number(data.activeTruckCount || 0),
+      activeDriverHeadcount: Number(data.activeDriverHeadcount || 0),
+      driverChargesAnnual: Number(data.driverChargesAnnual || 0),
+      companyCostAnnual: Number(data.companyCostAnnual || 0),
+      driverChargesPeriod: Number(data.driverChargesPeriod || 0),
+      companyCostPeriod: Number(data.companyCostPeriod || 0),
+      totalPeriod: Number(data.totalPeriod || 0),
+      summaryLines: Array.isArray(data.summaryLines) ? data.summaryLines : [],
+      matrix: data.matrix || undefined,
+      reportMeta: data.reportMeta || undefined,
+      computedAt: data.computedAt,
+      updatedAt: data.updatedAt
+    };
+  }
+
+  private async loadChargingSnapshotFromApi(): Promise<void> {
+    const { periodType, periodKey } = this.getFleetOverridePeriodParts();
+    if (!periodKey) {
+      this.persistedChargingSnapshot.set(null);
+      return;
+    }
+
+    this.loadingChargingSnapshot.set(true);
+    try {
+      const res: any = await firstValueFrom(
+        this.api.getInsuranceChargingSnapshot(periodType, periodKey)
+      );
+      this.persistedChargingSnapshot.set(res?.data ? this.mapApiChargingSnapshot(res.data) : null);
+    } catch {
+      this.persistedChargingSnapshot.set(null);
+    } finally {
+      this.loadingChargingSnapshot.set(false);
+    }
+  }
+
+  private scheduleChargingSnapshotSave(): void {
+    if (this.chargingSnapshotSaveTimer) {
+      clearTimeout(this.chargingSnapshotSaveTimer);
+    }
+    this.chargingSnapshotSaveTimer = setTimeout(() => void this.saveChargingSnapshotToApi(), 800);
+  }
+
+  private async saveChargingSnapshotToApi(): Promise<void> {
+    if (this.pageTab() !== 'charging') return;
+    const { periodType, periodKey } = this.getFleetOverridePeriodParts();
+    if (!periodKey || this.loadingCharging() || this.loadingFleetDriverOverrides()) return;
+
+    const breakdown = this.buildFleetCostBreakdown();
+    const driverChargesPeriod = this.roundMoney(
+      breakdown.lines.filter((line) => line.category === 'driver').reduce((sum, line) => sum + line.periodAmount, 0)
+    );
+    const companyCostPeriod = this.roundMoney(
+      breakdown.lines.filter((line) => line.category === 'company').reduce((sum, line) => sum + line.periodAmount, 0)
+    );
+    const totalPeriod = this.roundMoney(driverChargesPeriod + companyCostPeriod);
+
+    const matrix = {
+      columns: this.enrollmentMatrixColumns(),
+      rows: this.enrollmentMatrixRows(),
+      totals: this.enrollmentMatrixTotals()
+    };
+
+    try {
+      await firstValueFrom(this.api.upsertInsuranceChargingSnapshot({
+        periodType,
+        periodKey,
+        activeTruckCount: breakdown.activeDriverCount,
+        activeDriverHeadcount: breakdown.activeDriverHeadcount,
+        driverChargesAnnual: breakdown.driverChargesAnnual,
+        companyCostAnnual: breakdown.companyCostAnnual,
+        driverChargesPeriod,
+        companyCostPeriod,
+        totalPeriod,
+        summaryLines: breakdown.lines,
+        matrix,
+        reportMeta: {
+          periodLabel: this.getSummarySpecificPeriodLabel(),
+          chargeLines: breakdown.lines.length,
+          generatedAt: new Date().toISOString()
+        },
+        computedAt: new Date().toISOString()
+      }));
+    } catch {
+      // Keep UI responsive if snapshot save fails.
+    }
+  }
+
+  private getAccountingInvoiceCacheKey(): string {
+    const tab = this.summaryPeriodTab();
+    const value = String(this.summarySpecificPeriod() || '').trim();
+    if (tab === 'monthly') return value.substring(0, 7);
+    if (tab === 'yearly') return value;
+    return `${tab}:${value}`;
+  }
+
   private getFleetDriverOverridesForCurrentPeriod(): Record<string, FleetDriverOverrideState> {
     return this.fleetDriverOverrides()[this.getFleetOverridePeriodKey()] || {};
   }
@@ -1398,12 +1621,18 @@ export class InsuranceFinancialComponent implements OnInit {
     } else {
       this.summarySpecificPeriod.set(this.buildSummarySpecificPeriodOptions(tab)[0]?.value || '');
     }
-    void this.loadFleetDriverOverridesForCurrentPeriod();
+    void Promise.all([
+      this.loadFleetDriverOverridesForCurrentPeriod(),
+      this.loadChargingSnapshotFromApi()
+    ]);
   }
 
   setSummarySpecificPeriod(value: string): void {
     this.summarySpecificPeriod.set(value || this.formatSummaryDateKey(new Date()));
-    void this.loadFleetDriverOverridesForCurrentPeriod();
+    void Promise.all([
+      this.loadFleetDriverOverridesForCurrentPeriod(),
+      this.loadChargingSnapshotFromApi()
+    ]);
   }
 
   getSummaryMaxDate(): string {

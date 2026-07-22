@@ -678,7 +678,7 @@ type RosterEmployee = Record<string, any>;
               <tr>
                 <th>Employee</th>
                 <th title="Calls">Calls</th>
-                <th title="Total Call Time">Call Time</th>
+                <th title="Total Call Time (fill vs 8hr / 480 min day)">Call Time</th>
                 <th title="Average Call Time">Avg</th>
                 <th title="Texts">Texts</th>
                 <th title="Emails Sent">Sent</th>
@@ -706,7 +706,10 @@ type RosterEmployee = Record<string, any>;
                   (click)="selectTableRow(review.employeeId, $event)">
                   <td><strong>{{ review.employeeName || 'Employee #' + review.employeeId }}</strong></td>
                   <td>{{ review.callVolume }}</td>
-                  <td>{{ review.totalCallMinutes | number:'1.0-0' }}</td>
+                  <td class="meter-cell" title="{{ review.totalCallMinutes | number:'1.0-0' }} min of 480 (8hr day)">
+                    <div class="meter"><div class="meter-fill calltime" [style.width.%]="callTimeFill(review.totalCallMinutes)"></div></div>
+                    <span class="meter-lbl">{{ review.totalCallMinutes | number:'1.0-0' }}</span>
+                  </td>
                   <td>{{ review.avgCallMinutes | number:'1.0-1' }}</td>
                   <td>{{ review.textVolume }}</td>
                   <td>{{ review.sentCount }}</td>
@@ -1416,6 +1419,7 @@ type RosterEmployee = Record<string, any>;
     .meter-fill.system { background: linear-gradient(90deg, #1d4ed8, #60a5fa); }
     .meter-fill.busy { background: linear-gradient(90deg, #b45309, #fbbf24); }
     .meter-fill.follow { background: linear-gradient(90deg, #a16207, #fde047); }
+    .meter-fill.calltime { background: linear-gradient(90deg, #15803d, #4ade80); }
     .meter-lbl { font-size: 0.68rem; color: #cbd5e1; font-weight: 650; }
     .via-chip {
       display: inline-flex;
@@ -3071,6 +3075,13 @@ export class PerformanceReviewsComponent implements OnInit, OnDestroy {
     const n = Number(rate || 0);
     if (!Number.isFinite(n)) return 0;
     return Math.max(0, Math.min(100, n <= 1 ? n * 100 : n));
+  }
+
+  /** Call-time fill vs an 8hr workday (480 minutes = 100%). */
+  callTimeFill(minutes: number | null | undefined): number {
+    const mins = Number(minutes || 0);
+    if (!Number.isFinite(mins) || mins <= 0) return 0;
+    return Math.max(0, Math.min(100, (mins / 480) * 100));
   }
 
   clampScore(score: number | null | undefined): number {
