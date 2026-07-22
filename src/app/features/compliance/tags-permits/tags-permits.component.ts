@@ -351,6 +351,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       .filter((t: any) => t.id != null)
       .sort((a: any, b: any) => String(a.number || a.tag || a.id).localeCompare(String(b.number || b.tag || b.id)));
   });
+  truckOptions = computed(() => {
+    return this.drivers()
+      .map((d: any) => String(d?.truckNumber ?? d?.TruckNumber ?? d?.truckTag ?? d?.TruckTag ?? '').trim())
+      .filter((v: string) => !!v)
+      .filter((v: string, index: number, arr: string[]) => arr.indexOf(v) === index)
+      .sort((a: string, b: string) => a.localeCompare(b));
+  });
 
   ngOnInit() {
     void this.migrateLocalTrailerOverridesIfNeeded();
@@ -1221,9 +1228,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   equipmentAssetOptions(): string[] {
-    const values = this.trailerOptions()
-      .map((t: any) => String(t?.number || t?.tag || t?.id || '').trim())
-      .filter((v: string) => !!v);
+    const values = this.truckOptions().slice();
     const current = String(this.permitForm?.assignedTruckNumber ?? '').trim();
     if (current) values.push(current);
     return Array.from(new Set(values));
