@@ -808,15 +808,46 @@ export class FleetDashboardComponent implements OnInit {
   getMapFill(shape: UsStateShape): string {
     const applicantLevel = Math.max(0, Math.min(1, shape.applicantIntensity || 0));
     const driverLevel = Math.max(0, Math.min(1, shape.driverIntensity || 0));
+    // Drivers win when present so both fields stay visually distinct on the map.
     if (driverLevel > 0) {
-      const alpha = 0.28 + (driverLevel * 0.72);
-      return `rgba(168, 85, 247, ${alpha.toFixed(3)})`;
+      return this.sampleHeatColor(driverLevel, this.driverHeatStops);
     }
     if (applicantLevel > 0) {
-      const alpha = 0.22 + (applicantLevel * 0.72);
-      return `rgba(56, 189, 248, ${alpha.toFixed(3)})`;
+      return this.sampleHeatColor(applicantLevel, this.applicantHeatStops);
     }
     return 'rgba(10, 18, 30, 0.85)';
+  }
+
+  /** Fire heat: ember → red → orange → yellow for applicants. */
+  private readonly applicantHeatStops: Array<[number, number, number]> = [
+    [60, 20, 10],     // deep ember
+    [140, 30, 18],    // dark red
+    [210, 55, 20],    // hot red-orange
+    [245, 140, 30],   // orange
+    [255, 220, 120]   // pale gold
+  ];
+
+  /** Fire heat variant: charcoal → crimson → amber for current drivers. */
+  private readonly driverHeatStops: Array<[number, number, number]> = [
+    [45, 12, 8],      // near-black ember
+    [120, 18, 22],    // crimson
+    [190, 40, 25],    // scarlet
+    [235, 95, 28],    // blaze orange
+    [255, 200, 90]    // yellow-white heat
+  ];
+
+  private sampleHeatColor(t: number, stops: Array<[number, number, number]>): string {
+    const level = Math.max(0.1, Math.min(1, t));
+    const scaled = level * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(scaled));
+    const localT = scaled - i;
+    const a = stops[i];
+    const b = stops[i + 1];
+    const r = Math.round(a[0] + (b[0] - a[0]) * localT);
+    const g = Math.round(a[1] + (b[1] - a[1]) * localT);
+    const bl = Math.round(a[2] + (b[2] - a[2]) * localT);
+    const alpha = (0.78 + level * 0.22).toFixed(3);
+    return `rgba(${r}, ${g}, ${bl}, ${alpha})`;
   }
 
   getMapTooltip(shape: UsStateShape): string {

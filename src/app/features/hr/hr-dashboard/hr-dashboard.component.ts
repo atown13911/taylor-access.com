@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { catchError, lastValueFrom, of } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
@@ -68,7 +69,7 @@ interface StatPanel {
 @Component({
   selector: 'app-hr-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, NgxChartsModule],
   template: `
     <div class="hr-dashboard">
       <div class="page-header">
@@ -116,71 +117,6 @@ interface StatPanel {
         }
       </div>
 
-      <div class="chart-section">
-        <h2><i class="bx bx-bell"></i> Action Needed</h2>
-        @if (actionAlerts().length > 0) {
-          <div class="alert-grid">
-            @for (alert of actionAlerts(); track alert.id) {
-              @if (alert.route) {
-                <a class="stat-panel action-panel" [routerLink]="alert.route" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
-                  <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
-                  <header class="stat-panel-head">
-                    <span class="stat-panel-label">{{ alert.label }}</span>
-                    <span class="stat-panel-badge">{{ alert.badge }}</span>
-                  </header>
-                  <p class="stat-panel-value">{{ alert.value }}</p>
-                  <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
-                  <footer class="stat-panel-foot">
-                    <span class="stat-panel-chip">{{ alert.chip }}</span>
-                    <span class="stat-panel-chip soft">{{ alert.soft }}</span>
-                  </footer>
-                  <p class="action-panel-detail">{{ alert.detail }}</p>
-                </a>
-              } @else {
-                <article class="stat-panel action-panel" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
-                  <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
-                  <header class="stat-panel-head">
-                    <span class="stat-panel-label">{{ alert.label }}</span>
-                    <span class="stat-panel-badge">{{ alert.badge }}</span>
-                  </header>
-                  <p class="stat-panel-value">{{ alert.value }}</p>
-                  <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
-                  <footer class="stat-panel-foot">
-                    <span class="stat-panel-chip">{{ alert.chip }}</span>
-                    <span class="stat-panel-chip soft">{{ alert.soft }}</span>
-                  </footer>
-                  <p class="action-panel-detail">{{ alert.detail }}</p>
-                </article>
-              }
-            }
-          </div>
-        } @else {
-          <div class="chart-card glow-panel"><div class="chart-empty">No critical items right now</div></div>
-        }
-      </div>
-
-      <div class="chart-section">
-        <h2><i class="bx bx-bulb"></i> Ops Insights</h2>
-        <div class="insight-grid">
-          @for (insight of opsInsights(); track insight.id) {
-            <article class="stat-panel insight-panel" [ngClass]="'tone-' + (insight.tone === 'positive' ? 'green' : insight.tone === 'warning' ? 'orange' : 'cyan')">
-              <i class="bx stat-panel-mark" [ngClass]="insight.icon" aria-hidden="true"></i>
-              <header class="stat-panel-head">
-                <span class="stat-panel-label">{{ insight.label }}</span>
-                <span class="stat-panel-badge">{{ insight.badge }}</span>
-              </header>
-              <p class="stat-panel-value">{{ insight.value }}</p>
-              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="insight.meter"></span></div>
-              <footer class="stat-panel-foot">
-                <span class="stat-panel-chip">{{ insight.chip }}</span>
-                <span class="stat-panel-chip soft">{{ insight.soft }}</span>
-              </footer>
-              <p class="action-panel-detail">{{ insight.detail }}</p>
-            </article>
-          }
-        </div>
-      </div>
-
       @if (deptChartData().length > 0 || roleChartData().length > 0 || driverTenureWave().points.length > 0) {
         <div class="chart-section">
           <h2><i class="bx bx-bar-chart-alt-2"></i> Workforce Mix</h2>
@@ -203,23 +139,43 @@ interface StatPanel {
           </div>
           <div class="chart-grid-3">
             @if (deptChartData().length > 0) {
-              <div class="chart-card">
+              <div class="chart-card dept-pie-card">
                 <h3>By Department</h3>
-                <div class="vbar-chart">
-                  @for (row of deptBarRows(); track row.name; let i = $index) {
-                    <button
-                      type="button"
-                      class="vbar-col"
-                      [class.active]="selectedDepartment() === row.name"
-                      [title]="formatBreakdownLabel(row.name) + ': ' + row.value"
-                      (click)="onDepartmentChartSelect(row)">
-                      <span class="vbar-value">{{ row.value }}</span>
-                      <div class="vbar-track">
-                        <span class="vbar-fill tone-{{ i % 8 }}" [style.height.%]="row.pct"></span>
-                      </div>
-                      <span class="vbar-label">{{ formatBreakdownLabel(row.name) }}</span>
-                    </button>
-                  }
+                <div class="dept-pie-layout">
+                  <div class="pie-chart-wrap" [class.has-selection]="!!selectedDepartment()">
+                    <div class="pie-glow-ring" aria-hidden="true"></div>
+                    <ngx-charts-pie-chart
+                      [results]="deptChartData()"
+                      [view]="deptPieView"
+                      [scheme]="deptPieScheme"
+                      [labels]="false"
+                      [doughnut]="true"
+                      [arcWidth]="0.38"
+                      [legend]="false"
+                      [tooltipDisabled]="false"
+                      [animations]="true"
+                      [gradient]="true"
+                      (select)="onDepartmentChartSelect($event)">
+                    </ngx-charts-pie-chart>
+                    <div class="pie-center-stat">
+                      <strong>{{ deptPieTotal() }}</strong>
+                      <span>Total</span>
+                    </div>
+                  </div>
+                  <div class="dept-pie-side">
+                    @for (row of deptPieRows(); track row.name; let i = $index) {
+                      <button
+                        type="button"
+                        class="dept-pie-row"
+                        [class.active]="selectedDepartment() === row.name"
+                        (click)="onDepartmentChartSelect(row)">
+                        <span class="dept-swatch" [style.--swatch]="deptPieColors[i % deptPieColors.length]"></span>
+                        <span class="dept-name">{{ formatBreakdownLabel(row.name) }}</span>
+                        <span class="dept-count">{{ row.value }}</span>
+                        <span class="dept-pct">{{ row.pct }}%</span>
+                      </button>
+                    }
+                  </div>
                 </div>
               </div>
             }
@@ -300,6 +256,71 @@ interface StatPanel {
           </div>
         </div>
       }
+
+      <div class="chart-section">
+        <h2><i class="bx bx-bell"></i> Action Needed</h2>
+        @if (actionAlerts().length > 0) {
+          <div class="alert-grid">
+            @for (alert of actionAlerts(); track alert.id) {
+              @if (alert.route) {
+                <a class="stat-panel action-panel" [routerLink]="alert.route" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
+                  <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
+                  <header class="stat-panel-head">
+                    <span class="stat-panel-label">{{ alert.label }}</span>
+                    <span class="stat-panel-badge">{{ alert.badge }}</span>
+                  </header>
+                  <p class="stat-panel-value">{{ alert.value }}</p>
+                  <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
+                  <footer class="stat-panel-foot">
+                    <span class="stat-panel-chip">{{ alert.chip }}</span>
+                    <span class="stat-panel-chip soft">{{ alert.soft }}</span>
+                  </footer>
+                  <p class="action-panel-detail">{{ alert.detail }}</p>
+                </a>
+              } @else {
+                <article class="stat-panel action-panel" [ngClass]="['tone-' + alert.tone, 'level-' + alert.level]">
+                  <i class="bx stat-panel-mark" [ngClass]="alert.icon" aria-hidden="true"></i>
+                  <header class="stat-panel-head">
+                    <span class="stat-panel-label">{{ alert.label }}</span>
+                    <span class="stat-panel-badge">{{ alert.badge }}</span>
+                  </header>
+                  <p class="stat-panel-value">{{ alert.value }}</p>
+                  <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="alert.meter"></span></div>
+                  <footer class="stat-panel-foot">
+                    <span class="stat-panel-chip">{{ alert.chip }}</span>
+                    <span class="stat-panel-chip soft">{{ alert.soft }}</span>
+                  </footer>
+                  <p class="action-panel-detail">{{ alert.detail }}</p>
+                </article>
+              }
+            }
+          </div>
+        } @else {
+          <div class="chart-card glow-panel"><div class="chart-empty">No critical items right now</div></div>
+        }
+      </div>
+
+      <div class="chart-section">
+        <h2><i class="bx bx-bulb"></i> Ops Insights</h2>
+        <div class="insight-grid">
+          @for (insight of opsInsights(); track insight.id) {
+            <article class="stat-panel insight-panel" [ngClass]="'tone-' + (insight.tone === 'positive' ? 'green' : insight.tone === 'warning' ? 'orange' : 'cyan')">
+              <i class="bx stat-panel-mark" [ngClass]="insight.icon" aria-hidden="true"></i>
+              <header class="stat-panel-head">
+                <span class="stat-panel-label">{{ insight.label }}</span>
+                <span class="stat-panel-badge">{{ insight.badge }}</span>
+              </header>
+              <p class="stat-panel-value">{{ insight.value }}</p>
+              <div class="stat-panel-meter" aria-hidden="true"><span [style.width.%]="insight.meter"></span></div>
+              <footer class="stat-panel-foot">
+                <span class="stat-panel-chip">{{ insight.chip }}</span>
+                <span class="stat-panel-chip soft">{{ insight.soft }}</span>
+              </footer>
+              <p class="action-panel-detail">{{ insight.detail }}</p>
+            </article>
+          }
+        </div>
+      </div>
 
       <div class="chart-section">
         <div class="chart-section-head">
@@ -754,6 +775,137 @@ interface StatPanel {
       filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.15));
     }
 
+    .dept-pie-layout {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) minmax(140px, 1.05fr);
+      gap: 12px 16px;
+      align-items: center;
+      min-height: 260px;
+    }
+    .pie-chart-wrap {
+      position: relative;
+      min-height: 220px;
+      height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pie-glow-ring {
+      position: absolute;
+      inset: 18%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.18) 0%, rgba(0, 255, 163, 0.06) 45%, transparent 70%);
+      pointer-events: none;
+      filter: blur(6px);
+      z-index: 0;
+    }
+    .pie-center-stat {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 2;
+      gap: 2px;
+    }
+    .pie-center-stat strong {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #f8fafc;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      text-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+    }
+    .pie-center-stat span {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    ::ng-deep ngx-charts-pie-chart {
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+    ::ng-deep .pie-chart-wrap ngx-charts-pie-chart .arc path {
+      filter:
+        drop-shadow(0 0 4px rgba(0, 229, 255, 0.55))
+        drop-shadow(0 0 10px rgba(0, 255, 163, 0.28));
+      stroke: rgba(8, 12, 18, 0.65);
+      stroke-width: 1.5px;
+      transition: filter 0.2s ease, opacity 0.2s ease;
+    }
+    ::ng-deep .pie-chart-wrap ngx-charts-pie-chart .arc:hover path,
+    ::ng-deep .pie-chart-wrap.has-selection ngx-charts-pie-chart .arc path {
+      filter:
+        drop-shadow(0 0 6px rgba(0, 229, 255, 0.85))
+        drop-shadow(0 0 14px rgba(255, 77, 141, 0.35));
+    }
+    .dept-pie-side {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .dept-pie-row {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .dept-pie-row:hover {
+      background: rgba(0, 229, 255, 0.08);
+      border-color: rgba(0, 229, 255, 0.2);
+    }
+    .dept-pie-row.active {
+      background: rgba(0, 229, 255, 0.12);
+      border-color: rgba(0, 229, 255, 0.35);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
+    }
+    .dept-swatch {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: var(--swatch, #00e5ff);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--swatch, #00e5ff) 70%, transparent);
+      flex-shrink: 0;
+    }
+    .dept-name {
+      font-size: 0.72rem;
+      color: #cbd5e1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dept-pie-row.active .dept-name { color: #e0f7ff; }
+    .dept-count {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #f8fafc;
+      font-variant-numeric: tabular-nums;
+    }
+    .dept-pct {
+      font-size: 0.68rem;
+      color: #94a3b8;
+      font-variant-numeric: tabular-nums;
+      min-width: 2.4em;
+      text-align: right;
+    }
+    @media (max-width: 1100px) {
+      .dept-pie-layout { grid-template-columns: 1fr; }
+    }
     .vbar-chart {
       display: flex;
       align-items: flex-end;
@@ -962,7 +1114,26 @@ export class HrDashboardComponent implements OnInit, OnDestroy {
     }));
   }
 
-  deptBarRows = computed(() => this.toBarRows(this.deptChartData()));
+  readonly deptPieColors = [
+    '#00E5FF', '#00FFA3', '#FF4D8D', '#FFC94D', '#7C4DFF', '#38BDF8', '#FB923C', '#A3E635'
+  ];
+  readonly deptPieView: [number, number] = [220, 220];
+  deptPieScheme: Color = {
+    name: 'hr-dept-pie',
+    selectable: true,
+    group: ScaleType.Ordinal,
+    domain: this.deptPieColors
+  };
+  deptPieTotal = computed(() => this.deptChartData().reduce((sum, p) => sum + p.value, 0));
+  deptPieRows = computed(() => {
+    const total = Math.max(this.deptPieTotal(), 1);
+    return this.deptChartData().map((p) => ({
+      name: p.name,
+      value: p.value,
+      pct: Math.round((p.value / total) * 1000) / 10
+    }));
+  });
+
   roleBarRows = computed(() => this.toBarRows(this.roleChartData()));
   readonly tenureView = { w: 420, h: 260, padL: 36, padR: 16, padT: 28, padB: 36 };
 

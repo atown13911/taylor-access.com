@@ -140,47 +140,82 @@
       <h2><i class="bx bx-map-alt"></i> Fleet Applicant State Heatmap</h2>
       <span class="heatmap-subtitle">US choropleth by fleet applicant count</span>
     </div>
-    <div class="map-legend">
-      <span class="legend-item"><i class="legend-dot applicants"></i> Applicants</span>
-      <span class="legend-item"><i class="legend-dot drivers"></i> Current Drivers</span>
-    </div>
 
     @if (usMapLoading()) {
       <div class="chart-empty">Loading map...</div>
     } @else if (usMapError()) {
       <div class="chart-empty">{{ usMapError() }}</div>
     } @else if (usStateShapes().length > 0) {
-      <div class="us-map-wrap">
-        <svg class="us-map" [attr.viewBox]="usMapViewBox" role="img" aria-label="Fleet applicant heatmap by state">
-          @for (shape of usStateShapes(); track shape.code) {
-            <path
-              class="us-state-path"
-              [attr.d]="shape.path"
-              [attr.fill]="getMapFill(shape)"
-              [attr.data-state]="shape.code"
-            >
-              <title>{{ getMapTooltip(shape) }}</title>
-            </path>
+      <div class="heatmap-body">
+        <div class="us-map-wrap">
+          <svg class="us-map" [attr.viewBox]="usMapViewBox" role="img" aria-label="Fleet applicant heatmap by state">
+            <defs>
+              <linearGradient id="applicantScaleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#3c140a"></stop>
+                <stop offset="30%" stop-color="#8c1e12"></stop>
+                <stop offset="60%" stop-color="#d23714"></stop>
+                <stop offset="85%" stop-color="#f58c1e"></stop>
+                <stop offset="100%" stop-color="#ffdc78"></stop>
+              </linearGradient>
+              <linearGradient id="driverScaleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2d0c08"></stop>
+                <stop offset="30%" stop-color="#781216"></stop>
+                <stop offset="60%" stop-color="#be2819"></stop>
+                <stop offset="85%" stop-color="#eb5f1c"></stop>
+                <stop offset="100%" stop-color="#ffc85a"></stop>
+              </linearGradient>
+            </defs>
+            @for (shape of usStateShapes(); track shape.code) {
+              <path
+                class="us-state-path"
+                [attr.d]="shape.path"
+                [attr.fill]="getMapFill(shape)"
+                [attr.data-state]="shape.code"
+              >
+                <title>{{ getMapTooltip(shape) }}</title>
+              </path>
+            }
+          </svg>
+        </div>
+
+        <aside class="heatmap-side">
+          <div class="map-scale">
+            <span class="map-scale-label">Applicants</span>
+            <div class="map-scale-bar applicants"></div>
+            <div class="map-scale-ends"><span>Low</span><span>High</span></div>
+          </div>
+          <div class="map-scale">
+            <span class="map-scale-label">Current Drivers</span>
+            <div class="map-scale-bar drivers"></div>
+            <div class="map-scale-ends"><span>Low</span><span>High</span></div>
+          </div>
+
+          @if (topStateBreakdown().length > 0) {
+            <div class="side-block">
+              <h4>Top applicant states</h4>
+              @for (row of topStateBreakdown(); track row.state) {
+                <div class="side-row applicants">
+                  <span class="side-state">{{ row.state }}</span>
+                  <span class="side-count">{{ row.count }}</span>
+                </div>
+              }
+            </div>
           }
-        </svg>
+          @if (topDriverStateBreakdown().length > 0) {
+            <div class="side-block">
+              <h4>Top driver states</h4>
+              @for (row of topDriverStateBreakdown(); track row.state) {
+                <div class="side-row drivers">
+                  <span class="side-state">{{ row.state }}</span>
+                  <span class="side-count">{{ row.count }}</span>
+                </div>
+              }
+            </div>
+          }
+        </aside>
       </div>
     } @else {
       <div class="chart-empty">No applicant state data available yet.</div>
-    }
-
-    @if (topStateBreakdown().length > 0 && !usMapLoading()) {
-      <div class="top-states">
-        @for (row of topStateBreakdown(); track row.state) {
-          <span class="top-state-pill">{{ row.state }}: {{ row.count }}</span>
-        }
-      </div>
-    }
-    @if (topDriverStateBreakdown().length > 0 && !usMapLoading()) {
-      <div class="top-states top-driver-states">
-        @for (row of topDriverStateBreakdown(); track row.state) {
-          <span class="top-state-pill driver">{{ row.state }} drivers: {{ row.count }}</span>
-        }
-      </div>
     }
   </section>
 
