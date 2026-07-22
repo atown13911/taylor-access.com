@@ -1578,8 +1578,11 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   private buildFuelCardDisplay(card: any): string {
     const id = String(card?.id ?? card?.card_id ?? card?.cardId ?? '').trim();
-    const name = String(card?.name ?? card?.card_name ?? card?.display_name ?? card?.nickname ?? '').trim();
+    const nameLines = [card?.name_line_1, card?.name_line_2].filter((x) => String(x ?? '').trim()).join(' ').trim();
+    const name = String(card?.name ?? card?.card_name ?? card?.display_name ?? card?.nickname ?? '').trim() || nameLines;
+    const displayCardId = String(card?.display_card_id ?? '').trim();
     const rawLast4 =
+      card?.last_four_digits ??
       card?.last_four ??
       card?.last4 ??
       card?.last_digits ??
@@ -1591,12 +1594,14 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const last4 = digits.length >= 4 ? digits.slice(-4) : '';
     if (name) return name;
     if (last4) return `**** ${last4}`;
+    if (displayCardId) return displayCardId;
     if (id) return `Card ${id}`;
     return 'Assigned';
   }
 
   private buildFuelCardLast4(card: any): string {
     const rawLast4 =
+      card?.last_four_digits ??
       card?.last_four ??
       card?.last4 ??
       card?.last_digits ??
@@ -1656,16 +1661,35 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
     this.motivFuelCards().forEach((raw: any, index: number) => {
       const card = raw?.card ?? raw?.fuel_card ?? raw?.payment_card ?? raw ?? {};
-      const assigned = card?.assigned_driver ?? card?.driver ?? card?.user ?? card?.holder ?? raw?.assigned_driver ?? raw?.driver ?? raw?.user ?? raw?.holder ?? {};
-      const assignedName = [assigned?.first_name ?? assigned?.firstName, assigned?.last_name ?? assigned?.lastName].filter(Boolean).join(' ').trim() || String(assigned?.name ?? '').trim();
-      const assignedEmail = String(assigned?.email ?? assigned?.driver_email ?? raw?.assigned_driver_email ?? '').trim();
-      const assignedId = String(assigned?.id ?? assigned?.driver_id ?? assigned?.user_id ?? raw?.assigned_driver_id ?? raw?.driver_id ?? raw?.user_id ?? '').trim();
+      // Motive's real Fuel Card API returns assignment info under `assigned_to`
+      // ({ entity_type, entity_id, entity_name }), not `assigned_driver`/`driver`/etc.
+      const assignedTo = card?.assigned_to ?? raw?.assigned_to;
+      const legacyAssigned = card?.assigned_driver ?? card?.driver ?? card?.user ?? card?.holder ?? raw?.assigned_driver ?? raw?.driver ?? raw?.user ?? raw?.holder ?? {};
+      const assignedToIsDriver = !assignedTo || !assignedTo?.entity_type || String(assignedTo?.entity_type ?? '').toLowerCase() === 'driver';
+      const assignedToName = assignedToIsDriver ? String(assignedTo?.entity_name ?? '').trim() : '';
+      const legacyAssignedName = [legacyAssigned?.first_name ?? legacyAssigned?.firstName, legacyAssigned?.last_name ?? legacyAssigned?.lastName].filter(Boolean).join(' ').trim() || String(legacyAssigned?.name ?? '').trim();
+      const assignedName = assignedToName || legacyAssignedName;
+      const assignedEmail = String(legacyAssigned?.email ?? legacyAssigned?.driver_email ?? raw?.assigned_driver_email ?? '').trim();
+      const rawAssignedId = assignedToIsDriver && assignedTo?.entity_id != null
+        ? String(assignedTo.entity_id).trim()
+        : String(legacyAssigned?.id ?? legacyAssigned?.driver_id ?? legacyAssigned?.user_id ?? raw?.assigned_driver_id ?? raw?.driver_id ?? raw?.user_id ?? '').trim();
       const id = this.extractFuelCardId(card, index);
       const override = overrides[id];
 
+      // `assigned_to.entity_id` is Motive's own driver id, not this app's internal
+      // Driver.Id — resolve to the matching internal driver by email/name so
+      // assignment comparisons (and dropdown highlighting) line up correctly.
+      const matchedDriver = assignedName || assignedEmail
+        ? this.drivers().find((d: any) =>
+            (assignedEmail && this.normalizeKey(d?.email) === this.normalizeKey(assignedEmail)) ||
+            (assignedName && this.normalizeNameKey(d?.name || d?.driverName) === this.normalizeNameKey(assignedName))
+          )
+        : undefined;
+      const assignedId = matchedDriver ? String(matchedDriver.id ?? '').trim() : rawAssignedId;
+
       let resolvedDriverId = assignedId;
-      let resolvedDriverName = assignedName;
-      let resolvedDriverEmail = assignedEmail;
+      let resolvedDriverName = matchedDriver?.name ?? assignedName;
+      let resolvedDriverEmail = matchedDriver?.email ?? assignedEmail;
 
       if (override) {
         if (!String(override.driverId ?? '').trim()) {

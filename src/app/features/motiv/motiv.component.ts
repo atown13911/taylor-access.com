@@ -5607,6 +5607,7 @@ export class MotivComponent implements OnInit {
       'N/A'
     ).trim() || 'N/A';
     const last4 = this.parseCardLast4(
+      card?.last_four_digits ??
       card?.last_four ??
       card?.last4 ??
       card?.last_digits ??
@@ -5615,6 +5616,7 @@ export class MotivComponent implements OnInit {
       card?.masked_card_number ??
       card?.card_number ??
       card?.masked_pan ??
+      raw?.last_four_digits ??
       raw?.last_four ??
       raw?.last4 ??
       raw?.last_digits ??
@@ -5624,6 +5626,9 @@ export class MotivComponent implements OnInit {
       raw?.card_number ??
       raw?.masked_pan
     );
+    // Motive's real Fuel Card API exposes the cardholder/company name via
+    // `name_line_1`/`name_line_2` and a friendly id via `display_card_id`.
+    const nameLines = [card?.name_line_1, card?.name_line_2].filter((x: any) => String(x ?? '').trim()).join(' ').trim();
     const label = String(
       card?.name ??
       card?.card_name ??
@@ -5635,7 +5640,8 @@ export class MotivComponent implements OnInit {
       raw?.nickname ??
       raw?.display_name ??
       raw?.holder_name ??
-      (last4 ? `**** ${last4}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'))
+      (nameLines || undefined) ??
+      (last4 ? `**** ${last4}` : (card?.display_card_id ?? raw?.display_card_id ?? (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A')))
     ).trim() || 'N/A';
     const status = String(card?.status ?? card?.state ?? raw?.status ?? raw?.state ?? 'N/A').trim() || 'N/A';
     const type = String(card?.type ?? card?.card_type ?? card?.product_type ?? raw?.type ?? raw?.card_type ?? raw?.product_type ?? 'N/A').trim() || 'N/A';
@@ -5771,18 +5777,31 @@ export class MotivComponent implements OnInit {
       raw?.payment_method_name ??
       raw?.card_program_name;
 
+    const nameLineParts = cardObjects.find((x: any) => x?.name_line_1 || x?.name_line_2);
+    const nameLines = nameLineParts
+      ? [nameLineParts?.name_line_1, nameLineParts?.name_line_2].filter((x: any) => String(x ?? '').trim()).join(' ').trim()
+      : '';
+
+    const displayCardIdRaw =
+      cardObjects.find((x: any) => x?.display_card_id)?.display_card_id ??
+      fuel?.display_card_id ??
+      raw?.display_card_id;
+
     const last4Raw =
+      cardObjects.find((x: any) => x?.last_four_digits)?.last_four_digits ??
       cardObjects.find((x: any) => x?.last_four)?.last_four ??
       cardObjects.find((x: any) => x?.last4)?.last4 ??
       cardObjects.find((x: any) => x?.last_digits)?.last_digits ??
       cardObjects.find((x: any) => x?.number_last4)?.number_last4 ??
       cardObjects.find((x: any) => x?.pan_last4)?.pan_last4 ??
+      fuel?.card_last_four_digits ??
       fuel?.card_last_four ??
       fuel?.card_last4 ??
       fuel?.cardLast4 ??
       fuel?.pan_last4 ??
       fuel?.number_last4 ??
       fuel?.last4 ??
+      raw?.card_last_four_digits ??
       raw?.card_last_four ??
       raw?.card_last4 ??
       raw?.cardLast4 ??
@@ -5795,9 +5814,10 @@ export class MotivComponent implements OnInit {
       raw?.masked_card_number;
 
     const cardId = String(cardIdRaw ?? '').trim() || 'N/A';
-    const explicitName = String(explicitNameRaw ?? '').trim();
+    const explicitName = String(explicitNameRaw ?? '').trim() || nameLines;
+    const displayCardId = String(displayCardIdRaw ?? '').trim();
     const parsedLast4 = this.parseCardLast4(last4Raw);
-    const cardLabel = explicitName || (parsedLast4 ? `**** ${parsedLast4}` : (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A'));
+    const cardLabel = explicitName || (parsedLast4 ? `**** ${parsedLast4}` : (displayCardId || (cardId !== 'N/A' ? `Card ${cardId}` : 'N/A')));
 
     return { cardId, cardLabel };
   }
