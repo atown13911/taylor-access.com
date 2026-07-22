@@ -656,7 +656,9 @@ export class DriverListComponent implements OnInit {
       ?? (typeof driverLike?.fleet === 'string' ? driverLike.fleet : '')
       ?? ''
     ).trim();
-    if (direct) return direct;
+    // '—' is the unresolved placeholder written back onto mapped rows;
+    // treat it as missing so reconciliation can re-resolve via fleetId/membership.
+    if (direct && direct !== '—') return direct;
 
     const fleetId = this.toNullableNumber(
       driverLike?.fleetId
