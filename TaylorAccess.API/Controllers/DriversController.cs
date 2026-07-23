@@ -21,6 +21,7 @@ public class DriversController : ControllerBase
     private readonly IAuditService _auditService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _config;
+    private readonly IEmailService _emailService;
 
     public DriversController(
         TaylorAccessDbContext context,
@@ -28,7 +29,8 @@ public class DriversController : ControllerBase
         CurrentUserService currentUserService,
         IAuditService auditService,
         IHttpClientFactory httpClientFactory,
-        IConfiguration config)
+        IConfiguration config,
+        IEmailService emailService)
     {
         _context = context;
         _logger = logger;
@@ -36,6 +38,7 @@ public class DriversController : ControllerBase
         _auditService = auditService;
         _httpClientFactory = httpClientFactory;
         _config = config;
+        _emailService = emailService;
     }
 
     /// <summary>
@@ -1091,6 +1094,154 @@ public class DriversController : ControllerBase
     }
 
     /// <summary>
+    /// Send a compliance document view/upload request to the driver via T-Tac Driver deep link + email/in-app notice.
+    /// </summary>
+    [HttpPost("{id}/request-compliance")]
+    public async Task<ActionResult<object>> RequestComplianceUpload(int id, [FromBody] RequestComplianceUploadRequest request)
+    {
+        var driver = await _context.Drivers.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted);
+        if (driver == null)
+            return NotFound(new { error = "Driver not found" });
+
+        var documentKey = (request.DocumentKey ?? string.Empty).Trim();
+        var documentLabel = string.IsNullOrWhiteSpace(request.DocumentLabel)
+            ? documentKey
+            : request.DocumentLabel.Trim();
+        if (string.IsNullOrWhiteSpace(documentKey))
+            return BadRequest(new { error = "documentKey is required" });
+
+        var category = string.IsNullOrWhiteSpace(request.Category) ? documentKey : request.Category.Trim();
+        var subCategory = string.IsNullOrWhiteSpace(request.SubCategory) ? documentKey : request.SubCategory.Trim();
+
+        var existingWithFile = await _context.DriverDocuments
+            .AsNoTracking()
+            .Where(d => d.DriverId == id &&
+                        (d.SubCategory == subCategory || d.Category == category) &&
+                        d.FileName != null && d.FileName != "")
+            .OrderByDescending(d => d.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        var mode = existingWithFile != null ? "view" : "upload";
+        DriverDocument? pendingDoc = null;
+
+        if (mode == "upload")
+        {
+            pendingDoc = await _context.DriverDocuments
+                .FirstOrDefaultAsync(d =>
+                    d.DriverId == id &&
+                    d.Status == "pending" &&
+                    (d.SubCategory == subCategory || d.Category == category) &&
+                    (d.FileName == null || d.FileName == ""));
+
+            if (pendingDoc == null)
+            {
+                pendingDoc = new DriverDocument
+                {
+                    DriverId = id,
+                    OrganizationId = driver.OrganizationId,
+                    Category = category,
+                    SubCategory = subCategory,
+                    DocumentName = documentLabel,
+                    Status = "pending",
+                    Notes = $"[ttac-driver-request:{documentKey}] Requested from Taylor Access on {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC",
+                    RemindExpiry = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.DriverDocuments.Add(pendingDoc);
+            }
+            else
+            {
+                pendingDoc.DocumentName = documentLabel;
+                pendingDoc.Notes = $"[ttac-driver-request:{documentKey}] Re-requested from Taylor Access on {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC";
+                pendingDoc.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        var driverAppBase = (_config["DriverApp:WebUrl"]
+            ?? Environment.GetEnvironmentVariable("DRIVER_APP_WEB_URL")
+            ?? "https://t-tac-driver.pages.dev").TrimEnd('/');
+        // Land in Inbox so the driver sees the system alert; Docs opens from there.
+        var deepLink =
+            $"{driverAppBase}/?tab=inbox&doc={Uri.EscapeDataString(documentKey)}" +
+            (existingWithFile != null ? $"&documentId={existingWithFile.Id}" : "") +
+            (pendingDoc != null ? $"&requestId={pendingDoc.Id}" : "");
+
+        var email = (driver.Email ?? string.Empty).Trim();
+        var emailSent = false;
+        if (!string.IsNullOrWhiteSpace(email) && email.Contains('@'))
+        {
+            var subject = mode == "view"
+                ? $"T-Tac Driver: view your {documentLabel}"
+                : $"T-Tac Driver: upload required — {documentLabel}";
+            var actionLine = mode == "view"
+                ? $"Please open T-Tac Driver to view your <strong>{documentLabel}</strong>."
+                : $"Please open T-Tac Driver and upload your <strong>{documentLabel}</strong>.";
+            var body = $@"
+                <p>Hi {System.Net.WebUtility.HtmlEncode(driver.Name ?? "driver")},</p>
+                <p>{actionLine}</p>
+                <p><a href=""{deepLink}"">Open in T-Tac Driver</a></p>
+                <p>If the app is installed, you can also open the Compliance tab directly.</p>
+                <p>— Taylor Access</p>";
+            emailSent = await _emailService.SendEmailAsync(email, subject, body);
+        }
+
+        var linkedUser = !string.IsNullOrWhiteSpace(email)
+            ? await _context.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email.ToLower() && u.Status == "active")
+            : null;
+
+        if (linkedUser != null)
+        {
+            _context.NotificationLogs.Add(new NotificationLog
+            {
+                UserId = linkedUser.Id,
+                Type = "compliance_warning",
+                Title = mode == "view" ? $"View {documentLabel}" : $"Upload {documentLabel}",
+                Body = mode == "view"
+                    ? $"Open T-Tac Driver to view your {documentLabel}."
+                    : $"Taylor Access requested your {documentLabel}. Open T-Tac Driver Compliance to upload.",
+                Data = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    action = "ttac_driver_compliance",
+                    documentKey,
+                    documentLabel,
+                    deepLink,
+                    mode,
+                    documentId = existingWithFile?.Id ?? pendingDoc?.Id
+                }),
+                Channel = "in_app",
+                Status = "sent",
+                SentAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+        }
+
+        await _auditService.LogAsync(
+            AuditActions.ComplianceAlert,
+            "Driver",
+            id,
+            $"Sent {documentLabel} {mode} request to T-Tac Driver for {driver.Name}");
+
+        return Ok(new
+        {
+            mode,
+            emailSent,
+            deepLink,
+            notifiedUserId = linkedUser?.Id,
+            documentId = existingWithFile?.Id ?? pendingDoc?.Id,
+            message = emailSent
+                ? $"Sent to {email}"
+                : linkedUser != null
+                    ? "In-app notice created for driver account"
+                    : "Request saved. Driver has no email/user account for delivery."
+        });
+    }
+
+    /// <summary>
     /// Toggle driver online/offline status
     /// </summary>
     [HttpPost("{id}/toggle-online")]
@@ -1235,6 +1386,13 @@ public record UpdateDriverRequest(
 public record UpdateLocationRequest(decimal Latitude, decimal Longitude);
 
 public record SimulateRequest(decimal? StartLatitude, decimal? StartLongitude);
+
+public record RequestComplianceUploadRequest(
+    string DocumentKey,
+    string? DocumentLabel = null,
+    string? Category = null,
+    string? SubCategory = null
+);
 
 public record ImportDrayTacDriversRequest(int? Limit = 5000, bool? ForceArchive = true);
 
