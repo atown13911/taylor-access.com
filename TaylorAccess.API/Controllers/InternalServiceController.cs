@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TaylorAccess.API.Data;
+using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -777,10 +778,10 @@ public class InternalServiceController : ControllerBase
         return null;
     }
 
-    /// <summary>Get employees/users for internal service consumers.</summary>
+    /// <summary>Get employees/users for internal service consumers (office roster, not drivers).</summary>
     [HttpGet("employees")]
     public async Task<ActionResult> GetEmployees(
-        [FromQuery] int limit = 500,
+        [FromQuery] int limit = 5000,
         [FromQuery] int page = 1,
         [FromQuery] string? status = null,
         [FromQuery] string? search = null)
@@ -788,10 +789,28 @@ public class InternalServiceController : ControllerBase
         if (!IsAuthorizedInternalCall())
             return Unauthorized(new { error = "Invalid gateway or service key" });
 
+        var take = Math.Clamp(limit, 1, 5000);
+        var currentPage = Math.Max(1, page);
+
         var query = _db.Users
             .AsNoTracking()
-            .OrderBy(u => u.Name)
+            .Include(u => u.Organization)
+            .Include(u => u.Department)
+            .Include(u => u.Position)
             .AsQueryable();
+
+        // Keep drivers on the driver roster — Account Management Employees is office staff.
+        // Also hide the Product Owner (system account) from consumer rosters.
+        query = query.Where(u =>
+            u.Role == null
+            || (!u.Role.ToLower().Contains("driver")
+                && !u.Role.ToLower().Contains("owner_operator")
+                && !u.Role.ToLower().Contains("owner-operator")
+                && u.Role.ToLower() != "product_owner"));
+
+        query = query.Where(u =>
+            u.Email == null
+            || u.Email.ToLower() != "austin.taylor@vantac.local");
 
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -805,13 +824,15 @@ public class InternalServiceController : ControllerBase
             query = query.Where(u =>
                 (u.Name ?? "").ToLower().Contains(normalizedSearch) ||
                 (u.Email ?? "").ToLower().Contains(normalizedSearch) ||
-                (u.Phone ?? "").ToLower().Contains(normalizedSearch));
+                (u.Phone ?? "").ToLower().Contains(normalizedSearch) ||
+                (u.JobTitle ?? "").ToLower().Contains(normalizedSearch));
         }
 
         var total = await query.CountAsync();
         var employees = await query
-            .Skip((page - 1) * limit)
-            .Take(limit)
+            .OrderBy(u => u.Name)
+            .Skip((currentPage - 1) * take)
+            .Take(take)
             .Select(u => new
             {
                 u.Id,
@@ -819,16 +840,24 @@ public class InternalServiceController : ControllerBase
                 u.Email,
                 u.Phone,
                 u.Role,
-                u.Status,
+                Status = string.IsNullOrWhiteSpace(u.Status) ? "active" : u.Status,
+                u.JobTitle,
                 u.OrganizationId,
+                u.SatelliteId,
+                u.AgencyId,
+                u.TerminalId,
                 u.DepartmentId,
                 u.PositionId,
+                Organization = u.Organization == null ? null : new { u.Organization.Id, u.Organization.Name },
+                Department = u.Department == null ? null : new { u.Department.Id, u.Department.Name },
+                Position = u.Position == null ? null : new { u.Position.Id, u.Position.Title },
                 u.CreatedAt,
-                u.UpdatedAt
+                u.UpdatedAt,
+                u.LastLoginAt
             })
             .ToListAsync();
 
-        return Ok(new { data = employees, total });
+        return Ok(new { data = employees, total, page = currentPage, pageSize = take });
     }
 
     /// <summary>
@@ -1379,6 +1408,148 @@ public class InternalServiceController : ControllerBase
         }
 
         return null;
+    }
+
+    /// <summary>Compliance documents for a driver (used by T-Tac Driver via VanTac).</summary>
+    [HttpGet("drivers/{driverId:int}/documents")]
+    public async Task<ActionResult> GetDriverDocuments(int driverId)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driverExists = await _db.Drivers.AsNoTracking().AnyAsync(d => d.Id == driverId);
+        if (!driverExists)
+            return NotFound(new { error = "Driver not found" });
+
+        var docs = await _db.DriverDocuments
+            .AsNoTracking()
+            .Where(d => d.DriverId == driverId)
+            .OrderByDescending(d => d.CreatedAt)
+            .Select(d => new
+            {
+                d.Id,
+                d.DriverId,
+                d.OrganizationId,
+                d.Category,
+                d.SubCategory,
+                d.DocumentName,
+                d.DocumentNumber,
+                d.IssueDate,
+                d.ExpiryDate,
+                d.Status,
+                d.Notes,
+                d.FileName,
+                d.FileSize,
+                d.ContentType,
+                HasFile = d.FileContent != null,
+                d.CreatedAt,
+                d.UpdatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { data = docs, count = docs.Count });
+    }
+
+    [HttpGet("driver-documents/{id:int}/view")]
+    public async Task<ActionResult> ViewDriverDocument(int id)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var doc = await _db.DriverDocuments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id);
+        if (doc?.FileContent == null)
+            return NotFound(new { error = "Document not found" });
+
+        try
+        {
+            var bytes = Convert.FromBase64String(doc.FileContent);
+            Response.Headers.Append("Content-Disposition", $"inline; filename=\"{doc.FileName ?? "document"}\"");
+            return File(bytes, doc.ContentType ?? "application/pdf");
+        }
+        catch
+        {
+            return BadRequest(new { error = "Document file is corrupt" });
+        }
+    }
+
+    [HttpPost("drivers/{driverId:int}/documents")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult> UploadDriverDocument(
+        int driverId,
+        [FromForm] string category,
+        [FromForm] string documentName,
+        [FromForm] string? subCategory = null,
+        [FromForm] string? documentNumber = null,
+        [FromForm] DateTime? issueDate = null,
+        [FromForm] DateTime? expiryDate = null,
+        [FromForm] string? notes = null,
+        IFormFile? file = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driver = await _db.Drivers.FindAsync(driverId);
+        if (driver == null)
+            return NotFound(new { error = "Driver not found" });
+
+        if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(documentName))
+            return BadRequest(new { error = "category and documentName are required" });
+
+        var status = "active";
+        if (expiryDate.HasValue)
+        {
+            var days = (expiryDate.Value.Date - DateTime.UtcNow.Date).Days;
+            if (days < 0) status = "expired";
+            else if (days <= 30) status = "expiring";
+        }
+
+        var doc = new DriverDocument
+        {
+            DriverId = driverId,
+            OrganizationId = driver.OrganizationId,
+            Category = category.Trim(),
+            SubCategory = string.IsNullOrWhiteSpace(subCategory) ? null : subCategory.Trim(),
+            DocumentName = documentName.Trim(),
+            DocumentNumber = string.IsNullOrWhiteSpace(documentNumber) ? null : documentNumber.Trim(),
+            IssueDate = issueDate,
+            ExpiryDate = expiryDate,
+            Status = status,
+            Notes = notes,
+            RemindExpiry = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        if (file != null && file.Length > 0)
+        {
+            await using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            doc.FileContent = Convert.ToBase64String(ms.ToArray());
+            doc.FileName = file.FileName;
+            doc.ContentType = file.ContentType;
+            doc.FileSize = file.Length;
+        }
+
+        _db.DriverDocuments.Add(doc);
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                doc.Id,
+                doc.DriverId,
+                doc.Category,
+                doc.SubCategory,
+                doc.DocumentName,
+                doc.DocumentNumber,
+                doc.IssueDate,
+                doc.ExpiryDate,
+                doc.Status,
+                doc.FileName,
+                HasFile = doc.FileContent != null
+            }
+        });
     }
 }
 
