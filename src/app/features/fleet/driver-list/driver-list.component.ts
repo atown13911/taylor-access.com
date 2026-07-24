@@ -85,6 +85,8 @@ export class DriverListComponent implements OnInit {
   availableFleets = signal<any[]>([]);
   availableOrganizations = signal<any[]>([]);
   availableDispatchUsers = signal<DispatchUserRow[]>([]);
+  /** Users with Role=dispatcher — assignable even before they have Landmark drivers. */
+  dispatcherRoleUsers = signal<DispatchUserRow[]>([]);
   private dispatchUsersLoaded = false;
   private originalDriverNotes = signal('');
 
@@ -190,8 +192,10 @@ export class DriverListComponent implements OnInit {
 
   dispatcherRows = computed(() => {
     const pool = this.availableDispatchUsers();
+    const roleUsers = this.dispatcherRoleUsers();
     const activeLandmarkAssigned = this.activeLandmarkDispatchDrivers();
     const byKey = new Map<string, DispatchUserRow & { assignedDrivers: number }>();
+    const idsSeen = new Set<number>();
 
     // Stale tags sometimes omit |name: — learn id→label from siblings first.
     const labelByAssigneeId = new Map<number, string>();
@@ -204,7 +208,7 @@ export class DriverListComponent implements OnInit {
       }
     }
 
-    // Roster is Landmark assignees only (not every company user with Role=dispatcher).
+    // People who already have Landmark drivers assigned (may include non-dispatcher roles).
     for (const driver of activeLandmarkAssigned) {
       const assignedId = this.toNullableNumber(driver.dispatchUserId);
       const tagLabel =
@@ -237,17 +241,46 @@ export class DriverListComponent implements OnInit {
         };
         if (!row.id) continue;
         byKey.set(nameKey, row);
+        idsSeen.add(row.id);
       }
       row.assignedDrivers += 1;
+    }
+
+    // Role=dispatcher users with zero Landmark assignments still need to appear
+    // so they can be selected and assigned drivers (avoids chicken-and-egg).
+    for (const user of roleUsers) {
+      if (idsSeen.has(user.id)) continue;
+      const nameKey = this.normalizePersonName(user.name) || `id:${user.id}`;
+      if (byKey.has(nameKey)) continue;
+      byKey.set(nameKey, { ...user, assignedDrivers: 0 });
+      idsSeen.add(user.id);
     }
 
     return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
   });
 
-  /** Options for assign UI: Landmark roster when present, otherwise enrichment pool. */
+  /**
+   * Assign dropdown: Role=dispatcher users + anyone already assigned on Landmark.
+   * Never lock to "already has drivers only" — that blocks onboarding new dispatchers.
+   */
   dispatcherAssignOptions = computed(() => {
-    const roster = this.dispatcherRows();
-    return roster.length > 0 ? roster : this.availableDispatchUsers();
+    const byId = new Map<number, DispatchUserRow>();
+
+    for (const user of this.dispatcherRoleUsers()) {
+      byId.set(user.id, user);
+    }
+
+    for (const row of this.dispatcherRows()) {
+      if (!byId.has(row.id)) byId.set(row.id, row);
+    }
+
+    if (byId.size === 0) {
+      for (const user of this.availableDispatchUsers()) {
+        byId.set(user.id, user);
+      }
+    }
+
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   });
 
   dispatcherAssignedDrivers = computed(() => {
@@ -776,10 +809,18 @@ export class DriverListComponent implements OnInit {
     { key: 'w9', label: 'W-9' },
     { key: 'directDeposit', label: 'Direct Deposit' },
     { key: 'deduction', label: 'Deduction' },
+    { key: 'escrowDeductionSignup', label: 'Escrow and Deductions' },
   ];
+
+  sendingComplianceKey = signal<string | null>(null);
 
   getComplianceStatus(driver: any, key: string): string {
     const docs = this.getComplianceDocsForDriver(driver);
+    const doc = this.getComplianceDocByKey(key, docs);
+    if (doc && String(doc.status || '').toLowerCase() === 'pending' && !doc.fileName && !doc.fileContent) {
+      return 'dot-yellow';
+    }
+
     if (key === 'cdl' && driver.licenseNumber) {
       return this.isExpired(driver.licenseExpiry) ? 'dot-red' :
              this.isExpiringSoon(driver.licenseExpiry) ? 'dot-yellow' : 'dot-green';
@@ -795,13 +836,44 @@ export class DriverListComponent implements OnInit {
              this.isExpiringSoon(driver.twiccExpiry) ? 'dot-yellow' : 'dot-green';
     }
 
-    const doc = this.getComplianceDocByKey(key, docs);
     if (doc) {
       if (doc.status === 'expired') return 'dot-red';
-      if (doc.status === 'expiring') return 'dot-yellow';
+      if (doc.status === 'expiring' || doc.status === 'pending') return 'dot-yellow';
       return 'dot-green';
     }
     return 'dot-gray';
+  }
+
+  sendComplianceToDriverApp(item: { key: string; label: string }): void {
+    const driver = this.selectedDriver();
+    if (!driver?.id) return;
+    if (!String(driver.email || '').trim() && !String(driver.phone || '').trim()) {
+      this.toast.error('Driver needs an email or phone to receive the T-Tac Driver link', 'Missing Contact');
+      return;
+    }
+
+    this.sendingComplianceKey.set(item.key);
+    this.api.requestDriverComplianceUpload(driver.id, {
+      documentKey: item.key,
+      documentLabel: item.label,
+      category: this.compCategoryMap[item.key] || item.key,
+      subCategory: this.compSubMap[item.key] || item.key
+    }).subscribe({
+      next: (res: any) => {
+        this.sendingComplianceKey.set(null);
+        const mode = res?.mode === 'form'
+          ? 'acknowledgment form'
+          : res?.mode === 'view'
+            ? 'document link'
+            : 'upload request';
+        this.toast.success(`${item.label} ${mode} sent to T-Tac Driver`, 'Sent');
+        this.loadPanelDocs(driver);
+      },
+      error: (err: any) => {
+        this.sendingComplianceKey.set(null);
+        this.toast.error(err?.error?.error || 'Failed to send to driver app', 'Send Failed');
+      }
+    });
   }
 
   private fetchFullDriver(driver: DriverRow): void {
@@ -874,7 +946,8 @@ export class DriverListComponent implements OnInit {
       cdl: ['cdl', 'license'], medical: ['medical', 'dot physical'], mvr: ['mvr', 'motor vehicle'],
       drugTest: ['drug', 'alcohol'], dqf: ['dqf', 'qualification'], employment: ['employment', 'verification'],
       training: ['training'], insurance: ['insurance'], vehicleDocs: ['vehicle', 'registration'],
-      permits: ['permit', 'twic']
+      permits: ['permit', 'twic'],
+      escrowDeductionSignup: ['escrow deduction', 'escrow deductions', 'escrow signup', 'escrow_deduction']
     };
     const terms = labels[key] || [key];
     return docs.find((d: any) => {
@@ -1033,14 +1106,16 @@ export class DriverListComponent implements OnInit {
     cdl: 'cdl_endorsements', medical: 'medical', mvr: 'mvr', drugTest: 'drug_tests',
     dqf: 'dqf', employment: 'employment', training: 'training',
     insurance: 'insurance', vehicleDocs: 'vehicle', permits: 'permits',
-    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction'
+    i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction',
+    escrowDeductionSignup: 'escrow_deduction'
   };
 
   private readonly compSubMap: Record<string, string> = {
     cdl: 'cdl_license', medical: 'medical_card', mvr: 'annual_mvr', drugTest: 'pre_employment',
     dqf: 'application', employment: 'offer_letter', training: 'entry_level_driver',
     insurance: 'certificate_of_insurance', vehicleDocs: 'registration', permits: 'oversize',
-    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form'
+    i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form',
+    escrowDeductionSignup: 'escrow_deduction_signup'
   };
 
   openComplianceUpload(item: any): void {
@@ -1873,37 +1948,43 @@ export class DriverListComponent implements OnInit {
     if (this.dispatchUsersLoaded || this.loadingDispatchUsers()) return;
     this.loadingDispatchUsers.set(true);
     try {
-      // Enrichment pool: Role=dispatcher plus other users referenced by Landmark assignments
-      // (e.g. Joe Tucker is admin). The visible roster is computed from driver assignees only.
+      // Assignable pool starts with Role=dispatcher (even before they have drivers).
       const usersRes: any = await this.api.getUsers({ role: 'dispatcher', limit: 5000 }).toPromise();
-      const byId = new Map<number, DispatchUserRow>();
+      const roleById = new Map<number, DispatchUserRow>();
+      const enrichmentById = new Map<number, DispatchUserRow>();
 
       for (const user of this.asArray(usersRes)) {
         const row = this.mapUserToDispatchRow(user);
         if (!row || !this.isUserRecordEligibleForDispatch(row)) continue;
-        byId.set(row.id, row);
+        roleById.set(row.id, row);
+        enrichmentById.set(row.id, row);
       }
 
-      // Pull a broader user list so assignee names that aren't Role=dispatcher still resolve.
+      // Broader user list so non-dispatcher assignees (e.g. Joe Tucker as admin) still resolve.
       try {
         const allRes: any = await this.api.getUsers({ limit: 5000 }).toPromise();
         for (const user of this.asArray(allRes)) {
           const row = this.mapUserToDispatchRow(user);
           if (!row || !this.isUserRecordEligibleForDispatch(row)) continue;
-          if (!byId.has(row.id)) byId.set(row.id, row);
+          if (!enrichmentById.has(row.id)) enrichmentById.set(row.id, row);
         }
       } catch {
         // Dispatcher-role pool alone is still usable for Kenan/Slobodan.
       }
 
-      const candidates = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-      this.availableDispatchUsers.set(candidates);
+      this.dispatcherRoleUsers.set(
+        [...roleById.values()].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      this.availableDispatchUsers.set(
+        [...enrichmentById.values()].sort((a, b) => a.name.localeCompare(b.name))
+      );
 
       if (this.dispatchersView()) {
         this.ensureSelectedDispatcherInRoster();
       }
       this.dispatchUsersLoaded = true;
     } catch {
+      this.dispatcherRoleUsers.set([]);
       this.availableDispatchUsers.set([]);
     } finally {
       this.loadingDispatchUsers.set(false);

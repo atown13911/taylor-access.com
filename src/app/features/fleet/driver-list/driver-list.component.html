@@ -120,7 +120,7 @@
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="6" class="empty-row">No Landmark dispatcher assignments were found.</td>
+                  <td colspan="6" class="empty-row">No dispatcher-role users found. Set an employee’s Role to Dispatcher to add them here.</td>
                 </tr>
               }
             }
@@ -804,6 +804,16 @@
                 <i class='bx bx-x'></i>
               </button>
             }
+            <button
+              class="comp-send-btn"
+              (click)="sendComplianceToDriverApp(item)"
+              [disabled]="sendingComplianceKey() === item.key"
+              title="Send {{ item.label }} to T-Tac Driver">
+              <i class='bx'
+                [class.bx-loader-alt]="sendingComplianceKey() === item.key"
+                [class.bx-spin]="sendingComplianceKey() === item.key"
+                [class.bx-send]="sendingComplianceKey() !== item.key"></i>
+            </button>
             <button class="comp-upload-btn" (click)="openComplianceUpload(item)" title="Upload {{ item.label }}">
               <i class='bx bx-upload'></i>
             </button>
