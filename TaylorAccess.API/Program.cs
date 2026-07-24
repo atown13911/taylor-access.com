@@ -271,6 +271,7 @@ else
     builder.Services.AddSingleton<IMongoDbService, MongoDbService>();
 builder.Services.AddScoped<ITotpService, TotpService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<EscrowAcknowledgmentService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
 
 builder.Services.AddHealthChecks()

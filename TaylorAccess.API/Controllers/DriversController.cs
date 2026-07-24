@@ -22,6 +22,7 @@ public class DriversController : ControllerBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _config;
     private readonly IEmailService _emailService;
+    private readonly EscrowAcknowledgmentService _escrowAck;
 
     public DriversController(
         TaylorAccessDbContext context,
@@ -30,7 +31,8 @@ public class DriversController : ControllerBase
         IAuditService auditService,
         IHttpClientFactory httpClientFactory,
         IConfiguration config,
-        IEmailService emailService)
+        IEmailService emailService,
+        EscrowAcknowledgmentService escrowAck)
     {
         _context = context;
         _logger = logger;
@@ -39,6 +41,7 @@ public class DriversController : ControllerBase
         _httpClientFactory = httpClientFactory;
         _config = config;
         _emailService = emailService;
+        _escrowAck = escrowAck;
     }
 
     /// <summary>
@@ -1095,11 +1098,12 @@ public class DriversController : ControllerBase
 
     /// <summary>
     /// Send a compliance document view/upload request to the driver via T-Tac Driver deep link + email/in-app notice.
+    /// Escrow and Deductions generates an interactive acknowledgment form (checkboxes + signature).
     /// </summary>
     [HttpPost("{id}/request-compliance")]
     public async Task<ActionResult<object>> RequestComplianceUpload(int id, [FromBody] RequestComplianceUploadRequest request)
     {
-        var driver = await _context.Drivers.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted);
+        var driver = await _context.Drivers.FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted);
         if (driver == null)
             return NotFound(new { error = "Driver not found" });
 
@@ -1110,6 +1114,9 @@ public class DriversController : ControllerBase
         if (string.IsNullOrWhiteSpace(documentKey))
             return BadRequest(new { error = "documentKey is required" });
 
+        if (EscrowAcknowledgmentService.IsEscrowDocumentKey(documentKey))
+            return await RequestEscrowAcknowledgmentAsync(driver, documentLabel);
+
         var category = string.IsNullOrWhiteSpace(request.Category) ? documentKey : request.Category.Trim();
         var subCategory = string.IsNullOrWhiteSpace(request.SubCategory) ? documentKey : request.SubCategory.Trim();
 
@@ -1117,7 +1124,8 @@ public class DriversController : ControllerBase
             .AsNoTracking()
             .Where(d => d.DriverId == id &&
                         (d.SubCategory == subCategory || d.Category == category) &&
-                        d.FileName != null && d.FileName != "")
+                        d.FileName != null && d.FileName != "" &&
+                        d.ContentType != EscrowAcknowledgmentService.ContentType)
             .OrderByDescending(d => d.UpdatedAt)
             .FirstOrDefaultAsync();
 
@@ -1160,25 +1168,103 @@ public class DriversController : ControllerBase
             await _context.SaveChangesAsync();
         }
 
+        return await DeliverComplianceRequestAsync(
+            driver,
+            documentKey,
+            documentLabel,
+            mode,
+            existingWithFile?.Id,
+            pendingDoc?.Id);
+    }
+
+    private async Task<ActionResult<object>> RequestEscrowAcknowledgmentAsync(Driver driver, string documentLabel)
+    {
+        var form = await _escrowAck.BuildFormAsync(driver);
+        if (form.Escrows.Count == 0 && form.Deductions.Count == 0)
+        {
+            _logger.LogWarning(
+                "Escrow acknowledgment for driver {DriverId} has empty catalog — sending form anyway",
+                driver.Id);
+        }
+
+        var pendingDoc = await _context.DriverDocuments
+            .Where(d =>
+                d.DriverId == driver.Id &&
+                (d.SubCategory == EscrowAcknowledgmentService.SubCategory
+                 || d.Category == EscrowAcknowledgmentService.Category))
+            .OrderByDescending(d => d.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        if (pendingDoc == null)
+        {
+            pendingDoc = new DriverDocument
+            {
+                DriverId = driver.Id,
+                OrganizationId = driver.OrganizationId,
+                RemindExpiry = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.DriverDocuments.Add(pendingDoc);
+        }
+
+        form.Status = "pending";
+        form.SelectedEscrowIds = new List<int>();
+        form.SelectedDeductionIds = new List<int>();
+        form.SignatureData = null;
+        form.SignedAt = null;
+        form.SignedByName = null;
+        form.RequestedAt = DateTime.UtcNow;
+        form.Title = string.IsNullOrWhiteSpace(documentLabel)
+            ? form.Title
+            : documentLabel.Trim();
+
+        _escrowAck.ApplyToDocument(pendingDoc, form);
+        pendingDoc.Notes =
+            $"[ttac-driver-request:{EscrowAcknowledgmentService.DocumentKey}] Escrow acknowledgment generated {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC " +
+            $"({form.Escrows.Count} escrows, {form.Deductions.Count} deductions)";
+        await _context.SaveChangesAsync();
+
+        return await DeliverComplianceRequestAsync(
+            driver,
+            EscrowAcknowledgmentService.DocumentKey,
+            form.Title,
+            "form",
+            null,
+            pendingDoc.Id);
+    }
+
+    private async Task<ActionResult<object>> DeliverComplianceRequestAsync(
+        Driver driver,
+        string documentKey,
+        string documentLabel,
+        string mode,
+        int? documentId,
+        int? requestId)
+    {
         var driverAppBase = (_config["DriverApp:WebUrl"]
             ?? Environment.GetEnvironmentVariable("DRIVER_APP_WEB_URL")
             ?? "https://t-tac-driver.pages.dev").TrimEnd('/');
-        // Land in Inbox so the driver sees the system alert; Docs opens from there.
         var deepLink =
             $"{driverAppBase}/?tab=inbox&doc={Uri.EscapeDataString(documentKey)}" +
-            (existingWithFile != null ? $"&documentId={existingWithFile.Id}" : "") +
-            (pendingDoc != null ? $"&requestId={pendingDoc.Id}" : "");
+            (documentId != null ? $"&documentId={documentId}" : "") +
+            (requestId != null ? $"&requestId={requestId}" : "");
 
         var email = (driver.Email ?? string.Empty).Trim();
         var emailSent = false;
         if (!string.IsNullOrWhiteSpace(email) && email.Contains('@'))
         {
-            var subject = mode == "view"
-                ? $"T-Tac Driver: view your {documentLabel}"
-                : $"T-Tac Driver: upload required — {documentLabel}";
-            var actionLine = mode == "view"
-                ? $"Please open T-Tac Driver to view your <strong>{documentLabel}</strong>."
-                : $"Please open T-Tac Driver and upload your <strong>{documentLabel}</strong>.";
+            var subject = mode switch
+            {
+                "view" => $"T-Tac Driver: view your {documentLabel}",
+                "form" => $"T-Tac Driver: review & sign — {documentLabel}",
+                _ => $"T-Tac Driver: upload required — {documentLabel}"
+            };
+            var actionLine = mode switch
+            {
+                "view" => $"Please open T-Tac Driver to view your <strong>{documentLabel}</strong>.",
+                "form" => $"Please open T-Tac Driver to review the <strong>{documentLabel}</strong> form, select applicable items, and sign.",
+                _ => $"Please open T-Tac Driver and upload your <strong>{documentLabel}</strong>."
+            };
             var body = $@"
                 <p>Hi {System.Net.WebUtility.HtmlEncode(driver.Name ?? "driver")},</p>
                 <p>{actionLine}</p>
@@ -1195,14 +1281,24 @@ public class DriversController : ControllerBase
 
         if (linkedUser != null)
         {
+            var title = mode switch
+            {
+                "view" => $"View {documentLabel}",
+                "form" => $"Sign {documentLabel}",
+                _ => $"Upload {documentLabel}"
+            };
+            var noticeBody = mode switch
+            {
+                "view" => $"Open T-Tac Driver to view your {documentLabel}.",
+                "form" => $"Taylor Access sent your {documentLabel} form. Open T-Tac Driver Compliance to select items and sign.",
+                _ => $"Taylor Access requested your {documentLabel}. Open T-Tac Driver Compliance to upload."
+            };
             _context.NotificationLogs.Add(new NotificationLog
             {
                 UserId = linkedUser.Id,
                 Type = "compliance_warning",
-                Title = mode == "view" ? $"View {documentLabel}" : $"Upload {documentLabel}",
-                Body = mode == "view"
-                    ? $"Open T-Tac Driver to view your {documentLabel}."
-                    : $"Taylor Access requested your {documentLabel}. Open T-Tac Driver Compliance to upload.",
+                Title = title,
+                Body = noticeBody,
                 Data = System.Text.Json.JsonSerializer.Serialize(new
                 {
                     action = "ttac_driver_compliance",
@@ -1210,7 +1306,7 @@ public class DriversController : ControllerBase
                     documentLabel,
                     deepLink,
                     mode,
-                    documentId = existingWithFile?.Id ?? pendingDoc?.Id
+                    documentId = documentId ?? requestId
                 }),
                 Channel = "in_app",
                 Status = "sent",
@@ -1223,7 +1319,7 @@ public class DriversController : ControllerBase
         await _auditService.LogAsync(
             AuditActions.ComplianceAlert,
             "Driver",
-            id,
+            driver.Id,
             $"Sent {documentLabel} {mode} request to T-Tac Driver for {driver.Name}");
 
         return Ok(new
@@ -1232,7 +1328,7 @@ public class DriversController : ControllerBase
             emailSent,
             deepLink,
             notifiedUserId = linkedUser?.Id,
-            documentId = existingWithFile?.Id ?? pendingDoc?.Id,
+            documentId = documentId ?? requestId,
             message = emailSent
                 ? $"Sent to {email}"
                 : linkedUser != null
