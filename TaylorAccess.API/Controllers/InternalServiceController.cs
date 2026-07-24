@@ -24,6 +24,7 @@ public class InternalServiceController : ControllerBase
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly MotivFuelLiveClient _motivFuelLiveClient;
     private readonly InsuranceChargingEstimateService _insuranceChargingEstimates;
+    private readonly EscrowAcknowledgmentService _escrowAck;
 
     public InternalServiceController(
         TaylorAccessDbContext db,
@@ -31,7 +32,8 @@ public class InternalServiceController : ControllerBase
         ILogger<InternalServiceController> logger,
         IServiceScopeFactory scopeFactory,
         MotivFuelLiveClient motivFuelLiveClient,
-        InsuranceChargingEstimateService insuranceChargingEstimates)
+        InsuranceChargingEstimateService insuranceChargingEstimates,
+        EscrowAcknowledgmentService escrowAck)
     {
         _db = db;
         _config = config;
@@ -39,6 +41,7 @@ public class InternalServiceController : ControllerBase
         _scopeFactory = scopeFactory;
         _motivFuelLiveClient = motivFuelLiveClient;
         _insuranceChargingEstimates = insuranceChargingEstimates;
+        _escrowAck = escrowAck;
     }
 
     private bool ValidateServiceKey()
@@ -67,10 +70,11 @@ public class InternalServiceController : ControllerBase
         if (IsGatewayRequest())
             return true;
 
-        if (AllowLegacyServiceKey())
-            return ValidateServiceKey();
+        // VanTac / suite services call Access directly with X-Service-Key.
+        if (ValidateServiceKey())
+            return true;
 
-        return false;
+        return AllowLegacyServiceKey() && ValidateServiceKey();
     }
 
     /// <summary>
@@ -1441,13 +1445,157 @@ public class InternalServiceController : ControllerBase
                 d.FileName,
                 d.FileSize,
                 d.ContentType,
-                HasFile = d.FileContent != null,
+                HasFile = d.FileContent != null
+                    && d.ContentType != EscrowAcknowledgmentService.ContentType,
+                RequiresForm = d.ContentType == EscrowAcknowledgmentService.ContentType,
+                FormType = d.ContentType == EscrowAcknowledgmentService.ContentType
+                    ? EscrowAcknowledgmentService.FormType
+                    : null,
                 d.CreatedAt,
                 d.UpdatedAt
             })
             .ToListAsync();
 
         return Ok(new { data = docs, count = docs.Count });
+    }
+
+    /// <summary>System-generated Escrow and Deductions acknowledgment form for T-Tac Driver.</summary>
+    [HttpGet("drivers/{driverId:int}/escrow-acknowledgment")]
+    public async Task<ActionResult> GetEscrowAcknowledgment(int driverId)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driver = await _db.Drivers.FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+        if (driver == null)
+            return NotFound(new { error = "Driver not found" });
+
+        var doc = await _db.DriverDocuments
+            .Where(d =>
+                d.DriverId == driverId &&
+                (d.SubCategory == EscrowAcknowledgmentService.SubCategory
+                 || d.Category == EscrowAcknowledgmentService.Category
+                 || d.ContentType == EscrowAcknowledgmentService.ContentType))
+            .OrderByDescending(d => d.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        var form = doc != null ? _escrowAck.TryParse(doc) : null;
+
+        // Older "send to driver" rows may exist without JSON payload — heal on read.
+        if (form == null)
+        {
+            form = await _escrowAck.BuildFormAsync(driver);
+            form.Status = "pending";
+            form.SelectedEscrowIds = new List<int>();
+            form.SelectedDeductionIds = new List<int>();
+            form.SignatureData = null;
+            form.SignedAt = null;
+            form.SignedByName = null;
+            form.RequestedAt = DateTime.UtcNow;
+
+            if (doc == null)
+            {
+                doc = new DriverDocument
+                {
+                    DriverId = driver.Id,
+                    OrganizationId = driver.OrganizationId,
+                    RemindExpiry = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.DriverDocuments.Add(doc);
+            }
+
+            _escrowAck.ApplyToDocument(doc, form);
+            doc.Notes =
+                $"[ttac-driver-request:{EscrowAcknowledgmentService.DocumentKey}] Auto-healed escrow form {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC " +
+                $"({form.Escrows.Count} escrows, {form.Deductions.Count} deductions)";
+            await _db.SaveChangesAsync();
+        }
+
+        // After heal or successful parse, doc is always present.
+        return Ok(new
+        {
+            data = form,
+            documentId = doc!.Id,
+            status = doc.Status
+        });
+    }
+
+    /// <summary>Driver submits selected escrows/deductions + digital signature.</summary>
+    [HttpPost("drivers/{driverId:int}/escrow-acknowledgment")]
+    public async Task<ActionResult> SubmitEscrowAcknowledgment(
+        int driverId,
+        [FromBody] EscrowAckSubmitRequest request)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driver = await _db.Drivers.AsNoTracking().FirstOrDefaultAsync(d => d.Id == driverId);
+        if (driver == null)
+            return NotFound(new { error = "Driver not found" });
+
+        var signature = (request.SignatureData ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(signature) || signature.Length < 20)
+            return BadRequest(new { error = "A digital signature is required" });
+
+        var selectedEscrows = (request.SelectedEscrowIds ?? new List<int>())
+            .Where(x => x > 0).Distinct().ToList();
+        var selectedDeductions = (request.SelectedDeductionIds ?? new List<int>())
+            .Where(x => x > 0).Distinct().ToList();
+
+        if (selectedEscrows.Count == 0 && selectedDeductions.Count == 0)
+            return BadRequest(new { error = "Select at least one escrow or deduction" });
+
+        var doc = await _db.DriverDocuments
+            .Where(d =>
+                d.DriverId == driverId &&
+                (d.SubCategory == EscrowAcknowledgmentService.SubCategory
+                 || d.Category == EscrowAcknowledgmentService.Category
+                 || d.ContentType == EscrowAcknowledgmentService.ContentType))
+            .OrderByDescending(d => d.UpdatedAt)
+            .FirstOrDefaultAsync();
+
+        if (doc == null)
+            return NotFound(new { error = "No escrow acknowledgment on file" });
+
+        var form = _escrowAck.TryParse(doc);
+        if (form == null)
+            return BadRequest(new { error = "Escrow acknowledgment is corrupt" });
+
+        var allowedEscrowIds = form.Escrows.Select(e => e.Id).ToHashSet();
+        var allowedDeductionIds = form.Deductions.Select(d => d.Id).ToHashSet();
+        selectedEscrows = selectedEscrows.Where(id => allowedEscrowIds.Contains(id)).ToList();
+        selectedDeductions = selectedDeductions.Where(id => allowedDeductionIds.Contains(id)).ToList();
+
+        if (selectedEscrows.Count == 0 && selectedDeductions.Count == 0)
+            return BadRequest(new { error = "Selected items are no longer valid — ask Access to resend the form" });
+
+        form.SelectedEscrowIds = selectedEscrows;
+        form.SelectedDeductionIds = selectedDeductions;
+        form.SignatureData = signature;
+        form.SignedAt = DateTime.UtcNow;
+        form.SignedByName = string.IsNullOrWhiteSpace(request.SignedByName)
+            ? driver.Name
+            : request.SignedByName.Trim();
+        form.Status = "signed";
+
+        _escrowAck.ApplyToDocument(doc, form);
+        doc.Notes =
+            $"[ttac-driver-signed:{EscrowAcknowledgmentService.DocumentKey}] Signed {form.SignedAt:yyyy-MM-dd HH:mm} UTC " +
+            $"by {form.SignedByName}; escrows=[{string.Join(',', selectedEscrows)}]; deductions=[{string.Join(',', selectedDeductions)}]";
+        await _db.SaveChangesAsync();
+
+        await _escrowAck.AssignSelectedEscrowsAsync(
+            driver.Id,
+            driver.Name,
+            selectedEscrows);
+
+        return Ok(new
+        {
+            data = form,
+            documentId = doc.Id,
+            message = "Escrow and deductions acknowledgment signed"
+        });
     }
 
     [HttpGet("driver-documents/{id:int}/view")]
