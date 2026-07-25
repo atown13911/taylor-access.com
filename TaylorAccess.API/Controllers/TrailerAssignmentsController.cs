@@ -61,11 +61,9 @@ public class TrailerAssignmentsController : ControllerBase
             .Select(g =>
             {
                 var candidates = g.ToList();
-                var primary = candidates
-                    .OrderByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
-                    .ThenByDescending(a => a.DriverOverride)
-                    .ThenByDescending(a => a.UpdatedAt)
-                    .First();
+                // Prefer a row that actually names a driver over a preferred-org
+                // blank DriverOverride (e.g. Van Tac inactive shadowing Landmark's Jaleesa).
+                var primary = PickPrimaryAssignment(candidates, preferredOrgId);
                 var documentSource = candidates
                     .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.FileContent));
                 return new
@@ -704,6 +702,30 @@ public class TrailerAssignmentsController : ControllerBase
             return query.Where(a => a.OrganizationId == orgId || a.OrganizationId == 0);
 
         return query.Where(a => a.OrganizationId == 0);
+    }
+
+    /// <summary>
+    /// When the same trailer has rows in multiple orgs, pick the display row.
+    /// A preferred-org blank override must not hide another org's named driver.
+    /// </summary>
+    private static TrailerAssignment PickPrimaryAssignment(
+        IReadOnlyList<TrailerAssignment> candidates,
+        int preferredOrgId)
+    {
+        static bool HasDriverName(TrailerAssignment a) =>
+            !string.IsNullOrWhiteSpace(a.AssignedDriverName)
+            || !string.IsNullOrWhiteSpace(a.LastAssignedDriverName);
+
+        static bool IsActiveStatus(TrailerAssignment a) =>
+            string.Equals(a.TrailerStatus, "active", StringComparison.OrdinalIgnoreCase);
+
+        return candidates
+            .OrderByDescending(HasDriverName)
+            .ThenByDescending(IsActiveStatus)
+            .ThenByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
+            .ThenByDescending(a => a.DriverOverride && HasDriverName(a))
+            .ThenByDescending(a => a.UpdatedAt)
+            .First();
     }
 
     private static void ApplyUpsert(TrailerAssignment assignment, TrailerAssignmentUpsertRequest request)
