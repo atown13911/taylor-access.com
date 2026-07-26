@@ -559,6 +559,12 @@
               <input type="date" [ngModel]="driverForm().twiccExpiry" (ngModelChange)="updateField('twiccExpiry', $event)">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Fuel Card Number</label>
+              <input type="text" [ngModel]="driverForm().fuelCardNumber" (ngModelChange)="updateField('fuelCardNumber', $event)" placeholder="Fuel card number">
+            </div>
+          </div>
         </div>
 
         <div class="form-section">

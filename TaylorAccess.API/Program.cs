@@ -665,6 +665,7 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""ExpenseBasis"" VARCHAR(20) NULL;
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""PerIncidentDeductible"" DECIMAL(18,2) NULL;
         ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TerminationNotes"" TEXT NULL;
+        ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""FuelCardNumber"" VARCHAR(50) NULL;
 
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Laptop"" VARCHAR(200) NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IssuedPhone"" VARCHAR(200) NULL;

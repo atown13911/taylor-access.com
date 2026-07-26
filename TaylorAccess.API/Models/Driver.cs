@@ -110,6 +110,9 @@ public class Driver
 
     public DateOnly? TwiccExpiry { get; set; }
 
+    [MaxLength(50)]
+    public string? FuelCardNumber { get; set; }
+
     [MaxLength(100)]
     public string? TruckOwnerName { get; set; }
 

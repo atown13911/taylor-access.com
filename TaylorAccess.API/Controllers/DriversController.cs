@@ -502,6 +502,7 @@ public class DriversController : ControllerBase
         if (request.TruckYear.HasValue) driver.TruckYear = request.TruckYear;
         if (request.TruckVin != null) driver.TruckVin = request.TruckVin;
         if (request.TruckTag != null) driver.TruckTag = request.TruckTag;
+        if (request.FuelCardNumber != null) driver.FuelCardNumber = request.FuelCardNumber;
         
         // Address: create or update the linked Address record
         var hasAddressFields = request.Address != null || request.City != null || request.State != null || request.ZipCode != null || request.Zip != null;
@@ -1457,6 +1458,7 @@ public record UpdateDriverRequest(
     int? TruckYear,
     string? TruckVin,
     string? TruckTag,
+    string? FuelCardNumber,
     string? Address,
     string? City,
     string? State,
