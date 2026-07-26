@@ -1560,7 +1560,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   private isActiveDriverStatus(status: string): boolean {
     const normalized = String(status ?? '').trim().toLowerCase();
-    return !normalized || normalized === 'active' || normalized === 'available' || normalized === 'online' || normalized === 'in_service';
+    return !normalized
+      || normalized === 'active'
+      || normalized === 'available'
+      || normalized === 'online'
+      || normalized === 'in_service'
+      // Onboarding drivers need fuel cards assigned before they go active.
+      || normalized === 'onboarding';
   }
 
   private normalizeKey(value: any): string {
