@@ -326,6 +326,7 @@
             <th>Status</th>
             <th>Assigned Fuel Card</th>
             <th>Last4</th>
+            <th>Card Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -335,7 +336,7 @@
               <td>{{ d.name }}</td>
               <td>{{ d.email || '—' }}</td>
               <td class="tp-mono">{{ d.truckNumber || '—' }}</td>
-              <td><span class="tp-status active">Active</span></td>
+              <td><span class="tp-status" [class]="d.status || 'active'">{{ d.status || 'active' }}</span></td>
               <td>
                 @if (d.assignedFuelCard !== 'Unassigned') {
                   <button
@@ -350,6 +351,15 @@
                 }
               </td>
               <td class="tp-mono">{{ d.assignedFuelCardLast4 || 'N/A' }}</td>
+              <td>
+                @if (d.assignedFuelCardId) {
+                  <span class="tp-status" [class]="fuelCardStatusClass(d.assignedFuelCardStatus)">
+                    {{ fuelCardStatusLabel(d.assignedFuelCardStatus) }}
+                  </span>
+                } @else {
+                  <span class="tp-muted">—</span>
+                }
+              </td>
               <td class="tp-actions">
                 <button
                   class="tp-icon-btn"
@@ -367,7 +377,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="7" class="tp-empty">No active drivers found.</td></tr>
+            <tr><td colspan="8" class="tp-empty">No active drivers found.</td></tr>
           }
         </tbody>
       </table>

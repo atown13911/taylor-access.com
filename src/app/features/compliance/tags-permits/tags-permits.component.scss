@@ -151,6 +151,13 @@
   &.returned { background: rgba(255,170,0,0.12); color: #ffbf4d; }
   &.closed_out { background: rgba(0,212,255,0.12); color: #8ee8ff; }
   &.complete { background: rgba(0,255,136,0.1); color: #00ff88; }
+  &.available { background: rgba(0,255,136,0.1); color: #00ff88; }
+  &.onboarding { background: rgba(0,212,255,0.12); color: #8ee8ff; }
+  &.frozen { background: rgba(80,160,255,0.16); color: #7db8ff; }
+  &.unactivated { background: rgba(255,170,0,0.12); color: #ffbf4d; }
+  &.terminated { background: rgba(255,80,80,0.15); color: #ff7d7d; }
+  &.unassigned { background: rgba(136,136,170,0.15); color: #b5b5d1; }
+  &.unknown { background: rgba(136,136,170,0.15); color: #b5b5d1; }
   &.partial { background: rgba(255,170,0,0.1); color: #ffaa00; }
   &.missing { background: rgba(136,136,170,0.1); color: #8888aa; }
 }

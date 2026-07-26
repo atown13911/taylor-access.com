@@ -227,7 +227,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           status: d?.status || 'active',
           assignedFuelCardId: assigned?.cardId ?? '',
           assignedFuelCard: assigned?.label ?? 'Unassigned',
-          assignedFuelCardLast4: assigned?.last4 ?? 'N/A'
+          assignedFuelCardLast4: assigned?.last4 ?? 'N/A',
+          assignedFuelCardStatus: assigned?.status ?? ''
         };
       });
 
@@ -1558,6 +1559,19 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return [];
   }
 
+  // Motive calls a suspended card "Frozen" in its dashboard — mirror that wording.
+  fuelCardStatusLabel(status: string): string {
+    const normalized = String(status ?? '').trim().toLowerCase();
+    if (!normalized) return '—';
+    if (normalized === 'suspended') return 'Frozen';
+    return normalized.replace(/_/g, ' ');
+  }
+
+  fuelCardStatusClass(status: string): string {
+    const normalized = String(status ?? '').trim().toLowerCase();
+    return normalized === 'suspended' ? 'frozen' : (normalized || 'unknown');
+  }
+
   private isActiveDriverStatus(status: string): boolean {
     const normalized = String(status ?? '').trim().toLowerCase();
     return !normalized
@@ -1625,10 +1639,15 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return digits.length >= 4 ? digits.slice(-4) : 'N/A';
   }
 
-  private buildFuelCardAssignmentMap(): Map<string, { label: string; last4: string; cardId: string }> {
-    const map = new Map<string, { label: string; last4: string; cardId: string }>();
+  private buildFuelCardAssignmentMap(): Map<string, { label: string; last4: string; cardId: string; status: string }> {
+    const map = new Map<string, { label: string; last4: string; cardId: string; status: string }>();
     for (const card of this.getResolvedFuelCards()) {
-      const assignment = { label: card.label, last4: card.last4, cardId: card.id };
+      const assignment = {
+        label: card.label,
+        last4: card.last4,
+        cardId: card.id,
+        status: String(card.card?.status ?? card.raw?.status ?? '').trim().toLowerCase()
+      };
       const idKey = this.normalizeKey(card.assignedDriverId);
       const emailKey = this.normalizeKey(card.assignedDriverEmail);
       const nameKey = this.normalizeNameKey(card.assignedDriverName);
@@ -1755,7 +1774,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       cardLabel: assignedCard.label,
       last4: assignedCard.last4 || 'N/A',
       cardId: assignedCard.id,
-      status: assignedCard.card?.status ?? assignedCard.raw?.status ?? '—',
+      status: this.fuelCardStatusLabel(assignedCard.card?.status ?? assignedCard.raw?.status ?? ''),
       network: assignedCard.card?.network ?? assignedCard.raw?.network ?? assignedCard.card?.provider ?? assignedCard.raw?.provider ?? '—',
       cardType: assignedCard.card?.type ?? assignedCard.raw?.type ?? assignedCard.card?.card_type ?? assignedCard.raw?.card_type ?? '—',
       nickname: assignedCard.card?.nickname ?? assignedCard.raw?.nickname ?? assignedCard.card?.name ?? assignedCard.raw?.name ?? '—',
