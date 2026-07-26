@@ -131,6 +131,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<MotivActivityLog> MotivActivityLogs => Set<MotivActivityLog>();
     public DbSet<MotivSafetyEvent> MotivSafetyEvents => Set<MotivSafetyEvent>();
     public DbSet<MotivDriverAnalysisCache> MotivDriverAnalysisCaches => Set<MotivDriverAnalysisCache>();
+    public DbSet<FuelCardAssignment> FuelCardAssignments => Set<FuelCardAssignment>();
     public DbSet<IntegrationConfig> IntegrationConfigs => Set<IntegrationConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -256,6 +257,10 @@ public class TaylorAccessDbContext : DbContext
 
         modelBuilder.Entity<IntegrationConfig>()
             .HasIndex(c => new { c.OrganizationId, c.IntegrationType })
+            .IsUnique();
+
+        modelBuilder.Entity<FuelCardAssignment>()
+            .HasIndex(f => new { f.OrganizationId, f.CardId })
             .IsUnique();
     }
 }

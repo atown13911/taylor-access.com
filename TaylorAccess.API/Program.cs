@@ -662,6 +662,21 @@ using (var scope = app.Services.CreateScope())
         CREATE INDEX IF NOT EXISTS ""IX_TrailerAssignmentLogs_TrailerId_CreatedAt""
             ON ""TrailerAssignmentLogs"" (""TrailerId"", ""CreatedAt"" DESC);
 
+        CREATE TABLE IF NOT EXISTS ""FuelCardAssignments"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""CardId"" VARCHAR(120) NOT NULL,
+            ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,
+            ""DriverId"" VARCHAR(50) NOT NULL DEFAULT '',
+            ""DriverName"" VARCHAR(150) NULL,
+            ""DriverEmail"" VARCHAR(200) NULL,
+            ""AssignedByUserId"" INTEGER NULL,
+            ""AssignedBy"" VARCHAR(150) NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""IX_FuelCardAssignments_Org_CardId""
+            ON ""FuelCardAssignments"" (""OrganizationId"", ""CardId"");
+
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""ExpenseBasis"" VARCHAR(20) NULL;
         ALTER TABLE ""InsurancePolicies"" ADD COLUMN IF NOT EXISTS ""PerIncidentDeductible"" DECIMAL(18,2) NULL;
         ALTER TABLE ""Drivers"" ADD COLUMN IF NOT EXISTS ""TerminationNotes"" TEXT NULL;

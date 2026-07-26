@@ -46,6 +46,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   private readonly legacyTrailerStatusOverridesKey = 'ta_trailer_status_overrides';
   private readonly legacyTrailerFieldOverridesKey = 'ta_trailer_field_overrides';
   private readonly fuelCardAssignmentOverridesKey = 'ta_fuel_card_assignment_overrides_v1';
+  private readonly fuelCardAssignmentsMigratedKey = 'ta_fuel_card_assignments_migrated_v1';
 
   activeTab = signal<'permits' | 'irp' | 'trailer' | 'fuel-cards' | 'elds' | 'cameras' | 'cables'>('permits');
   trailerSubTab = signal<'active' | 'inactive'>('active');
@@ -361,7 +362,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     void this.migrateLocalTrailerOverridesIfNeeded();
-    this.loadFuelCardAssignmentOverrides();
+    void this.loadFuelCardAssignmentOverrides();
     this.loadData();
   }
 
@@ -1775,7 +1776,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     this.savingFuelCardAssignment.set(false);
   }
 
-  saveFuelCardAssignment(): void {
+  async saveFuelCardAssignment(): Promise<void> {
     const driver = this.selectedFuelCardDriver();
     if (!driver) return;
 
@@ -1783,7 +1784,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const driverId = String(driver?.id ?? '').trim();
     const selectedCardId = String(this.fuelCardAssignCardId() ?? '').trim();
     const currentCardId = String(driver?.assignedFuelCardId ?? '').trim();
-    const next = { ...this.fuelCardAssignmentOverrides() };
+    const prev = this.fuelCardAssignmentOverrides();
+    const next = { ...prev };
 
     for (const [cardId, assignment] of Object.entries(next)) {
       if (String((assignment as any)?.driverId ?? '').trim() === driverId) {
@@ -1805,11 +1807,37 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       next[currentCardId] = { driverId: '' };
     }
 
-    this.fuelCardAssignmentOverrides.set(next);
-    this.persistFuelCardAssignmentOverrides(next);
-    this.savingFuelCardAssignment.set(false);
-    this.closeFuelCardAssignModal();
-    this.toast.champagne('Fuel card assignment updated', 'Success');
+    // Send only what changed: removed overrides fall back to Motive's own assignment.
+    const items: any[] = [];
+    for (const cardId of Object.keys(prev)) {
+      if (!(cardId in next)) items.push({ cardId, remove: true });
+    }
+    for (const [cardId, assignment] of Object.entries(next)) {
+      const before = prev[cardId];
+      if (!before || String(before.driverId ?? '') !== String(assignment.driverId ?? '')) {
+        items.push({
+          cardId,
+          driverId: assignment.driverId ?? '',
+          driverName: assignment.driverName ?? '',
+          driverEmail: assignment.driverEmail ?? ''
+        });
+      }
+    }
+
+    try {
+      if (items.length > 0) {
+        await firstValueFrom(
+          this.http.post(`${this.apiUrl}/api/v1/fuel-card-assignments/bulk-upsert`, { items })
+        );
+      }
+      this.fuelCardAssignmentOverrides.set(next);
+      this.closeFuelCardAssignModal();
+      this.toast.champagne('Fuel card assignment updated', 'Success');
+    } catch {
+      this.toast.error('Could not save the fuel card assignment. Please try again.', 'Fuel cards');
+    } finally {
+      this.savingFuelCardAssignment.set(false);
+    }
   }
 
   private getAssignedFuelCardForDriver(driverRow: any): {
@@ -1839,7 +1867,68 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     }) ?? null;
   }
 
-  private loadFuelCardAssignmentOverrides(): void {
+  private async loadFuelCardAssignmentOverrides(): Promise<void> {
+    await this.migrateLocalFuelCardOverridesIfNeeded();
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/api/v1/fuel-card-assignments`)
+      );
+      const rows: any[] = Array.isArray(res?.data) ? res.data : [];
+      const next: Record<string, { driverId: string; driverName?: string; driverEmail?: string }> = {};
+      for (const row of rows) {
+        const cardId = String(row?.cardId ?? '').trim();
+        if (!cardId) continue;
+        next[cardId] = {
+          driverId: String(row?.driverId ?? '').trim(),
+          driverName: String(row?.driverName ?? '').trim() || undefined,
+          driverEmail: String(row?.driverEmail ?? '').trim() || undefined
+        };
+      }
+      this.fuelCardAssignmentOverrides.set(next);
+    } catch {
+      // Server unavailable — fall back to any local copy so the tab still renders.
+      this.loadLocalFuelCardAssignmentOverrides();
+    }
+  }
+
+  /**
+   * Fuel card assignments used to live only in this browser's localStorage.
+   * Push any existing local overrides to the backend once, so data is unified
+   * across users and machines, then stop treating localStorage as the source.
+   */
+  private async migrateLocalFuelCardOverridesIfNeeded(): Promise<void> {
+    try {
+      if (localStorage.getItem(this.fuelCardAssignmentsMigratedKey)) return;
+
+      const raw = localStorage.getItem(this.fuelCardAssignmentOverridesKey);
+      if (!raw) {
+        localStorage.setItem(this.fuelCardAssignmentsMigratedKey, '1');
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      const items = (parsed && typeof parsed === 'object' ? Object.entries(parsed) : [])
+        .map(([cardId, assignment]: [string, any]) => ({
+          cardId: String(cardId ?? '').trim(),
+          driverId: String(assignment?.driverId ?? '').trim(),
+          driverName: String(assignment?.driverName ?? '').trim(),
+          driverEmail: String(assignment?.driverEmail ?? '').trim()
+        }))
+        .filter((item) => !!item.cardId);
+
+      if (items.length > 0) {
+        await firstValueFrom(
+          this.http.post(`${this.apiUrl}/api/v1/fuel-card-assignments/bulk-upsert`, { items })
+        );
+      }
+      localStorage.setItem(this.fuelCardAssignmentsMigratedKey, '1');
+    } catch {
+      // Leave the migrated flag unset so we retry on the next page load.
+    }
+  }
+
+  private loadLocalFuelCardAssignmentOverrides(): void {
     try {
       const raw = localStorage.getItem(this.fuelCardAssignmentOverridesKey);
       if (!raw) return;
@@ -1848,16 +1937,6 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       this.fuelCardAssignmentOverrides.set(parsed);
     } catch {
       // Ignore malformed local values.
-    }
-  }
-
-  private persistFuelCardAssignmentOverrides(
-    overrides: Record<string, { driverId: string; driverName?: string; driverEmail?: string }>
-  ): void {
-    try {
-      localStorage.setItem(this.fuelCardAssignmentOverridesKey, JSON.stringify(overrides));
-    } catch {
-      // Ignore storage issues.
     }
   }
 
