@@ -1,0 +1,16 @@
+---
+description: Commit, push, and deploy taylor-access.com when finishing a requested change
+alwaysApply: true
+---
+
+# Commit and deploy when finished
+
+When you finish implementing a requested change in this repo:
+
+1. **Commit** the relevant files (only what you changed for the task; leave unrelated dirty files unstaged).
+2. **Push** to `origin` on the current branch. Backend (`TaylorAccess.API/`) deploys via Railway on push to `main`.
+3. **Deploy** the frontend for any UI changes: `npm run deploy:cloudflare` from the repo root (ng build + wrangler Pages deploy to project `taylor-access-com`).
+
+Do not wait to be asked again — treat "work is done" as implied permission to commit, push, and deploy for this project.
+
+Note: this shell is old PowerShell — `&&` is not a valid separator; run commands sequentially or with `;`.
