@@ -19,13 +19,18 @@
     <div class="stat cyan"><span class="stat-val">{{ stats().enrolled2sv }}</span><span class="stat-lbl">2FA Enrolled</span></div>
   </div>
 
+  <div class="status-tabs">
+    @for (tab of statusTabs; track tab.key) {
+      <button class="tab" [class.active]="statusFilter() === tab.key" (click)="statusFilter.set(tab.key)">
+        {{ tab.label }}<span class="tab-count">{{ tabCounts()[tab.key] }}</span>
+      </button>
+    }
+  </div>
+
   <div class="filters-bar">
     <div class="search-box"><i class='bx bx-search'></i><input type="text" placeholder="Search name, email, org unit..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)"></div>
-    <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+    <select [ngModel]="extraFilter()" (ngModelChange)="extraFilter.set($event)">
       <option value="all">All Users</option>
-      <option value="active">Active</option>
-      <option value="suspended">Suspended</option>
-      <option value="archived">Archived</option>
       <option value="admins">Admins</option>
       <option value="no2sv">No 2FA</option>
     </select>
@@ -89,7 +94,7 @@
               </td>
               <td>{{ user.lastLoginTime ? (user.lastLoginTime | date:'MMM d, y, h:mm a') : 'Never' }}</td>
               <td>{{ user.creationTime ? (user.creationTime | date:'MMM d, y') : '—' }}</td>
-              <td><span class="status-badge" [class]="getStatus(user)">{{ getStatus(user) }}</span></td>
+              <td><span class="status-badge" [class]="getStatus(user)" [title]="getStatusTooltip(user)">{{ getStatus(user) }}</span></td>
             </tr>
           }
         </tbody>

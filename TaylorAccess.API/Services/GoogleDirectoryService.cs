@@ -18,6 +18,9 @@ public sealed class GoogleWorkspaceUser
     public bool IsDelegatedAdmin { get; set; }
     public bool Suspended { get; set; }
     public bool Archived { get; set; }
+    public bool Deleted { get; set; }
+    public string? DeletionTime { get; set; }
+    public string? SuspensionReason { get; set; }
     public bool IsEnrolledIn2Sv { get; set; }
     public string? LastLoginTime { get; set; }
     public string? CreationTime { get; set; }
@@ -96,12 +99,32 @@ public class GoogleDirectoryService
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var users = new List<GoogleWorkspaceUser>();
+
+        var error = await FetchUsersAsync(client, users, showDeleted: false, cancellationToken);
+        if (error != null)
+            return new GoogleDirectoryResult { Success = false, Error = error };
+
+        // Recently deleted users (recoverable ~20 days) only appear via showDeleted=true
+        // and return a reduced field set. Non-fatal if this secondary query fails.
+        var deletedError = await FetchUsersAsync(client, users, showDeleted: true, cancellationToken);
+        if (deletedError != null)
+            _logger.LogWarning("Google Directory deleted-users query failed: {Error}", deletedError);
+
+        return new GoogleDirectoryResult { Success = true, Users = users };
+    }
+
+    private async Task<string?> FetchUsersAsync(
+        HttpClient client,
+        List<GoogleWorkspaceUser> users,
+        bool showDeleted,
+        CancellationToken cancellationToken)
+    {
         string? pageToken = null;
 
         do
         {
-            var url = "https://admin.googleapis.com/admin/directory/v1/users" +
-                      "?customer=my_customer&maxResults=500&orderBy=email";
+            var url = "https://admin.googleapis.com/admin/directory/v1/users?customer=my_customer&maxResults=500";
+            url += showDeleted ? "&showDeleted=true" : "&orderBy=email";
             if (!string.IsNullOrEmpty(pageToken))
                 url += $"&pageToken={Uri.EscapeDataString(pageToken)}";
 
@@ -109,26 +132,26 @@ public class GoogleDirectoryService
             var body = await res.Content.ReadAsStringAsync(cancellationToken);
             if (!res.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Google Directory users.list failed ({Status}): {Body}",
-                    (int)res.StatusCode, body[..Math.Min(body.Length, 300)]);
-                return new GoogleDirectoryResult
-                {
-                    Success = false,
-                    Error = $"Directory API error {(int)res.StatusCode}: {body[..Math.Min(body.Length, 200)]}"
-                };
+                _logger.LogWarning("Google Directory users.list failed ({Status}, showDeleted={ShowDeleted}): {Body}",
+                    (int)res.StatusCode, showDeleted, body[..Math.Min(body.Length, 300)]);
+                return $"Directory API error {(int)res.StatusCode}: {body[..Math.Min(body.Length, 200)]}";
             }
 
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.TryGetProperty("users", out var arr) && arr.ValueKind == JsonValueKind.Array)
             {
                 foreach (var u in arr.EnumerateArray())
-                    users.Add(MapUser(u));
+                {
+                    var user = MapUser(u);
+                    user.Deleted = showDeleted;
+                    users.Add(user);
+                }
             }
 
             pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var next) ? next.GetString() : null;
         } while (!string.IsNullOrEmpty(pageToken));
 
-        return new GoogleDirectoryResult { Success = true, Users = users };
+        return null;
     }
 
     private static GoogleWorkspaceUser MapUser(JsonElement u)
@@ -144,7 +167,9 @@ public class GoogleDirectoryService
             Archived = GetBool(u, "archived"),
             IsEnrolledIn2Sv = GetBool(u, "isEnrolledIn2Sv"),
             ThumbnailPhotoUrl = NullIfEmpty(GetString(u, "thumbnailPhotoUrl")),
-            CreationTime = NullIfEmpty(GetString(u, "creationTime"))
+            CreationTime = NullIfEmpty(GetString(u, "creationTime")),
+            DeletionTime = NullIfEmpty(GetString(u, "deletionTime")),
+            SuspensionReason = NullIfEmpty(GetString(u, "suspensionReason"))
         };
 
         if (u.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.Object)

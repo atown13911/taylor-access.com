@@ -14,6 +14,9 @@ interface GoogleUser {
   isDelegatedAdmin: boolean;
   suspended: boolean;
   archived: boolean;
+  deleted: boolean;
+  deletionTime: string | null;
+  suspensionReason: string | null;
   isEnrolledIn2Sv: boolean;
   lastLoginTime: string | null;
   creationTime: string | null;
@@ -38,11 +41,30 @@ export class GoogleUsersComponent implements OnInit {
   users = signal<GoogleUser[]>([]);
   searchTerm = signal('');
   statusFilter = signal('all');
+  extraFilter = signal('all');
+
+  readonly statusTabs = [
+    { key: 'all', label: 'All' },
+    { key: 'active', label: 'Active' },
+    { key: 'suspended', label: 'Suspended' },
+    { key: 'archived', label: 'Archived' },
+    { key: 'deleted', label: 'Deleted' }
+  ];
+
+  tabCounts = computed(() => {
+    const counts: Record<string, number> = { all: 0, active: 0, suspended: 0, archived: 0, deleted: 0 };
+    for (const u of this.users()) {
+      counts['all']++;
+      counts[this.getStatus(u)]++;
+    }
+    return counts;
+  });
 
   filteredUsers = computed(() => {
     let list = this.users();
     const search = this.searchTerm().toLowerCase();
     const status = this.statusFilter();
+    const extra = this.extraFilter();
     if (search) {
       list = list.filter(u =>
         u.email?.toLowerCase().includes(search) ||
@@ -51,11 +73,9 @@ export class GoogleUsersComponent implements OnInit {
         u.aliases?.some(a => a.toLowerCase().includes(search))
       );
     }
-    if (status === 'active') list = list.filter(u => !u.suspended && !u.archived);
-    else if (status === 'suspended') list = list.filter(u => u.suspended);
-    else if (status === 'archived') list = list.filter(u => u.archived);
-    else if (status === 'admins') list = list.filter(u => u.isAdmin || u.isDelegatedAdmin);
-    else if (status === 'no2sv') list = list.filter(u => !u.isEnrolledIn2Sv && !u.suspended && !u.archived);
+    if (status !== 'all') list = list.filter(u => this.getStatus(u) === status);
+    if (extra === 'admins') list = list.filter(u => u.isAdmin || u.isDelegatedAdmin);
+    else if (extra === 'no2sv') list = list.filter(u => !u.isEnrolledIn2Sv && this.getStatus(u) === 'active');
     return list;
   });
 
@@ -88,8 +108,18 @@ export class GoogleUsersComponent implements OnInit {
   }
 
   getStatus(user: GoogleUser): string {
+    if (user.deleted) return 'deleted';
     if (user.archived) return 'archived';
     if (user.suspended) return 'suspended';
     return 'active';
+  }
+
+  getStatusTooltip(user: GoogleUser): string {
+    if (user.deleted) {
+      const when = user.deletionTime ? new Date(user.deletionTime).toLocaleDateString() : '';
+      return `Deleted${when ? ' ' + when : ''} — recoverable for ~20 days`;
+    }
+    if (user.suspended && user.suspensionReason) return `Suspension reason: ${user.suspensionReason}`;
+    return '';
   }
 }
