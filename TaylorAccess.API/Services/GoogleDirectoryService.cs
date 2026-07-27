@@ -198,12 +198,14 @@ public class GoogleDirectoryService
         string scope,
         CancellationToken cancellationToken)
     {
-        saKeyJson = CleanServiceAccountKey(saKeyJson);
-        using var saKey = JsonDocument.Parse(saKeyJson);
+        using var saKey = ParseServiceAccountKey(saKeyJson);
         var clientEmail = saKey.RootElement.GetProperty("client_email").GetString()
             ?? throw new InvalidOperationException("service account missing client_email");
         var privateKeyPem = saKey.RootElement.GetProperty("private_key").GetString()
             ?? throw new InvalidOperationException("service account missing private_key");
+        // Keys pasted with double-escaped newlines leave literal "\n" text in the PEM
+        if (privateKeyPem.Contains("\\n"))
+            privateKeyPem = privateKeyPem.Replace("\\n", "\n");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var header = Base64Url(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" })));
@@ -238,12 +240,22 @@ public class GoogleDirectoryService
             ?? throw new InvalidOperationException("No access_token in Google response");
     }
 
-    private static string CleanServiceAccountKey(string raw)
+    private static JsonDocument ParseServiceAccountKey(string raw)
     {
         var trimmed = raw.Trim();
         if (trimmed.StartsWith('\'') && trimmed.EndsWith('\''))
-            trimmed = trimmed[1..^1];
-        return trimmed.Replace("\\n", "\n");
+            trimmed = trimmed[1..^1].Trim();
+
+        // A well-formed key file parses as-is; rewriting "\n" escapes first would
+        // inject raw newlines into the private_key string and corrupt the JSON.
+        try
+        {
+            return JsonDocument.Parse(trimmed);
+        }
+        catch (JsonException)
+        {
+            return JsonDocument.Parse(trimmed.Replace("\\n", "\n"));
+        }
     }
 
     private static string Base64Url(byte[] bytes) =>
