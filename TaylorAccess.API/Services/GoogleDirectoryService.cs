@@ -659,7 +659,7 @@ public class GoogleDirectoryService
     {
         const string parameters = "accounts:used_quota_in_mb,accounts:drive_used_quota_in_mb," +
                                   "accounts:gmail_used_quota_in_mb,accounts:gplus_photos_used_quota_in_mb," +
-                                  "accounts:used_quota_percentage";
+                                  "accounts:used_quota_in_percentage";
 
         var usage = new List<GoogleUserStorage>();
         string? pageToken = null;
@@ -694,7 +694,7 @@ public class GoogleDirectoryService
                                     case "accounts:drive_used_quota_in_mb": row.DriveMb = ReadLong(p, "intValue"); break;
                                     case "accounts:gmail_used_quota_in_mb": row.GmailMb = ReadLong(p, "intValue"); break;
                                     case "accounts:gplus_photos_used_quota_in_mb": row.PhotosMb = ReadLong(p, "intValue"); break;
-                                    case "accounts:used_quota_percentage":
+                                    case "accounts:used_quota_in_percentage":
                                         if (p.TryGetProperty("intValue", out var iv) &&
                                             double.TryParse(iv.ValueKind == JsonValueKind.String ? iv.GetString() : iv.GetRawText(), out var pct))
                                             row.UsedPercent = pct;
