@@ -148,12 +148,6 @@ export class ShellComponent implements OnInit, OnDestroy {
       ]
     },
     {
-      label: 'Google',
-      items: [
-        { label: 'Domain Users', icon: 'bx bxl-google', route: '/google/users' },
-      ]
-    },
-    {
       label: 'Admin',
       items: [
         { label: 'Audit Logs', icon: 'bx bx-history', route: '/admin/audit' },
