@@ -257,6 +257,7 @@ builder.Services.AddScoped<CrmIntegrationCopyService>();
 builder.Services.AddScoped<LocalIntegrationStatusService>();
 builder.Services.AddScoped<ZoomDirectMetricsService>();
 builder.Services.AddScoped<GmailDirectMetricsService>();
+builder.Services.AddScoped<GoogleDirectoryService>();
 builder.Services.AddScoped<PerformanceSyncOrchestrator>();
 builder.Services.AddScoped<CrmPerformanceBackfillService>();
 builder.Services.AddScoped<InsuranceChargingEstimateService>();

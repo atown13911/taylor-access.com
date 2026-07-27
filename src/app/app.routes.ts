@@ -199,6 +199,14 @@ export const routes: Routes = [
       {
         path: 'motiv',
         loadComponent: () => import('./features/motiv/motiv.component').then(m => m.MotivComponent)
+      },
+      {
+        path: 'google/users',
+        loadComponent: () => import('./features/google/google-users.component').then(m => m.GoogleUsersComponent)
+      },
+      {
+        path: 'google/users',
+        loadComponent: () => import('./features/google/google-users.component').then(m => m.GoogleUsersComponent)
       }
     ]
   },

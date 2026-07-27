@@ -1,0 +1,99 @@
+<div class="google-users-page">
+  <div class="page-header">
+    <div>
+      <h1><i class='bx bxl-google'></i> Google Domain Users</h1>
+      <p>All Google Workspace accounts on the domain</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" (click)="loadUsers()" [disabled]="loading()">
+        <i class='bx bx-refresh'></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><span class="stat-val">{{ stats().total }}</span><span class="stat-lbl">Total Users</span></div>
+    <div class="stat green"><span class="stat-val">{{ stats().active }}</span><span class="stat-lbl">Active</span></div>
+    <div class="stat red"><span class="stat-val">{{ stats().suspended }}</span><span class="stat-lbl">Suspended</span></div>
+    <div class="stat cyan"><span class="stat-val">{{ stats().admins }}</span><span class="stat-lbl">Admins</span></div>
+    <div class="stat cyan"><span class="stat-val">{{ stats().enrolled2sv }}</span><span class="stat-lbl">2FA Enrolled</span></div>
+  </div>
+
+  <div class="filters-bar">
+    <div class="search-box"><i class='bx bx-search'></i><input type="text" placeholder="Search name, email, org unit..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)"></div>
+    <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+      <option value="all">All Users</option>
+      <option value="active">Active</option>
+      <option value="suspended">Suspended</option>
+      <option value="archived">Archived</option>
+      <option value="admins">Admins</option>
+      <option value="no2sv">No 2FA</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading Google Workspace users...</p></div>
+  } @else if (loadError()) {
+    <div class="empty-state error"><i class='bx bx-error-circle'></i><h3>Could not load users</h3><p>{{ loadError() }}</p></div>
+  } @else if (filteredUsers().length === 0) {
+    <div class="empty-state"><i class='bx bxl-google'></i><h3>No users found</h3><p>No Google Workspace users match the current filters</p></div>
+  } @else {
+    <div class="users-table">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Org Unit</th>
+            <th>Role</th>
+            <th>2FA</th>
+            <th>Last Login</th>
+            <th>Created</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of filteredUsers(); track user.id) {
+            <tr>
+              <td>
+                <div class="user-cell">
+                  @if (user.thumbnailPhotoUrl) {
+                    <img class="avatar" [src]="user.thumbnailPhotoUrl" alt="" referrerpolicy="no-referrer">
+                  } @else {
+                    <span class="avatar avatar-fallback">{{ (user.fullName || user.email).charAt(0) | uppercase }}</span>
+                  }
+                  <strong>{{ user.fullName || '—' }}</strong>
+                </div>
+              </td>
+              <td class="mono">{{ user.email }}
+                @if (user.aliases.length > 0) {
+                  <span class="alias-sub" [title]="user.aliases.join(', ')">+{{ user.aliases.length }} alias{{ user.aliases.length > 1 ? 'es' : '' }}</span>
+                }
+              </td>
+              <td class="mono">{{ user.orgUnitPath || '/' }}</td>
+              <td>
+                @if (user.isAdmin) {
+                  <span class="role-badge admin">Super Admin</span>
+                } @else if (user.isDelegatedAdmin) {
+                  <span class="role-badge delegated">Delegated Admin</span>
+                } @else {
+                  <span class="role-badge">User</span>
+                }
+              </td>
+              <td>
+                @if (user.isEnrolledIn2Sv) {
+                  <i class='bx bx-check-shield tfa-on' title="Enrolled in 2-Step Verification"></i>
+                } @else {
+                  <i class='bx bx-shield-x tfa-off' title="Not enrolled in 2-Step Verification"></i>
+                }
+              </td>
+              <td>{{ user.lastLoginTime ? (user.lastLoginTime | date:'MMM d, y, h:mm a') : 'Never' }}</td>
+              <td>{{ user.creationTime ? (user.creationTime | date:'MMM d, y') : '—' }}</td>
+              <td><span class="status-badge" [class]="getStatus(user)">{{ getStatus(user) }}</span></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
