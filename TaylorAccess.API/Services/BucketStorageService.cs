@@ -1,5 +1,6 @@
+using Amazon.Runtime;
 using Amazon.S3;
-using Amazon.S3.Transfer;
+using Amazon.S3.Model;
 
 namespace TaylorAccess.API.Services;
 
@@ -30,10 +31,14 @@ public sealed class BucketStorageService : IDisposable
         }
 
         _bucketName = name;
+        // Railway's storage rejects aws-chunked uploads, so checksums stay off
+        // and every request uses UseChunkEncoding = false.
         _client = new AmazonS3Client(accessKey, secretKey, new AmazonS3Config
         {
             ServiceURL = endpoint,
-            ForcePathStyle = false
+            ForcePathStyle = false,
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
         });
     }
 
@@ -46,20 +51,10 @@ public sealed class BucketStorageService : IDisposable
         if (_client == null)
             throw new InvalidOperationException("Bucket storage is not configured");
 
-        using var transfer = new TransferUtility(_client);
-
         if (content.CanSeek)
         {
-            var written = content.Length;
-            await transfer.UploadAsync(new TransferUtilityUploadRequest
-            {
-                BucketName = _bucketName,
-                Key = key,
-                InputStream = content,
-                ContentType = contentType,
-                AutoCloseStream = false
-            }, cancellationToken);
-            return written;
+            await UploadCoreAsync(key, content, contentType, cancellationToken);
+            return content.Length;
         }
 
         // Spool non-seekable streams (HTTP downloads) to a temp file so multi-GB
@@ -73,20 +68,86 @@ public sealed class BucketStorageService : IDisposable
                 await content.CopyToAsync(temp, cancellationToken);
                 written = temp.Length;
                 temp.Position = 0;
-                await transfer.UploadAsync(new TransferUtilityUploadRequest
-                {
-                    BucketName = _bucketName,
-                    Key = key,
-                    InputStream = temp,
-                    ContentType = contentType,
-                    AutoCloseStream = false
-                }, cancellationToken);
+                await UploadCoreAsync(key, temp, contentType, cancellationToken);
             }
             return written;
         }
         finally
         {
             try { File.Delete(tempPath); } catch { /* best effort */ }
+        }
+    }
+
+    private async Task UploadCoreAsync(string key, Stream seekable, string? contentType, CancellationToken ct)
+    {
+        const long multipartThreshold = 4L * 1024 * 1024 * 1024; // single PUT caps at 5 GB
+        const long partSize = 256L * 1024 * 1024;
+
+        if (seekable.Length <= multipartThreshold)
+        {
+            await _client!.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = key,
+                InputStream = seekable,
+                ContentType = contentType,
+                UseChunkEncoding = false,
+                AutoCloseStream = false
+            }, ct);
+            return;
+        }
+
+        var init = await _client!.InitiateMultipartUploadAsync(new InitiateMultipartUploadRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            ContentType = contentType
+        }, ct);
+
+        try
+        {
+            var etags = new List<PartETag>();
+            var partNumber = 1;
+            long position = 0;
+            while (position < seekable.Length)
+            {
+                var size = Math.Min(partSize, seekable.Length - position);
+                var part = await _client.UploadPartAsync(new UploadPartRequest
+                {
+                    BucketName = _bucketName,
+                    Key = key,
+                    UploadId = init.UploadId,
+                    PartNumber = partNumber,
+                    InputStream = seekable,
+                    PartSize = size,
+                    UseChunkEncoding = false
+                }, ct);
+                etags.Add(new PartETag(partNumber, part.ETag));
+                position += size;
+                partNumber++;
+            }
+
+            await _client.CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
+            {
+                BucketName = _bucketName,
+                Key = key,
+                UploadId = init.UploadId,
+                PartETags = etags
+            }, ct);
+        }
+        catch
+        {
+            try
+            {
+                await _client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
+                {
+                    BucketName = _bucketName,
+                    Key = key,
+                    UploadId = init.UploadId
+                }, CancellationToken.None);
+            }
+            catch { /* best effort */ }
+            throw;
         }
     }
 

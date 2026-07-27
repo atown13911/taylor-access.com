@@ -84,7 +84,8 @@ public sealed class GoogleDriveBackupWorker
                 await _db.SaveChangesAsync(ct);
             }
 
-            run.Status = "completed";
+            // A pass that failed on everything shouldn't block the scheduler's retry.
+            run.Status = run.FilesBackedUp == 0 && run.FilesFailed > 0 ? "failed" : "completed";
             run.FinishedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
             _logger.LogInformation(
