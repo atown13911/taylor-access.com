@@ -174,7 +174,8 @@ public class GoogleDirectoryService
 
     // Accounts never exposed through the workspace-users listing (comma-separated env override).
     private static readonly HashSet<string> HiddenUsers =
-        (Environment.GetEnvironmentVariable("GOOGLE_HIDDEN_WORKSPACE_USERS") ?? "austin.taylor@taylor-corp.net")
+        (Environment.GetEnvironmentVariable("GOOGLE_HIDDEN_WORKSPACE_USERS")
+            ?? "austin.taylor@taylor-corp.net,anatomic@taylor-corp.net")
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
