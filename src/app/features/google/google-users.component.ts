@@ -6,6 +6,26 @@ import { ToastService } from '../../core/services/toast.service';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 
+interface OAuthToken {
+  clientId: string;
+  displayText: string;
+  scopes: string[];
+  nativeApp: boolean;
+}
+
+interface AppSpecificPassword {
+  codeId: number;
+  name: string;
+  creationTime: number;
+  lastTimeUsed: number;
+}
+
+interface UserSecurity {
+  tokens: OAuthToken[];
+  asps: AppSpecificPassword[];
+  backupCodes: string[];
+}
+
 interface GoogleUser {
   id: string;
   email: string;
@@ -162,18 +182,141 @@ export class GoogleUsersComponent implements OnInit {
 
   // ----- Account register drawer -----
   registerUser = signal<GoogleUser | null>(null);
+  security = signal<UserSecurity | null>(null);
+  securityLoading = signal(false);
+  securityError = signal<string | null>(null);
+  securityBusy = signal(false);
+  showBackupCodes = signal(false);
 
   openRegister(user: GoogleUser) {
     this.registerUser.set(user);
+    this.showBackupCodes.set(false);
+    if (!user.deleted) this.loadSecurity(user);
+    else { this.security.set(null); this.securityError.set(null); }
   }
 
   closeRegister() {
     this.registerUser.set(null);
+    this.security.set(null);
+    this.securityError.set(null);
   }
 
   manageFromRegister() {
     const user = this.registerUser();
     if (user) this.openManage(user);
+  }
+
+  adminConsoleLinks(user: GoogleUser) {
+    return [
+      { label: 'User in Admin Console', icon: 'bx bx-user-circle', url: `https://admin.google.com/ac/users/${user.id}` },
+      { label: 'Groups', icon: 'bx bx-group', url: 'https://admin.google.com/ac/groups' },
+      { label: 'Licenses & Billing', icon: 'bx bx-badge-check', url: 'https://admin.google.com/ac/billing' },
+      { label: 'Login Audit (Reports)', icon: 'bx bx-history', url: 'https://admin.google.com/ac/reporting/audit/user' },
+      { label: 'Data Transfer', icon: 'bx bx-transfer', url: 'https://admin.google.com/ac/datatransfer' }
+    ];
+  }
+
+  loadSecurity(user: GoogleUser) {
+    this.securityLoading.set(true);
+    this.securityError.set(null);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/security`).subscribe({
+      next: (res) => { this.security.set(res?.data || null); this.securityLoading.set(false); },
+      error: (err) => {
+        this.security.set(null);
+        this.securityLoading.set(false);
+        this.securityError.set(err?.error?.error || 'Failed to load security details');
+      }
+    });
+  }
+
+  revokeToken(token: OAuthToken) {
+    const user = this.registerUser();
+    if (!user) return;
+    if (!confirm(`Revoke access for "${token.displayText || token.clientId}"?\nThe app will lose access to ${user.email}.`)) return;
+
+    this.securityBusy.set(true);
+    this.http.delete(
+      `${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/tokens/${encodeURIComponent(token.clientId)}`,
+      { params: { email: user.email } }
+    ).subscribe({
+      next: () => {
+        this.securityBusy.set(false);
+        this.toast.champagne(`Access revoked — ${token.displayText || token.clientId}`, 'Google');
+        this.loadSecurity(user);
+      },
+      error: (err) => {
+        this.securityBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to revoke token', 'Google');
+      }
+    });
+  }
+
+  deleteAsp(asp: AppSpecificPassword) {
+    const user = this.registerUser();
+    if (!user) return;
+    if (!confirm(`Delete app-specific password "${asp.name}" for ${user.email}?`)) return;
+
+    this.securityBusy.set(true);
+    this.http.delete(
+      `${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/asps/${asp.codeId}`,
+      { params: { email: user.email } }
+    ).subscribe({
+      next: () => {
+        this.securityBusy.set(false);
+        this.toast.champagne(`App password deleted — ${asp.name}`, 'Google');
+        this.loadSecurity(user);
+      },
+      error: (err) => {
+        this.securityBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to delete app password', 'Google');
+      }
+    });
+  }
+
+  generateBackupCodes() {
+    const user = this.registerUser();
+    if (!user) return;
+    if (!confirm(`Generate new 2SV backup codes for ${user.email}? Existing codes will be replaced.`)) return;
+
+    this.securityBusy.set(true);
+    this.http.post(
+      `${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/backup-codes/generate`,
+      null, { params: { email: user.email } }
+    ).subscribe({
+      next: () => {
+        this.securityBusy.set(false);
+        this.showBackupCodes.set(true);
+        this.toast.champagne(`Backup codes generated — ${user.email}`, 'Google');
+        this.loadSecurity(user);
+      },
+      error: (err) => {
+        this.securityBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to generate backup codes', 'Google');
+      }
+    });
+  }
+
+  invalidateBackupCodes() {
+    const user = this.registerUser();
+    if (!user) return;
+    if (!confirm(`Invalidate all 2SV backup codes for ${user.email}? They can no longer be used to sign in.`)) return;
+
+    this.securityBusy.set(true);
+    this.http.post(
+      `${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/backup-codes/invalidate`,
+      null, { params: { email: user.email } }
+    ).subscribe({
+      next: () => {
+        this.securityBusy.set(false);
+        this.showBackupCodes.set(false);
+        this.toast.champagne(`Backup codes invalidated — ${user.email}`, 'Google');
+        this.loadSecurity(user);
+      },
+      error: (err) => {
+        this.securityBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to invalidate backup codes', 'Google');
+      }
+    });
   }
 
   // ----- Manage modal -----

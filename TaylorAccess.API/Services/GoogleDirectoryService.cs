@@ -39,6 +39,29 @@ public sealed class GoogleDirectoryResult
     public List<GoogleWorkspaceUser> Users { get; init; } = new();
 }
 
+public sealed class GoogleOAuthToken
+{
+    public string ClientId { get; set; } = "";
+    public string DisplayText { get; set; } = "";
+    public List<string> Scopes { get; set; } = new();
+    public bool NativeApp { get; set; }
+}
+
+public sealed class GoogleAsp
+{
+    public long CodeId { get; set; }
+    public string Name { get; set; } = "";
+    public long CreationTime { get; set; }
+    public long LastTimeUsed { get; set; }
+}
+
+public sealed class GoogleUserSecurity
+{
+    public List<GoogleOAuthToken> Tokens { get; set; } = new();
+    public List<GoogleAsp> Asps { get; set; } = new();
+    public List<string> BackupCodes { get; set; } = new();
+}
+
 /// <summary>
 /// Lists Google Workspace domain users via the Admin SDK Directory API using the same
 /// domain-wide-delegation service account as <see cref="GmailDirectMetricsService"/>.
@@ -142,6 +165,137 @@ public class GoogleDirectoryService
         SendDirectoryRequestAsync(
             new HttpRequestMessage(HttpMethod.Delete, $"{UserUrl(userKey)}/aliases/{Uri.EscapeDataString(alias)}"),
             DirectoryWriteScope, $"remove alias on {userKey}", cancellationToken);
+
+    /// <summary>
+    /// Fetches a user's security surface: OAuth tokens (connected third-party apps),
+    /// app-specific passwords, and 2SV backup verification codes.
+    /// </summary>
+    public async Task<(GoogleUserSecurity? Security, string? Error)> GetUserSecurityAsync(
+        string userKey,
+        CancellationToken cancellationToken = default)
+    {
+        var (token, tokenError) = await AcquireTokenAsync(DirectorySecurityScope, cancellationToken);
+        if (token == null)
+            return (null, tokenError);
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var baseUrl = UserUrl(userKey);
+        var security = new GoogleUserSecurity();
+
+        var (tokensDoc, tokensError) = await GetJsonAsync(client, $"{baseUrl}/tokens", $"tokens for {userKey}", cancellationToken);
+        if (tokensDoc == null)
+            return (null, tokensError);
+        using (tokensDoc)
+        {
+            if (tokensDoc.RootElement.TryGetProperty("items", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    var t = new GoogleOAuthToken
+                    {
+                        ClientId = item.TryGetProperty("clientId", out var ci) ? ci.GetString() ?? "" : "",
+                        DisplayText = item.TryGetProperty("displayText", out var dt) ? dt.GetString() ?? "" : "",
+                        NativeApp = item.TryGetProperty("nativeApp", out var na) && na.GetBoolean()
+                    };
+                    if (item.TryGetProperty("scopes", out var scopes) && scopes.ValueKind == JsonValueKind.Array)
+                        t.Scopes = scopes.EnumerateArray().Select(s => s.GetString() ?? "").Where(s => s.Length > 0).ToList();
+                    security.Tokens.Add(t);
+                }
+            }
+        }
+
+        var (aspsDoc, aspsError) = await GetJsonAsync(client, $"{baseUrl}/asps", $"asps for {userKey}", cancellationToken);
+        if (aspsDoc == null)
+            return (null, aspsError);
+        using (aspsDoc)
+        {
+            if (aspsDoc.RootElement.TryGetProperty("items", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    security.Asps.Add(new GoogleAsp
+                    {
+                        CodeId = ReadLong(item, "codeId"),
+                        Name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                        CreationTime = ReadLong(item, "creationTime"),
+                        LastTimeUsed = ReadLong(item, "lastTimeUsed")
+                    });
+                }
+            }
+        }
+
+        var (codesDoc, codesError) = await GetJsonAsync(client, $"{baseUrl}/verificationCodes", $"verification codes for {userKey}", cancellationToken);
+        if (codesDoc == null)
+            return (null, codesError);
+        using (codesDoc)
+        {
+            if (codesDoc.RootElement.TryGetProperty("items", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    var code = item.TryGetProperty("verificationCode", out var vc) ? vc.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(code))
+                        security.BackupCodes.Add(code);
+                }
+            }
+        }
+
+        return (security, null);
+    }
+
+    public Task<(bool Success, string? Error)> RevokeTokenAsync(
+        string userKey, string clientId, CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            new HttpRequestMessage(HttpMethod.Delete, $"{UserUrl(userKey)}/tokens/{Uri.EscapeDataString(clientId)}"),
+            DirectorySecurityScope, $"revoke token on {userKey}", cancellationToken);
+
+    public Task<(bool Success, string? Error)> DeleteAspAsync(
+        string userKey, long codeId, CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            new HttpRequestMessage(HttpMethod.Delete, $"{UserUrl(userKey)}/asps/{codeId}"),
+            DirectorySecurityScope, $"delete ASP on {userKey}", cancellationToken);
+
+    public Task<(bool Success, string? Error)> GenerateBackupCodesAsync(
+        string userKey, CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            new HttpRequestMessage(HttpMethod.Post, $"{UserUrl(userKey)}/verificationCodes/generate"),
+            DirectorySecurityScope, $"generate backup codes on {userKey}", cancellationToken);
+
+    public Task<(bool Success, string? Error)> InvalidateBackupCodesAsync(
+        string userKey, CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            new HttpRequestMessage(HttpMethod.Post, $"{UserUrl(userKey)}/verificationCodes/invalidate"),
+            DirectorySecurityScope, $"invalidate backup codes on {userKey}", cancellationToken);
+
+    // Google renders int64 values as JSON strings; accept both forms.
+    private static long ReadLong(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value)) return 0;
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number => value.GetInt64(),
+            JsonValueKind.String when long.TryParse(value.GetString(), out var parsed) => parsed,
+            _ => 0
+        };
+    }
+
+    private async Task<(JsonDocument? Doc, string? Error)> GetJsonAsync(
+        HttpClient client, string url, string context, CancellationToken cancellationToken)
+    {
+        using var res = await client.GetAsync(url, cancellationToken);
+        var body = await res.Content.ReadAsStringAsync(cancellationToken);
+        if (!res.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Google Directory {Context} failed ({Status}): {Body}",
+                context, (int)res.StatusCode, body[..Math.Min(body.Length, 300)]);
+            return (null, $"Google API error {(int)res.StatusCode}: {body[..Math.Min(body.Length, 200)]}");
+        }
+
+        return (JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body), null);
+    }
 
     private static string UserUrl(string userKey) =>
         $"https://admin.googleapis.com/admin/directory/v1/users/{Uri.EscapeDataString(userKey)}";

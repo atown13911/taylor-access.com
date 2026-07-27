@@ -186,12 +186,101 @@
           }
         </div>
 
+        @if (!user.deleted) {
+          @if (securityLoading()) {
+            <h3 class="section-title">Connected Apps & Security</h3>
+            <p class="empty-hint"><i class='bx bx-loader-alt bx-spin'></i> Loading security details...</p>
+          } @else if (securityError()) {
+            <h3 class="section-title">Connected Apps & Security</h3>
+            <p class="empty-hint error-hint"><i class='bx bx-error-circle'></i> {{ securityError() }}</p>
+          }
+          @if (!securityLoading() && !securityError() && security(); as sec) {
+
+            <h3 class="section-title">Connected Apps (OAuth)</h3>
+            @if (sec.tokens.length) {
+              <div class="sec-list">
+                @for (token of sec.tokens; track token.clientId) {
+                  <div class="sec-row">
+                    <div class="sec-info">
+                      <span class="sec-name">{{ token.displayText || token.clientId }}</span>
+                      <span class="sec-sub">{{ token.scopes.length }} scope{{ token.scopes.length === 1 ? '' : 's' }}{{ token.nativeApp ? ' · native app' : '' }}</span>
+                    </div>
+                    <button class="btn btn-secondary btn-xs danger" (click)="revokeToken(token)" [disabled]="securityBusy()" [title]="token.scopes.join('\n')">
+                      <i class='bx bx-unlink'></i> Revoke
+                    </button>
+                  </div>
+                }
+              </div>
+            } @else {
+              <p class="empty-hint">No third-party apps have access</p>
+            }
+
+            <h3 class="section-title">App-Specific Passwords</h3>
+            @if (sec.asps.length) {
+              <div class="sec-list">
+                @for (asp of sec.asps; track asp.codeId) {
+                  <div class="sec-row">
+                    <div class="sec-info">
+                      <span class="sec-name">{{ asp.name || 'Unnamed' }}</span>
+                      <span class="sec-sub">Created {{ asp.creationTime ? (asp.creationTime | date:'MMM d, y') : '—' }} · {{ asp.lastTimeUsed ? 'Last used ' + (asp.lastTimeUsed | date:'MMM d, y') : 'Never used' }}</span>
+                    </div>
+                    <button class="btn btn-secondary btn-xs danger" (click)="deleteAsp(asp)" [disabled]="securityBusy()">
+                      <i class='bx bx-trash'></i> Delete
+                    </button>
+                  </div>
+                }
+              </div>
+            } @else {
+              <p class="empty-hint">No app-specific passwords</p>
+            }
+
+            <h3 class="section-title">2SV Backup Codes</h3>
+            @if (sec.backupCodes.length) {
+              <div class="sec-row codes-head">
+                <span class="sec-sub">{{ sec.backupCodes.length }} unused code{{ sec.backupCodes.length === 1 ? '' : 's' }}</span>
+                <button class="btn btn-secondary btn-xs" (click)="showBackupCodes.set(!showBackupCodes())">
+                  <i class='bx' [class.bx-show]="!showBackupCodes()" [class.bx-hide]="showBackupCodes()"></i>
+                  {{ showBackupCodes() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
+              @if (showBackupCodes()) {
+                <div class="codes-grid">
+                  @for (code of sec.backupCodes; track code) {
+                    <span class="code-chip">{{ code }}</span>
+                  }
+                </div>
+              }
+            } @else {
+              <p class="empty-hint">No backup codes</p>
+            }
+            <div class="codes-actions">
+              <button class="btn btn-secondary btn-xs" (click)="generateBackupCodes()" [disabled]="securityBusy()">
+                <i class='bx bx-refresh'></i> Generate New
+              </button>
+              @if (sec.backupCodes.length) {
+                <button class="btn btn-secondary btn-xs danger" (click)="invalidateBackupCodes()" [disabled]="securityBusy()">
+                  <i class='bx bx-block'></i> Invalidate All
+                </button>
+              }
+            </div>
+          }
+        }
+
         <h3 class="section-title">Activity</h3>
         <div class="detail-grid">
           <div class="detail"><label>Last Login</label><span>{{ user.lastLoginTime ? (user.lastLoginTime | date:'MMM d, y, h:mm a') : 'Never' }}</span></div>
           <div class="detail"><label>Created</label><span>{{ user.creationTime ? (user.creationTime | date:'MMM d, y, h:mm a') : '—' }}</span></div>
           @if (user.deleted && user.deletionTime) {
             <div class="detail"><label>Deleted</label><span>{{ user.deletionTime | date:'MMM d, y, h:mm a' }} — recoverable ~20 days</span></div>
+          }
+        </div>
+
+        <h3 class="section-title">Google Admin Console</h3>
+        <div class="link-list">
+          @for (link of adminConsoleLinks(user); track link.url) {
+            <a class="console-link" [href]="link.url" target="_blank" rel="noopener">
+              <i [class]="link.icon"></i> {{ link.label }} <i class='bx bx-link-external ext'></i>
+            </a>
           }
         </div>
       </div>

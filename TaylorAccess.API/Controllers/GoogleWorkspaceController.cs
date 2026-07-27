@@ -186,4 +186,74 @@ public class GoogleWorkspaceController : ControllerBase
 
         return Ok(new { success = true });
     }
+
+    /// <summary>
+    /// Security surface for a user: OAuth tokens (connected apps),
+    /// app-specific passwords, and 2SV backup codes.
+    /// </summary>
+    [HttpGet("workspace-users/{id}/security")]
+    public async Task<ActionResult> GetUserSecurity(string id, CancellationToken cancellationToken)
+    {
+        var (security, error) = await _directory.GetUserSecurityAsync(id, cancellationToken);
+        if (security == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = security });
+    }
+
+    [HttpDelete("workspace-users/{id}/tokens/{clientId}")]
+    public async Task<ActionResult> RevokeToken(
+        string id, string clientId, [FromQuery] string? email, CancellationToken cancellationToken)
+    {
+        var (success, error) = await _directory.RevokeTokenAsync(id, clientId, cancellationToken);
+        if (!success)
+            return StatusCode(502, new { error });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            $"Google Workspace: revoked OAuth token {clientId} for {email ?? id}");
+
+        return Ok(new { success = true });
+    }
+
+    [HttpDelete("workspace-users/{id}/asps/{codeId:long}")]
+    public async Task<ActionResult> DeleteAsp(
+        string id, long codeId, [FromQuery] string? email, CancellationToken cancellationToken)
+    {
+        var (success, error) = await _directory.DeleteAspAsync(id, codeId, cancellationToken);
+        if (!success)
+            return StatusCode(502, new { error });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            $"Google Workspace: deleted app-specific password {codeId} for {email ?? id}");
+
+        return Ok(new { success = true });
+    }
+
+    [HttpPost("workspace-users/{id}/backup-codes/generate")]
+    public async Task<ActionResult> GenerateBackupCodes(
+        string id, [FromQuery] string? email, CancellationToken cancellationToken)
+    {
+        var (success, error) = await _directory.GenerateBackupCodesAsync(id, cancellationToken);
+        if (!success)
+            return StatusCode(502, new { error });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            $"Google Workspace: generated 2SV backup codes for {email ?? id}");
+
+        return Ok(new { success = true });
+    }
+
+    [HttpPost("workspace-users/{id}/backup-codes/invalidate")]
+    public async Task<ActionResult> InvalidateBackupCodes(
+        string id, [FromQuery] string? email, CancellationToken cancellationToken)
+    {
+        var (success, error) = await _directory.InvalidateBackupCodesAsync(id, cancellationToken);
+        if (!success)
+            return StatusCode(502, new { error });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            $"Google Workspace: invalidated 2SV backup codes for {email ?? id}");
+
+        return Ok(new { success = true });
+    }
 }
