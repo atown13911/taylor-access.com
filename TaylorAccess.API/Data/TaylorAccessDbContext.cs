@@ -131,6 +131,8 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<MotivActivityLog> MotivActivityLogs => Set<MotivActivityLog>();
     public DbSet<GoogleDataTransfer> GoogleDataTransfers => Set<GoogleDataTransfer>();
     public DbSet<GoogleStorageSnapshot> GoogleStorageSnapshots => Set<GoogleStorageSnapshot>();
+    public DbSet<GoogleDriveBackupFile> GoogleDriveBackupFiles => Set<GoogleDriveBackupFile>();
+    public DbSet<GoogleDriveBackupRun> GoogleDriveBackupRuns => Set<GoogleDriveBackupRun>();
     public DbSet<MotivSafetyEvent> MotivSafetyEvents => Set<MotivSafetyEvent>();
     public DbSet<MotivDriverAnalysisCache> MotivDriverAnalysisCaches => Set<MotivDriverAnalysisCache>();
     public DbSet<FuelCardAssignment> FuelCardAssignments => Set<FuelCardAssignment>();

@@ -19,6 +19,13 @@
 }
 
 .report-date { align-self: center; font-size: 0.72rem; color: var(--text-secondary); margin-left: auto; }
+
+.backup-panel { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; margin-bottom: 18px; background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.15); border-radius: 10px; }
+.backup-info { display: flex; align-items: center; gap: 12px;
+  > i { font-size: 1.5rem; color: var(--cyan); }
+  strong { display: block; font-size: 0.85rem; color: var(--text-primary); }
+}
+.backup-sub { display: block; font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; }
 .quota-cell { min-width: 140px; }
 .quota-bar { display: inline-block; width: 90px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; vertical-align: middle; margin-right: 8px; }
 .quota-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #00d4ff, #0080ff);

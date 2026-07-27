@@ -126,6 +126,7 @@ public class GoogleDirectoryService
     private const string ReportsScope = "https://www.googleapis.com/auth/admin.reports.audit.readonly";
     private const string UsageReportScope = "https://www.googleapis.com/auth/admin.reports.usage.readonly";
     private const string DataTransferScope = "https://www.googleapis.com/auth/admin.datatransfer";
+    public const string DriveReadScope = "https://www.googleapis.com/auth/drive.readonly";
 
     private readonly TaylorAccessDbContext _context;
     private readonly IntegrationEncryptionService _encryption;
@@ -808,6 +809,34 @@ public class GoogleDirectoryService
                     ? " — the admin.directory.user.security scope may be missing from domain-wide delegation."
                     : " — the admin.directory.user (write) scope may be missing from domain-wide delegation.";
             return (false, error);
+        }
+    }
+
+    /// <summary>Token impersonating a specific user (Drive backups etc), not the admin.</summary>
+    public async Task<(string? Token, string? Error)> AcquireUserTokenAsync(
+        string userEmail, string scope, CancellationToken cancellationToken = default)
+    {
+        string? saKeyJson;
+        try
+        {
+            saKeyJson = await ResolveServiceAccountJsonAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return (null, ex.Message);
+        }
+
+        if (string.IsNullOrWhiteSpace(saKeyJson))
+            return (null, "No Google service account key configured");
+
+        try
+        {
+            return (await GetServiceAccountTokenAsync(saKeyJson, userEmail, scope, cancellationToken), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Google token exchange failed for {User} scope {Scope}", userEmail, scope);
+            return (null, $"Google authorization failed for scope {scope} impersonating {userEmail}. {ex.Message}");
         }
     }
 

@@ -71,6 +71,27 @@ interface UserStorage {
   usedPercent: number;
 }
 
+interface DriveBackupRun {
+  id: number;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  trigger: string;
+  usersProcessed: number;
+  filesBackedUp: number;
+  filesSkipped: number;
+  filesFailed: number;
+  bytesUploaded: number;
+  error: string | null;
+}
+
+interface DriveBackupStatus {
+  running: boolean;
+  runs: DriveBackupRun[];
+  perUser: { email: string; files: number; bytes: number; lastBackedUpAt: string }[];
+  failedFiles: number;
+}
+
 interface GoogleUser {
   id: string;
   email: string;
@@ -123,6 +144,7 @@ export class GoogleUsersComponent implements OnInit {
   setPageTab(tab: 'domain' | 'storage' | 'restricted') {
     this.pageTab.set(tab);
     if (tab === 'storage' && !this.storageLoaded) this.loadStorage();
+    if (tab === 'storage' && this.isProductOwner) this.loadBackupStatus();
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
   }
 
@@ -226,7 +248,56 @@ export class GoogleUsersComponent implements OnInit {
     });
   }
 
-  refreshStorage() { this.loadStorage(); }
+  refreshStorage() {
+    this.loadStorage();
+    if (this.isProductOwner) this.loadBackupStatus();
+  }
+
+  // ----- Drive-to-bucket backup (product owner only) -----
+  backupStatus = signal<DriveBackupStatus | null>(null);
+  backupBusy = signal(false);
+
+  loadBackupStatus() {
+    this.http.get<DriveBackupStatus>(`${this.apiUrl}/api/v1/google/drive-backup/status`).subscribe({
+      next: (res) => this.backupStatus.set(res),
+      error: () => this.backupStatus.set(null)
+    });
+  }
+
+  runBackup() {
+    if (!confirm('Back up every user\'s Drive files to the storage bucket now? The first pass can take several hours.')) return;
+    this.backupBusy.set(true);
+    this.http.post<any>(`${this.apiUrl}/api/v1/google/drive-backup/run`, {}).subscribe({
+      next: (res) => {
+        this.backupBusy.set(false);
+        if (res?.started) {
+          this.toast.champagne('Drive backup started — files are being copied to the bucket', 'Google');
+        } else {
+          this.toast.info(res?.message || 'A backup run is already in progress', 'Google');
+        }
+        this.loadBackupStatus();
+      },
+      error: (err) => {
+        this.backupBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to start backup', 'Google');
+      }
+    });
+  }
+
+  lastBackupRun = computed(() => this.backupStatus()?.runs?.[0] ?? null);
+
+  backupTotals = computed(() => {
+    const perUser = this.backupStatus()?.perUser ?? [];
+    return {
+      users: perUser.length,
+      files: perUser.reduce((sum, u) => sum + u.files, 0),
+      bytes: perUser.reduce((sum, u) => sum + u.bytes, 0)
+    };
+  });
+
+  formatBytes(bytes: number): string {
+    return this.formatMb(Math.round(bytes / (1024 * 1024)));
+  }
 
   formatMb(mb: number): string {
     if (mb >= 1024 * 1024) return (mb / (1024 * 1024)).toFixed(2) + ' TB';

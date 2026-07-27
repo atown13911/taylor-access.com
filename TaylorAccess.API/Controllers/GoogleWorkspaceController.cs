@@ -478,6 +478,68 @@ public class GoogleWorkspaceController : ControllerBase
 
         return Ok(new { success = true, transferId });
     }
+
+    // ----- Drive-to-bucket backup -----
+
+    /// <summary>Starts a Drive backup pass in the background (product owner only).</summary>
+    [HttpPost("drive-backup/run")]
+    public async Task<ActionResult> RunDriveBackup([FromServices] IServiceScopeFactory scopeFactory)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can run Drive backups" });
+
+        if (GoogleDriveBackupWorker.IsRunning)
+            return Ok(new { started = false, message = "A backup run is already in progress" });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            "Google Workspace: manually started Drive-to-bucket backup");
+
+        _ = Task.Run(async () =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var worker = scope.ServiceProvider.GetRequiredService<GoogleDriveBackupWorker>();
+            await worker.RunAsync("manual", CancellationToken.None);
+        });
+
+        return Ok(new { started = true });
+    }
+
+    /// <summary>Latest backup runs plus per-user bucket totals (product owner only).</summary>
+    [HttpGet("drive-backup/status")]
+    public async Task<ActionResult> GetDriveBackupStatus(CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can view Drive backup status" });
+
+        var runs = await _context.GoogleDriveBackupRuns.AsNoTracking()
+            .OrderByDescending(r => r.StartedAt)
+            .Take(10)
+            .ToListAsync(cancellationToken);
+
+        var perUser = await _context.GoogleDriveBackupFiles.AsNoTracking()
+            .Where(f => f.Status == "backedUp")
+            .GroupBy(f => f.UserEmail)
+            .Select(g => new
+            {
+                email = g.Key,
+                files = g.Count(),
+                bytes = g.Sum(x => x.SizeBytes),
+                lastBackedUpAt = g.Max(x => x.BackedUpAt)
+            })
+            .OrderByDescending(x => x.bytes)
+            .ToListAsync(cancellationToken);
+
+        var failed = await _context.GoogleDriveBackupFiles.AsNoTracking()
+            .CountAsync(f => f.Status == "failed", cancellationToken);
+
+        return Ok(new
+        {
+            running = GoogleDriveBackupWorker.IsRunning,
+            runs,
+            perUser,
+            failedFiles = failed
+        });
+    }
 }
 
 public class GoogleTransferRequest

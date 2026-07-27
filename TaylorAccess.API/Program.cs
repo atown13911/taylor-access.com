@@ -258,6 +258,8 @@ builder.Services.AddScoped<LocalIntegrationStatusService>();
 builder.Services.AddScoped<ZoomDirectMetricsService>();
 builder.Services.AddScoped<GmailDirectMetricsService>();
 builder.Services.AddScoped<GoogleDirectoryService>();
+builder.Services.AddSingleton<BucketStorageService>();
+builder.Services.AddScoped<GoogleDriveBackupWorker>();
 builder.Services.AddScoped<PerformanceSyncOrchestrator>();
 builder.Services.AddScoped<CrmPerformanceBackfillService>();
 builder.Services.AddScoped<InsuranceChargingEstimateService>();
@@ -286,6 +288,7 @@ builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHostedService<MotiveDriverAnalysisScheduledRefreshService>();
 builder.Services.AddHostedService<GoogleStorageSnapshotService>();
+builder.Services.AddHostedService<GoogleDriveBackupScheduler>();
 
 var app = builder.Build();
 
@@ -620,6 +623,39 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleStorageSnapshots_ReportDate_Email""
             ON ""GoogleStorageSnapshots"" (""ReportDate"", ""Email"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""GoogleDriveBackupFiles"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""UserEmail"" VARCHAR(256) NOT NULL,
+            ""FileId"" VARCHAR(128) NOT NULL,
+            ""FileName"" VARCHAR(1024) NOT NULL DEFAULT '',
+            ""MimeType"" VARCHAR(256) NOT NULL DEFAULT '',
+            ""SizeBytes"" BIGINT NOT NULL DEFAULT 0,
+            ""Md5"" VARCHAR(64) NULL,
+            ""ModifiedTime"" VARCHAR(64) NULL,
+            ""S3Key"" VARCHAR(2048) NOT NULL DEFAULT '',
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'backedUp',
+            ""Error"" VARCHAR(500) NULL,
+            ""BackedUpAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleDriveBackupFiles_User_File""
+            ON ""GoogleDriveBackupFiles"" (""UserEmail"", ""FileId"");
+
+        CREATE TABLE IF NOT EXISTS ""GoogleDriveBackupRuns"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""StartedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""FinishedAt"" TIMESTAMP NULL,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'running',
+            ""Trigger"" VARCHAR(50) NOT NULL DEFAULT 'scheduled',
+            ""UsersProcessed"" INT NOT NULL DEFAULT 0,
+            ""FilesBackedUp"" INT NOT NULL DEFAULT 0,
+            ""FilesSkipped"" INT NOT NULL DEFAULT 0,
+            ""FilesFailed"" INT NOT NULL DEFAULT 0,
+            ""BytesUploaded"" BIGINT NOT NULL DEFAULT 0,
+            ""Error"" VARCHAR(1000) NULL
+        );
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"

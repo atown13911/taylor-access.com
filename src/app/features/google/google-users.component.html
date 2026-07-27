@@ -170,6 +170,42 @@
       </button>
     </div>
 
+    @if (isProductOwner) {
+      <div class="backup-panel">
+        <div class="backup-info">
+          <i class='bx bx-cloud-upload'></i>
+          <div>
+            <strong>Drive Backup to Bucket</strong>
+            <span class="backup-sub">
+              @if (backupStatus()?.running) {
+                Backup in progress...
+              } @else if (lastBackupRun()) {
+                @if (lastBackupRun(); as run) {
+                  Last run {{ run.startedAt | date:'MMM d, h:mm a' }} — {{ run.status }} ·
+                  {{ run.filesBackedUp }} backed up, {{ run.filesSkipped }} unchanged, {{ run.filesFailed }} failed
+                }
+              } @else {
+                Drive files for every account are copied to the storage bucket nightly
+              }
+            </span>
+            @if (backupTotals().files > 0) {
+              <span class="backup-sub">
+                In bucket: {{ backupTotals().files }} files · {{ formatBytes(backupTotals().bytes) }} across {{ backupTotals().users }} accounts
+              </span>
+            }
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" (click)="runBackup()"
+                [disabled]="backupBusy() || backupStatus()?.running">
+          @if (backupStatus()?.running) {
+            <i class='bx bx-loader-alt bx-spin'></i> Running...
+          } @else {
+            <i class='bx bx-cloud-upload'></i> Back Up Now
+          }
+        </button>
+      </div>
+    }
+
     @if (storageLoading()) {
       <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading storage usage...</p></div>
     } @else if (storageError()) {
