@@ -13,7 +13,11 @@ public sealed class GoogleWorkspaceUser
     public string Id { get; set; } = "";
     public string Email { get; set; } = "";
     public string FullName { get; set; } = "";
+    public string GivenName { get; set; } = "";
+    public string FamilyName { get; set; } = "";
     public string OrgUnitPath { get; set; } = "";
+    public string? RecoveryEmail { get; set; }
+    public string? RecoveryPhone { get; set; }
     public bool IsAdmin { get; set; }
     public bool IsDelegatedAdmin { get; set; }
     public bool Suspended { get; set; }
@@ -98,26 +102,72 @@ public class GoogleDirectoryService
         string? orgUnitPath,
         CancellationToken cancellationToken = default)
     {
-        var scope = action == "signout" ? DirectorySecurityScope : DirectoryWriteScope;
-        var (token, tokenError) = await AcquireTokenAsync(scope, cancellationToken);
-        if (token == null)
-            return (false, tokenError);
-
-        var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(30);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var baseUrl = $"https://admin.googleapis.com/admin/directory/v1/users/{Uri.EscapeDataString(userKey)}";
+        var baseUrl = UserUrl(userKey);
         HttpRequestMessage request = action switch
         {
-            "suspend" => JsonPut(baseUrl, new { suspended = true }),
-            "unsuspend" => JsonPut(baseUrl, new { suspended = false }),
-            "archive" => JsonPut(baseUrl, new { archived = true }),
-            "unarchive" => JsonPut(baseUrl, new { archived = false }),
-            "undelete" => JsonPost($"{baseUrl}/undelete", new { orgUnitPath = string.IsNullOrWhiteSpace(orgUnitPath) ? "/" : orgUnitPath }),
+            "suspend" => JsonRequest(HttpMethod.Put, baseUrl, new { suspended = true }),
+            "unsuspend" => JsonRequest(HttpMethod.Put, baseUrl, new { suspended = false }),
+            "archive" => JsonRequest(HttpMethod.Put, baseUrl, new { archived = true }),
+            "unarchive" => JsonRequest(HttpMethod.Put, baseUrl, new { archived = false }),
+            "undelete" => JsonRequest(HttpMethod.Post, $"{baseUrl}/undelete", new { orgUnitPath = string.IsNullOrWhiteSpace(orgUnitPath) ? "/" : orgUnitPath }),
+            "makeadmin" => JsonRequest(HttpMethod.Post, $"{baseUrl}/makeAdmin", new { status = true }),
+            "revokeadmin" => JsonRequest(HttpMethod.Post, $"{baseUrl}/makeAdmin", new { status = false }),
             "signout" => new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/signOut"),
             _ => throw new ArgumentException($"Unknown action '{action}'")
         };
+
+        var scope = action == "signout" ? DirectorySecurityScope : DirectoryWriteScope;
+        return await SendDirectoryRequestAsync(request, scope, $"action {action} on {userKey}", cancellationToken);
+    }
+
+    /// <summary>
+    /// Partially updates a Workspace user (name, org unit, recovery contacts, primary email, password).
+    /// </summary>
+    public Task<(bool Success, string? Error)> PatchUserAsync(
+        string userKey,
+        Dictionary<string, object> payload,
+        CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            JsonRequest(HttpMethod.Patch, UserUrl(userKey), payload),
+            DirectoryWriteScope, $"patch on {userKey}", cancellationToken);
+
+    public Task<(bool Success, string? Error)> AddAliasAsync(
+        string userKey, string alias, CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            JsonRequest(HttpMethod.Post, $"{UserUrl(userKey)}/aliases", new { alias }),
+            DirectoryWriteScope, $"add alias on {userKey}", cancellationToken);
+
+    public Task<(bool Success, string? Error)> RemoveAliasAsync(
+        string userKey, string alias, CancellationToken cancellationToken = default) =>
+        SendDirectoryRequestAsync(
+            new HttpRequestMessage(HttpMethod.Delete, $"{UserUrl(userKey)}/aliases/{Uri.EscapeDataString(alias)}"),
+            DirectoryWriteScope, $"remove alias on {userKey}", cancellationToken);
+
+    private static string UserUrl(string userKey) =>
+        $"https://admin.googleapis.com/admin/directory/v1/users/{Uri.EscapeDataString(userKey)}";
+
+    private static HttpRequestMessage JsonRequest(HttpMethod method, string url, object payload) =>
+        new(method, url)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+
+    private async Task<(bool Success, string? Error)> SendDirectoryRequestAsync(
+        HttpRequestMessage request,
+        string scope,
+        string context,
+        CancellationToken cancellationToken)
+    {
+        var (token, tokenError) = await AcquireTokenAsync(scope, cancellationToken);
+        if (token == null)
+        {
+            request.Dispose();
+            return (false, tokenError);
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using (request)
         using (var res = await client.SendAsync(request, cancellationToken))
@@ -126,29 +176,17 @@ public class GoogleDirectoryService
                 return (true, null);
 
             var body = await res.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogWarning("Google Directory action {Action} on {UserKey} failed ({Status}): {Body}",
-                action, userKey, (int)res.StatusCode, body[..Math.Min(body.Length, 300)]);
+            _logger.LogWarning("Google Directory {Context} failed ({Status}): {Body}",
+                context, (int)res.StatusCode, body[..Math.Min(body.Length, 300)]);
 
             var error = $"Google API error {(int)res.StatusCode}: {body[..Math.Min(body.Length, 200)]}";
             if ((int)res.StatusCode == 403 || body.Contains("unauthorized", StringComparison.OrdinalIgnoreCase))
-                error += action == "signout"
+                error += scope == DirectorySecurityScope
                     ? " — the admin.directory.user.security scope may be missing from domain-wide delegation."
                     : " — the admin.directory.user (write) scope may be missing from domain-wide delegation.";
             return (false, error);
         }
     }
-
-    private static HttpRequestMessage JsonPut(string url, object payload) =>
-        new(HttpMethod.Put, url)
-        {
-            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-        };
-
-    private static HttpRequestMessage JsonPost(string url, object payload) =>
-        new(HttpMethod.Post, url)
-        {
-            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-        };
 
     private async Task<(string? Token, string? Error)> AcquireTokenAsync(string scope, CancellationToken cancellationToken)
     {
@@ -234,11 +272,17 @@ public class GoogleDirectoryService
             ThumbnailPhotoUrl = NullIfEmpty(GetString(u, "thumbnailPhotoUrl")),
             CreationTime = NullIfEmpty(GetString(u, "creationTime")),
             DeletionTime = NullIfEmpty(GetString(u, "deletionTime")),
-            SuspensionReason = NullIfEmpty(GetString(u, "suspensionReason"))
+            SuspensionReason = NullIfEmpty(GetString(u, "suspensionReason")),
+            RecoveryEmail = NullIfEmpty(GetString(u, "recoveryEmail")),
+            RecoveryPhone = NullIfEmpty(GetString(u, "recoveryPhone"))
         };
 
         if (u.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.Object)
+        {
             user.FullName = GetString(name, "fullName");
+            user.GivenName = GetString(name, "givenName");
+            user.FamilyName = GetString(name, "familyName");
+        }
 
         // Google reports epoch (1970) for users that never logged in
         var lastLogin = GetString(u, "lastLoginTime");
