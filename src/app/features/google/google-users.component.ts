@@ -26,6 +26,40 @@ interface UserSecurity {
   backupCodes: string[];
 }
 
+interface GroupInfo {
+  id: string;
+  name: string;
+  email: string;
+  description: string;
+  directMembersCount: number;
+}
+
+interface LicenseInfo {
+  productId: string;
+  productName: string;
+  skuId: string;
+  skuName: string;
+}
+
+interface LoginEvent {
+  time: string | null;
+  name: string;
+  ipAddress: string | null;
+}
+
+interface TransferApp {
+  id: number;
+  name: string;
+}
+
+interface TransferInfo {
+  id: string;
+  requestTime: string | null;
+  status: string;
+  newOwnerUserId: string;
+  apps: string[];
+}
+
 interface GoogleUser {
   id: string;
   email: string;
@@ -199,6 +233,7 @@ export class GoogleUsersComponent implements OnInit {
     this.registerUser.set(null);
     this.security.set(null);
     this.securityError.set(null);
+    this.toolModal.set(null);
   }
 
   manageFromRegister() {
@@ -206,14 +241,135 @@ export class GoogleUsersComponent implements OnInit {
     if (user) this.openManage(user);
   }
 
-  adminConsoleLinks(user: GoogleUser) {
-    return [
-      { label: 'User in Admin Console', icon: 'bx bx-user-circle', url: `https://admin.google.com/ac/users/${user.id}` },
-      { label: 'Groups', icon: 'bx bx-group', url: 'https://admin.google.com/ac/groups' },
-      { label: 'Licenses & Billing', icon: 'bx bx-badge-check', url: 'https://admin.google.com/ac/billing' },
-      { label: 'Login Audit (Reports)', icon: 'bx bx-history', url: 'https://admin.google.com/ac/reporting/audit/user' },
-      { label: 'Data Transfer', icon: 'bx bx-transfer', url: 'https://admin.google.com/ac/datatransfer' }
-    ];
+  // ----- Account tool popups (groups, licenses, login audit, data transfer) -----
+  toolModal = signal<'groups' | 'licenses' | 'audit' | 'transfer' | null>(null);
+  toolLoading = signal(false);
+  toolError = signal<string | null>(null);
+  groups = signal<GroupInfo[]>([]);
+  licenses = signal<LicenseInfo[]>([]);
+  loginEvents = signal<LoginEvent[]>([]);
+  transferApps = signal<TransferApp[]>([]);
+  transfers = signal<TransferInfo[]>([]);
+  transferBusy = signal(false);
+  transferNewOwnerId = '';
+  transferSelectedApps = new Set<number>();
+
+  readonly toolButtons = [
+    { kind: 'groups' as const, label: 'Groups', icon: 'bx bx-group' },
+    { kind: 'licenses' as const, label: 'Licenses', icon: 'bx bx-badge-check' },
+    { kind: 'audit' as const, label: 'Login Audit', icon: 'bx bx-history' },
+    { kind: 'transfer' as const, label: 'Data Transfer', icon: 'bx bx-transfer' }
+  ];
+
+  readonly toolTitles: Record<string, string> = {
+    groups: 'Group Memberships',
+    licenses: 'License Assignments',
+    audit: 'Login Audit',
+    transfer: 'Data Transfer'
+  };
+
+  transferTargets = computed(() => {
+    const current = this.registerUser();
+    return this.users()
+      .filter(u => !u.suspended && !u.archived && !u.deleted && u.id !== current?.id)
+      .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  });
+
+  openTool(kind: 'groups' | 'licenses' | 'audit' | 'transfer') {
+    const user = this.registerUser();
+    if (!user) return;
+    this.toolModal.set(kind);
+    this.toolError.set(null);
+    this.toolLoading.set(true);
+
+    const base = `${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}`;
+    const done = () => this.toolLoading.set(false);
+    const fail = (err: any) => {
+      this.toolLoading.set(false);
+      this.toolError.set(err?.error?.error || 'Failed to load data');
+    };
+
+    switch (kind) {
+      case 'groups':
+        this.groups.set([]);
+        this.http.get<any>(`${base}/groups`).subscribe({
+          next: (res) => { this.groups.set(res?.data || []); done(); }, error: fail
+        });
+        break;
+      case 'licenses':
+        this.licenses.set([]);
+        this.http.get<any>(`${base}/licenses`, { params: { email: user.email } }).subscribe({
+          next: (res) => { this.licenses.set(res?.data || []); done(); }, error: fail
+        });
+        break;
+      case 'audit':
+        this.loginEvents.set([]);
+        this.http.get<any>(`${base}/login-events`).subscribe({
+          next: (res) => { this.loginEvents.set(res?.data || []); done(); }, error: fail
+        });
+        break;
+      case 'transfer':
+        this.transferApps.set([]);
+        this.transfers.set([]);
+        this.transferNewOwnerId = '';
+        this.transferSelectedApps = new Set<number>();
+        this.http.get<any>(`${this.apiUrl}/api/v1/google/transfer-applications`).subscribe({
+          next: (res) => {
+            this.transferApps.set(res?.data || []);
+            this.http.get<any>(`${base}/transfers`).subscribe({
+              next: (r2) => { this.transfers.set(r2?.data || []); done(); },
+              error: () => done()   // transfer history is non-critical
+            });
+          },
+          error: fail
+        });
+        break;
+    }
+  }
+
+  closeTool() {
+    this.toolModal.set(null);
+  }
+
+  toggleTransferApp(appId: number) {
+    if (this.transferSelectedApps.has(appId)) this.transferSelectedApps.delete(appId);
+    else this.transferSelectedApps.add(appId);
+  }
+
+  startTransfer() {
+    const user = this.registerUser();
+    if (!user) return;
+    const target = this.users().find(u => u.id === this.transferNewOwnerId);
+    if (!target) { this.toast.error('Select a destination user', 'Google'); return; }
+    if (this.transferSelectedApps.size === 0) { this.toast.error('Select at least one application', 'Google'); return; }
+
+    const appNames = this.transferApps()
+      .filter(a => this.transferSelectedApps.has(a.id))
+      .map(a => a.name).join(', ');
+    if (!confirm(`Transfer ${appNames} data from ${user.email} to ${target.email}?`)) return;
+
+    this.transferBusy.set(true);
+    this.http.post(`${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/transfers`, {
+      newOwnerUserId: target.id,
+      newOwnerEmail: target.email,
+      applicationIds: [...this.transferSelectedApps],
+      email: user.email
+    }).subscribe({
+      next: () => {
+        this.transferBusy.set(false);
+        this.toast.champagne(`Transfer started — ${user.email} → ${target.email}`, 'Google');
+        this.openTool('transfer');
+      },
+      error: (err) => {
+        this.transferBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to start transfer', 'Google');
+      }
+    });
+  }
+
+  transferStatusLabel(t: TransferInfo): string {
+    const target = this.users().find(u => u.id === t.newOwnerUserId);
+    return `→ ${target?.email || t.newOwnerUserId} · ${t.status || 'unknown'}`;
   }
 
   loadSecurity(user: GoogleUser) {

@@ -159,11 +159,25 @@
 .code-chip { padding: 6px 10px; background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.12); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-primary); text-align: center; letter-spacing: 1px; }
 .codes-actions { display: flex; gap: 8px; margin-bottom: 6px; }
 
-.link-list { display: flex; flex-direction: column; gap: 4px; }
-.console-link { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 0.8rem; color: var(--text-primary); text-decoration: none; transition: background 0.12s;
+.tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tool-btn { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.12); border-radius: 8px; color: var(--text-primary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.12s;
   i { color: var(--cyan); font-size: 1rem; }
-  .ext { margin-left: auto; color: var(--text-secondary); font-size: 0.8rem; }
-  &:hover { background: rgba(0,212,255,0.06); }
+  &:hover { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); }
+}
+
+.tool-modal { max-width: 720px; }
+.tool-table { width: 100%; border-collapse: collapse;
+  th { padding: 8px 10px; text-align: left; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--cyan); border-bottom: 1px solid rgba(255,255,255,0.08); }
+  td { padding: 8px 10px; font-size: 0.8rem; color: var(--text-primary); border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+}
+.event-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 0.68rem; font-weight: 600; background: rgba(150,150,150,0.1); color: #bbb; text-transform: capitalize;
+  &.ok { background: rgba(0,200,83,0.12); color: #00c853; }
+  &.fail { background: rgba(255,68,68,0.12); color: #ff4444; }
+}
+.tool-select { width: 100%; padding: 9px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem; cursor: pointer;
+  &:focus { border-color: var(--cyan); outline: none; }
+  option { background: #0a0a0f; }
 }
 
 @media (max-width: 768px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .form-row { flex-direction: column; gap: 0; } }

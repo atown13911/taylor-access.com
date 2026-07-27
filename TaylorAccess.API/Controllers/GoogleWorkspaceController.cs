@@ -256,4 +256,89 @@ public class GoogleWorkspaceController : ControllerBase
 
         return Ok(new { success = true });
     }
+
+    [HttpGet("workspace-users/{id}/groups")]
+    public async Task<ActionResult> GetUserGroups(string id, CancellationToken cancellationToken)
+    {
+        var (groups, error) = await _directory.GetUserGroupsAsync(id, cancellationToken);
+        if (groups == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = groups });
+    }
+
+    [HttpGet("workspace-users/{id}/licenses")]
+    public async Task<ActionResult> GetUserLicenses(
+        string id, [FromQuery] string email, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest(new { error = "email query parameter is required" });
+
+        var (licenses, error) = await _directory.GetUserLicensesAsync(email, cancellationToken);
+        if (licenses == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = licenses });
+    }
+
+    [HttpGet("workspace-users/{id}/login-events")]
+    public async Task<ActionResult> GetLoginEvents(string id, CancellationToken cancellationToken)
+    {
+        var (events, error) = await _directory.GetLoginEventsAsync(id, cancellationToken);
+        if (events == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = events });
+    }
+
+    [HttpGet("transfer-applications")]
+    public async Task<ActionResult> GetTransferApplications(CancellationToken cancellationToken)
+    {
+        var (apps, error) = await _directory.GetTransferApplicationsAsync(cancellationToken);
+        if (apps == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = apps });
+    }
+
+    [HttpGet("workspace-users/{id}/transfers")]
+    public async Task<ActionResult> GetTransfers(string id, CancellationToken cancellationToken)
+    {
+        var (transfers, error) = await _directory.GetTransfersAsync(id, cancellationToken);
+        if (transfers == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = transfers });
+    }
+
+    [HttpPost("workspace-users/{id}/transfers")]
+    public async Task<ActionResult> StartTransfer(
+        string id,
+        [FromBody] GoogleTransferRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.NewOwnerUserId))
+            return BadRequest(new { error = "A destination user is required" });
+        if (request.ApplicationIds == null || request.ApplicationIds.Count == 0)
+            return BadRequest(new { error = "At least one application must be selected" });
+
+        var (success, error) = await _directory.InsertTransferAsync(
+            id, request.NewOwnerUserId, request.ApplicationIds, cancellationToken);
+        if (!success)
+            return StatusCode(502, new { error });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            $"Google Workspace: started data transfer from {request.Email ?? id} to {request.NewOwnerEmail ?? request.NewOwnerUserId} " +
+            $"(apps: {string.Join(",", request.ApplicationIds)})");
+
+        return Ok(new { success = true });
+    }
+}
+
+public class GoogleTransferRequest
+{
+    public string? NewOwnerUserId { get; set; }
+    public string? NewOwnerEmail { get; set; }
+    public List<long>? ApplicationIds { get; set; }
+    public string? Email { get; set; }
 }

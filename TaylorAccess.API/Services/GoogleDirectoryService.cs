@@ -62,6 +62,45 @@ public sealed class GoogleUserSecurity
     public List<string> BackupCodes { get; set; } = new();
 }
 
+public sealed class GoogleGroupInfo
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string Description { get; set; } = "";
+    public long DirectMembersCount { get; set; }
+}
+
+public sealed class GoogleLicenseInfo
+{
+    public string ProductId { get; set; } = "";
+    public string ProductName { get; set; } = "";
+    public string SkuId { get; set; } = "";
+    public string SkuName { get; set; } = "";
+}
+
+public sealed class GoogleLoginEvent
+{
+    public string? Time { get; set; }
+    public string Name { get; set; } = "";
+    public string? IpAddress { get; set; }
+}
+
+public sealed class GoogleTransferApp
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+public sealed class GoogleTransferInfo
+{
+    public string Id { get; set; } = "";
+    public string? RequestTime { get; set; }
+    public string Status { get; set; } = "";
+    public string NewOwnerUserId { get; set; } = "";
+    public List<string> Apps { get; set; } = new();
+}
+
 /// <summary>
 /// Lists Google Workspace domain users via the Admin SDK Directory API using the same
 /// domain-wide-delegation service account as <see cref="GmailDirectMetricsService"/>.
@@ -72,6 +111,10 @@ public class GoogleDirectoryService
     private const string DirectoryScope = "https://www.googleapis.com/auth/admin.directory.user.readonly";
     private const string DirectoryWriteScope = "https://www.googleapis.com/auth/admin.directory.user";
     private const string DirectorySecurityScope = "https://www.googleapis.com/auth/admin.directory.user.security";
+    private const string GroupReadScope = "https://www.googleapis.com/auth/admin.directory.group.readonly";
+    private const string LicensingScope = "https://www.googleapis.com/auth/apps.licensing";
+    private const string ReportsScope = "https://www.googleapis.com/auth/admin.reports.audit.readonly";
+    private const string DataTransferScope = "https://www.googleapis.com/auth/admin.datatransfer";
 
     private readonly TaylorAccessDbContext _context;
     private readonly IntegrationEncryptionService _encryption;
@@ -269,6 +312,291 @@ public class GoogleDirectoryService
         SendDirectoryRequestAsync(
             new HttpRequestMessage(HttpMethod.Post, $"{UserUrl(userKey)}/verificationCodes/invalidate"),
             DirectorySecurityScope, $"invalidate backup codes on {userKey}", cancellationToken);
+
+    /// <summary>Groups the user is a member of (Directory Groups API).</summary>
+    public async Task<(List<GoogleGroupInfo>? Groups, string? Error)> GetUserGroupsAsync(
+        string userKey, CancellationToken cancellationToken = default)
+    {
+        var groups = new List<GoogleGroupInfo>();
+        string? pageToken = null;
+        do
+        {
+            var url = $"https://admin.googleapis.com/admin/directory/v1/groups?userKey={Uri.EscapeDataString(userKey)}&maxResults=200"
+                      + (pageToken != null ? $"&pageToken={Uri.EscapeDataString(pageToken)}" : "");
+            var (doc, error) = await GetJsonWithScopeAsync(url, GroupReadScope, $"groups for {userKey}", cancellationToken);
+            if (doc == null)
+                return (null, error);
+
+            using (doc)
+            {
+                if (doc.RootElement.TryGetProperty("groups", out var items))
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        groups.Add(new GoogleGroupInfo
+                        {
+                            Id = ReadString(item, "id"),
+                            Name = ReadString(item, "name"),
+                            Email = ReadString(item, "email"),
+                            Description = ReadString(item, "description"),
+                            DirectMembersCount = ReadLong(item, "directMembersCount")
+                        });
+                    }
+                }
+
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            }
+        } while (!string.IsNullOrEmpty(pageToken));
+
+        return (groups, null);
+    }
+
+    // Products checked for license assignments (Enterprise License Manager API has no per-user query).
+    private static readonly string[] LicensingProductIds = { "Google-Apps", "Google-Vault" };
+
+    /// <summary>License assignments for a user across known Workspace products.</summary>
+    public async Task<(List<GoogleLicenseInfo>? Licenses, string? Error)> GetUserLicensesAsync(
+        string userEmail, CancellationToken cancellationToken = default)
+    {
+        var adminEmail = Environment.GetEnvironmentVariable("GOOGLE_ADMIN_EMAIL") ?? "van-tac@taylor-corp.net";
+        var customerId = adminEmail.Contains('@') ? adminEmail.Split('@')[1] : adminEmail;
+
+        var licenses = new List<GoogleLicenseInfo>();
+        string? firstError = null;
+
+        foreach (var productId in LicensingProductIds)
+        {
+            string? pageToken = null;
+            do
+            {
+                var url = $"https://licensing.googleapis.com/apps/licensing/v1/product/{Uri.EscapeDataString(productId)}/users" +
+                          $"?customerId={Uri.EscapeDataString(customerId)}&maxResults=1000" +
+                          (pageToken != null ? $"&pageToken={Uri.EscapeDataString(pageToken)}" : "");
+                var (doc, error) = await GetJsonWithScopeAsync(url, LicensingScope, $"licenses {productId}", cancellationToken);
+                if (doc == null)
+                {
+                    // Auth errors are fatal; per-product errors (e.g. product not owned) are skipped.
+                    if (error != null && error.Contains("authorization failed", StringComparison.OrdinalIgnoreCase))
+                        return (null, error);
+                    firstError ??= error;
+                    break;
+                }
+
+                using (doc)
+                {
+                    if (doc.RootElement.TryGetProperty("items", out var items))
+                    {
+                        foreach (var item in items.EnumerateArray())
+                        {
+                            if (!string.Equals(ReadString(item, "userId"), userEmail, StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            licenses.Add(new GoogleLicenseInfo
+                            {
+                                ProductId = ReadString(item, "productId"),
+                                ProductName = ReadString(item, "productName"),
+                                SkuId = ReadString(item, "skuId"),
+                                SkuName = ReadString(item, "skuName")
+                            });
+                        }
+                    }
+
+                    pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+                }
+            } while (!string.IsNullOrEmpty(pageToken));
+        }
+
+        if (licenses.Count == 0 && firstError != null)
+            return (null, firstError);
+
+        return (licenses, null);
+    }
+
+    /// <summary>Recent login audit events for a user (Reports API).</summary>
+    public async Task<(List<GoogleLoginEvent>? Events, string? Error)> GetLoginEventsAsync(
+        string userKey, CancellationToken cancellationToken = default)
+    {
+        var url = $"https://admin.googleapis.com/admin/reports/v1/activity/users/{Uri.EscapeDataString(userKey)}/applications/login?maxResults=100";
+        var (doc, error) = await GetJsonWithScopeAsync(url, ReportsScope, $"login events for {userKey}", cancellationToken);
+        if (doc == null)
+            return (null, error);
+
+        var events = new List<GoogleLoginEvent>();
+        using (doc)
+        {
+            if (doc.RootElement.TryGetProperty("items", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    string? time = null;
+                    if (item.TryGetProperty("id", out var idEl))
+                        time = ReadString(idEl, "time");
+
+                    var ip = item.TryGetProperty("ipAddress", out var ipEl) ? ipEl.GetString() : null;
+
+                    if (item.TryGetProperty("events", out var evts) && evts.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var evt in evts.EnumerateArray())
+                        {
+                            events.Add(new GoogleLoginEvent
+                            {
+                                Time = time,
+                                Name = ReadString(evt, "name"),
+                                IpAddress = ip
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        return (events, null);
+    }
+
+    /// <summary>Applications available for data transfer (Drive, Calendar, ...).</summary>
+    public async Task<(List<GoogleTransferApp>? Apps, string? Error)> GetTransferApplicationsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var (doc, error) = await GetTransferApplicationsRawAsync(cancellationToken);
+        if (doc == null)
+            return (null, error);
+
+        var apps = new List<GoogleTransferApp>();
+        using (doc)
+        {
+            if (doc.RootElement.TryGetProperty("applications", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    apps.Add(new GoogleTransferApp
+                    {
+                        Id = ReadLong(item, "id"),
+                        Name = ReadString(item, "name")
+                    });
+                }
+            }
+        }
+
+        return (apps, null);
+    }
+
+    /// <summary>Starts a data transfer from one user to another for the selected applications.</summary>
+    public async Task<(bool Success, string? Error)> InsertTransferAsync(
+        string oldOwnerUserId,
+        string newOwnerUserId,
+        List<long> applicationIds,
+        CancellationToken cancellationToken = default)
+    {
+        var (appsDoc, appsError) = await GetTransferApplicationsRawAsync(cancellationToken);
+        if (appsDoc == null)
+            return (false, appsError);
+
+        var appTransfers = new List<object>();
+        using (appsDoc)
+        {
+            if (appsDoc.RootElement.TryGetProperty("applications", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    var appId = ReadLong(item, "id");
+                    if (!applicationIds.Contains(appId))
+                        continue;
+
+                    // Include every transfer parameter the app supports with all allowed values
+                    // (e.g. Drive PRIVACY_LEVEL: PRIVATE + SHARED) so everything moves.
+                    var transferParams = new List<object>();
+                    if (item.TryGetProperty("transferParams", out var tp) && tp.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var param in tp.EnumerateArray())
+                        {
+                            var key = ReadString(param, "key");
+                            var values = param.TryGetProperty("value", out var vals) && vals.ValueKind == JsonValueKind.Array
+                                ? vals.EnumerateArray().Select(v => v.GetString() ?? "").Where(v => v.Length > 0).ToList()
+                                : new List<string>();
+                            if (key.Length > 0 && values.Count > 0)
+                                transferParams.Add(new { key, value = values });
+                        }
+                    }
+
+                    appTransfers.Add(transferParams.Count > 0
+                        ? new { applicationId = appId, applicationTransferParams = transferParams }
+                        : (object)new { applicationId = appId });
+                }
+            }
+        }
+
+        if (appTransfers.Count == 0)
+            return (false, "No matching transferable applications found");
+
+        var body = new
+        {
+            oldOwnerUserId,
+            newOwnerUserId,
+            applicationDataTransfers = appTransfers
+        };
+
+        return await SendDirectoryRequestAsync(
+            JsonRequest(HttpMethod.Post, "https://admin.googleapis.com/admin/datatransfer/v1/transfers", body),
+            DataTransferScope, $"data transfer {oldOwnerUserId} -> {newOwnerUserId}", cancellationToken);
+    }
+
+    /// <summary>Past/in-flight transfers where this user is the source.</summary>
+    public async Task<(List<GoogleTransferInfo>? Transfers, string? Error)> GetTransfersAsync(
+        string oldOwnerUserId, CancellationToken cancellationToken = default)
+    {
+        var url = $"https://admin.googleapis.com/admin/datatransfer/v1/transfers?oldOwnerUserId={Uri.EscapeDataString(oldOwnerUserId)}";
+        var (doc, error) = await GetJsonWithScopeAsync(url, DataTransferScope, $"transfers for {oldOwnerUserId}", cancellationToken);
+        if (doc == null)
+            return (null, error);
+
+        var transfers = new List<GoogleTransferInfo>();
+        using (doc)
+        {
+            if (doc.RootElement.TryGetProperty("dataTransfers", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    var info = new GoogleTransferInfo
+                    {
+                        Id = ReadString(item, "id"),
+                        RequestTime = item.TryGetProperty("requestTime", out var rt) ? rt.GetString() : null,
+                        Status = ReadString(item, "overallTransferStatusCode"),
+                        NewOwnerUserId = ReadString(item, "newOwnerUserId")
+                    };
+                    if (item.TryGetProperty("applicationDataTransfers", out var adt) && adt.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var app in adt.EnumerateArray())
+                            info.Apps.Add($"{ReadLong(app, "applicationId")}: {ReadString(app, "applicationTransferStatus")}");
+                    }
+                    transfers.Add(info);
+                }
+            }
+        }
+
+        return (transfers, null);
+    }
+
+    private Task<(JsonDocument? Doc, string? Error)> GetTransferApplicationsRawAsync(CancellationToken cancellationToken) =>
+        GetJsonWithScopeAsync(
+            "https://admin.googleapis.com/admin/datatransfer/v1/applications?customerId=my_customer",
+            DataTransferScope, "transfer applications", cancellationToken);
+
+    private async Task<(JsonDocument? Doc, string? Error)> GetJsonWithScopeAsync(
+        string url, string scope, string context, CancellationToken cancellationToken)
+    {
+        var (token, tokenError) = await AcquireTokenAsync(scope, cancellationToken);
+        if (token == null)
+            return (null, tokenError);
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await GetJsonAsync(client, url, context, cancellationToken);
+    }
+
+    private static string ReadString(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? ""
+            : "";
 
     // Google renders int64 values as JSON strings; accept both forms.
     private static long ReadLong(JsonElement element, string property)

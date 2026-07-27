@@ -275,14 +275,16 @@
           }
         </div>
 
-        <h3 class="section-title">Google Admin Console</h3>
-        <div class="link-list">
-          @for (link of adminConsoleLinks(user); track link.url) {
-            <a class="console-link" [href]="link.url" target="_blank" rel="noopener">
-              <i [class]="link.icon"></i> {{ link.label }} <i class='bx bx-link-external ext'></i>
-            </a>
-          }
-        </div>
+        @if (!user.deleted) {
+          <h3 class="section-title">Account Tools</h3>
+          <div class="tool-grid">
+            @for (tool of toolButtons; track tool.kind) {
+              <button class="tool-btn" (click)="openTool(tool.kind)">
+                <i [class]="tool.icon"></i> {{ tool.label }}
+              </button>
+            }
+          </div>
+        }
       </div>
 
       <div class="register-footer">
@@ -311,6 +313,144 @@
       </div>
     </aside>
   </div>
+}
+
+<!-- Account Tool Popup (groups / licenses / login audit / data transfer) -->
+@if (toolModal(); as kind) {
+  @if (registerUser(); as user) {
+    <div class="modal-overlay" (click)="closeTool()">
+      <div class="modal-content tool-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2><i class='bx bxl-google'></i> {{ toolTitles[kind] }} — {{ user.fullName || user.email }}</h2>
+          <button class="btn-close" (click)="closeTool()"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="modal-body">
+          @if (toolLoading()) {
+            <p class="empty-hint"><i class='bx bx-loader-alt bx-spin'></i> Loading...</p>
+          } @else if (toolError()) {
+            <p class="empty-hint error-hint"><i class='bx bx-error-circle'></i> {{ toolError() }}</p>
+          } @else {
+            @switch (kind) {
+
+              @case ('groups') {
+                @if (groups().length) {
+                  <table class="tool-table">
+                    <thead><tr><th>Group</th><th>Email</th><th>Members</th></tr></thead>
+                    <tbody>
+                      @for (group of groups(); track group.id) {
+                        <tr>
+                          <td><strong>{{ group.name }}</strong>
+                            @if (group.description) { <span class="sec-sub">{{ group.description }}</span> }
+                          </td>
+                          <td class="mono">{{ group.email }}</td>
+                          <td>{{ group.directMembersCount || '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else {
+                  <p class="empty-hint">Not a member of any groups</p>
+                }
+              }
+
+              @case ('licenses') {
+                @if (licenses().length) {
+                  <table class="tool-table">
+                    <thead><tr><th>Product</th><th>License (SKU)</th></tr></thead>
+                    <tbody>
+                      @for (lic of licenses(); track lic.skuId) {
+                        <tr>
+                          <td>{{ lic.productName || lic.productId }}</td>
+                          <td>{{ lic.skuName || lic.skuId }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else {
+                  <p class="empty-hint">No license assignments found</p>
+                }
+              }
+
+              @case ('audit') {
+                @if (loginEvents().length) {
+                  <table class="tool-table">
+                    <thead><tr><th>Time</th><th>Event</th><th>IP Address</th></tr></thead>
+                    <tbody>
+                      @for (evt of loginEvents(); track $index) {
+                        <tr>
+                          <td>{{ evt.time ? (evt.time | date:'MMM d, y, h:mm a') : '—' }}</td>
+                          <td>
+                            <span class="event-badge" [class.fail]="evt.name.includes('failure')" [class.ok]="evt.name.includes('success')">
+                              {{ evt.name.replaceAll('_', ' ') }}
+                            </span>
+                          </td>
+                          <td class="mono">{{ evt.ipAddress || '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else {
+                  <p class="empty-hint">No recent login events</p>
+                }
+              }
+
+              @case ('transfer') {
+                <h3 class="section-title">Start a Transfer</h3>
+                <p class="field-hint">Moves data ownership (e.g. Drive files, Calendar events) from {{ user.email }} to another user. Commonly used for offboarding.</p>
+                <div class="form-group">
+                  <label>Applications</label>
+                  @if (transferApps().length) {
+                    @for (app of transferApps(); track app.id) {
+                      <label class="check-label">
+                        <input type="checkbox" [checked]="transferSelectedApps.has(app.id)" (change)="toggleTransferApp(app.id)">
+                        {{ app.name }}
+                      </label>
+                    }
+                  } @else {
+                    <p class="empty-hint">No transferable applications available</p>
+                  }
+                </div>
+                <div class="form-group">
+                  <label>Transfer To</label>
+                  <select class="tool-select" [(ngModel)]="transferNewOwnerId">
+                    <option value="">Select destination user...</option>
+                    @for (target of transferTargets(); track target.id) {
+                      <option [value]="target.id">{{ target.email }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="section-actions">
+                  <button class="btn btn-primary btn-sm" (click)="startTransfer()" [disabled]="transferBusy() || !transferNewOwnerId || transferSelectedApps.size === 0">
+                    @if (transferBusy()) { <i class='bx bx-loader-alt bx-spin'></i> } @else { <i class='bx bx-transfer'></i> }
+                    Start Transfer
+                  </button>
+                </div>
+
+                <h3 class="section-title">Transfer History</h3>
+                @if (transfers().length) {
+                  <div class="sec-list">
+                    @for (transfer of transfers(); track transfer.id) {
+                      <div class="sec-row">
+                        <div class="sec-info">
+                          <span class="sec-name">{{ transferStatusLabel(transfer) }}</span>
+                          <span class="sec-sub">{{ transfer.requestTime ? (transfer.requestTime | date:'MMM d, y, h:mm a') : '' }}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <p class="empty-hint">No transfers from this user</p>
+                }
+              }
+            }
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeTool()">Close</button>
+        </div>
+      </div>
+    </div>
+  }
 }
 
 <!-- Manage Account Modal -->
