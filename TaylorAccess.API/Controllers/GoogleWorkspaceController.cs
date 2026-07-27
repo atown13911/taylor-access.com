@@ -66,7 +66,23 @@ public class GoogleWorkspaceController : ControllerBase
     [HttpGet("workspace-users")]
     public async Task<ActionResult> GetWorkspaceUsers(CancellationToken cancellationToken)
     {
-        var result = await _directory.ListDomainUsersAsync(cancellationToken);
+        var result = await _directory.ListDomainUsersAsync(restrictedOnly: false, cancellationToken);
+        if (!result.Success)
+            return StatusCode(502, new { error = result.Error });
+
+        return Ok(new { data = result.Users });
+    }
+
+    /// <summary>
+    /// Lists only the restricted (hidden) Workspace accounts. Product owner only.
+    /// </summary>
+    [HttpGet("workspace-users/restricted")]
+    public async Task<ActionResult> GetRestrictedWorkspaceUsers(CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can view restricted accounts" });
+
+        var result = await _directory.ListDomainUsersAsync(restrictedOnly: true, cancellationToken);
         if (!result.Success)
             return StatusCode(502, new { error = result.Error });
 

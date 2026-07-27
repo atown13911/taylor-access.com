@@ -118,11 +118,58 @@ export class GoogleUsersComponent implements OnInit {
   actionBusyId = signal<string | null>(null);
 
   // ----- Page tabs -----
-  pageTab = signal<'domain' | 'storage'>('domain');
+  pageTab = signal<'domain' | 'storage' | 'restricted'>('domain');
 
-  setPageTab(tab: 'domain' | 'storage') {
+  setPageTab(tab: 'domain' | 'storage' | 'restricted') {
     this.pageTab.set(tab);
     if (tab === 'storage' && !this.storageLoaded) this.loadStorage();
+    if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
+  }
+
+  // ----- Restricted access tab (product owner only) -----
+  private restrictedLoaded = false;
+  restrictedLoading = signal(false);
+  restrictedError = signal<string | null>(null);
+  restrictedUsers = signal<GoogleUser[]>([]);
+
+  loadRestricted() {
+    this.restrictedLoaded = true;
+    this.restrictedLoading.set(true);
+    this.restrictedError.set(null);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/workspace-users/restricted`).subscribe({
+      next: (res) => {
+        this.restrictedUsers.set(res?.data || []);
+        this.restrictedLoading.set(false);
+        this.syncRegisterUser();
+      },
+      error: (err) => {
+        this.restrictedUsers.set([]);
+        this.restrictedLoading.set(false);
+        this.restrictedError.set(err?.error?.error || 'Failed to load restricted accounts');
+      }
+    });
+  }
+
+  /** The user list backing the current Domain-style view. */
+  sourceUsers = computed(() =>
+    this.pageTab() === 'restricted' ? this.restrictedUsers() : this.users());
+
+  viewLoading = computed(() =>
+    this.pageTab() === 'restricted' ? this.restrictedLoading() : this.loading());
+
+  viewError = computed(() =>
+    this.pageTab() === 'restricted' ? this.restrictedError() : this.loadError());
+
+  refreshCurrentTab() {
+    if (this.pageTab() === 'restricted') this.loadRestricted();
+    else this.loadUsers();
+  }
+
+  private syncRegisterUser() {
+    const open = this.registerUser();
+    if (!open) return;
+    const merged = [...this.users(), ...this.restrictedUsers()];
+    this.registerUser.set(merged.find(u => u.id === open.id) || null);
   }
 
   // ----- Data storage tab -----
@@ -205,7 +252,7 @@ export class GoogleUsersComponent implements OnInit {
 
   tabCounts = computed(() => {
     const counts: Record<string, number> = { all: 0, active: 0, suspended: 0, archived: 0, deleted: 0 };
-    for (const u of this.users()) {
+    for (const u of this.sourceUsers()) {
       counts['all']++;
       counts[this.getStatus(u)]++;
     }
@@ -213,7 +260,7 @@ export class GoogleUsersComponent implements OnInit {
   });
 
   filteredUsers = computed(() => {
-    let list = this.users();
+    let list = this.sourceUsers();
     const search = this.searchTerm().toLowerCase();
     const status = this.statusFilter();
     const extra = this.extraFilter();
@@ -232,7 +279,7 @@ export class GoogleUsersComponent implements OnInit {
   });
 
   stats = computed(() => {
-    const all = this.users();
+    const all = this.sourceUsers();
     return {
       total: all.length,
       active: all.filter(u => !u.suspended && !u.archived).length,
@@ -252,9 +299,9 @@ export class GoogleUsersComponent implements OnInit {
         const list: GoogleUser[] = res?.data || [];
         this.users.set(list);
         this.loading.set(false);
-        // Keep the open register in sync with refreshed data
-        const open = this.registerUser();
-        if (open) this.registerUser.set(list.find(u => u.id === open.id) || null);
+        this.syncRegisterUser();
+        // Restricted accounts can change state from the same actions
+        if (this.restrictedLoaded) this.loadRestricted();
       },
       error: (err) => {
         this.users.set([]);

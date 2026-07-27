@@ -144,7 +144,9 @@ public class GoogleDirectoryService
         _logger = logger;
     }
 
-    public async Task<GoogleDirectoryResult> ListDomainUsersAsync(CancellationToken cancellationToken = default)
+    public async Task<GoogleDirectoryResult> ListDomainUsersAsync(
+        bool restrictedOnly = false,
+        CancellationToken cancellationToken = default)
     {
         var (token, tokenError) = await AcquireTokenAsync(DirectoryScope, cancellationToken);
         if (token == null)
@@ -166,8 +168,12 @@ public class GoogleDirectoryService
         if (deletedError != null)
             _logger.LogWarning("Google Directory deleted-users query failed: {Error}", deletedError);
 
-        users.RemoveAll(u =>
-            HiddenUsers.Contains(u.Email) || u.Aliases.Any(a => HiddenUsers.Contains(a)));
+        if (restrictedOnly)
+            users.RemoveAll(u =>
+                !HiddenUsers.Contains(u.Email) && !u.Aliases.Any(a => HiddenUsers.Contains(a)));
+        else
+            users.RemoveAll(u =>
+                HiddenUsers.Contains(u.Email) || u.Aliases.Any(a => HiddenUsers.Contains(a)));
 
         return new GoogleDirectoryResult { Success = true, Users = users };
     }

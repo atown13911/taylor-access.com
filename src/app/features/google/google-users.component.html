@@ -5,7 +5,7 @@
       <p>All Google Workspace accounts on the domain</p>
     </div>
     <div class="header-actions">
-      <button class="btn btn-secondary btn-sm" (click)="loadUsers()" [disabled]="loading()">
+      <button class="btn btn-secondary btn-sm" (click)="refreshCurrentTab()" [disabled]="viewLoading()">
         <i class='bx bx-refresh'></i> Refresh
       </button>
     </div>
@@ -18,9 +18,21 @@
     <button class="page-tab" [class.active]="pageTab() === 'storage'" (click)="setPageTab('storage')">
       <i class='bx bx-data'></i> Data Storage
     </button>
+    @if (isProductOwner) {
+      <button class="page-tab restricted" [class.active]="pageTab() === 'restricted'" (click)="setPageTab('restricted')">
+        <i class='bx bx-lock-alt'></i> Restricted Access
+      </button>
+    }
   </div>
 
-  @if (pageTab() === 'domain') {
+  @if (pageTab() !== 'storage') {
+
+  @if (pageTab() === 'restricted') {
+    <div class="restricted-banner">
+      <i class='bx bx-shield-quarter'></i>
+      Restricted accounts are hidden from the Domain list and only visible to the product owner.
+    </div>
+  }
 
   <div class="stats-row">
     <div class="stat"><span class="stat-val">{{ stats().total }}</span><span class="stat-lbl">Total Users</span></div>
@@ -47,10 +59,10 @@
     </select>
   </div>
 
-  @if (loading()) {
+  @if (viewLoading()) {
     <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading Google Workspace users...</p></div>
-  } @else if (loadError()) {
-    <div class="empty-state error"><i class='bx bx-error-circle'></i><h3>Could not load users</h3><p>{{ loadError() }}</p></div>
+  } @else if (viewError()) {
+    <div class="empty-state error"><i class='bx bx-error-circle'></i><h3>Could not load users</h3><p>{{ viewError() }}</p></div>
   } @else if (filteredUsers().length === 0) {
     <div class="empty-state"><i class='bx bxl-google'></i><h3>No users found</h3><p>No Google Workspace users match the current filters</p></div>
   } @else {
