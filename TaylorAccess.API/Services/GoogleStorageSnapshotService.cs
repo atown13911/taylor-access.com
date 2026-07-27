@@ -86,7 +86,8 @@ public sealed class GoogleStorageSnapshotService : BackgroundService
         var added = 0;
         foreach (var row in usage)
         {
-            if (existingSet.Contains(row.Email))
+            // Guards against both prior runs and duplicate emails within one report.
+            if (!existingSet.Add(row.Email))
                 continue;
 
             db.GoogleStorageSnapshots.Add(new GoogleStorageSnapshot
