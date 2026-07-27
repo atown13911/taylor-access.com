@@ -105,7 +105,14 @@ export class GoogleUsersComponent implements OnInit {
     this.loading.set(true);
     this.loadError.set(null);
     this.http.get<any>(`${this.apiUrl}/api/v1/google/workspace-users`).subscribe({
-      next: (res) => { this.users.set(res?.data || []); this.loading.set(false); },
+      next: (res) => {
+        const list: GoogleUser[] = res?.data || [];
+        this.users.set(list);
+        this.loading.set(false);
+        // Keep the open register in sync with refreshed data
+        const open = this.registerUser();
+        if (open) this.registerUser.set(list.find(u => u.id === open.id) || null);
+      },
       error: (err) => {
         this.users.set([]);
         this.loading.set(false);
@@ -151,6 +158,22 @@ export class GoogleUsersComponent implements OnInit {
         this.toast.error(err?.error?.error || `Failed to ${label.toLowerCase()} ${user.email}`, 'Google');
       }
     });
+  }
+
+  // ----- Account register drawer -----
+  registerUser = signal<GoogleUser | null>(null);
+
+  openRegister(user: GoogleUser) {
+    this.registerUser.set(user);
+  }
+
+  closeRegister() {
+    this.registerUser.set(null);
+  }
+
+  manageFromRegister() {
+    const user = this.registerUser();
+    if (user) this.openManage(user);
   }
 
   // ----- Manage modal -----

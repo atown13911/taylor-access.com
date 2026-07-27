@@ -60,7 +60,7 @@
         </thead>
         <tbody>
           @for (user of filteredUsers(); track user.id) {
-            <tr>
+            <tr class="row-clickable" [class.row-selected]="registerUser()?.id === user.id" (click)="openRegister(user)">
               <td>
                 <div class="user-cell">
                   @if (user.thumbnailPhotoUrl) {
@@ -96,7 +96,7 @@
               <td>{{ user.lastLoginTime ? (user.lastLoginTime | date:'MMM d, y, h:mm a') : 'Never' }}</td>
               <td>{{ user.creationTime ? (user.creationTime | date:'MMM d, y') : '—' }}</td>
               <td><span class="status-badge" [class]="getStatus(user)" [title]="getStatusTooltip(user)">{{ getStatus(user) }}</span></td>
-              <td class="actions-cell">
+              <td class="actions-cell" (click)="$event.stopPropagation()">
                 @if (actionBusyId() === user.id) {
                   <i class='bx bx-loader-alt bx-spin action-spinner'></i>
                 } @else {
@@ -127,6 +127,102 @@
     </div>
   }
 </div>
+
+<!-- Account Register Drawer -->
+@if (registerUser(); as user) {
+  <div class="register-overlay" (click)="closeRegister()">
+    <aside class="register-drawer" (click)="$event.stopPropagation()">
+      <div class="register-header">
+        @if (user.thumbnailPhotoUrl) {
+          <img class="avatar lg" [src]="user.thumbnailPhotoUrl" alt="" referrerpolicy="no-referrer">
+        } @else {
+          <span class="avatar avatar-fallback lg">{{ (user.fullName || user.email).charAt(0) | uppercase }}</span>
+        }
+        <div class="register-title">
+          <h2>{{ user.fullName || user.email }}</h2>
+          <span class="mono">{{ user.email }}</span>
+          <div class="badge-row">
+            <span class="status-badge" [class]="getStatus(user)" [title]="getStatusTooltip(user)">{{ getStatus(user) }}</span>
+            @if (user.isAdmin) { <span class="role-badge admin">Super Admin</span> }
+            @else if (user.isDelegatedAdmin) { <span class="role-badge delegated">Delegated Admin</span> }
+          </div>
+        </div>
+        <button class="btn-close" (click)="closeRegister()"><i class='bx bx-x'></i></button>
+      </div>
+
+      <div class="register-body">
+        <h3 class="section-title">Account</h3>
+        <div class="detail-grid">
+          <div class="detail"><label>First Name</label><span>{{ user.givenName || '—' }}</span></div>
+          <div class="detail"><label>Last Name</label><span>{{ user.familyName || '—' }}</span></div>
+          <div class="detail"><label>Org Unit</label><span class="mono">{{ user.orgUnitPath || '/' }}</span></div>
+          <div class="detail"><label>Google ID</label><span class="mono">{{ user.id }}</span></div>
+        </div>
+
+        <h3 class="section-title">Email Aliases</h3>
+        @if (user.aliases.length) {
+          <div class="alias-list">
+            @for (alias of user.aliases; track alias) {
+              <span class="alias-chip">{{ alias }}</span>
+            }
+          </div>
+        } @else {
+          <p class="empty-hint">No aliases</p>
+        }
+
+        <h3 class="section-title">Security</h3>
+        <div class="detail-grid">
+          <div class="detail">
+            <label>2-Step Verification</label>
+            <span>
+              @if (user.isEnrolledIn2Sv) { <i class='bx bx-check-shield tfa-on'></i> Enrolled }
+              @else { <i class='bx bx-shield-x tfa-off'></i> Not enrolled }
+            </span>
+          </div>
+          <div class="detail"><label>Recovery Email</label><span class="mono">{{ user.recoveryEmail || '—' }}</span></div>
+          <div class="detail"><label>Recovery Phone</label><span class="mono">{{ user.recoveryPhone || '—' }}</span></div>
+          @if (user.suspended && user.suspensionReason) {
+            <div class="detail"><label>Suspension Reason</label><span>{{ user.suspensionReason }}</span></div>
+          }
+        </div>
+
+        <h3 class="section-title">Activity</h3>
+        <div class="detail-grid">
+          <div class="detail"><label>Last Login</label><span>{{ user.lastLoginTime ? (user.lastLoginTime | date:'MMM d, y, h:mm a') : 'Never' }}</span></div>
+          <div class="detail"><label>Created</label><span>{{ user.creationTime ? (user.creationTime | date:'MMM d, y, h:mm a') : '—' }}</span></div>
+          @if (user.deleted && user.deletionTime) {
+            <div class="detail"><label>Deleted</label><span>{{ user.deletionTime | date:'MMM d, y, h:mm a' }} — recoverable ~20 days</span></div>
+          }
+        </div>
+      </div>
+
+      <div class="register-footer">
+        @if (actionBusyId() === user.id) {
+          <i class='bx bx-loader-alt bx-spin action-spinner'></i>
+        } @else {
+          @switch (getStatus(user)) {
+            @case ('active') {
+              <button class="btn btn-primary btn-sm" (click)="manageFromRegister()"><i class='bx bx-edit'></i> Manage</button>
+              <button class="btn btn-secondary btn-sm danger" (click)="runAction(user, 'suspend', 'Suspend')"><i class='bx bx-user-x'></i> Suspend</button>
+              <button class="btn btn-secondary btn-sm" (click)="runAction(user, 'signout', 'Sign out everywhere for')"><i class='bx bx-log-out'></i> Sign Out Everywhere</button>
+            }
+            @case ('suspended') {
+              <button class="btn btn-primary btn-sm" (click)="manageFromRegister()"><i class='bx bx-edit'></i> Manage</button>
+              <button class="btn btn-secondary btn-sm" (click)="runAction(user, 'unsuspend', 'Unsuspend')"><i class='bx bx-user-check'></i> Unsuspend</button>
+              <button class="btn btn-secondary btn-sm" (click)="runAction(user, 'archive', 'Archive')"><i class='bx bx-archive-in'></i> Archive</button>
+            }
+            @case ('archived') {
+              <button class="btn btn-secondary btn-sm" (click)="runAction(user, 'unarchive', 'Unarchive')"><i class='bx bx-archive-out'></i> Unarchive</button>
+            }
+            @case ('deleted') {
+              <button class="btn btn-secondary btn-sm" (click)="runAction(user, 'undelete', 'Restore')"><i class='bx bx-undo'></i> Restore</button>
+            }
+          }
+        }
+      </div>
+    </aside>
+  </div>
+}
 
 <!-- Manage Account Modal -->
 @if (showManageModal() && manageUser(); as user) {
