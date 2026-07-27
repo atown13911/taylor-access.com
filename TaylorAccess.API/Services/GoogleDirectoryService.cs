@@ -43,6 +43,8 @@ public class GoogleDirectoryService
 {
     private const string GoogleTokenUrl = "https://oauth2.googleapis.com/token";
     private const string DirectoryScope = "https://www.googleapis.com/auth/admin.directory.user.readonly";
+    private const string DirectoryWriteScope = "https://www.googleapis.com/auth/admin.directory.user";
+    private const string DirectorySecurityScope = "https://www.googleapis.com/auth/admin.directory.user.security";
 
     private readonly TaylorAccessDbContext _context;
     private readonly IntegrationEncryptionService _encryption;
@@ -63,36 +65,9 @@ public class GoogleDirectoryService
 
     public async Task<GoogleDirectoryResult> ListDomainUsersAsync(CancellationToken cancellationToken = default)
     {
-        string? saKeyJson;
-        try
-        {
-            saKeyJson = await ResolveServiceAccountJsonAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            return new GoogleDirectoryResult { Success = false, Error = ex.Message };
-        }
-
-        if (string.IsNullOrWhiteSpace(saKeyJson))
-            return new GoogleDirectoryResult { Success = false, Error = "No Google service account key configured" };
-
-        var adminEmail = Environment.GetEnvironmentVariable("GOOGLE_ADMIN_EMAIL") ?? "van-tac@taylor-corp.net";
-
-        string token;
-        try
-        {
-            token = await GetServiceAccountTokenAsync(saKeyJson, adminEmail, DirectoryScope, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Google Directory token exchange failed");
-            return new GoogleDirectoryResult
-            {
-                Success = false,
-                Error = "Google authorization failed. Ensure the service account has the " +
-                        "admin.directory.user.readonly scope in domain-wide delegation. " + ex.Message
-            };
-        }
+        var (token, tokenError) = await AcquireTokenAsync(DirectoryScope, cancellationToken);
+        if (token == null)
+            return new GoogleDirectoryResult { Success = false, Error = tokenError };
 
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(30);
@@ -111,6 +86,96 @@ public class GoogleDirectoryService
             _logger.LogWarning("Google Directory deleted-users query failed: {Error}", deletedError);
 
         return new GoogleDirectoryResult { Success = true, Users = users };
+    }
+
+    /// <summary>
+    /// Executes an admin action against a Workspace account. Supported actions:
+    /// suspend, unsuspend, archive, unarchive, undelete, signout.
+    /// </summary>
+    public async Task<(bool Success, string? Error)> ExecuteUserActionAsync(
+        string userKey,
+        string action,
+        string? orgUnitPath,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = action == "signout" ? DirectorySecurityScope : DirectoryWriteScope;
+        var (token, tokenError) = await AcquireTokenAsync(scope, cancellationToken);
+        if (token == null)
+            return (false, tokenError);
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var baseUrl = $"https://admin.googleapis.com/admin/directory/v1/users/{Uri.EscapeDataString(userKey)}";
+        HttpRequestMessage request = action switch
+        {
+            "suspend" => JsonPut(baseUrl, new { suspended = true }),
+            "unsuspend" => JsonPut(baseUrl, new { suspended = false }),
+            "archive" => JsonPut(baseUrl, new { archived = true }),
+            "unarchive" => JsonPut(baseUrl, new { archived = false }),
+            "undelete" => JsonPost($"{baseUrl}/undelete", new { orgUnitPath = string.IsNullOrWhiteSpace(orgUnitPath) ? "/" : orgUnitPath }),
+            "signout" => new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/signOut"),
+            _ => throw new ArgumentException($"Unknown action '{action}'")
+        };
+
+        using (request)
+        using (var res = await client.SendAsync(request, cancellationToken))
+        {
+            if (res.IsSuccessStatusCode)
+                return (true, null);
+
+            var body = await res.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("Google Directory action {Action} on {UserKey} failed ({Status}): {Body}",
+                action, userKey, (int)res.StatusCode, body[..Math.Min(body.Length, 300)]);
+
+            var error = $"Google API error {(int)res.StatusCode}: {body[..Math.Min(body.Length, 200)]}";
+            if ((int)res.StatusCode == 403 || body.Contains("unauthorized", StringComparison.OrdinalIgnoreCase))
+                error += action == "signout"
+                    ? " — the admin.directory.user.security scope may be missing from domain-wide delegation."
+                    : " — the admin.directory.user (write) scope may be missing from domain-wide delegation.";
+            return (false, error);
+        }
+    }
+
+    private static HttpRequestMessage JsonPut(string url, object payload) =>
+        new(HttpMethod.Put, url)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+
+    private static HttpRequestMessage JsonPost(string url, object payload) =>
+        new(HttpMethod.Post, url)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+
+    private async Task<(string? Token, string? Error)> AcquireTokenAsync(string scope, CancellationToken cancellationToken)
+    {
+        string? saKeyJson;
+        try
+        {
+            saKeyJson = await ResolveServiceAccountJsonAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return (null, ex.Message);
+        }
+
+        if (string.IsNullOrWhiteSpace(saKeyJson))
+            return (null, "No Google service account key configured");
+
+        var adminEmail = Environment.GetEnvironmentVariable("GOOGLE_ADMIN_EMAIL") ?? "van-tac@taylor-corp.net";
+        try
+        {
+            return (await GetServiceAccountTokenAsync(saKeyJson, adminEmail, scope, cancellationToken), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Google Directory token exchange failed for scope {Scope}", scope);
+            return (null, $"Google authorization failed for scope {scope}. " +
+                          "Ensure it is authorized in domain-wide delegation. " + ex.Message);
+        }
     }
 
     private async Task<string?> FetchUsersAsync(

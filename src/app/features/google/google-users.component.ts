@@ -42,6 +42,7 @@ export class GoogleUsersComponent implements OnInit {
   searchTerm = signal('');
   statusFilter = signal('all');
   extraFilter = signal('all');
+  actionBusyId = signal<string | null>(null);
 
   readonly statusTabs = [
     { key: 'all', label: 'All' },
@@ -121,5 +122,25 @@ export class GoogleUsersComponent implements OnInit {
     }
     if (user.suspended && user.suspensionReason) return `Suspension reason: ${user.suspensionReason}`;
     return '';
+  }
+
+  runAction(user: GoogleUser, action: string, label: string) {
+    if (!confirm(`${label} ${user.email}?`)) return;
+    this.actionBusyId.set(user.id);
+    this.http.post(`${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/actions`, {
+      action,
+      email: user.email,
+      orgUnitPath: user.orgUnitPath || '/'
+    }).subscribe({
+      next: () => {
+        this.actionBusyId.set(null);
+        this.toast.champagne(`${label} — ${user.email}`, 'Google');
+        this.loadUsers();
+      },
+      error: (err) => {
+        this.actionBusyId.set(null);
+        this.toast.error(err?.error?.error || `Failed to ${label.toLowerCase()} ${user.email}`, 'Google');
+      }
+    });
   }
 }

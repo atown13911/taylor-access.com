@@ -55,6 +55,7 @@
             <th>Last Login</th>
             <th>Created</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -95,6 +96,28 @@
               <td>{{ user.lastLoginTime ? (user.lastLoginTime | date:'MMM d, y, h:mm a') : 'Never' }}</td>
               <td>{{ user.creationTime ? (user.creationTime | date:'MMM d, y') : '—' }}</td>
               <td><span class="status-badge" [class]="getStatus(user)" [title]="getStatusTooltip(user)">{{ getStatus(user) }}</span></td>
+              <td class="actions-cell">
+                @if (actionBusyId() === user.id) {
+                  <i class='bx bx-loader-alt bx-spin action-spinner'></i>
+                } @else {
+                  @switch (getStatus(user)) {
+                    @case ('active') {
+                      <button class="act-btn warn" (click)="runAction(user, 'suspend', 'Suspend')" title="Suspend account (blocks sign-in, reversible)"><i class='bx bx-user-x'></i></button>
+                      <button class="act-btn" (click)="runAction(user, 'signout', 'Sign out everywhere for')" title="Sign out of all sessions"><i class='bx bx-log-out'></i></button>
+                    }
+                    @case ('suspended') {
+                      <button class="act-btn good" (click)="runAction(user, 'unsuspend', 'Unsuspend')" title="Unsuspend account (restores sign-in)"><i class='bx bx-user-check'></i></button>
+                      <button class="act-btn" (click)="runAction(user, 'archive', 'Archive')" title="Archive account (moves to Archived User license)"><i class='bx bx-archive-in'></i></button>
+                    }
+                    @case ('archived') {
+                      <button class="act-btn good" (click)="runAction(user, 'unarchive', 'Unarchive')" title="Unarchive account (restores active license)"><i class='bx bx-archive-out'></i></button>
+                    }
+                    @case ('deleted') {
+                      <button class="act-btn good" (click)="runAction(user, 'undelete', 'Restore')" title="Restore deleted account"><i class='bx bx-undo'></i></button>
+                    }
+                  }
+                }
+              </td>
             </tr>
           }
         </tbody>
