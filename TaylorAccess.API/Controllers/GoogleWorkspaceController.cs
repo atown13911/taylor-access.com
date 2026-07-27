@@ -317,11 +317,62 @@ public class GoogleWorkspaceController : ControllerBase
     [HttpGet("storage-usage")]
     public async Task<ActionResult> GetStorageUsage(CancellationToken cancellationToken)
     {
-        var (usage, reportDate, error) = await _directory.GetStorageUsageAsync(cancellationToken);
+        var (usage, reportDate, error) = await _directory.GetStorageUsageAsync(includeHidden: false, cancellationToken);
         if (usage == null)
             return StatusCode(502, new { error });
 
         return Ok(new { data = usage, reportDate });
+    }
+
+    /// <summary>
+    /// Saved storage history: per-user rows when an email is given,
+    /// otherwise daily domain totals. Backed by GoogleStorageSnapshots.
+    /// </summary>
+    [HttpGet("storage-history")]
+    public async Task<ActionResult> GetStorageHistory(
+        [FromQuery] string? email,
+        [FromQuery] int days = 90,
+        CancellationToken cancellationToken = default)
+    {
+        var cutoff = DateTime.UtcNow.Date.AddDays(-Math.Clamp(days, 1, 3650));
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            if (GoogleDirectoryService.IsHiddenUser(email) && !_currentUser.IsProductOwner)
+                return StatusCode(403, new { error = "Not authorized for this account" });
+
+            var normalized = email.ToLower();
+            var rows = await _context.GoogleStorageSnapshots
+                .AsNoTracking()
+                .Where(s => s.Email.ToLower() == normalized && s.ReportDate >= cutoff)
+                .OrderBy(s => s.ReportDate)
+                .ToListAsync(cancellationToken);
+            return Ok(new { data = rows });
+        }
+
+        var snapshots = await _context.GoogleStorageSnapshots
+            .AsNoTracking()
+            .Where(s => s.ReportDate >= cutoff)
+            .ToListAsync(cancellationToken);
+
+        if (!_currentUser.IsProductOwner)
+            snapshots = snapshots.Where(s => !GoogleDirectoryService.IsHiddenUser(s.Email)).ToList();
+
+        var daily = snapshots
+            .GroupBy(s => s.ReportDate)
+            .OrderBy(g => g.Key)
+            .Select(g => new
+            {
+                reportDate = g.Key,
+                usedMb = g.Sum(x => x.UsedMb),
+                driveMb = g.Sum(x => x.DriveMb),
+                gmailMb = g.Sum(x => x.GmailMb),
+                photosMb = g.Sum(x => x.PhotosMb),
+                accounts = g.Count()
+            })
+            .ToList();
+
+        return Ok(new { data = daily });
     }
 
     [HttpGet("transfer-applications")]

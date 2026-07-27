@@ -285,6 +285,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<WebhookService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHostedService<MotiveDriverAnalysisScheduledRefreshService>();
+builder.Services.AddHostedService<GoogleStorageSnapshotService>();
 
 var app = builder.Build();
 
@@ -603,6 +604,22 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE INDEX IF NOT EXISTS ""IX_GoogleDataTransfers_SourceGoogleUserId""
             ON ""GoogleDataTransfers"" (""SourceGoogleUserId"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""GoogleStorageSnapshots"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""ReportDate"" TIMESTAMP NOT NULL,
+            ""Email"" VARCHAR(256) NOT NULL,
+            ""UsedMb"" BIGINT NOT NULL DEFAULT 0,
+            ""DriveMb"" BIGINT NOT NULL DEFAULT 0,
+            ""GmailMb"" BIGINT NOT NULL DEFAULT 0,
+            ""PhotosMb"" BIGINT NOT NULL DEFAULT 0,
+            ""UsedPercent"" DOUBLE PRECISION NOT NULL DEFAULT 0,
+            ""CapturedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleStorageSnapshots_ReportDate_Email""
+            ON ""GoogleStorageSnapshots"" (""ReportDate"", ""Email"");
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"

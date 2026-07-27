@@ -178,6 +178,8 @@ public class GoogleDirectoryService
         return new GoogleDirectoryResult { Success = true, Users = users };
     }
 
+    public static bool IsHiddenUser(string email) => HiddenUsers.Contains(email);
+
     // Accounts never exposed through the workspace-users listing (comma-separated env override).
     private static readonly HashSet<string> HiddenUsers =
         (Environment.GetEnvironmentVariable("GOOGLE_HIDDEN_WORKSPACE_USERS")
@@ -631,13 +633,14 @@ public class GoogleDirectoryService
     /// so we walk back from 2 to 6 days until Google has data.
     /// </summary>
     public async Task<(List<GoogleUserStorage>? Usage, string? ReportDate, string? Error)> GetStorageUsageAsync(
+        bool includeHidden = false,
         CancellationToken cancellationToken = default)
     {
         string? firstError = null;
         for (var daysBack = 2; daysBack <= 6; daysBack++)
         {
             var date = DateTime.UtcNow.AddDays(-daysBack).ToString("yyyy-MM-dd");
-            var (usage, error) = await FetchUsageForDateAsync(date, cancellationToken);
+            var (usage, error) = await FetchUsageForDateAsync(date, includeHidden, cancellationToken);
             if (usage != null && usage.Count > 0)
                 return (usage, date, null);
 
@@ -655,7 +658,7 @@ public class GoogleDirectoryService
     }
 
     private async Task<(List<GoogleUserStorage>? Usage, string? Error)> FetchUsageForDateAsync(
-        string date, CancellationToken cancellationToken)
+        string date, bool includeHidden, CancellationToken cancellationToken)
     {
         const string parameters = "accounts:used_quota_in_mb,accounts:drive_used_quota_in_mb," +
                                   "accounts:gmail_used_quota_in_mb,accounts:gplus_photos_used_quota_in_mb," +
@@ -679,7 +682,7 @@ public class GoogleDirectoryService
                     foreach (var report in reports.EnumerateArray())
                     {
                         var email = report.TryGetProperty("entity", out var entity) ? ReadString(entity, "userEmail") : "";
-                        if (string.IsNullOrEmpty(email) || HiddenUsers.Contains(email))
+                        if (string.IsNullOrEmpty(email) || (!includeHidden && HiddenUsers.Contains(email)))
                             continue;
 
                         var row = new GoogleUserStorage { Email = email };
