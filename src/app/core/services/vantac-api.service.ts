@@ -273,6 +273,18 @@ export class VanTacApiService {
   createDriverDocument(data: any): Observable<any> {
     return this.http.post(`${this.baseUrl}/api/v1/driver-documents`, data);
   }
+
+  requestDriverComplianceUpload(
+    driverId: string | number,
+    payload: {
+      documentKey: string;
+      documentLabel: string;
+      category?: string;
+      subCategory?: string;
+    }
+  ): Observable<any> {
+    return this.http.post(`${this.baseUrl}/api/v1/drivers/${driverId}/request-compliance`, payload);
+  }
   updateDriverDocument(id: any, data: any): Observable<any> {
     const payload = data instanceof FormData ? data : this.toDriverDocumentFormData(data);
     return this.http.put(`${this.baseUrl}/api/v1/driver-documents/${id}`, payload);

@@ -33,6 +33,7 @@ export class DriverDatabaseComponent implements OnInit {
     insurance: 'insurance', vehicle: 'vehicle', permits: 'permits',
     ifta: 'ifta', irp: 'ifta', safety: 'safety', violations: 'violations',
     i9: 'i9', w9: 'w9', directDeposit: 'direct_deposit', deduction: 'deduction',
+    escrowDeductionSignup: 'escrow_deduction',
     contract: 'contracts'
   };
   private readonly subMap: Record<string, string> = {
@@ -41,6 +42,7 @@ export class DriverDatabaseComponent implements OnInit {
     insurance: 'certificate_of_insurance', vehicle: 'registration', permits: 'oversize',
     ifta: 'ifta_license', irp: 'irp_cab_card', safety: 'safe_driver', violations: 'moving_violation',
     i9: 'i9_form', w9: 'w9_form', directDeposit: 'direct_deposit_form', deduction: 'deduction_form',
+    escrowDeductionSignup: 'escrow_deduction_signup',
     contract: 'driver_contract'
   };
 
@@ -58,7 +60,7 @@ export class DriverDatabaseComponent implements OnInit {
   private readonly complianceMatrixKeys = [
     'cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance',
     'vehicle', 'permits', 'ifta', 'irp', 'safety', 'violations', 'contract',
-    'i9', 'w9', 'directDeposit', 'deduction'
+    'i9', 'w9', 'directDeposit', 'deduction', 'escrowDeductionSignup'
   ];
   private readonly complianceStatsKeys = [
     'cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training',
@@ -312,7 +314,7 @@ export class DriverDatabaseComponent implements OnInit {
   private computeOtherStatusFromCache(
     statusCache: Record<string, 'compliant' | 'expiring' | 'expired' | 'none'>
   ): 'compliant' | 'expiring' | 'expired' | 'none' {
-    const items = ['i9', 'w9', 'directDeposit', 'deduction'];
+    const items = ['i9', 'w9', 'directDeposit', 'deduction', 'escrowDeductionSignup'];
     let hasExpiring = false;
     let hasExpired = false;
     let hasMissing = false;
@@ -859,7 +861,8 @@ export class DriverDatabaseComponent implements OnInit {
     { key: 'safety', label: 'Safety' },
     { key: 'violations', label: 'Violations' }, { key: 'contract', label: 'Contract' },
     { key: 'i9', label: 'I-9' }, { key: 'w9', label: 'W-9' },
-    { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' }
+    { key: 'directDeposit', label: 'Direct Deposit' }, { key: 'deduction', label: 'Deduction' },
+    { key: 'escrowDeductionSignup', label: 'Escrow and Deductions' }
   ];
   private readonly onboardingPaperworkKeys = [
     'cdl',
@@ -872,7 +875,8 @@ export class DriverDatabaseComponent implements OnInit {
     'i9',
     'w9',
     'directDeposit',
-    'deduction'
+    'deduction',
+    'escrowDeductionSignup'
   ];
 
   selectDriver(driver: any) {
@@ -1200,7 +1204,7 @@ export class DriverDatabaseComponent implements OnInit {
 
   getOtherStatus(driver: any): 'compliant' | 'expiring' | 'expired' | 'none' {
     if (driver?._otherStatus) return driver._otherStatus;
-    const items = ['i9', 'w9', 'directDeposit', 'deduction'];
+    const items = ['i9', 'w9', 'directDeposit', 'deduction', 'escrowDeductionSignup'];
     let hasExpiring = false;
     let hasExpired = false;
     let hasMissing = false;
@@ -1232,7 +1236,7 @@ export class DriverDatabaseComponent implements OnInit {
       expired: 'Expired',
       none: 'Not on File'
     };
-    return `Other (I-9, W-9, Direct Deposit, Deduction): ${labels[this.getOtherStatus(driver)]}`;
+    return `Other (I-9, W-9, Direct Deposit, Deduction, Escrow): ${labels[this.getOtherStatus(driver)]}`;
   }
 
   attachDocsToDrivers(): void {
@@ -1324,6 +1328,10 @@ export class DriverDatabaseComponent implements OnInit {
     w9: ['w-9', 'w9', 'w9_form', 'tax'],
     directDeposit: ['direct deposit', 'direct_deposit', 'direct_deposit_form', 'bank'],
     deduction: ['deduction', 'deduction_form', 'payroll deduction'],
+    escrowDeductionSignup: [
+      'escrow deduction', 'escrow deductions', 'escrow signup',
+      'escrow_deduction', 'escrow_deduction_signup'
+    ],
     contract: ['contract', 'driver_contract', 'contracts', 'agreement', 'lease agreement', 'owner operator']
   };
 
@@ -1334,7 +1342,8 @@ export class DriverDatabaseComponent implements OnInit {
       training: 'Training', insurance: 'Insurance', vehicle: 'Vehicle Docs',
       permits: 'Permits', ifta: 'IFTA', safety: 'Safety', violations: 'Violations',
       contract: 'Contract', irp: 'IRP / Cab Card',
-      i9: 'I-9', w9: 'W-9', directDeposit: 'Direct Deposit', deduction: 'Deduction'
+      i9: 'I-9', w9: 'W-9', directDeposit: 'Direct Deposit', deduction: 'Deduction',
+      escrowDeductionSignup: 'Escrow and Deductions'
     };
     const status = this.getItemStatus(driver, item);
     const statusLabel = status === 'compliant' ? 'Compliant' : status === 'expiring' ? 'Expiring Soon' : status === 'expired' ? 'Expired' : 'Not on File';
