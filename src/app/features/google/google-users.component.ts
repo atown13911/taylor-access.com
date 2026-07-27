@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../../core/services/toast.service';
+import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
 
 interface GoogleUser {
@@ -38,7 +39,10 @@ interface GoogleUser {
 export class GoogleUsersComponent implements OnInit {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
+  private authService = inject(AuthService);
   private apiUrl = environment.apiUrl;
+
+  readonly isProductOwner = this.authService.getEffectiveRoles().includes('product_owner');
 
   loading = signal(false);
   loadError = signal<string | null>(null);

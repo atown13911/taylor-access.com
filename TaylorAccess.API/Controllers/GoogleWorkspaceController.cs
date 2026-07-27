@@ -42,11 +42,16 @@ public class GoogleWorkspaceController : ControllerBase
 
     private readonly GoogleDirectoryService _directory;
     private readonly IAuditService _auditService;
+    private readonly CurrentUserService _currentUser;
 
-    public GoogleWorkspaceController(GoogleDirectoryService directory, IAuditService auditService)
+    public GoogleWorkspaceController(
+        GoogleDirectoryService directory,
+        IAuditService auditService,
+        CurrentUserService currentUser)
     {
         _directory = directory;
         _auditService = auditService;
+        _currentUser = currentUser;
     }
 
     /// <summary>
@@ -75,6 +80,10 @@ public class GoogleWorkspaceController : ControllerBase
         var action = (request.Action ?? "").Trim().ToLowerInvariant();
         if (!AllowedActions.Contains(action))
             return BadRequest(new { error = $"Unknown action '{request.Action}'" });
+
+        // Granting/revoking super admin is restricted to the product owner
+        if ((action == "makeadmin" || action == "revokeadmin") && !_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can grant or revoke super admin" });
 
         var (success, error) = await _directory.ExecuteUserActionAsync(id, action, request.OrgUnitPath, cancellationToken);
         if (!success)
