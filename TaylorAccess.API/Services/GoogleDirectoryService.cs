@@ -480,7 +480,7 @@ public class GoogleDirectoryService
     }
 
     /// <summary>Starts a data transfer from one user to another for the selected applications.</summary>
-    public async Task<(bool Success, string? Error)> InsertTransferAsync(
+    public async Task<(bool Success, string? Error, string? TransferId)> InsertTransferAsync(
         string oldOwnerUserId,
         string newOwnerUserId,
         List<long> applicationIds,
@@ -488,7 +488,7 @@ public class GoogleDirectoryService
     {
         var (appsDoc, appsError) = await GetTransferApplicationsRawAsync(cancellationToken);
         if (appsDoc == null)
-            return (false, appsError);
+            return (false, appsError, null);
 
         var appTransfers = new List<object>();
         using (appsDoc)
@@ -525,7 +525,7 @@ public class GoogleDirectoryService
         }
 
         if (appTransfers.Count == 0)
-            return (false, "No matching transferable applications found");
+            return (false, "No matching transferable applications found", null);
 
         var body = new
         {
@@ -534,9 +534,33 @@ public class GoogleDirectoryService
             applicationDataTransfers = appTransfers
         };
 
-        return await SendDirectoryRequestAsync(
-            JsonRequest(HttpMethod.Post, "https://admin.googleapis.com/admin/datatransfer/v1/transfers", body),
-            DataTransferScope, $"data transfer {oldOwnerUserId} -> {newOwnerUserId}", cancellationToken);
+        var (token, tokenError) = await AcquireTokenAsync(DataTransferScope, cancellationToken);
+        if (token == null)
+            return (false, tokenError, null);
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        using var request = JsonRequest(HttpMethod.Post, "https://admin.googleapis.com/admin/datatransfer/v1/transfers", body);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var res = await client.SendAsync(request, cancellationToken);
+        var resBody = await res.Content.ReadAsStringAsync(cancellationToken);
+        if (!res.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Google data transfer {Old} -> {New} failed ({Status}): {Body}",
+                oldOwnerUserId, newOwnerUserId, (int)res.StatusCode, resBody[..Math.Min(resBody.Length, 300)]);
+            return (false, $"Google API error {(int)res.StatusCode}: {resBody[..Math.Min(resBody.Length, 200)]}", null);
+        }
+
+        string? transferId = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(resBody);
+            transferId = ReadString(doc.RootElement, "id");
+        }
+        catch (JsonException) { /* id is best-effort */ }
+
+        return (true, null, transferId);
     }
 
     /// <summary>Past/in-flight transfers where this user is the source.</summary>

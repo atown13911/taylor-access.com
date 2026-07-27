@@ -433,7 +433,10 @@
                       <div class="sec-row">
                         <div class="sec-info">
                           <span class="sec-name">{{ transferStatusLabel(transfer) }}</span>
-                          <span class="sec-sub">{{ transfer.requestTime ? (transfer.requestTime | date:'MMM d, y, h:mm a') : '' }}</span>
+                          <span class="sec-sub">
+                            {{ transferDetailLabel(transfer) }}
+                            {{ transfer.time ? '· ' + (transfer.time | date:'MMM d, y, h:mm a') : '' }}
+                          </span>
                         </div>
                       </div>
                     }

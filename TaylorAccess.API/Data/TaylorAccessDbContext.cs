@@ -129,6 +129,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<MotivFuelPurchase> MotivFuelPurchases => Set<MotivFuelPurchase>();
     public DbSet<MotivDriverProfile> MotivDriverProfiles => Set<MotivDriverProfile>();
     public DbSet<MotivActivityLog> MotivActivityLogs => Set<MotivActivityLog>();
+    public DbSet<GoogleDataTransfer> GoogleDataTransfers => Set<GoogleDataTransfer>();
     public DbSet<MotivSafetyEvent> MotivSafetyEvents => Set<MotivSafetyEvent>();
     public DbSet<MotivDriverAnalysisCache> MotivDriverAnalysisCaches => Set<MotivDriverAnalysisCache>();
     public DbSet<FuelCardAssignment> FuelCardAssignments => Set<FuelCardAssignment>();

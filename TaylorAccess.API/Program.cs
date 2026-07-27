@@ -587,6 +587,25 @@ using (var scope = app.Services.CreateScope())
     ");
 
     await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""GoogleDataTransfers"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""GoogleTransferId"" VARCHAR(100) NULL,
+            ""SourceGoogleUserId"" VARCHAR(100) NOT NULL,
+            ""SourceEmail"" VARCHAR(256) NOT NULL,
+            ""TargetGoogleUserId"" VARCHAR(100) NOT NULL,
+            ""TargetEmail"" VARCHAR(256) NOT NULL,
+            ""Applications"" VARCHAR(500) NOT NULL DEFAULT '',
+            ""Status"" VARCHAR(50) NOT NULL DEFAULT 'inProgress',
+            ""RequestedByUserId"" INTEGER NULL,
+            ""RequestedBy"" VARCHAR(256) NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""UpdatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS ""IX_GoogleDataTransfers_SourceGoogleUserId""
+            ON ""GoogleDataTransfers"" (""SourceGoogleUserId"");
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
         CREATE TABLE IF NOT EXISTS ""TrailerPhotos"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""TrailerId"" VARCHAR(100) NOT NULL,

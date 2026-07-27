@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TaylorAccess.API.Data;
+using TaylorAccess.API.Models;
 using TaylorAccess.API.Services;
 
 namespace TaylorAccess.API.Controllers;
@@ -43,15 +46,18 @@ public class GoogleWorkspaceController : ControllerBase
     private readonly GoogleDirectoryService _directory;
     private readonly IAuditService _auditService;
     private readonly CurrentUserService _currentUser;
+    private readonly TaylorAccessDbContext _context;
 
     public GoogleWorkspaceController(
         GoogleDirectoryService directory,
         IAuditService auditService,
-        CurrentUserService currentUser)
+        CurrentUserService currentUser,
+        TaylorAccessDbContext context)
     {
         _directory = directory;
         _auditService = auditService;
         _currentUser = currentUser;
+        _context = context;
     }
 
     /// <summary>
@@ -304,11 +310,58 @@ public class GoogleWorkspaceController : ControllerBase
     [HttpGet("workspace-users/{id}/transfers")]
     public async Task<ActionResult> GetTransfers(string id, CancellationToken cancellationToken)
     {
-        var (transfers, error) = await _directory.GetTransfersAsync(id, cancellationToken);
-        if (transfers == null)
+        var (googleTransfers, error) = await _directory.GetTransfersAsync(id, cancellationToken);
+        if (googleTransfers == null)
             return StatusCode(502, new { error });
 
-        return Ok(new { data = transfers });
+        var saved = await _context.GoogleDataTransfers
+            .Where(t => t.SourceGoogleUserId == id)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        // Sync live Google status onto our saved records
+        var changed = false;
+        foreach (var record in saved.Where(r => !string.IsNullOrEmpty(r.GoogleTransferId)))
+        {
+            var live = googleTransfers.FirstOrDefault(g => g.Id == record.GoogleTransferId);
+            if (live != null && !string.IsNullOrEmpty(live.Status) && live.Status != record.Status)
+            {
+                record.Status = live.Status;
+                record.UpdatedAt = DateTime.UtcNow;
+                changed = true;
+            }
+        }
+        if (changed)
+            await _context.SaveChangesAsync(cancellationToken);
+
+        var result = saved.Select(r => new
+        {
+            id = $"db-{r.Id}",
+            targetEmail = r.TargetEmail,
+            targetUserId = r.TargetGoogleUserId,
+            applications = r.Applications,
+            status = r.Status,
+            requestedBy = r.RequestedBy,
+            time = r.CreatedAt.ToString("o")
+        }).ToList();
+
+        // Include transfers Google knows about that weren't started from Taylor Access
+        var knownIds = saved.Select(s => s.GoogleTransferId).Where(gid => !string.IsNullOrEmpty(gid)).ToHashSet();
+        foreach (var g in googleTransfers.Where(g => !knownIds.Contains(g.Id)))
+        {
+            result.Add(new
+            {
+                id = $"g-{g.Id}",
+                targetEmail = (string?)null ?? "",
+                targetUserId = g.NewOwnerUserId,
+                applications = string.Join(", ", g.Apps),
+                status = g.Status,
+                requestedBy = (string?)null,
+                time = g.RequestTime ?? ""
+            });
+        }
+
+        return Ok(new { data = result.OrderByDescending(r => r.time).ToList() });
     }
 
     [HttpPost("workspace-users/{id}/transfers")]
@@ -322,16 +375,30 @@ public class GoogleWorkspaceController : ControllerBase
         if (request.ApplicationIds == null || request.ApplicationIds.Count == 0)
             return BadRequest(new { error = "At least one application must be selected" });
 
-        var (success, error) = await _directory.InsertTransferAsync(
+        var (success, error, transferId) = await _directory.InsertTransferAsync(
             id, request.NewOwnerUserId, request.ApplicationIds, cancellationToken);
         if (!success)
             return StatusCode(502, new { error });
 
+        _context.GoogleDataTransfers.Add(new GoogleDataTransfer
+        {
+            GoogleTransferId = transferId,
+            SourceGoogleUserId = id,
+            SourceEmail = request.Email ?? "",
+            TargetGoogleUserId = request.NewOwnerUserId,
+            TargetEmail = request.NewOwnerEmail ?? "",
+            Applications = request.ApplicationNames ?? string.Join(",", request.ApplicationIds),
+            Status = "inProgress",
+            RequestedByUserId = _currentUser.UserId,
+            RequestedBy = _currentUser.DisplayName
+        });
+        await _context.SaveChangesAsync(cancellationToken);
+
         await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
             $"Google Workspace: started data transfer from {request.Email ?? id} to {request.NewOwnerEmail ?? request.NewOwnerUserId} " +
-            $"(apps: {string.Join(",", request.ApplicationIds)})");
+            $"(apps: {request.ApplicationNames ?? string.Join(",", request.ApplicationIds)})");
 
-        return Ok(new { success = true });
+        return Ok(new { success = true, transferId });
     }
 }
 
@@ -340,5 +407,6 @@ public class GoogleTransferRequest
     public string? NewOwnerUserId { get; set; }
     public string? NewOwnerEmail { get; set; }
     public List<long>? ApplicationIds { get; set; }
+    public string? ApplicationNames { get; set; }
     public string? Email { get; set; }
 }

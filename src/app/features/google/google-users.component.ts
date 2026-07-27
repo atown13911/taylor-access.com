@@ -54,10 +54,12 @@ interface TransferApp {
 
 interface TransferInfo {
   id: string;
-  requestTime: string | null;
+  targetEmail: string;
+  targetUserId: string;
+  applications: string;
   status: string;
-  newOwnerUserId: string;
-  apps: string[];
+  requestedBy: string | null;
+  time: string;
 }
 
 interface GoogleUser {
@@ -353,6 +355,7 @@ export class GoogleUsersComponent implements OnInit {
       newOwnerUserId: target.id,
       newOwnerEmail: target.email,
       applicationIds: [...this.transferSelectedApps],
+      applicationNames: appNames,
       email: user.email
     }).subscribe({
       next: () => {
@@ -368,8 +371,15 @@ export class GoogleUsersComponent implements OnInit {
   }
 
   transferStatusLabel(t: TransferInfo): string {
-    const target = this.users().find(u => u.id === t.newOwnerUserId);
-    return `→ ${target?.email || t.newOwnerUserId} · ${t.status || 'unknown'}`;
+    const email = t.targetEmail || this.users().find(u => u.id === t.targetUserId)?.email || t.targetUserId;
+    return `→ ${email} · ${t.status || 'unknown'}`;
+  }
+
+  transferDetailLabel(t: TransferInfo): string {
+    const parts: string[] = [];
+    if (t.applications) parts.push(t.applications);
+    if (t.requestedBy) parts.push(`requested by ${t.requestedBy}`);
+    return parts.join(' · ');
   }
 
   loadSecurity(user: GoogleUser) {
