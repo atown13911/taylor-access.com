@@ -62,6 +62,15 @@ interface TransferInfo {
   time: string;
 }
 
+interface UserStorage {
+  email: string;
+  usedMb: number;
+  driveMb: number;
+  gmailMb: number;
+  photosMb: number;
+  usedPercent: number;
+}
+
 interface GoogleUser {
   id: string;
   email: string;
@@ -107,6 +116,84 @@ export class GoogleUsersComponent implements OnInit {
   statusFilter = signal('all');
   extraFilter = signal('all');
   actionBusyId = signal<string | null>(null);
+
+  // ----- Page tabs -----
+  pageTab = signal<'domain' | 'storage'>('domain');
+
+  setPageTab(tab: 'domain' | 'storage') {
+    this.pageTab.set(tab);
+    if (tab === 'storage' && !this.storageLoaded) this.loadStorage();
+  }
+
+  // ----- Data storage tab -----
+  private storageLoaded = false;
+  storageLoading = signal(false);
+  storageError = signal<string | null>(null);
+  storage = signal<UserStorage[]>([]);
+  storageReportDate = signal<string | null>(null);
+  storageSearch = signal('');
+
+  filteredStorage = computed(() => {
+    const search = this.storageSearch().toLowerCase();
+    let list = this.storage();
+    if (search) {
+      list = list.filter(s => {
+        const user = this.userByEmail().get(s.email.toLowerCase());
+        return s.email.toLowerCase().includes(search) ||
+          (user?.fullName || '').toLowerCase().includes(search);
+      });
+    }
+    return [...list].sort((a, b) => b.usedMb - a.usedMb);
+  });
+
+  storageTotals = computed(() => {
+    const list = this.storage();
+    return {
+      used: list.reduce((sum, s) => sum + s.usedMb, 0),
+      drive: list.reduce((sum, s) => sum + s.driveMb, 0),
+      gmail: list.reduce((sum, s) => sum + s.gmailMb, 0),
+      photos: list.reduce((sum, s) => sum + s.photosMb, 0)
+    };
+  });
+
+  userByEmail = computed(() => {
+    const map = new Map<string, GoogleUser>();
+    for (const u of this.users()) map.set(u.email.toLowerCase(), u);
+    return map;
+  });
+
+  loadStorage() {
+    this.storageLoaded = true;
+    this.storageLoading.set(true);
+    this.storageError.set(null);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/storage-usage`).subscribe({
+      next: (res) => {
+        this.storage.set(res?.data || []);
+        this.storageReportDate.set(res?.reportDate || null);
+        this.storageLoading.set(false);
+      },
+      error: (err) => {
+        this.storageLoading.set(false);
+        this.storageError.set(err?.error?.error || 'Failed to load storage usage');
+      }
+    });
+  }
+
+  refreshStorage() { this.loadStorage(); }
+
+  formatMb(mb: number): string {
+    if (mb >= 1024 * 1024) return (mb / (1024 * 1024)).toFixed(2) + ' TB';
+    if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+    return mb + ' MB';
+  }
+
+  storageUserName(email: string): string {
+    return this.userByEmail().get(email.toLowerCase())?.fullName || email;
+  }
+
+  storageUserPhoto(email: string): string | null {
+    return this.userByEmail().get(email.toLowerCase())?.thumbnailPhotoUrl || null;
+  }
 
   readonly statusTabs = [
     { key: 'all', label: 'All' },

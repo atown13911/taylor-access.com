@@ -92,6 +92,16 @@ public sealed class GoogleTransferApp
     public string Name { get; set; } = "";
 }
 
+public sealed class GoogleUserStorage
+{
+    public string Email { get; set; } = "";
+    public long UsedMb { get; set; }
+    public long DriveMb { get; set; }
+    public long GmailMb { get; set; }
+    public long PhotosMb { get; set; }
+    public double UsedPercent { get; set; }
+}
+
 public sealed class GoogleTransferInfo
 {
     public string Id { get; set; } = "";
@@ -114,6 +124,7 @@ public class GoogleDirectoryService
     private const string GroupReadScope = "https://www.googleapis.com/auth/admin.directory.group.readonly";
     private const string LicensingScope = "https://www.googleapis.com/auth/apps.licensing";
     private const string ReportsScope = "https://www.googleapis.com/auth/admin.reports.audit.readonly";
+    private const string UsageReportScope = "https://www.googleapis.com/auth/admin.reports.usage.readonly";
     private const string DataTransferScope = "https://www.googleapis.com/auth/admin.datatransfer";
 
     private readonly TaylorAccessDbContext _context;
@@ -606,6 +617,93 @@ public class GoogleDirectoryService
         }
 
         return (transfers, null);
+    }
+
+    /// <summary>
+    /// Per-user storage usage from the Reports usage API. Usage reports lag ~2 days,
+    /// so we walk back from 2 to 6 days until Google has data.
+    /// </summary>
+    public async Task<(List<GoogleUserStorage>? Usage, string? ReportDate, string? Error)> GetStorageUsageAsync(
+        CancellationToken cancellationToken = default)
+    {
+        string? firstError = null;
+        for (var daysBack = 2; daysBack <= 6; daysBack++)
+        {
+            var date = DateTime.UtcNow.AddDays(-daysBack).ToString("yyyy-MM-dd");
+            var (usage, error) = await FetchUsageForDateAsync(date, cancellationToken);
+            if (usage != null && usage.Count > 0)
+                return (usage, date, null);
+
+            if (error != null)
+            {
+                if (error.Contains("authorization failed", StringComparison.OrdinalIgnoreCase))
+                    return (null, null, error);
+                firstError ??= error;
+            }
+        }
+
+        return firstError != null
+            ? (null, null, firstError)
+            : (new List<GoogleUserStorage>(), null, null);
+    }
+
+    private async Task<(List<GoogleUserStorage>? Usage, string? Error)> FetchUsageForDateAsync(
+        string date, CancellationToken cancellationToken)
+    {
+        const string parameters = "accounts:used_quota_in_mb,accounts:drive_used_quota_in_mb," +
+                                  "accounts:gmail_used_quota_in_mb,accounts:gplus_photos_used_quota_in_mb," +
+                                  "accounts:used_quota_percentage";
+
+        var usage = new List<GoogleUserStorage>();
+        string? pageToken = null;
+        do
+        {
+            var url = $"https://admin.googleapis.com/admin/reports/v1/usage/users/all/dates/{date}" +
+                      $"?parameters={Uri.EscapeDataString(parameters)}&maxResults=500" +
+                      (pageToken != null ? $"&pageToken={Uri.EscapeDataString(pageToken)}" : "");
+            var (doc, error) = await GetJsonWithScopeAsync(url, UsageReportScope, $"usage report {date}", cancellationToken);
+            if (doc == null)
+                return (null, error);
+
+            using (doc)
+            {
+                if (doc.RootElement.TryGetProperty("usageReports", out var reports))
+                {
+                    foreach (var report in reports.EnumerateArray())
+                    {
+                        var email = report.TryGetProperty("entity", out var entity) ? ReadString(entity, "userEmail") : "";
+                        if (string.IsNullOrEmpty(email) || HiddenUsers.Contains(email))
+                            continue;
+
+                        var row = new GoogleUserStorage { Email = email };
+                        if (report.TryGetProperty("parameters", out var pars) && pars.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var p in pars.EnumerateArray())
+                            {
+                                var name = ReadString(p, "name");
+                                switch (name)
+                                {
+                                    case "accounts:used_quota_in_mb": row.UsedMb = ReadLong(p, "intValue"); break;
+                                    case "accounts:drive_used_quota_in_mb": row.DriveMb = ReadLong(p, "intValue"); break;
+                                    case "accounts:gmail_used_quota_in_mb": row.GmailMb = ReadLong(p, "intValue"); break;
+                                    case "accounts:gplus_photos_used_quota_in_mb": row.PhotosMb = ReadLong(p, "intValue"); break;
+                                    case "accounts:used_quota_percentage":
+                                        if (p.TryGetProperty("intValue", out var iv) &&
+                                            double.TryParse(iv.ValueKind == JsonValueKind.String ? iv.GetString() : iv.GetRawText(), out var pct))
+                                            row.UsedPercent = pct;
+                                        break;
+                                }
+                            }
+                        }
+                        usage.Add(row);
+                    }
+                }
+
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            }
+        } while (!string.IsNullOrEmpty(pageToken));
+
+        return (usage, null);
     }
 
     private Task<(JsonDocument? Doc, string? Error)> GetTransferApplicationsRawAsync(CancellationToken cancellationToken) =>

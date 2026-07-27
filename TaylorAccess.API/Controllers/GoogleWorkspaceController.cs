@@ -297,6 +297,17 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new { data = events });
     }
 
+    /// <summary>Per-user storage usage across the domain (Drive, Gmail, Photos).</summary>
+    [HttpGet("storage-usage")]
+    public async Task<ActionResult> GetStorageUsage(CancellationToken cancellationToken)
+    {
+        var (usage, reportDate, error) = await _directory.GetStorageUsageAsync(cancellationToken);
+        if (usage == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = usage, reportDate });
+    }
+
     [HttpGet("transfer-applications")]
     public async Task<ActionResult> GetTransferApplications(CancellationToken cancellationToken)
     {

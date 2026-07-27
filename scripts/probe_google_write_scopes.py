@@ -20,6 +20,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/admin.directory.group.readonly",
     "https://www.googleapis.com/auth/apps.licensing",
     "https://www.googleapis.com/auth/admin.reports.audit.readonly",
+    "https://www.googleapis.com/auth/admin.reports.usage.readonly",
     "https://www.googleapis.com/auth/admin.datatransfer",
 ]
 
