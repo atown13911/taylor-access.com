@@ -127,6 +127,7 @@ public class GoogleDirectoryService
     private const string UsageReportScope = "https://www.googleapis.com/auth/admin.reports.usage.readonly";
     private const string DataTransferScope = "https://www.googleapis.com/auth/admin.datatransfer";
     public const string DriveReadScope = "https://www.googleapis.com/auth/drive.readonly";
+    public const string GmailReadScope = "https://www.googleapis.com/auth/gmail.readonly";
 
     private readonly TaylorAccessDbContext _context;
     private readonly IntegrationEncryptionService _encryption;

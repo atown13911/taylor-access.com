@@ -540,6 +540,68 @@ public class GoogleWorkspaceController : ControllerBase
             failedFiles = failed
         });
     }
+
+    // ----- Gmail-to-bucket backup -----
+
+    /// <summary>Starts a Gmail backup pass in the background (product owner only).</summary>
+    [HttpPost("gmail-backup/run")]
+    public async Task<ActionResult> RunGmailBackup([FromServices] IServiceScopeFactory scopeFactory)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can run Gmail backups" });
+
+        if (GoogleGmailBackupWorker.IsRunning)
+            return Ok(new { started = false, message = "A Gmail backup run is already in progress" });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            "Google Workspace: manually started Gmail-to-bucket backup");
+
+        _ = Task.Run(async () =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var worker = scope.ServiceProvider.GetRequiredService<GoogleGmailBackupWorker>();
+            await worker.RunAsync("manual", CancellationToken.None);
+        });
+
+        return Ok(new { started = true });
+    }
+
+    /// <summary>Latest Gmail backup runs plus per-user bucket totals (product owner only).</summary>
+    [HttpGet("gmail-backup/status")]
+    public async Task<ActionResult> GetGmailBackupStatus(CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can view Gmail backup status" });
+
+        var runs = await _context.GoogleGmailBackupRuns.AsNoTracking()
+            .OrderByDescending(r => r.StartedAt)
+            .Take(10)
+            .ToListAsync(cancellationToken);
+
+        var perUser = await _context.GoogleGmailBackupMessages.AsNoTracking()
+            .Where(m => m.Status == "backedUp")
+            .GroupBy(m => m.UserEmail)
+            .Select(g => new
+            {
+                email = g.Key,
+                messages = g.Count(),
+                bytes = g.Sum(x => x.SizeBytes),
+                lastBackedUpAt = g.Max(x => x.BackedUpAt)
+            })
+            .OrderByDescending(x => x.bytes)
+            .ToListAsync(cancellationToken);
+
+        var failed = await _context.GoogleGmailBackupMessages.AsNoTracking()
+            .CountAsync(m => m.Status == "failed", cancellationToken);
+
+        return Ok(new
+        {
+            running = GoogleGmailBackupWorker.IsRunning,
+            runs,
+            perUser,
+            failedMessages = failed
+        });
+    }
 }
 
 public class GoogleTransferRequest

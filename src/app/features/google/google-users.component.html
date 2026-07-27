@@ -204,6 +204,40 @@
           }
         </button>
       </div>
+
+      <div class="backup-panel">
+        <div class="backup-info">
+          <i class='bx bx-envelope'></i>
+          <div>
+            <strong>Gmail Backup to Bucket</strong>
+            <span class="backup-sub">
+              @if (gmailBackupStatus()?.running) {
+                Backup in progress — full mailboxes are copied as raw .eml files...
+              } @else if (lastGmailBackupRun()) {
+                @if (lastGmailBackupRun(); as run) {
+                  Last run {{ run.startedAt | date:'MMM d, h:mm a' }} — {{ run.status }} ·
+                  {{ run.messagesBackedUp }} backed up, {{ run.messagesSkipped }} already stored, {{ run.messagesFailed }} failed
+                }
+              } @else {
+                Every message (full headers, body, attachments) is copied to the storage bucket nightly
+              }
+            </span>
+            @if (gmailBackupTotals().messages > 0) {
+              <span class="backup-sub">
+                In bucket: {{ gmailBackupTotals().messages }} messages · {{ formatBytes(gmailBackupTotals().bytes) }} across {{ gmailBackupTotals().users }} accounts
+              </span>
+            }
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" (click)="runGmailBackup()"
+                [disabled]="gmailBackupBusy() || gmailBackupStatus()?.running">
+          @if (gmailBackupStatus()?.running) {
+            <i class='bx bx-loader-alt bx-spin'></i> Running...
+          } @else {
+            <i class='bx bx-cloud-upload'></i> Back Up Now
+          }
+        </button>
+      </div>
     }
 
     @if (storageLoading()) {

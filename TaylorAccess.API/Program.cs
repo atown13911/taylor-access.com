@@ -260,6 +260,7 @@ builder.Services.AddScoped<GmailDirectMetricsService>();
 builder.Services.AddScoped<GoogleDirectoryService>();
 builder.Services.AddSingleton<BucketStorageService>();
 builder.Services.AddScoped<GoogleDriveBackupWorker>();
+builder.Services.AddScoped<GoogleGmailBackupWorker>();
 builder.Services.AddScoped<PerformanceSyncOrchestrator>();
 builder.Services.AddScoped<CrmPerformanceBackfillService>();
 builder.Services.AddScoped<InsuranceChargingEstimateService>();
@@ -289,6 +290,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddHostedService<MotiveDriverAnalysisScheduledRefreshService>();
 builder.Services.AddHostedService<GoogleStorageSnapshotService>();
 builder.Services.AddHostedService<GoogleDriveBackupScheduler>();
+builder.Services.AddHostedService<GoogleGmailBackupScheduler>();
 
 var app = builder.Build();
 
@@ -653,6 +655,37 @@ using (var scope = app.Services.CreateScope())
             ""FilesBackedUp"" INT NOT NULL DEFAULT 0,
             ""FilesSkipped"" INT NOT NULL DEFAULT 0,
             ""FilesFailed"" INT NOT NULL DEFAULT 0,
+            ""BytesUploaded"" BIGINT NOT NULL DEFAULT 0,
+            ""Error"" VARCHAR(1000) NULL
+        );
+    ");
+
+    await context.Database.ExecuteSqlRawAsync(@"
+        CREATE TABLE IF NOT EXISTS ""GoogleGmailBackupMessages"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""UserEmail"" VARCHAR(256) NOT NULL,
+            ""MessageId"" VARCHAR(64) NOT NULL,
+            ""ThreadId"" VARCHAR(64) NULL,
+            ""SizeBytes"" BIGINT NOT NULL DEFAULT 0,
+            ""InternalDate"" TIMESTAMP NULL,
+            ""S3Key"" VARCHAR(512) NOT NULL DEFAULT '',
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'backedUp',
+            ""Error"" VARCHAR(500) NULL,
+            ""BackedUpAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleGmailBackupMessages_User_Message""
+            ON ""GoogleGmailBackupMessages"" (""UserEmail"", ""MessageId"");
+
+        CREATE TABLE IF NOT EXISTS ""GoogleGmailBackupRuns"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""StartedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""FinishedAt"" TIMESTAMP NULL,
+            ""Status"" VARCHAR(20) NOT NULL DEFAULT 'running',
+            ""Trigger"" VARCHAR(50) NOT NULL DEFAULT 'scheduled',
+            ""UsersProcessed"" INT NOT NULL DEFAULT 0,
+            ""MessagesBackedUp"" INT NOT NULL DEFAULT 0,
+            ""MessagesSkipped"" INT NOT NULL DEFAULT 0,
+            ""MessagesFailed"" INT NOT NULL DEFAULT 0,
             ""BytesUploaded"" BIGINT NOT NULL DEFAULT 0,
             ""Error"" VARCHAR(1000) NULL
         );

@@ -92,6 +92,27 @@ interface DriveBackupStatus {
   failedFiles: number;
 }
 
+interface GmailBackupRun {
+  id: number;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  trigger: string;
+  usersProcessed: number;
+  messagesBackedUp: number;
+  messagesSkipped: number;
+  messagesFailed: number;
+  bytesUploaded: number;
+  error: string | null;
+}
+
+interface GmailBackupStatus {
+  running: boolean;
+  runs: GmailBackupRun[];
+  perUser: { email: string; messages: number; bytes: number; lastBackedUpAt: string }[];
+  failedMessages: number;
+}
+
 interface GoogleUser {
   id: string;
   email: string;
@@ -144,7 +165,10 @@ export class GoogleUsersComponent implements OnInit {
   setPageTab(tab: 'domain' | 'storage' | 'restricted') {
     this.pageTab.set(tab);
     if (tab === 'storage' && !this.storageLoaded) this.loadStorage();
-    if (tab === 'storage' && this.isProductOwner) this.loadBackupStatus();
+    if (tab === 'storage' && this.isProductOwner) {
+      this.loadBackupStatus();
+      this.loadGmailBackupStatus();
+    }
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
   }
 
@@ -250,7 +274,10 @@ export class GoogleUsersComponent implements OnInit {
 
   refreshStorage() {
     this.loadStorage();
-    if (this.isProductOwner) this.loadBackupStatus();
+    if (this.isProductOwner) {
+      this.loadBackupStatus();
+      this.loadGmailBackupStatus();
+    }
   }
 
   // ----- Drive-to-bucket backup (product owner only) -----
@@ -298,6 +325,48 @@ export class GoogleUsersComponent implements OnInit {
   formatBytes(bytes: number): string {
     return this.formatMb(Math.round(bytes / (1024 * 1024)));
   }
+
+  // ----- Gmail-to-bucket backup (product owner only) -----
+  gmailBackupStatus = signal<GmailBackupStatus | null>(null);
+  gmailBackupBusy = signal(false);
+
+  loadGmailBackupStatus() {
+    this.http.get<GmailBackupStatus>(`${this.apiUrl}/api/v1/google/gmail-backup/status`).subscribe({
+      next: (res) => this.gmailBackupStatus.set(res),
+      error: () => this.gmailBackupStatus.set(null)
+    });
+  }
+
+  runGmailBackup() {
+    if (!confirm('Back up every user\'s Gmail messages to the storage bucket now? The first pass covers ~11 TB of mail and will run for days, resuming automatically if interrupted.')) return;
+    this.gmailBackupBusy.set(true);
+    this.http.post<any>(`${this.apiUrl}/api/v1/google/gmail-backup/run`, {}).subscribe({
+      next: (res) => {
+        this.gmailBackupBusy.set(false);
+        if (res?.started) {
+          this.toast.champagne('Gmail backup started — messages are being copied to the bucket', 'Google');
+        } else {
+          this.toast.info(res?.message || 'A Gmail backup run is already in progress', 'Google');
+        }
+        this.loadGmailBackupStatus();
+      },
+      error: (err) => {
+        this.gmailBackupBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to start Gmail backup', 'Google');
+      }
+    });
+  }
+
+  lastGmailBackupRun = computed(() => this.gmailBackupStatus()?.runs?.[0] ?? null);
+
+  gmailBackupTotals = computed(() => {
+    const perUser = this.gmailBackupStatus()?.perUser ?? [];
+    return {
+      users: perUser.length,
+      messages: perUser.reduce((sum, u) => sum + u.messages, 0),
+      bytes: perUser.reduce((sum, u) => sum + u.bytes, 0)
+    };
+  });
 
   formatMb(mb: number): string {
     if (mb >= 1024 * 1024) return (mb / (1024 * 1024)).toFixed(2) + ' TB';
