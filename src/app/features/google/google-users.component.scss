@@ -117,8 +117,9 @@
 .row-clickable { cursor: pointer; }
 .users-table tbody tr.row-selected { background: rgba(0,212,255,0.06); }
 
-.register-overlay { position: fixed; inset: 0; z-index: 99998; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); }
-.register-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 92vw; display: flex; flex-direction: column; background: var(--bg-card, #0d0d14); border-left: 1px solid rgba(0,212,255,0.15); box-shadow: -10px 0 40px rgba(0,0,0,0.5); animation: drawer-in 0.2s ease-out; }
+// Keep the drawer below the fixed 64px app topbar
+.register-overlay { position: fixed; inset: 64px 0 0 0; z-index: 99998; background: rgba(0,0,0,0.6); backdrop-filter: blur(2px); }
+.register-drawer { position: fixed; top: 64px; right: 0; bottom: 0; width: 440px; max-width: 92vw; display: flex; flex-direction: column; background: var(--bg-card, #0d0d14); border-left: 1px solid rgba(0,212,255,0.15); box-shadow: -10px 0 40px rgba(0,0,0,0.5); animation: drawer-in 0.2s ease-out; }
 @keyframes drawer-in { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 .register-header { display: flex; align-items: flex-start; gap: 14px; padding: 20px 22px; border-bottom: 1px solid rgba(0,212,255,0.1);
