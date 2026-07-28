@@ -751,9 +751,11 @@ public class MotivController : ControllerBase
         var locationsPath = _config["MOTIV_DISPATCH_LOCATIONS_PATH"]
             ?? Environment.GetEnvironmentVariable("MOTIV_DISPATCH_LOCATIONS_PATH")
             ?? "/v1/dispatch_locations";
+        // v3 is the dispatch store Motive's newer Dispatch product (board + driver
+        // relay) reads; v1-created dispatches never surface there.
         var dispatchesPath = _config["MOTIV_DISPATCHES_PATH"]
             ?? Environment.GetEnvironmentVariable("MOTIV_DISPATCHES_PATH")
-            ?? "/v1/dispatches";
+            ?? "/v3/dispatches";
 
         var shipperVendorId = BuildDispatchLocationVendorId(request.Shipper);
         var consigneeVendorId = BuildDispatchLocationVendorId(request.Consignee);
@@ -789,41 +791,6 @@ public class MotivController : ControllerBase
             : Regex.Replace(request.OrderNumber.Trim(), @"[^A-Za-z0-9\-]", "-");
         var dispatchVendorId = $"TA-{reference}-{DateTime.UtcNow:yyMMddHHmmss}";
 
-        var body = new Dictionary<string, object?>
-        {
-            ["vendor_id"] = dispatchVendorId,
-            ["driver_id"] = request.DriverId,
-            ["status"] = "planned",
-            ["vendor_shipper_id"] = shipperVendorId,
-            ["vendor_consignee_id"] = consigneeVendorId,
-            ["vendor_shipper_dispatch_location_id"] = shipperVendorId,
-            ["vendor_consignee_dispatch_location_id"] = consigneeVendorId,
-            ["shipper_type"] = "PICKUP",
-            ["consignee_type"] = "DROPOFF",
-            ["dispatch_stops"] = Array.Empty<object>()
-        };
-        if (shipperEnsure.LocationId > 0)
-            body["shipper_dispatch_location_id"] = shipperEnsure.LocationId;
-        if (consigneeEnsure.LocationId > 0)
-            body["consignee_dispatch_location_id"] = consigneeEnsure.LocationId;
-        if (shipperFormIds.Count > 0)
-            body["shipper_form_ids"] = shipperFormIds;
-        if (consigneeFormIds.Count > 0)
-            body["consignee_form_ids"] = consigneeFormIds;
-        if (request.VehicleId is long vehicleId && vehicleId > 0)
-            body["vehicle_id"] = vehicleId;
-        if (!string.IsNullOrWhiteSpace(request.OrderNumber))
-        {
-            body["order_number"] = request.OrderNumber.Trim();
-            body["pickup_number"] = request.OrderNumber.Trim();
-        }
-        if (!string.IsNullOrWhiteSpace(request.Product))
-            body["product"] = request.Product.Trim();
-        if (!string.IsNullOrWhiteSpace(request.Comments))
-        {
-            body["shipper_comments"] = request.Comments.Trim();
-            body["consignee_comments"] = request.Comments.Trim();
-        }
         var pickupEarly = ParseDispatchDate(request.PickupEarlyDate);
         var pickupLate = ParseDispatchDate(request.PickupLateDate) ?? pickupEarly;
         var deliveryEarly = ParseDispatchDate(request.DeliveryEarlyDate);
@@ -843,10 +810,62 @@ public class MotivController : ControllerBase
         if (deliveryLate.HasValue && deliveryEarly.HasValue && deliveryLate.Value < deliveryEarly.Value)
             deliveryLate = deliveryEarly;
 
-        if (pickupEarly.HasValue) body["pickup_early_date"] = FormatDispatchDate(pickupEarly.Value);
-        if (pickupLate.HasValue) body["pickup_late_date"] = FormatDispatchDate(pickupLate.Value);
-        if (deliveryEarly.HasValue) body["delivery_early_date"] = FormatDispatchDate(deliveryEarly.Value);
-        if (deliveryLate.HasValue) body["delivery_late_date"] = FormatDispatchDate(deliveryLate.Value);
+        var pickupStopVendorId = $"{dispatchVendorId}-PU";
+        var deliveryStopVendorId = $"{dispatchVendorId}-DEL";
+
+        var pickupStop = new Dictionary<string, object?>
+        {
+            ["vendor_id"] = pickupStopVendorId,
+            ["type"] = "pickup",
+            ["number"] = 1,
+            ["status"] = "available",
+            ["vendor_dispatch_location_id"] = shipperVendorId
+        };
+        // v3 create doesn't resolve the vendor location reference — the numeric id is required.
+        if (shipperEnsure.LocationId > 0) pickupStop["dispatch_location_id"] = shipperEnsure.LocationId;
+        if (shipperFormIds.Count > 0) pickupStop["form_ids"] = shipperFormIds;
+        if (pickupEarly.HasValue) pickupStop["early_date"] = FormatDispatchDate(pickupEarly.Value);
+        if (pickupLate.HasValue) pickupStop["late_date"] = FormatDispatchDate(pickupLate.Value);
+        if (!string.IsNullOrWhiteSpace(request.Comments)) pickupStop["comments"] = request.Comments.Trim();
+
+        var deliveryStop = new Dictionary<string, object?>
+        {
+            ["vendor_id"] = deliveryStopVendorId,
+            ["type"] = "delivery",
+            ["number"] = 2,
+            ["status"] = "available",
+            ["vendor_dispatch_location_id"] = consigneeVendorId
+        };
+        if (consigneeEnsure.LocationId > 0) deliveryStop["dispatch_location_id"] = consigneeEnsure.LocationId;
+        if (consigneeFormIds.Count > 0) deliveryStop["form_ids"] = consigneeFormIds;
+        if (deliveryEarly.HasValue) deliveryStop["early_date"] = FormatDispatchDate(deliveryEarly.Value);
+        if (deliveryLate.HasValue) deliveryStop["late_date"] = FormatDispatchDate(deliveryLate.Value);
+        if (!string.IsNullOrWhiteSpace(request.Comments)) deliveryStop["comments"] = request.Comments.Trim();
+
+        var trip = new Dictionary<string, object?>
+        {
+            ["vendor_id"] = $"{dispatchVendorId}-T1",
+            ["driver_id"] = request.DriverId,
+            ["vendor_stop_ids"] = new[] { pickupStopVendorId, deliveryStopVendorId },
+            ["status"] = "not_started"
+        };
+        if (request.VehicleId is long vehicleId && vehicleId > 0)
+            trip["vehicle_id"] = vehicleId;
+
+        var body = new Dictionary<string, object?>
+        {
+            ["vendor_id"] = dispatchVendorId,
+            ["status"] = "planned",
+            ["dispatch_stops"] = new object[] { pickupStop, deliveryStop },
+            ["dispatch_trips"] = new object[] { trip }
+        };
+        if (!string.IsNullOrWhiteSpace(request.OrderNumber))
+        {
+            body["order_number"] = request.OrderNumber.Trim();
+            body["pickup_number"] = request.OrderNumber.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(request.Product))
+            body["product"] = request.Product.Trim();
 
         var result = await FetchMotivResponse(dispatchesPath, "dispatches:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
         if (!result.Success)
@@ -1065,16 +1084,24 @@ public class MotivController : ControllerBase
         if (result.Success)
             CollectDispatchForms(result.Payload, forms);
 
+        // Template names vary by account: this one uses pickup/delivery naming
+        // (auto_arrive_pickup, delivery_info, ...); others use shipper/consignee.
+        // "stop_" variants are for additional stops — skip them for main stops.
+        static bool NameMatches(string name, string primary, string secondary) =>
+            !name.Contains("stop_", StringComparison.OrdinalIgnoreCase)
+            && (name.Contains(primary, StringComparison.OrdinalIgnoreCase)
+                || name.Contains(secondary, StringComparison.OrdinalIgnoreCase));
+
         var shipper = forms
-            .Where(f => f.Name.Contains("shipper", StringComparison.OrdinalIgnoreCase))
+            .Where(f => NameMatches(f.Name, "pickup", "shipper"))
             .Select(f => f.Uuid).Distinct().ToList();
         var consignee = forms
-            .Where(f => f.Name.Contains("consignee", StringComparison.OrdinalIgnoreCase))
+            .Where(f => NameMatches(f.Name, "delivery", "consignee"))
             .Select(f => f.Uuid).Distinct().ToList();
         var fallback = forms.Select(f => f.Uuid).Distinct().Take(2).ToList();
 
-        if (shipper.Count == 0) shipper = fallback;
-        if (consignee.Count == 0) consignee = fallback;
+        if (shipper.Count < 2) shipper = fallback;
+        if (consignee.Count < 2) consignee = fallback;
 
         _logger.LogInformation(
             "MOTIV dispatch forms resolved: total={Total} shipper={Shipper} consignee={Consignee}",
