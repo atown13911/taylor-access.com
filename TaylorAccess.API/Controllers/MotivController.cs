@@ -750,6 +750,10 @@ public class MotivController : ControllerBase
             });
         }
 
+        // Motive requires forms on each stop ("at least 2 forms"): use the company's
+        // arrive/depart form templates for shipper and consignee.
+        var (shipperFormIds, consigneeFormIds) = await FetchDispatchFormIds();
+
         var reference = string.IsNullOrWhiteSpace(request.OrderNumber)
             ? DateTime.UtcNow.ToString("yyyyMMddHHmmss")
             : Regex.Replace(request.OrderNumber.Trim(), @"[^A-Za-z0-9\-]", "-");
@@ -768,6 +772,14 @@ public class MotivController : ControllerBase
             ["consignee_type"] = "DROPOFF",
             ["dispatch_stops"] = Array.Empty<object>()
         };
+        if (shipperEnsure.LocationId > 0)
+            body["shipper_dispatch_location_id"] = shipperEnsure.LocationId;
+        if (consigneeEnsure.LocationId > 0)
+            body["consignee_dispatch_location_id"] = consigneeEnsure.LocationId;
+        if (shipperFormIds.Count > 0)
+            body["shipper_form_ids"] = shipperFormIds;
+        if (consigneeFormIds.Count > 0)
+            body["consignee_form_ids"] = consigneeFormIds;
         if (request.VehicleId is long vehicleId && vehicleId > 0)
             body["vehicle_id"] = vehicleId;
         if (!string.IsNullOrWhiteSpace(request.OrderNumber))
@@ -825,8 +837,11 @@ public class MotivController : ControllerBase
         return $"TA-LOC-{hash[..12]}";
     }
 
-    /// <summary>Create the dispatch location in Motive; tolerate it already existing.</summary>
-    private async Task<(bool Success, int StatusCode, string? Error)> EnsureDispatchLocation(
+    /// <summary>
+    /// Create the dispatch location in Motive (or find it if it already exists) and
+    /// return its numeric Motive id, which the dispatch payload requires.
+    /// </summary>
+    private async Task<(bool Success, int StatusCode, string? Error, long LocationId)> EnsureDispatchLocation(
         string locationsPath,
         string vendorId,
         MotivDispatchStopRequest stop)
@@ -844,25 +859,120 @@ public class MotivController : ControllerBase
 
         var create = await FetchMotivResponse(locationsPath, "dispatch-locations:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
         if (create.Success)
-            return (true, 200, null);
+        {
+            var createdId = FindDispatchLocationId(create.Payload, vendorId);
+            if (createdId > 0)
+                return (true, 200, null, createdId);
+        }
 
-        // A 4xx usually means the vendor_id is already registered from a prior send.
-        var errorText = (create.Error ?? "").ToLowerInvariant();
-        if (errorText.Contains("taken") || errorText.Contains("exist") || errorText.Contains("duplicate") || errorText.Contains("already"))
-            return (true, 200, null);
-
+        // Creation failed (often "vendor_id already taken") or didn't echo the id —
+        // look the location up by vendor id instead.
         var lookup = await FetchMotivResponse(
             $"{locationsPath}?vendor_ids={Uri.EscapeDataString(vendorId)}",
             "dispatch-locations:lookup",
             HttpMethod.Get,
             includeIncomingQuery: false);
-        if (lookup.Success && lookup.Payload.ValueKind == JsonValueKind.Object
-            && lookup.Payload.GetRawText().Contains(vendorId, StringComparison.OrdinalIgnoreCase))
+        if (lookup.Success)
         {
-            return (true, 200, null);
+            var foundId = FindDispatchLocationId(lookup.Payload, vendorId);
+            if (foundId > 0)
+                return (true, 200, null, foundId);
         }
 
-        return (false, create.StatusCode, create.Error);
+        if (create.Success)
+            return (true, 200, null, 0);
+        return (false, create.StatusCode, create.Error, 0);
+    }
+
+    /// <summary>Deep-scan a Motive payload for the numeric id of the location with the given vendor_id.</summary>
+    private static long FindDispatchLocationId(JsonElement element, string vendorId, int depth = 0)
+    {
+        if (depth > 8) return 0;
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                if (element.TryGetProperty("id", out var idProp)
+                    && idProp.ValueKind == JsonValueKind.Number
+                    && element.TryGetProperty("vendor_id", out var vendorProp)
+                    && string.Equals(vendorProp.GetString(), vendorId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return idProp.GetInt64();
+                }
+                foreach (var prop in element.EnumerateObject())
+                {
+                    var found = FindDispatchLocationId(prop.Value, vendorId, depth + 1);
+                    if (found > 0) return found;
+                }
+                return 0;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    var found = FindDispatchLocationId(item, vendorId, depth + 1);
+                    if (found > 0) return found;
+                }
+                return 0;
+            default:
+                return 0;
+        }
+    }
+
+    /// <summary>
+    /// Fetch the company's dispatch form templates and split them into shipper and
+    /// consignee sets (Motive names them e.g. "arrive_shipper" / "depart_consignee").
+    /// </summary>
+    private async Task<(List<string> ShipperFormIds, List<string> ConsigneeFormIds)> FetchDispatchFormIds()
+    {
+        var formsPath = _config["MOTIV_FORMS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_FORMS_PATH")
+            ?? "/v1/forms";
+
+        var result = await FetchMotivResponse(formsPath, "forms:list", HttpMethod.Get, includeIncomingQuery: false);
+        var forms = new List<(string Uuid, string Name)>();
+        if (result.Success)
+            CollectDispatchForms(result.Payload, forms);
+
+        var shipper = forms
+            .Where(f => f.Name.Contains("shipper", StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.Uuid).Distinct().ToList();
+        var consignee = forms
+            .Where(f => f.Name.Contains("consignee", StringComparison.OrdinalIgnoreCase))
+            .Select(f => f.Uuid).Distinct().ToList();
+        var fallback = forms.Select(f => f.Uuid).Distinct().Take(2).ToList();
+
+        if (shipper.Count == 0) shipper = fallback;
+        if (consignee.Count == 0) consignee = fallback;
+
+        _logger.LogInformation(
+            "MOTIV dispatch forms resolved: total={Total} shipper={Shipper} consignee={Consignee}",
+            forms.Count, shipper.Count, consignee.Count);
+
+        return (shipper, consignee);
+    }
+
+    /// <summary>Deep-scan the /v1/forms payload for form template UUIDs and names.</summary>
+    private static void CollectDispatchForms(JsonElement element, List<(string Uuid, string Name)> forms, int depth = 0)
+    {
+        if (depth > 8) return;
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                if (element.TryGetProperty("form_id", out var uuidProp)
+                    && uuidProp.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(uuidProp.GetString()))
+                {
+                    var name = element.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String
+                        ? nameProp.GetString() ?? ""
+                        : "";
+                    forms.Add((uuidProp.GetString()!, name));
+                }
+                foreach (var prop in element.EnumerateObject())
+                    CollectDispatchForms(prop.Value, forms, depth + 1);
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                    CollectDispatchForms(item, forms, depth + 1);
+                break;
+        }
     }
 
     private static bool TryFormatDispatchDate(string? value, out string formatted)
