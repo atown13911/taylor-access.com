@@ -705,6 +705,36 @@ public class MotivController : ControllerBase
     }
 
     /// <summary>
+    /// List dispatches from Motive. Uses the v2 API — dispatches created via the v1
+    /// POST land there on accounts migrated to Motive's newer Dispatch product.
+    /// </summary>
+    [HttpGet("dispatches")]
+    public async Task<IActionResult> ListDispatches()
+    {
+        var path = _config["MOTIV_DISPATCHES_LIST_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_DISPATCHES_LIST_PATH")
+            ?? "/v2/dispatches";
+
+        var result = await FetchMotivResponse(path, "dispatches:list", HttpMethod.Get, includeIncomingQuery: true);
+        if (!result.Success)
+        {
+            return StatusCode(result.StatusCode, new
+            {
+                error = "MOTIV dispatches request failed.",
+                status = result.StatusCode,
+                details = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "dispatches",
+            data = result.Payload
+        });
+    }
+
+    /// <summary>
     /// Send a dispatch (pickup + delivery) to a driver's Motive ELD app.
     /// Ensures both dispatch locations exist in Motive, then creates the dispatch.
     /// </summary>
