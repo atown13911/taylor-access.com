@@ -40,7 +40,8 @@ public class GoogleWorkspaceController : ControllerBase
 {
     private static readonly HashSet<string> AllowedActions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "suspend", "unsuspend", "archive", "unarchive", "undelete", "signout", "makeadmin", "revokeadmin"
+        "suspend", "unsuspend", "archive", "unarchive", "undelete", "signout", "makeadmin", "revokeadmin",
+        "removeadminroles"
     };
 
     private readonly GoogleDirectoryService _directory;
@@ -103,11 +104,16 @@ public class GoogleWorkspaceController : ControllerBase
         if (!AllowedActions.Contains(action))
             return BadRequest(new { error = $"Unknown action '{request.Action}'" });
 
-        // Granting/revoking super admin is restricted to the product owner
-        if ((action == "makeadmin" || action == "revokeadmin") && !_currentUser.IsProductOwner)
-            return StatusCode(403, new { error = "Only the product owner can grant or revoke super admin" });
+        // Granting/revoking admin privileges is restricted to the product owner
+        if ((action == "makeadmin" || action == "revokeadmin" || action == "removeadminroles") && !_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can grant or revoke admin privileges" });
 
-        var (success, error) = await _directory.ExecuteUserActionAsync(id, action, request.OrgUnitPath, cancellationToken);
+        bool success;
+        string? error;
+        if (action == "removeadminroles")
+            (success, error, _) = await _directory.RemoveAdminRolesAsync(id, cancellationToken);
+        else
+            (success, error) = await _directory.ExecuteUserActionAsync(id, action, request.OrgUnitPath, cancellationToken);
         if (!success)
             return StatusCode(502, new { error });
 

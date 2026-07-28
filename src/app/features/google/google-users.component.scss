@@ -141,6 +141,7 @@
 .empty-hint { font-size: 0.78rem; color: var(--text-secondary); margin: 0 0 10px; }
 
 .admin-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 8px; }
+.admin-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
 .row-clickable { cursor: pointer; }
 .users-table tbody tr.row-selected { background: rgba(0,212,255,0.06); }

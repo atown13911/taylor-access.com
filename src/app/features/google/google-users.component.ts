@@ -961,4 +961,10 @@ export class GoogleUsersComponent implements OnInit {
       this.runAction(user, 'makeadmin', 'Grant SUPER ADMIN to');
     }
   }
+
+  removeAdminRoles() {
+    const user = this.manageUser();
+    if (!user) return;
+    this.runAction(user, 'removeadminroles', 'Remove ALL delegated admin roles from');
+  }
 }

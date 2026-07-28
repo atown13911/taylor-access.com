@@ -139,6 +139,7 @@ public class GoogleDirectoryService
     private const string DataTransferScope = "https://www.googleapis.com/auth/admin.datatransfer";
     public const string DriveReadScope = "https://www.googleapis.com/auth/drive.readonly";
     public const string GmailReadScope = "https://www.googleapis.com/auth/gmail.readonly";
+    private const string RoleManagementScope = "https://www.googleapis.com/auth/admin.directory.rolemanagement";
 
     private readonly TaylorAccessDbContext _context;
     private readonly IntegrationEncryptionService _encryption;
@@ -226,6 +227,67 @@ public class GoogleDirectoryService
 
         var scope = action == "signout" ? DirectorySecurityScope : DirectoryWriteScope;
         return await SendDirectoryRequestAsync(request, scope, $"action {action} on {userKey}", cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes every admin role assignment for a user (delegated admin roles).
+    /// Super admin status is separate — use the revokeadmin action for that.
+    /// </summary>
+    public async Task<(bool Success, string? Error, int Removed)> RemoveAdminRolesAsync(
+        string userKey,
+        CancellationToken cancellationToken = default)
+    {
+        var (token, tokenError) = await AcquireTokenAsync(RoleManagementScope, cancellationToken);
+        if (token == null)
+            return (false, tokenError, 0);
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var assignmentIds = new List<string>();
+        string? pageToken = null;
+        do
+        {
+            var url = "https://admin.googleapis.com/admin/directory/v1/customer/my_customer/roleassignments" +
+                      $"?userKey={Uri.EscapeDataString(userKey)}&maxResults=200" +
+                      (pageToken != null ? "&pageToken=" + Uri.EscapeDataString(pageToken) : "");
+            var (doc, error) = await GetJsonAsync(client, url, $"role assignments for {userKey}", cancellationToken);
+            if (doc == null)
+                return (false, error, 0);
+            using (doc)
+            {
+                if (doc.RootElement.TryGetProperty("items", out var items))
+                    foreach (var item in items.EnumerateArray())
+                        if (item.TryGetProperty("roleAssignmentId", out var raId))
+                            assignmentIds.Add(raId.GetString() ?? "");
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            }
+        } while (!string.IsNullOrEmpty(pageToken));
+
+        assignmentIds.RemoveAll(string.IsNullOrEmpty);
+        if (assignmentIds.Count == 0)
+            return (true, null, 0);
+
+        var removed = 0;
+        foreach (var assignmentId in assignmentIds)
+        {
+            var url = "https://admin.googleapis.com/admin/directory/v1/customer/my_customer/roleassignments/" +
+                      Uri.EscapeDataString(assignmentId);
+            using var res = await client.DeleteAsync(url, cancellationToken);
+            if (res.IsSuccessStatusCode)
+            {
+                removed++;
+                continue;
+            }
+
+            var body = await res.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("Google role assignment delete failed for {User} assignment {Assignment}: {Status} {Body}",
+                userKey, assignmentId, (int)res.StatusCode, body[..Math.Min(body.Length, 200)]);
+            return (false, $"Removed {removed} of {assignmentIds.Count} role assignments; delete failed with HTTP {(int)res.StatusCode}", removed);
+        }
+
+        return (true, null, removed);
     }
 
     /// <summary>

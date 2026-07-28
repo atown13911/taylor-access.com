@@ -708,15 +708,23 @@
                 {{ user.isAdmin ? 'Super Admin' : user.isDelegatedAdmin ? 'Delegated Admin' : 'User' }}
               </span>
             </div>
-            @if (user.isAdmin) {
-              <button class="btn btn-secondary btn-sm danger" (click)="toggleAdmin()" [disabled]="actionBusyId() === user.id">
-                <i class='bx bx-shield-x'></i> Revoke Super Admin
-              </button>
-            } @else {
-              <button class="btn btn-secondary btn-sm" (click)="toggleAdmin()" [disabled]="actionBusyId() === user.id">
-                <i class='bx bx-shield-quarter'></i> Grant Super Admin
-              </button>
-            }
+            <div class="admin-actions">
+              @if (user.isAdmin) {
+                <button class="btn btn-secondary btn-sm danger" (click)="toggleAdmin()" [disabled]="actionBusyId() === user.id">
+                  <i class='bx bx-shield-x'></i> Revoke Super Admin
+                </button>
+              } @else {
+                <button class="btn btn-secondary btn-sm" (click)="toggleAdmin()" [disabled]="actionBusyId() === user.id">
+                  <i class='bx bx-shield-quarter'></i> Grant Super Admin
+                </button>
+              }
+              @if (user.isDelegatedAdmin) {
+                <button class="btn btn-secondary btn-sm danger" (click)="removeAdminRoles()" [disabled]="actionBusyId() === user.id"
+                        title="Removes every delegated admin role assigned to this user">
+                  <i class='bx bx-shield-x'></i> Remove Admin Roles
+                </button>
+              }
+            </div>
           </div>
         }
 
