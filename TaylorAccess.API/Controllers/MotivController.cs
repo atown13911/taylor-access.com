@@ -824,14 +824,29 @@ public class MotivController : ControllerBase
             body["shipper_comments"] = request.Comments.Trim();
             body["consignee_comments"] = request.Comments.Trim();
         }
-        if (TryFormatDispatchDate(request.PickupEarlyDate, out var pickupEarly))
-            body["pickup_early_date"] = pickupEarly;
-        if (TryFormatDispatchDate(request.PickupLateDate ?? request.PickupEarlyDate, out var pickupLate))
-            body["pickup_late_date"] = pickupLate;
-        if (TryFormatDispatchDate(request.DeliveryEarlyDate, out var deliveryEarly))
-            body["delivery_early_date"] = deliveryEarly;
-        if (TryFormatDispatchDate(request.DeliveryLateDate ?? request.DeliveryEarlyDate, out var deliveryLate))
-            body["delivery_late_date"] = deliveryLate;
+        var pickupEarly = ParseDispatchDate(request.PickupEarlyDate);
+        var pickupLate = ParseDispatchDate(request.PickupLateDate) ?? pickupEarly;
+        var deliveryEarly = ParseDispatchDate(request.DeliveryEarlyDate);
+        var deliveryLate = ParseDispatchDate(request.DeliveryLateDate) ?? deliveryEarly;
+
+        // A dispatch is an instruction to do the work now. Past trip dates would bury
+        // it in Motive's board history, so clamp everything to today or later.
+        var todayAnchorUtc = DateTime.UtcNow.Date.AddHours(17);
+        if (pickupEarly.HasValue && pickupEarly.Value < DateTime.UtcNow.Date)
+            pickupEarly = todayAnchorUtc;
+        if (pickupLate.HasValue && pickupEarly.HasValue && pickupLate.Value < pickupEarly.Value)
+            pickupLate = pickupEarly;
+        if (deliveryEarly.HasValue && pickupEarly.HasValue && deliveryEarly.Value < pickupEarly.Value)
+            deliveryEarly = pickupEarly;
+        if (deliveryEarly.HasValue && deliveryEarly.Value < DateTime.UtcNow.Date)
+            deliveryEarly = todayAnchorUtc;
+        if (deliveryLate.HasValue && deliveryEarly.HasValue && deliveryLate.Value < deliveryEarly.Value)
+            deliveryLate = deliveryEarly;
+
+        if (pickupEarly.HasValue) body["pickup_early_date"] = FormatDispatchDate(pickupEarly.Value);
+        if (pickupLate.HasValue) body["pickup_late_date"] = FormatDispatchDate(pickupLate.Value);
+        if (deliveryEarly.HasValue) body["delivery_early_date"] = FormatDispatchDate(deliveryEarly.Value);
+        if (deliveryLate.HasValue) body["delivery_late_date"] = FormatDispatchDate(deliveryLate.Value);
 
         var result = await FetchMotivResponse(dispatchesPath, "dispatches:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
         if (!result.Success)
@@ -1005,19 +1020,20 @@ public class MotivController : ControllerBase
         }
     }
 
-    private static bool TryFormatDispatchDate(string? value, out string formatted)
+    private static DateTime? ParseDispatchDate(string? value)
     {
-        formatted = "";
-        if (string.IsNullOrWhiteSpace(value)) return false;
-        if (!DateTime.TryParse(value, out var parsed)) return false;
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!DateTime.TryParse(value, out var parsed)) return null;
         var utc = parsed.ToUniversalTime();
         // Date-only inputs parse to midnight UTC, which Motive's dispatch board buckets
         // onto the previous local day in US timezones. Anchor those at 17:00 UTC (midday US).
         if (utc.TimeOfDay == TimeSpan.Zero)
             utc = utc.AddHours(17);
-        formatted = utc.ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
-        return true;
+        return utc;
     }
+
+    private static string FormatDispatchDate(DateTime utc)
+        => utc.ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
 
     /// <summary>
     /// Returns cached Motive driver-analysis telematics for a date range (DB snapshot).
