@@ -1010,7 +1010,12 @@ public class MotivController : ControllerBase
         formatted = "";
         if (string.IsNullOrWhiteSpace(value)) return false;
         if (!DateTime.TryParse(value, out var parsed)) return false;
-        formatted = parsed.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
+        var utc = parsed.ToUniversalTime();
+        // Date-only inputs parse to midnight UTC, which Motive's dispatch board buckets
+        // onto the previous local day in US timezones. Anchor those at 17:00 UTC (midday US).
+        if (utc.TimeOfDay == TimeSpan.Zero)
+            utc = utc.AddHours(17);
+        formatted = utc.ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
         return true;
     }
 
