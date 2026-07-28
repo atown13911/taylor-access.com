@@ -587,6 +587,90 @@ public class MotivController : ControllerBase
         });
     }
 
+    private static readonly HashSet<string> AllowedCameraPositions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "front_facing", "driver_facing", "front_narrow_facing", "side_left", "side_right", "rear"
+    };
+
+    /// <summary>Request an on-demand dashcam/omnicam image capture from Motive.</summary>
+    [HttpPost("image-captures")]
+    public async Task<IActionResult> CreateImageCapture([FromBody] MotivImageCaptureRequest request)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Position))
+            return BadRequest(new { error = "Position is required (e.g. front_facing, driver_facing)." });
+        if (!AllowedCameraPositions.Contains(request.Position.Trim()))
+            return BadRequest(new { error = $"Invalid camera position '{request.Position}'." });
+        if (request.VehicleId == null && string.IsNullOrWhiteSpace(request.VehicleNumber))
+            return BadRequest(new { error = "VehicleId or VehicleNumber is required." });
+
+        var path = _config["MOTIV_IMAGE_CAPTURES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_IMAGE_CAPTURES_PATH")
+            ?? "/v1/image_captures";
+
+        var body = new Dictionary<string, object>
+        {
+            ["position"] = request.Position.Trim().ToLowerInvariant()
+        };
+        if (request.VehicleId != null)
+            body["vehicle_id"] = request.VehicleId.Value;
+        else
+            body["vehicle_number"] = request.VehicleNumber!.Trim();
+
+        var result = await FetchMotivResponse(path, "image-captures:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
+        if (!result.Success)
+        {
+            return StatusCode(result.StatusCode, new
+            {
+                error = "MOTIV image capture request failed.",
+                status = result.StatusCode,
+                details = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "image-captures",
+            data = result.Payload
+        });
+    }
+
+    /// <summary>Fetch the presigned image URL(s) for a previously requested image capture.</summary>
+    [HttpGet("image-captures/{cameraType}/{requestId}")]
+    public async Task<IActionResult> GetImageCapture(string cameraType, string requestId)
+    {
+        var safeCameraType = (cameraType ?? "").Trim().ToLowerInvariant();
+        if (safeCameraType != "dashcam" && safeCameraType != "omnicam")
+            return BadRequest(new { error = "cameraType must be 'dashcam' or 'omnicam'." });
+        if (string.IsNullOrWhiteSpace(requestId) || !long.TryParse(requestId.Trim(), out var safeRequestId))
+            return BadRequest(new { error = "requestId must be numeric." });
+
+        var basePath = _config["MOTIV_IMAGE_CAPTURES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_IMAGE_CAPTURES_PATH")
+            ?? "/v1/image_captures";
+        var path = $"{basePath}/{safeCameraType}/{safeRequestId}";
+
+        var result = await FetchMotivResponse(path, "image-captures:get", HttpMethod.Get, includeIncomingQuery: false);
+        if (!result.Success)
+        {
+            return StatusCode(result.StatusCode, new
+            {
+                error = "MOTIV image capture status request failed.",
+                status = result.StatusCode,
+                details = result.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "image-captures",
+            cameraType = safeCameraType,
+            requestId = safeRequestId,
+            data = result.Payload
+        });
+    }
+
     /// <summary>
     /// Returns cached Motive driver-analysis telematics for a date range (DB snapshot).
     /// Use POST driver-analysis/refresh to pull fresh data from Motive.
@@ -1742,7 +1826,8 @@ public class MotivController : ControllerBase
         string path,
         string endpointName,
         HttpMethod method,
-        bool includeIncomingQuery)
+        bool includeIncomingQuery,
+        object? body = null)
     {
         var creds = await ResolveMotivCredentials();
         var apiKey = creds.ApiKey;
@@ -1761,6 +1846,13 @@ public class MotivController : ControllerBase
         using var request = new HttpRequestMessage(method, requestUri);
         request.Headers.TryAddWithoutValidation("x-api-key", apiKey);
         request.Headers.TryAddWithoutValidation("Accept", "application/json");
+        if (body != null)
+        {
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(body),
+                System.Text.Encoding.UTF8,
+                "application/json");
+        }
 
         try
         {
@@ -3950,6 +4042,13 @@ public class MotivProbeMethodRequest
 {
     public string? Path { get; set; }
     public string? Method { get; set; }
+}
+
+public class MotivImageCaptureRequest
+{
+    public long? VehicleId { get; set; }
+    public string? VehicleNumber { get; set; }
+    public string? Position { get; set; }
 }
 
 public class MotivActivityLogRequest
