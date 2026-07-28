@@ -884,13 +884,16 @@ public class MotivController : ControllerBase
 
     /// <summary>
     /// Create the dispatch location in Motive (or find it if it already exists) and
-    /// return its numeric Motive id, which the dispatch payload requires.
+    /// return its numeric Motive id. Motive requires geofenced (geocoded) locations
+    /// for dispatch stops, so the address is geocoded and lat/lon + radii included.
     /// </summary>
     private async Task<(bool Success, int StatusCode, string? Error, long LocationId)> EnsureDispatchLocation(
         string locationsPath,
         string vendorId,
         MotivDispatchStopRequest stop)
     {
+        var geo = await GeocodeStopAddress(stop);
+
         var body = new Dictionary<string, object?>
         {
             ["vendor_id"] = vendorId,
@@ -901,13 +904,20 @@ public class MotivController : ControllerBase
             ["zip"] = stop.Zip?.Trim() ?? "",
             ["country"] = "US"
         };
+        if (geo is { } coords)
+        {
+            body["lat"] = coords.Lat;
+            body["lon"] = coords.Lon;
+            body["arrive_radius"] = 500;
+            body["depart_radius"] = 500;
+        }
 
         var create = await FetchMotivResponse(locationsPath, "dispatch-locations:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
         if (create.Success)
         {
-            var createdId = FindDispatchLocationId(create.Payload, vendorId);
-            if (createdId > 0)
-                return (true, 200, null, createdId);
+            var created = FindDispatchLocation(create.Payload, vendorId);
+            if (created.Id > 0)
+                return (true, 200, null, created.Id);
         }
 
         // Creation failed (often "vendor_id already taken") or didn't echo the id —
@@ -919,9 +929,22 @@ public class MotivController : ControllerBase
             includeIncomingQuery: false);
         if (lookup.Success)
         {
-            var foundId = FindDispatchLocationId(lookup.Payload, vendorId);
-            if (foundId > 0)
-                return (true, 200, null, foundId);
+            var found = FindDispatchLocation(lookup.Payload, vendorId);
+            if (found.Id > 0)
+            {
+                // Older sends may have left this location without coordinates —
+                // geofence it now, otherwise Motive rejects the dispatch.
+                if (!found.Geofenced && geo != null)
+                {
+                    await FetchMotivResponse(
+                        $"{locationsPath}/{found.Id}",
+                        "dispatch-locations:update",
+                        HttpMethod.Put,
+                        includeIncomingQuery: false,
+                        body: body);
+                }
+                return (true, 200, null, found.Id);
+            }
         }
 
         if (create.Success)
@@ -929,10 +952,64 @@ public class MotivController : ControllerBase
         return (false, create.StatusCode, create.Error, 0);
     }
 
-    /// <summary>Deep-scan a Motive payload for the numeric id of the location with the given vendor_id.</summary>
-    private static long FindDispatchLocationId(JsonElement element, string vendorId, int depth = 0)
+    /// <summary>
+    /// Forward-geocode a stop's address via Nominatim (OpenStreetMap). Falls back to
+    /// the location name + city/state when no street address is available.
+    /// </summary>
+    private async Task<(double Lat, double Lon)?> GeocodeStopAddress(MotivDispatchStopRequest stop)
     {
-        if (depth > 8) return 0;
+        var addressParts = new[] { stop.Address1, stop.City, stop.State, stop.Zip }
+            .Select(value => (value ?? "").Trim())
+            .Where(value => value.Length > 0)
+            .ToList();
+        var cityState = string.Join(", ", new[] { stop.City, stop.State }
+            .Select(value => (value ?? "").Trim())
+            .Where(value => value.Length > 0));
+
+        var queries = new List<string>();
+        if (addressParts.Count > 0) queries.Add(string.Join(", ", addressParts));
+        if (!string.IsNullOrWhiteSpace(stop.Name) && cityState.Length > 0)
+            queries.Add($"{stop.Name!.Trim()}, {cityState}");
+        if (cityState.Length > 0) queries.Add(cityState);
+
+        foreach (var query in queries.Distinct())
+        {
+            try
+            {
+                var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
+                using var request = new HttpRequestMessage(
+                    HttpMethod.Get,
+                    $"https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q={Uri.EscapeDataString(query)}");
+                request.Headers.TryAddWithoutValidation("User-Agent", "TaylorAccessAPI/1.0 (dispatch location geocoding)");
+                using var response = await client.SendAsync(request);
+                if (!response.IsSuccessStatusCode) continue;
+
+                var json = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+                if (json.ValueKind != JsonValueKind.Array || json.GetArrayLength() == 0) continue;
+
+                var first = json[0];
+                if (first.TryGetProperty("lat", out var latProp) && first.TryGetProperty("lon", out var lonProp)
+                    && double.TryParse(latProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lat)
+                    && double.TryParse(lonProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lon))
+                {
+                    return (lat, lon);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Dispatch location geocode failed for query {Query}", query);
+            }
+        }
+
+        _logger.LogWarning("Dispatch location could not be geocoded: name={Name} city={City} state={State}", stop.Name, stop.City, stop.State);
+        return null;
+    }
+
+    /// <summary>Deep-scan a Motive payload for the location matching the vendor_id (id + whether it has coordinates).</summary>
+    private static (long Id, bool Geofenced) FindDispatchLocation(JsonElement element, string vendorId, int depth = 0)
+    {
+        if (depth > 8) return (0, false);
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
@@ -941,24 +1018,36 @@ public class MotivController : ControllerBase
                     && element.TryGetProperty("vendor_id", out var vendorProp)
                     && string.Equals(vendorProp.GetString(), vendorId, StringComparison.OrdinalIgnoreCase))
                 {
-                    return idProp.GetInt64();
+                    var geofenced = HasCoordinate(element, "lat") && HasCoordinate(element, "lon");
+                    return (idProp.GetInt64(), geofenced);
                 }
                 foreach (var prop in element.EnumerateObject())
                 {
-                    var found = FindDispatchLocationId(prop.Value, vendorId, depth + 1);
-                    if (found > 0) return found;
+                    var found = FindDispatchLocation(prop.Value, vendorId, depth + 1);
+                    if (found.Id > 0) return found;
                 }
-                return 0;
+                return (0, false);
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    var found = FindDispatchLocationId(item, vendorId, depth + 1);
-                    if (found > 0) return found;
+                    var found = FindDispatchLocation(item, vendorId, depth + 1);
+                    if (found.Id > 0) return found;
                 }
-                return 0;
+                return (0, false);
             default:
-                return 0;
+                return (0, false);
         }
+    }
+
+    private static bool HasCoordinate(JsonElement obj, string property)
+    {
+        if (!obj.TryGetProperty(property, out var prop)) return false;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.Number => Math.Abs(prop.GetDouble()) > 0.0001,
+            JsonValueKind.String => double.TryParse(prop.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) && Math.Abs(value) > 0.0001,
+            _ => false
+        };
     }
 
     /// <summary>
