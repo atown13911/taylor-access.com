@@ -38,6 +38,39 @@ public class MotivController : ControllerBase
         _scopeFactory = scopeFactory;
     }
 
+    /// <summary>Service-to-service auth for /internal/motiv routes (gateway header or X-Service-Key).</summary>
+    private bool IsAuthorizedInternalCall()
+    {
+        if (Request.Headers["X-GW-Internal"].FirstOrDefault() == "1")
+            return true;
+
+        var expected = _config["INTERNAL_SERVICE_KEY"]
+            ?? Environment.GetEnvironmentVariable("INTERNAL_SERVICE_KEY")
+            ?? "ta-internal-service-key-2026";
+        var provided = Request.Headers["X-Service-Key"].FirstOrDefault();
+        return !string.IsNullOrEmpty(provided) && provided == expected;
+    }
+
+    /// <summary>Internal (X-Service-Key) mirror of hos-available-time for VanTac's compliance alert poller.</summary>
+    [HttpGet("/internal/motiv/hos-available-time")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetHosAvailableTimeInternal()
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+        return await GetHosAvailableTime();
+    }
+
+    /// <summary>Internal (X-Service-Key) mirror of hos-violations for VanTac's compliance alert poller.</summary>
+    [HttpGet("/internal/motiv/hos-violations")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetHosViolationsInternal([FromQuery] int days = 30, [FromQuery] int limit = 2000)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+        return await GetHosViolations(days, limit);
+    }
+
     [HttpGet("config")]
     public async Task<IActionResult> GetConfig()
     {
