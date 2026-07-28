@@ -705,6 +705,176 @@ public class MotivController : ControllerBase
     }
 
     /// <summary>
+    /// Send a dispatch (pickup + delivery) to a driver's Motive ELD app.
+    /// Ensures both dispatch locations exist in Motive, then creates the dispatch.
+    /// </summary>
+    [HttpPost("dispatches")]
+    public async Task<IActionResult> CreateDispatch([FromBody] MotivDispatchRequest request)
+    {
+        if (request == null || request.DriverId <= 0)
+            return BadRequest(new { error = "DriverId (Motive user id) is required." });
+        if (request.Shipper == null || string.IsNullOrWhiteSpace(request.Shipper.Name))
+            return BadRequest(new { error = "Shipper (pickup) location with a name is required." });
+        if (request.Consignee == null || string.IsNullOrWhiteSpace(request.Consignee.Name))
+            return BadRequest(new { error = "Consignee (delivery) location with a name is required." });
+
+        var locationsPath = _config["MOTIV_DISPATCH_LOCATIONS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_DISPATCH_LOCATIONS_PATH")
+            ?? "/v1/dispatch_locations";
+        var dispatchesPath = _config["MOTIV_DISPATCHES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_DISPATCHES_PATH")
+            ?? "/v1/dispatches";
+
+        var shipperVendorId = BuildDispatchLocationVendorId(request.Shipper);
+        var consigneeVendorId = BuildDispatchLocationVendorId(request.Consignee);
+
+        var shipperEnsure = await EnsureDispatchLocation(locationsPath, shipperVendorId, request.Shipper);
+        if (!shipperEnsure.Success)
+        {
+            return StatusCode(shipperEnsure.StatusCode, new
+            {
+                error = "Failed to create the pickup dispatch location in Motive.",
+                status = shipperEnsure.StatusCode,
+                details = shipperEnsure.Error
+            });
+        }
+
+        var consigneeEnsure = await EnsureDispatchLocation(locationsPath, consigneeVendorId, request.Consignee);
+        if (!consigneeEnsure.Success)
+        {
+            return StatusCode(consigneeEnsure.StatusCode, new
+            {
+                error = "Failed to create the delivery dispatch location in Motive.",
+                status = consigneeEnsure.StatusCode,
+                details = consigneeEnsure.Error
+            });
+        }
+
+        var reference = string.IsNullOrWhiteSpace(request.OrderNumber)
+            ? DateTime.UtcNow.ToString("yyyyMMddHHmmss")
+            : Regex.Replace(request.OrderNumber.Trim(), @"[^A-Za-z0-9\-]", "-");
+        var dispatchVendorId = $"TA-{reference}-{DateTime.UtcNow:yyMMddHHmmss}";
+
+        var body = new Dictionary<string, object?>
+        {
+            ["vendor_id"] = dispatchVendorId,
+            ["driver_id"] = request.DriverId,
+            ["status"] = "planned",
+            ["vendor_shipper_id"] = shipperVendorId,
+            ["vendor_consignee_id"] = consigneeVendorId,
+            ["vendor_shipper_dispatch_location_id"] = shipperVendorId,
+            ["vendor_consignee_dispatch_location_id"] = consigneeVendorId,
+            ["shipper_type"] = "PICKUP",
+            ["consignee_type"] = "DROPOFF",
+            ["dispatch_stops"] = Array.Empty<object>()
+        };
+        if (request.VehicleId is long vehicleId && vehicleId > 0)
+            body["vehicle_id"] = vehicleId;
+        if (!string.IsNullOrWhiteSpace(request.OrderNumber))
+        {
+            body["order_number"] = request.OrderNumber.Trim();
+            body["pickup_number"] = request.OrderNumber.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(request.Product))
+            body["product"] = request.Product.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Comments))
+        {
+            body["shipper_comments"] = request.Comments.Trim();
+            body["consignee_comments"] = request.Comments.Trim();
+        }
+        if (TryFormatDispatchDate(request.PickupEarlyDate, out var pickupEarly))
+            body["pickup_early_date"] = pickupEarly;
+        if (TryFormatDispatchDate(request.PickupLateDate ?? request.PickupEarlyDate, out var pickupLate))
+            body["pickup_late_date"] = pickupLate;
+        if (TryFormatDispatchDate(request.DeliveryEarlyDate, out var deliveryEarly))
+            body["delivery_early_date"] = deliveryEarly;
+        if (TryFormatDispatchDate(request.DeliveryLateDate ?? request.DeliveryEarlyDate, out var deliveryLate))
+            body["delivery_late_date"] = deliveryLate;
+
+        var result = await FetchMotivResponse(dispatchesPath, "dispatches:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
+        if (!result.Success)
+        {
+            return StatusCode(result.StatusCode, new
+            {
+                error = "MOTIV dispatch creation failed.",
+                status = result.StatusCode,
+                details = result.Error
+            });
+        }
+
+        _logger.LogInformation(
+            "MOTIV dispatch created: vendorId={VendorId} driverId={DriverId} order={Order}",
+            dispatchVendorId, request.DriverId, request.OrderNumber);
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "dispatches",
+            vendorId = dispatchVendorId,
+            data = result.Payload
+        });
+    }
+
+    /// <summary>Deterministic vendor id for a dispatch location so repeat sends reuse it.</summary>
+    private static string BuildDispatchLocationVendorId(MotivDispatchStopRequest stop)
+    {
+        var normalized = string.Join('|', new[] { stop.Name, stop.Address1, stop.City, stop.State, stop.Zip }
+            .Select(value => (value ?? "").Trim().ToLowerInvariant()));
+        var hash = Convert.ToHexString(
+            System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(normalized)));
+        return $"TA-LOC-{hash[..12]}";
+    }
+
+    /// <summary>Create the dispatch location in Motive; tolerate it already existing.</summary>
+    private async Task<(bool Success, int StatusCode, string? Error)> EnsureDispatchLocation(
+        string locationsPath,
+        string vendorId,
+        MotivDispatchStopRequest stop)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["vendor_id"] = vendorId,
+            ["name"] = stop.Name?.Trim(),
+            ["address1"] = FirstNonEmpty(stop.Address1, stop.Name) ?? "",
+            ["city"] = stop.City?.Trim() ?? "",
+            ["state"] = stop.State?.Trim() ?? "",
+            ["zip"] = stop.Zip?.Trim() ?? "",
+            ["country"] = "US"
+        };
+
+        var create = await FetchMotivResponse(locationsPath, "dispatch-locations:create", HttpMethod.Post, includeIncomingQuery: false, body: body);
+        if (create.Success)
+            return (true, 200, null);
+
+        // A 4xx usually means the vendor_id is already registered from a prior send.
+        var errorText = (create.Error ?? "").ToLowerInvariant();
+        if (errorText.Contains("taken") || errorText.Contains("exist") || errorText.Contains("duplicate") || errorText.Contains("already"))
+            return (true, 200, null);
+
+        var lookup = await FetchMotivResponse(
+            $"{locationsPath}?vendor_ids={Uri.EscapeDataString(vendorId)}",
+            "dispatch-locations:lookup",
+            HttpMethod.Get,
+            includeIncomingQuery: false);
+        if (lookup.Success && lookup.Payload.ValueKind == JsonValueKind.Object
+            && lookup.Payload.GetRawText().Contains(vendorId, StringComparison.OrdinalIgnoreCase))
+        {
+            return (true, 200, null);
+        }
+
+        return (false, create.StatusCode, create.Error);
+    }
+
+    private static bool TryFormatDispatchDate(string? value, out string formatted)
+    {
+        formatted = "";
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (!DateTime.TryParse(value, out var parsed)) return false;
+        formatted = parsed.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'+00:00'");
+        return true;
+    }
+
+    /// <summary>
     /// Returns cached Motive driver-analysis telematics for a date range (DB snapshot).
     /// Use POST driver-analysis/refresh to pull fresh data from Motive.
     /// </summary>
@@ -4082,6 +4252,30 @@ public class MotivImageCaptureRequest
     public long? VehicleId { get; set; }
     public string? VehicleNumber { get; set; }
     public string? Position { get; set; }
+}
+
+public class MotivDispatchRequest
+{
+    public long DriverId { get; set; }
+    public long? VehicleId { get; set; }
+    public string? OrderNumber { get; set; }
+    public string? Product { get; set; }
+    public string? Comments { get; set; }
+    public string? PickupEarlyDate { get; set; }
+    public string? PickupLateDate { get; set; }
+    public string? DeliveryEarlyDate { get; set; }
+    public string? DeliveryLateDate { get; set; }
+    public MotivDispatchStopRequest? Shipper { get; set; }
+    public MotivDispatchStopRequest? Consignee { get; set; }
+}
+
+public class MotivDispatchStopRequest
+{
+    public string? Name { get; set; }
+    public string? Address1 { get; set; }
+    public string? City { get; set; }
+    public string? State { get; set; }
+    public string? Zip { get; set; }
 }
 
 public class MotivActivityLogRequest
