@@ -18,8 +18,10 @@ import { ActivatedRoute } from '@angular/router';
 export class LegalComponent {
   private route = inject(ActivatedRoute);
 
-  readonly doc: 'terms' | 'privacy' =
-    this.route.snapshot.data['doc'] === 'privacy' ? 'privacy' : 'terms';
+  readonly doc: 'terms' | 'privacy' | 'optin' =
+    this.route.snapshot.data['doc'] === 'privacy' ? 'privacy'
+    : this.route.snapshot.data['doc'] === 'optin' ? 'optin'
+    : 'terms';
 
   readonly lastUpdated = 'July 28, 2026';
   readonly companyName = 'Taylor Logistics';

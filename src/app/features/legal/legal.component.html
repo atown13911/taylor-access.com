@@ -135,5 +135,79 @@
 
       <p class="cross-link">See also our <a href="/terms">Terms &amp; Conditions</a>.</p>
     }
+
+    @if (doc === 'optin') {
+      <h1>SMS Opt-In Policy &amp; Consent Documentation</h1>
+      <p class="updated">Last updated: {{ lastUpdated }}</p>
+
+      <h2>1. Program Description</h2>
+      <p>
+        {{ companyName }} operates a transactional SMS notification program for commercial drivers who
+        work with us. Messages are limited to load dispatch notifications, schedule changes, and
+        operational or safety alerts sent through our dispatch platforms (Taylor Access / DrayTac). We do
+        not send marketing or promotional text messages.
+      </p>
+
+      <h2>2. How Consent Is Collected</h2>
+      <p>
+        Drivers provide <strong>written consent</strong> during onboarding. The signed driver onboarding
+        agreement contains the following consent language:
+      </p>
+      <blockquote class="consent-quote">
+        <strong>SMS Consent.</strong> By providing my mobile phone number, I consent to receive text
+        messages from {{ companyName }} and its dispatch systems (DrayTac) concerning load assignments,
+        schedule updates, and safety or system alerts. Message frequency varies based on dispatch
+        activity. Message and data rates may apply. I may revoke this consent at any time by replying
+        STOP to any message or by notifying my dispatcher in writing. Replying HELP provides assistance.
+        Consent is not a condition of employment or engagement.
+      </blockquote>
+      <p>
+        Consent is also recorded in the driver's profile in our driver management system. The profile
+        editor contains the following opt-in control, shown here exactly as it appears to our staff:
+      </p>
+      <div class="ui-proof">
+        <div class="ui-proof-title">Driver Profile — Basic Information</div>
+        <label class="ui-proof-toggle">
+          <input type="checkbox" checked disabled>
+          SMS opt-in — driver consents to receive dispatch and system alert text messages
+        </label>
+        <small class="ui-proof-hint">
+          Uncheck if the driver has revoked consent (replied STOP). DrayTac will not text opted-out drivers.
+        </small>
+      </div>
+
+      <h2>3. Consent Records</h2>
+      <p>
+        Each driver record stores the current opt-in status, the date and time consent was granted or
+        revoked, and the source of consent (onboarding agreement or profile update). This provides a
+        complete audit trail of consent for every recipient.
+      </p>
+
+      <h2>4. Enforcement</h2>
+      <p>
+        Our dispatch software checks a driver's consent status before every outbound message. Messages to
+        opted-out drivers are blocked automatically and logged. Only consented recipients receive SMS.
+      </p>
+
+      <h2>5. Opt-Out and Help</h2>
+      <ul>
+        <li>Reply <strong>STOP</strong> to any message to cancel at any time (one final confirmation
+          message will be sent).</li>
+        <li>Reply <strong>HELP</strong> for assistance, or contact us at {{ contactEmail }}.</li>
+        <li>Drivers may also opt out by notifying their dispatcher; consent status is updated in their
+          profile immediately.</li>
+      </ul>
+
+      <h2>6. Sample Messages</h2>
+      <ul>
+        <li>"DrayTac Dispatch: New load DT-0164 assigned to you. ABC Warehouse to Port of Tampa. Open
+          Motive app &gt; Menu &gt; Dispatches to review and accept. Reply STOP to opt out."</li>
+        <li>"DrayTac Alert: Please call dispatch as soon as it is safe to do so. Reply STOP to opt out."</li>
+      </ul>
+
+      <p class="cross-link">
+        See also our <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Policy</a>.
+      </p>
+    }
   </div>
 </div>

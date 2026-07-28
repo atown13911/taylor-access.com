@@ -26,6 +26,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/legal/legal.component').then(m => m.LegalComponent)
   },
   {
+    path: 'sms-opt-in',
+    data: { doc: 'optin' },
+    loadComponent: () => import('./features/legal/legal.component').then(m => m.LegalComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],

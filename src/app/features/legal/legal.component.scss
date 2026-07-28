@@ -55,4 +55,51 @@
     padding-top: 1rem;
     border-top: 1px solid var(--border-color, #21262d);
   }
+
+  .consent-quote {
+    margin: 0.75rem 0 1rem;
+    padding: 0.9rem 1.1rem;
+    border-left: 3px solid var(--cyan, #00e5ff);
+    background: rgba(0, 229, 255, 0.05);
+    border-radius: 0 8px 8px 0;
+    font-size: 0.88rem;
+    color: var(--text-secondary, #c9d1d9);
+  }
+
+  .ui-proof {
+    margin: 0.75rem 0 1rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border-color, #21262d);
+    border-radius: 10px;
+    background: var(--bg-primary, #010409);
+
+    .ui-proof-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted, #8b949e);
+      margin-bottom: 0.6rem;
+    }
+
+    .ui-proof-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.85rem;
+      color: var(--text-primary, #e6edf3);
+
+      input[type='checkbox'] {
+        width: 15px;
+        height: 15px;
+        accent-color: var(--cyan, #00e5ff);
+      }
+    }
+
+    .ui-proof-hint {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.7rem;
+      color: var(--text-muted, #8b949e);
+    }
+  }
 }
