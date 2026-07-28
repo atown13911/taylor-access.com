@@ -389,6 +389,10 @@ export class GoogleUsersComponent implements OnInit {
     return this.userByEmail().get(email.toLowerCase())?.thumbnailPhotoUrl || null;
   }
 
+  storageUserLastLogin(email: string): string | null {
+    return this.userByEmail().get(email.toLowerCase())?.lastLoginTime || null;
+  }
+
   readonly statusTabs = [
     { key: 'all', label: 'All' },
     { key: 'active', label: 'Active' },
