@@ -421,6 +421,15 @@
               <input type="date" [ngModel]="driverForm().dateOfBirth" (ngModelChange)="updateField('dateOfBirth', $event)">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group sms-optin-group">
+              <label class="sms-optin-toggle">
+                <input type="checkbox" [ngModel]="driverForm().smsOptIn" (ngModelChange)="updateField('smsOptIn', $event)">
+                SMS opt-in — driver consents to receive dispatch and system alert text messages
+              </label>
+              <small class="sms-optin-hint">Uncheck if the driver has revoked consent (replied STOP). DrayTac will not text opted-out drivers.</small>
+            </div>
+          </div>
         </div>
 
         <div class="form-section">

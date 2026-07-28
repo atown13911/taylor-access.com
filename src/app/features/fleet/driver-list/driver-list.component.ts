@@ -117,6 +117,7 @@ export class DriverListComponent implements OnInit {
     name: '',
     email: '',
     phone: '',
+    smsOptIn: true,
     organizationId: null as number | null,
     fleetId: null as number | null,
     divisionId: null as number | null,
@@ -1400,6 +1401,7 @@ export class DriverListComponent implements OnInit {
           name: d.name || '',
           email: d.email || '',
           phone: this.formatPhoneInput(d.phone || ''),
+          smsOptIn: d.smsOptIn !== false,
           organizationId: d.organizationId || null,
           fleetId: d.fleetId || null,
           divisionId: d.divisionId || null,
@@ -1446,6 +1448,7 @@ export class DriverListComponent implements OnInit {
       error: () => {
         this.driverForm.set({
           name: driver.name, email: driver.email, phone: this.formatPhoneInput(driver.phone || ''),
+          smsOptIn: (driver as any).smsOptIn !== false,
           organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: driver.licenseNumber, licenseState: '',
           licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.split('T')[0] : '',
           dateOfBirth: '', address: '', city: '', state: '', zip: '', ssn: '',
@@ -1473,7 +1476,7 @@ export class DriverListComponent implements OnInit {
 
   resetForm(): void {
     this.driverForm.set({
-      name: '', email: '', phone: '', organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
+      name: '', email: '', phone: '', smsOptIn: true, organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
       address: '', city: '', state: '', zip: '', ssn: '',
       truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '', fuelCardNumber: '',
@@ -1560,6 +1563,7 @@ export class DriverListComponent implements OnInit {
       name: form.name,
       email: form.email,
       phone: this.normalizePhoneForSave(form.phone),
+      smsOptIn: form.smsOptIn,
       organizationId: form.organizationId || null,
       fleetId: form.fleetId || null,
       divisionId: form.divisionId || null,

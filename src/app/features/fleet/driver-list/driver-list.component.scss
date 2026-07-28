@@ -901,6 +901,30 @@
     line-height: 1.45;
     font-family: inherit;
   }
+
+  .sms-optin-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    cursor: pointer;
+
+    input[type='checkbox'] {
+      width: 15px;
+      height: 15px;
+      padding: 0;
+      accent-color: var(--cyan, #00e5ff);
+      cursor: pointer;
+    }
+  }
+
+  .sms-optin-hint {
+    font-size: 0.68rem;
+    color: var(--text-muted, #555);
+  }
 }
 
 .termination-section {
