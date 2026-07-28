@@ -151,8 +151,10 @@ public class GoogleWorkspaceController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.PrimaryEmail)) { payload["primaryEmail"] = request.PrimaryEmail.Trim(); changed.Add("primaryEmail"); }
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
-            if (request.Password.Length < 8)
-                return BadRequest(new { error = "Password must be at least 8 characters" });
+            if (request.Password.Length < 12)
+                return BadRequest(new { error = "Password must be at least 12 characters (domain password policy)" });
+            if (request.Password.Length > 100)
+                return BadRequest(new { error = "Password must be 100 characters or fewer" });
             payload["password"] = request.Password;
             changed.Add("password");
         }

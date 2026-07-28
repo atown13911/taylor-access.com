@@ -880,8 +880,12 @@ export class GoogleUsersComponent implements OnInit {
   resetPassword() {
     const user = this.manageUser();
     if (!user) return;
-    if (!this.passwordForm.password || this.passwordForm.password.length < 8) {
-      this.toast.error('Password must be at least 8 characters', 'Google');
+    if (!this.passwordForm.password || this.passwordForm.password.length < 12) {
+      this.toast.error('Password must be at least 12 characters (domain password policy)', 'Google');
+      return;
+    }
+    if (this.passwordForm.password.length > 100) {
+      this.toast.error('Password must be 100 characters or fewer', 'Google');
       return;
     }
     if (!confirm(`Reset password for ${user.email}?`)) return;
@@ -905,10 +909,31 @@ export class GoogleUsersComponent implements OnInit {
   }
 
   generatePassword() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
-    const bytes = new Uint32Array(16);
-    crypto.getRandomValues(bytes);
-    this.passwordForm.password = Array.from(bytes, b => chars[b % chars.length]).join('');
+    // 16 chars with at least one upper, lower, digit, and symbol.
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnopqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$%';
+    const all = upper + lower + digits + symbols;
+
+    const pick = (set: string, count: number) => {
+      const bytes = new Uint32Array(count);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, b => set[b % set.length]);
+    };
+
+    const chars = [
+      ...pick(upper, 1), ...pick(lower, 1), ...pick(digits, 1), ...pick(symbols, 1),
+      ...pick(all, 12)
+    ];
+    // Fisher-Yates shuffle so the guaranteed classes aren't always in front
+    const rand = new Uint32Array(chars.length);
+    crypto.getRandomValues(rand);
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = rand[i] % (i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    this.passwordForm.password = chars.join('');
   }
 
   addAlias() {
