@@ -16,6 +16,16 @@ export const routes: Routes = [
     loadComponent: () => import('./features/sso/sso-callback.component').then(m => m.SsoCallbackComponent)
   },
   {
+    path: 'terms',
+    data: { doc: 'terms' },
+    loadComponent: () => import('./features/legal/legal.component').then(m => m.LegalComponent)
+  },
+  {
+    path: 'privacy',
+    data: { doc: 'privacy' },
+    loadComponent: () => import('./features/legal/legal.component').then(m => m.LegalComponent)
+  },
+  {
     path: '',
     component: ShellComponent,
     canActivate: [authGuard],

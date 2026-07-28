@@ -1,0 +1,139 @@
+<div class="legal-page">
+  <div class="legal-card">
+    @if (doc === 'terms') {
+      <h1>Terms &amp; Conditions</h1>
+      <p class="updated">Last updated: {{ lastUpdated }}</p>
+
+      <h2>1. About These Terms</h2>
+      <p>
+        These Terms &amp; Conditions ("Terms") govern the use of software, websites, and communication
+        services (including SMS text messaging) operated by {{ companyName }} ("we," "us," or "our"),
+        including the Taylor Access, DrayTac, and related dispatch platforms. By using our services or
+        providing your mobile phone number to us, you agree to these Terms.
+      </p>
+
+      <h2>2. SMS Messaging Program</h2>
+      <p>
+        We operate an SMS notification program for commercial drivers and personnel who work with us.
+        Messages include load dispatch notifications, schedule changes, and operational or safety alerts.
+        This is a transactional/operational messaging program — we do not send marketing or promotional
+        text messages.
+      </p>
+      <ul>
+        <li><strong>Opt-in:</strong> Drivers consent in writing to receive SMS messages as part of the
+          signed driver onboarding agreement, or by providing their mobile number and confirming consent
+          in their driver profile.</li>
+        <li><strong>Message frequency:</strong> Varies based on dispatch activity.</li>
+        <li><strong>Fees:</strong> Message and data rates may apply according to your mobile carrier plan.</li>
+        <li><strong>Opt-out:</strong> Reply <strong>STOP</strong> to any message to cancel at any time.
+          After opting out you will receive one final confirmation message. You may also contact your
+          dispatcher to opt out.</li>
+        <li><strong>Help:</strong> Reply <strong>HELP</strong> to any message, or contact us at
+          {{ contactEmail }}.</li>
+        <li><strong>Carriers:</strong> Mobile carriers are not liable for delayed or undelivered messages.</li>
+      </ul>
+      <p>Consent to receive SMS messages is not a condition of employment or engagement.</p>
+
+      <h2>3. Acceptable Use</h2>
+      <p>
+        Our platforms are provided for legitimate business operations of {{ companyName }} and its
+        authorized drivers, contractors, and staff. You agree not to misuse the services, attempt
+        unauthorized access, or interfere with their operation.
+      </p>
+
+      <h2>4. Disclaimer and Limitation of Liability</h2>
+      <p>
+        Services are provided "as is" without warranties of any kind. To the maximum extent permitted by
+        law, {{ companyName }} is not liable for indirect, incidental, or consequential damages arising
+        from use of the services, including missed or delayed messages.
+      </p>
+
+      <h2>5. Changes</h2>
+      <p>
+        We may update these Terms from time to time. The "Last updated" date above reflects the most
+        recent revision. Continued use of the services after changes constitutes acceptance.
+      </p>
+
+      <h2>6. Contact</h2>
+      <p>Questions about these Terms: {{ contactEmail }}</p>
+
+      <p class="cross-link">See also our <a href="/privacy">Privacy Policy</a>.</p>
+    } @else {
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: {{ lastUpdated }}</p>
+
+      <h2>1. Overview</h2>
+      <p>
+        This Privacy Policy describes how {{ companyName }} ("we," "us," or "our") collects, uses, and
+        protects personal information through our software, websites, and communication services,
+        including the Taylor Access, DrayTac, and related dispatch platforms and our SMS messaging
+        program.
+      </p>
+
+      <h2>2. Information We Collect</h2>
+      <ul>
+        <li><strong>Contact information:</strong> name, phone number, email, and mailing address.</li>
+        <li><strong>Employment and compliance records:</strong> driver license, medical card, and related
+          credentials required for commercial transportation operations.</li>
+        <li><strong>Operational data:</strong> load assignments, dispatch records, and location data from
+          fleet telematics used for dispatch and safety.</li>
+        <li><strong>SMS consent records:</strong> whether and when a driver opted in or out of text
+          messages.</li>
+      </ul>
+
+      <h2>3. How We Use Information</h2>
+      <p>
+        We use personal information to operate our transportation business: dispatching loads, sending
+        operational SMS notifications and alerts, maintaining regulatory compliance, processing payroll
+        and settlements, and providing support.
+      </p>
+
+      <h2>4. SMS Messaging and Mobile Information</h2>
+      <p>
+        Mobile phone numbers collected for our SMS program are used solely to send dispatch
+        notifications, schedule changes, and operational or safety alerts to consented recipients.
+      </p>
+      <p>
+        <strong>No mobile information will be shared with third parties or affiliates for marketing or
+        promotional purposes. Text messaging originator opt-in data and consent will not be shared with
+        any third parties</strong>, except with service providers acting on our behalf solely to deliver
+        the messages (for example, our SMS delivery provider), or as required by law.
+      </p>
+      <p>
+        You can opt out of SMS messages at any time by replying <strong>STOP</strong> to any message or by
+        contacting your dispatcher. Reply <strong>HELP</strong> for assistance.
+      </p>
+
+      <h2>5. Sharing of Information</h2>
+      <p>
+        We do not sell personal information. We share information only with service providers that
+        support our operations (such as hosting, telematics, and messaging providers) under
+        confidentiality obligations, with customers or partners as necessary to perform transportation
+        services, or when required by law.
+      </p>
+
+      <h2>6. Data Security and Retention</h2>
+      <p>
+        We use reasonable administrative and technical safeguards to protect personal information, and we
+        retain records only as long as needed for business and regulatory purposes.
+      </p>
+
+      <h2>7. Your Choices</h2>
+      <p>
+        You may request access to or correction of your personal information, or opt out of SMS
+        messaging, by contacting us at {{ contactEmail }}.
+      </p>
+
+      <h2>8. Changes</h2>
+      <p>
+        We may update this Privacy Policy from time to time. The "Last updated" date above reflects the
+        most recent revision.
+      </p>
+
+      <h2>9. Contact</h2>
+      <p>Questions about this Privacy Policy: {{ contactEmail }}</p>
+
+      <p class="cross-link">See also our <a href="/terms">Terms &amp; Conditions</a>.</p>
+    }
+  </div>
+</div>
