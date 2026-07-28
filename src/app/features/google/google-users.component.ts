@@ -26,6 +26,13 @@ interface UserSecurity {
   backupCodes: string[];
 }
 
+interface TokenActivity {
+  clientId: string;
+  appName: string;
+  lastActivityTime: string | null;
+  lastEvent: string;
+}
+
 interface GroupInfo {
   id: string;
   name: string;
@@ -497,6 +504,8 @@ export class GoogleUsersComponent implements OnInit {
   securityError = signal<string | null>(null);
   securityBusy = signal(false);
   showBackupCodes = signal(false);
+  /** Last OAuth token audit event per clientId (and appName fallback). */
+  tokenActivity = signal<Map<string, TokenActivity> | null>(null);
 
   openRegister(user: GoogleUser) {
     this.registerUser.set(user);
@@ -667,6 +676,46 @@ export class GoogleUsersComponent implements OnInit {
         this.securityError.set(err?.error?.error || 'Failed to load security details');
       }
     });
+
+    // Non-blocking enrichment: last token use per connected app from the audit log.
+    this.tokenActivity.set(null);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/token-activity`).subscribe({
+      next: (res) => {
+        const map = new Map<string, TokenActivity>();
+        for (const a of (res?.data || []) as TokenActivity[]) {
+          if (a.clientId) map.set(a.clientId, a);
+          if (a.appName) map.set(a.appName.toLowerCase(), a);
+        }
+        this.tokenActivity.set(map);
+      },
+      error: () => this.tokenActivity.set(new Map()),
+    });
+  }
+
+  activityFor(token: OAuthToken): TokenActivity | null {
+    const map = this.tokenActivity();
+    if (!map) return null;
+    return map.get(token.clientId) || map.get((token.displayText || '').toLowerCase()) || null;
+  }
+
+  /** True when the app used its grant within the last 24 hours. */
+  isRecentlyActive(token: OAuthToken): boolean {
+    const a = this.activityFor(token);
+    if (!a?.lastActivityTime) return false;
+    return Date.now() - new Date(a.lastActivityTime).getTime() < 24 * 3600 * 1000;
+  }
+
+  activityLabel(token: OAuthToken): string | null {
+    const map = this.tokenActivity();
+    if (!map) return null; // still loading — show nothing
+    const a = this.activityFor(token);
+    if (!a?.lastActivityTime) return 'no recent activity';
+    const mins = Math.max(0, Math.floor((Date.now() - new Date(a.lastActivityTime).getTime()) / 60000));
+    if (mins < 60) return `active ${mins <= 1 ? 'just now' : mins + 'm ago'}`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `active ${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `active ${days}d ago`;
   }
 
   revokeToken(token: OAuthToken) {

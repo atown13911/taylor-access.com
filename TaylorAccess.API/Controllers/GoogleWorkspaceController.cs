@@ -313,6 +313,17 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new { data = events });
     }
 
+    /// <summary>Last OAuth token activity per connected app — "is this grant actually in use".</summary>
+    [HttpGet("workspace-users/{id}/token-activity")]
+    public async Task<ActionResult> GetTokenActivity(string id, CancellationToken cancellationToken)
+    {
+        var (activity, error) = await _directory.GetTokenActivityAsync(id, cancellationToken);
+        if (activity == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = activity });
+    }
+
     /// <summary>Per-user storage usage across the domain (Drive, Gmail, Photos).</summary>
     [HttpGet("storage-usage")]
     public async Task<ActionResult> GetStorageUsage(CancellationToken cancellationToken)

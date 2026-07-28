@@ -368,8 +368,18 @@
                 @for (token of sec.tokens; track token.clientId) {
                   <div class="sec-row">
                     <div class="sec-info">
-                      <span class="sec-name">{{ token.displayText || token.clientId }}</span>
-                      <span class="sec-sub">{{ token.scopes.length }} scope{{ token.scopes.length === 1 ? '' : 's' }}{{ token.nativeApp ? ' · native app' : '' }}</span>
+                      <span class="sec-name">
+                        {{ token.displayText || token.clientId }}
+                        @if (isRecentlyActive(token)) {
+                          <i class='bx bxs-circle token-live' title="Used its access within the last 24h"></i>
+                        }
+                      </span>
+                      <span class="sec-sub">
+                        {{ token.scopes.length }} scope{{ token.scopes.length === 1 ? '' : 's' }}{{ token.nativeApp ? ' · native app' : '' }}
+                        @if (activityLabel(token); as label) {
+                          · <span [class.token-active-label]="isRecentlyActive(token)">{{ label }}</span>
+                        }
+                      </span>
                     </div>
                     <button class="btn btn-secondary btn-xs danger" (click)="revokeToken(token)" [disabled]="securityBusy()" [title]="token.scopes.join('\n')">
                       <i class='bx bx-unlink'></i> Revoke

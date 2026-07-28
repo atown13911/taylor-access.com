@@ -86,6 +86,17 @@ public sealed class GoogleLoginEvent
     public string? IpAddress { get; set; }
 }
 
+/// <summary>Most recent OAuth token audit event per connected app (Reports API `token` log).</summary>
+public sealed class GoogleTokenActivity
+{
+    public string ClientId { get; set; } = "";
+    public string AppName { get; set; } = "";
+    /// <summary>ISO timestamp of the newest authorize/request event; null if none in the audit window.</summary>
+    public string? LastActivityTime { get; set; }
+    /// <summary>authorize | request | revoke</summary>
+    public string LastEvent { get; set; } = "";
+}
+
 public sealed class GoogleTransferApp
 {
     public long Id { get; set; }
@@ -481,6 +492,69 @@ public class GoogleDirectoryService
         }
 
         return (events, null);
+    }
+
+    /// <summary>
+    /// Recent OAuth token audit activity for a user (Reports API `token` application).
+    /// Apps exchange refresh tokens when actually in use, so the newest event per
+    /// client is a good "last active" proxy for the connected-apps list.
+    /// </summary>
+    public async Task<(List<GoogleTokenActivity>? Activity, string? Error)> GetTokenActivityAsync(
+        string userKey, CancellationToken cancellationToken = default)
+    {
+        var url = $"https://admin.googleapis.com/admin/reports/v1/activity/users/{Uri.EscapeDataString(userKey)}/applications/token?maxResults=1000";
+        var (doc, error) = await GetJsonWithScopeAsync(url, ReportsScope, $"token activity for {userKey}", cancellationToken);
+        if (doc == null)
+            return (null, error);
+
+        // Reports API returns items newest-first, so the first event seen per client wins.
+        var byClient = new Dictionary<string, GoogleTokenActivity>(StringComparer.Ordinal);
+        using (doc)
+        {
+            if (doc.RootElement.TryGetProperty("items", out var items))
+            {
+                foreach (var item in items.EnumerateArray())
+                {
+                    string? time = null;
+                    if (item.TryGetProperty("id", out var idEl))
+                        time = ReadString(idEl, "time");
+
+                    if (!item.TryGetProperty("events", out var evts) || evts.ValueKind != JsonValueKind.Array)
+                        continue;
+
+                    foreach (var evt in evts.EnumerateArray())
+                    {
+                        string clientId = "", appName = "";
+                        if (evt.TryGetProperty("parameters", out var pars) && pars.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var p in pars.EnumerateArray())
+                            {
+                                var pName = ReadString(p, "name");
+                                if (pName == "client_id") clientId = ReadString(p, "value");
+                                else if (pName == "app_name") appName = ReadString(p, "value");
+                            }
+                        }
+
+                        if (clientId.Length == 0 && appName.Length == 0)
+                            continue;
+
+                        var key = clientId.Length > 0 ? clientId : appName;
+                        if (!byClient.ContainsKey(key))
+                        {
+                            byClient[key] = new GoogleTokenActivity
+                            {
+                                ClientId = clientId,
+                                AppName = appName,
+                                LastActivityTime = time,
+                                LastEvent = ReadString(evt, "name")
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        return (byClient.Values.ToList(), null);
     }
 
     /// <summary>Applications available for data transfer (Drive, Calendar, ...).</summary>

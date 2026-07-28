@@ -182,6 +182,9 @@
 .sec-info { min-width: 0; }
 .sec-name { display: block; font-size: 0.8rem; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sec-sub { display: block; font-size: 0.65rem; color: var(--text-secondary); }
+.token-live { font-size: 0.5rem; color: #22c55e; vertical-align: middle; margin-left: 4px; animation: token-live-pulse 2s ease-in-out infinite; }
+.token-active-label { color: #22c55e; }
+@keyframes token-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .codes-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 10px; }
 .code-chip { padding: 6px 10px; background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.12); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-primary); text-align: center; letter-spacing: 1px; }
