@@ -51,6 +51,19 @@ public class Driver
     [MaxLength(20)]
     public string? Phone { get; set; }
 
+    /// <summary>
+    /// TCPA consent: driver agreed to receive SMS dispatch notifications and system alerts.
+    /// Source of truth for DrayTac / Twilio messaging.
+    /// </summary>
+    public bool SmsOptIn { get; set; } = true;
+
+    /// <summary>When SMS consent was last granted or revoked (UTC).</summary>
+    public DateTime? SmsOptInAt { get; set; }
+
+    /// <summary>How consent was captured (e.g. onboarding-agreement, profile-update).</summary>
+    [MaxLength(100)]
+    public string? SmsOptInSource { get; set; }
+
     [MaxLength(50)]
     public string? LicenseNumber { get; set; }
 

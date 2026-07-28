@@ -143,6 +143,7 @@ export class DriversComponent implements OnInit {
     email: '',
     personalEmail: '',
     phone: '',
+    smsOptIn: true,
     fleetId: null as number | null,
     divisionId: null as number | null,
     driverTerminalId: null as number | null,
@@ -344,6 +345,8 @@ export class DriversComponent implements OnInit {
           name: d.name || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
           unit: d.vehicleNumber || '',
           phone: d.phone || '',
+          smsOptIn: d.smsOptIn !== false,
+          smsOptInAt: d.smsOptInAt || null,
           email: d.email || '',
           licenseNumber: d.licenseNumber || '',
           licenseExpiry: d.licenseExpiry || '',
@@ -457,6 +460,7 @@ export class DriversComponent implements OnInit {
             email: driver.email || '',
             personalEmail: driver.personalEmail || '',
             phone: driver.phone || '',
+            smsOptIn: driver.smsOptIn !== false,
             fleetId: driver.fleetId || null,
             divisionId: driver.divisionId || null,
             driverTerminalId: driver.driverTerminalId || null,
@@ -486,6 +490,7 @@ export class DriversComponent implements OnInit {
             email: item.email || '',
             personalEmail: item.personalEmail || '',
             phone: item.phone || '',
+            smsOptIn: item.smsOptIn !== false,
             fleetId: item.fleetId || null,
             divisionId: item.divisionId || null,
             driverTerminalId: item.driverTerminalId || null,
@@ -555,7 +560,7 @@ export class DriversComponent implements OnInit {
 
   resetForms(): void {
     this.driverForm.set({
-      name: '', email: '', personalEmail: '', phone: '', fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: '', licenseState: '', licenseExpiry: '',
+      name: '', email: '', personalEmail: '', phone: '', smsOptIn: true, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: '', licenseState: '', licenseExpiry: '',
       dateOfBirth: '', address: '', city: '', state: '', zip: '', emergencyContact: '',
       emergencyPhone: '', hireDate: '', payRate: 0, payType: 'mile'
     });
@@ -765,6 +770,7 @@ export class DriversComponent implements OnInit {
         email: form.email,
         personalEmail: form.personalEmail,
         phone: form.phone,
+        smsOptIn: form.smsOptIn,
         fleetId: form.fleetId || null,
         divisionId: form.divisionId || null,
         driverTerminalId: form.driverTerminalId || null,

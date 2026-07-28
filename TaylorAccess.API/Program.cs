@@ -352,6 +352,15 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE IF EXISTS ""ApplicantRecords""
         ADD COLUMN IF NOT EXISTS ""State"" VARCHAR(50);
 
+        ALTER TABLE IF EXISTS ""Drivers""
+        ADD COLUMN IF NOT EXISTS ""SmsOptIn"" BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE IF EXISTS ""Drivers""
+        ADD COLUMN IF NOT EXISTS ""SmsOptInAt"" TIMESTAMP;
+        ALTER TABLE IF EXISTS ""Drivers""
+        ADD COLUMN IF NOT EXISTS ""SmsOptInSource"" VARCHAR(100);
+        UPDATE ""Drivers"" SET ""SmsOptInAt"" = NOW(), ""SmsOptInSource"" = 'onboarding-agreement'
+        WHERE ""SmsOptIn"" = TRUE AND ""SmsOptInAt"" IS NULL;
+
         CREATE TABLE IF NOT EXISTS ""TimeOffRequests"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL DEFAULT 0,

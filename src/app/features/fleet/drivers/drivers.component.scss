@@ -859,6 +859,26 @@
       padding-right: 2.5rem;
       cursor: pointer;
     }
+    .sms-optin-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      text-transform: none;
+      letter-spacing: normal;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      input[type='checkbox'] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--cyan);
+        cursor: pointer;
+      }
+    }
+    .sms-optin-hint {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
   }
 }
 .modal-footer {

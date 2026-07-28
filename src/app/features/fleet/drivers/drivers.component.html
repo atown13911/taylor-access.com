@@ -306,6 +306,15 @@
             </div>
             <div class="form-row">
               <div class="form-group">
+                <label class="sms-optin-toggle">
+                  <input type="checkbox" [ngModel]="driverForm().smsOptIn" (ngModelChange)="updateDriverField('smsOptIn', $event)">
+                  SMS opt-in — driver consents to receive dispatch and system alert text messages
+                </label>
+                <small class="sms-optin-hint">Uncheck if the driver has revoked consent (STOP). DrayTac will not text opted-out drivers.</small>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
                 <label>Work Email</label>
                 <input type="email" [ngModel]="driverForm().email" (ngModelChange)="updateDriverField('email', $event)" placeholder="driver@vantac.com">
               </div>
@@ -815,6 +824,15 @@
               <div class="dd-field">
                 <span class="dd-label">Phone</span>
                 <span class="dd-value">{{ selectedDriver().phone || '—' }}</span>
+              </div>
+              <div class="dd-field">
+                <span class="dd-label">SMS Opt-In</span>
+                <span class="dd-value">
+                  {{ selectedDriver().smsOptIn === false ? 'Opted out' : 'Opted in' }}
+                  @if (selectedDriver().smsOptInAt) {
+                    ({{ selectedDriver().smsOptInAt | date:'MMM d, y' }})
+                  }
+                </span>
               </div>
               <div class="dd-field">
                 <span class="dd-label">Work Email</span>

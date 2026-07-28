@@ -191,6 +191,8 @@ public class DriversController : ControllerBase
                 Name = d.Name,
                 Email = d.Email,
                 Phone = d.Phone,
+                SmsOptIn = d.SmsOptIn,
+                SmsOptInAt = d.SmsOptInAt,
                 LicenseNumber = d.LicenseNumber,
                 LicenseState = d.LicenseState,
                 LicenseExpiry = d.LicenseExpiry,
@@ -302,6 +304,8 @@ public class DriversController : ControllerBase
                 d.Name,
                 d.Email,
                 d.Phone,
+                d.SmsOptIn,
+                d.SmsOptInAt,
                 d.LicenseNumber,
                 d.LicenseState,
                 d.LicenseExpiry,
@@ -477,6 +481,14 @@ public class DriversController : ControllerBase
         if (!string.IsNullOrEmpty(request.Name)) driver.Name = request.Name;
         if (request.Email != null) driver.Email = request.Email;
         if (request.Phone != null) driver.Phone = request.Phone;
+
+        // SMS consent — stamp when it changes so we have a TCPA audit trail
+        if (request.SmsOptIn.HasValue && request.SmsOptIn.Value != driver.SmsOptIn)
+        {
+            driver.SmsOptIn = request.SmsOptIn.Value;
+            driver.SmsOptInAt = DateTime.UtcNow;
+            driver.SmsOptInSource = request.SmsOptIn.Value ? "profile-update" : "profile-opt-out";
+        }
         
         // License Info
         if (request.LicenseNumber != null) driver.LicenseNumber = request.LicenseNumber;
@@ -1438,6 +1450,7 @@ public record UpdateDriverRequest(
     string? Name,
     string? Email,
     string? Phone,
+    bool? SmsOptIn,
     int? FleetId,
     int? OrganizationId,
     int? DivisionId,
@@ -1501,6 +1514,8 @@ file sealed class ComplianceBoardDriverRow
     public string Name { get; set; } = string.Empty;
     public string? Email { get; set; }
     public string? Phone { get; set; }
+    public bool SmsOptIn { get; set; }
+    public DateTime? SmsOptInAt { get; set; }
     public string? LicenseNumber { get; set; }
     public string? LicenseState { get; set; }
     public DateOnly? LicenseExpiry { get; set; }
