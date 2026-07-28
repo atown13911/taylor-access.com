@@ -401,6 +401,192 @@ public class MotivController : ControllerBase
         return StatusCode(500, new { error = "MOTIV safety-events request failed: no valid safety events path configured.", attempted });
     }
 
+    [HttpGet("hos-available-time")]
+    public async Task<IActionResult> GetHosAvailableTime()
+    {
+        var path = _config["MOTIV_HOS_AVAILABLE_TIME_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_HOS_AVAILABLE_TIME_PATH")
+            ?? "/v1/available_time";
+        var fetch = await FetchAllMotivRows(path, "hos-available-time");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV hos-available-time request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "hos-available-time",
+            path,
+            rows = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(fetch.Rows)
+        });
+    }
+
+    [HttpGet("hos-violations")]
+    public async Task<IActionResult> GetHosViolations([FromQuery] int days = 30, [FromQuery] int limit = 2000)
+    {
+        var safeDays = Math.Clamp(days, 1, 365);
+        var safeLimit = Math.Clamp(limit, 1, 10000);
+        var endDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var startDate = DateTime.UtcNow.AddDays(-safeDays).ToString("yyyy-MM-dd");
+
+        var basePath = _config["MOTIV_HOS_VIOLATIONS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_HOS_VIOLATIONS_PATH")
+            ?? "/v1/hos_violations";
+        var path = UpsertQueryParam(UpsertQueryParam(basePath, "min_start_time", startDate), "max_start_time", endDate);
+        var fetch = await FetchAllMotivRows(path, "hos-violations");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV hos-violations request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        var scopedRows = fetch.Rows.Take(safeLimit).ToList();
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "hos-violations",
+            path,
+            days = safeDays,
+            startDate,
+            endDate,
+            rows = scopedRows.Count,
+            totalFetched = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(scopedRows)
+        });
+    }
+
+    [HttpGet("fault-codes")]
+    public async Task<IActionResult> GetFaultCodes(
+        [FromQuery] int days = 30,
+        [FromQuery] string? status = null,
+        [FromQuery] int limit = 2000)
+    {
+        var safeDays = Math.Clamp(days, 1, 365);
+        var safeLimit = Math.Clamp(limit, 1, 10000);
+        var endDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var startDate = DateTime.UtcNow.AddDays(-safeDays).ToString("yyyy-MM-dd");
+
+        var basePath = _config["MOTIV_FAULT_CODES_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_FAULT_CODES_PATH")
+            ?? "/v1/fault_codes";
+        var path = UpsertQueryParam(UpsertQueryParam(basePath, "start_date", startDate), "end_date", endDate);
+        var normalizedStatus = (status ?? "").Trim().ToLowerInvariant();
+        if (normalizedStatus == "open" || normalizedStatus == "closed")
+            path = UpsertQueryParam(path, "status", normalizedStatus);
+
+        var fetch = await FetchAllMotivRows(path, "fault-codes");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV fault-codes request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        var scopedRows = fetch.Rows.Take(safeLimit).ToList();
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "fault-codes",
+            path,
+            days = safeDays,
+            startDate,
+            endDate,
+            rows = scopedRows.Count,
+            totalFetched = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(scopedRows)
+        });
+    }
+
+    [HttpGet("inspection-reports")]
+    public async Task<IActionResult> GetInspectionReports([FromQuery] int days = 30, [FromQuery] int limit = 2000)
+    {
+        var safeDays = Math.Clamp(days, 1, 365);
+        var safeLimit = Math.Clamp(limit, 1, 10000);
+        var endDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var startDate = DateTime.UtcNow.AddDays(-safeDays).ToString("yyyy-MM-dd");
+
+        var basePath = _config["MOTIV_INSPECTION_REPORTS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_INSPECTION_REPORTS_PATH")
+            ?? "/v1/inspection_reports";
+        var path = UpsertQueryParam(UpsertQueryParam(basePath, "start_date", startDate), "end_date", endDate);
+        var fetch = await FetchAllMotivRows(path, "inspection-reports");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV inspection-reports request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        var scopedRows = fetch.Rows.Take(safeLimit).ToList();
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "inspection-reports",
+            path,
+            days = safeDays,
+            startDate,
+            endDate,
+            rows = scopedRows.Count,
+            totalFetched = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(scopedRows)
+        });
+    }
+
+    [HttpGet("idle-events")]
+    public async Task<IActionResult> GetIdleEvents([FromQuery] int days = 7, [FromQuery] int limit = 2000)
+    {
+        var safeDays = Math.Clamp(days, 1, 90);
+        var safeLimit = Math.Clamp(limit, 1, 10000);
+        var endDate = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var startDate = DateTime.UtcNow.AddDays(-safeDays).ToString("yyyy-MM-dd");
+
+        var basePath = _config["MOTIV_IDLE_EVENTS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_IDLE_EVENTS_PATH")
+            ?? "/v1/idle_events";
+        var path = UpsertQueryParam(UpsertQueryParam(basePath, "start_date", startDate), "end_date", endDate);
+        var fetch = await FetchAllMotivRows(path, "idle-events", perPage: 100, maxPages: 30);
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV idle-events request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        var scopedRows = fetch.Rows.Take(safeLimit).ToList();
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "idle-events",
+            path,
+            days = safeDays,
+            startDate,
+            endDate,
+            rows = scopedRows.Count,
+            totalFetched = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(scopedRows)
+        });
+    }
+
     /// <summary>
     /// Returns cached Motive driver-analysis telematics for a date range (DB snapshot).
     /// Use POST driver-analysis/refresh to pull fresh data from Motive.
