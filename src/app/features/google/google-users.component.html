@@ -178,7 +178,12 @@
             <strong>Drive Backup to Bucket</strong>
             <span class="backup-sub">
               @if (backupStatus()?.running) {
-                Backup in progress...
+                @if (backupStatus()?.progress; as p) {
+                  Backup in progress — account {{ p.usersProcessed + 1 > p.usersTotal ? p.usersTotal : p.usersProcessed + 1 }} of {{ p.usersTotal }}{{ p.currentUser ? ': ' + p.currentUser : '' }}
+                  · {{ p.itemsBackedUp.toLocaleString() }} backed up, {{ p.itemsSkipped.toLocaleString() }} unchanged this pass
+                } @else {
+                  Backup in progress...
+                }
               } @else if (lastBackupRun()) {
                 @if (lastBackupRun(); as run) {
                   Last run {{ run.startedAt | date:'MMM d, h:mm a' }} — {{ run.status }} ·
@@ -212,7 +217,12 @@
             <strong>Gmail Backup to Bucket</strong>
             <span class="backup-sub">
               @if (gmailBackupStatus()?.running) {
-                Backup in progress — full mailboxes are copied as raw .eml files...
+                @if (gmailBackupStatus()?.progress; as p) {
+                  Backup in progress — account {{ p.usersProcessed + 1 > p.usersTotal ? p.usersTotal : p.usersProcessed + 1 }} of {{ p.usersTotal }}{{ p.currentUser ? ': ' + p.currentUser : '' }}
+                  · {{ p.itemsBackedUp.toLocaleString() }} backed up, {{ p.itemsSkipped.toLocaleString() }} already stored this pass
+                } @else {
+                  Backup in progress — full mailboxes are copied as raw .eml files...
+                }
               } @else if (lastGmailBackupRun()) {
                 @if (lastGmailBackupRun(); as run) {
                   Last run {{ run.startedAt | date:'MMM d, h:mm a' }} — {{ run.status }} ·
@@ -289,6 +299,11 @@
                 </td>
                 @if (isProductOwner) {
                   <td class="actions-cell">
+                    @if (rowBackupLive(row.email); as live) {
+                      <span class="row-backup-live" title="Backup currently processing this account (backed up + unchanged + failed items this pass)">
+                        <i class='bx bx-loader-alt bx-spin'></i> {{ live }}
+                      </span>
+                    }
                     <button class="act-btn" (click)="runUserBackup(row, 'drive')"
                             [disabled]="userBackupBusy() !== null"
                             title="Back up this user's Drive files to the bucket">

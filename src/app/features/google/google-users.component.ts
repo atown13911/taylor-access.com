@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -103,8 +103,19 @@ interface DriveBackupRun {
   error: string | null;
 }
 
+interface BackupProgress {
+  currentUser: string | null;
+  usersProcessed: number;
+  usersTotal: number;
+  itemsBackedUp: number;
+  itemsSkipped: number;
+  itemsFailed: number;
+  currentUserItems: number;
+}
+
 interface DriveBackupStatus {
   running: boolean;
+  progress: BackupProgress | null;
   runs: DriveBackupRun[];
   perUser: { email: string; files: number; bytes: number; lastBackedUpAt: string }[];
   failedFiles: number;
@@ -126,6 +137,7 @@ interface GmailBackupRun {
 
 interface GmailBackupStatus {
   running: boolean;
+  progress: BackupProgress | null;
   runs: GmailBackupRun[];
   perUser: { email: string; messages: number; bytes: number; lastBackedUpAt: string }[];
   failedMessages: number;
@@ -161,7 +173,7 @@ interface GoogleUser {
   templateUrl: './google-users.component.html',
   styleUrls: ['./google-users.component.scss']
 })
-export class GoogleUsersComponent implements OnInit {
+export class GoogleUsersComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private authService = inject(AuthService);
@@ -483,7 +495,36 @@ export class GoogleUsersComponent implements OnInit {
     };
   });
 
-  ngOnInit() { this.loadUsers(); }
+  ngOnInit() {
+    this.loadUsers();
+    this.statusPollId = setInterval(() => this.pollBackupStatuses(), 5000);
+  }
+
+  ngOnDestroy() {
+    if (this.statusPollId) clearInterval(this.statusPollId);
+  }
+
+  // ----- Live backup progress polling (storage tab, product owner) -----
+  private statusPollId: ReturnType<typeof setInterval> | null = null;
+
+  private pollBackupStatuses() {
+    if (this.pageTab() !== 'storage' || !this.isProductOwner) return;
+    if (this.backupStatus()?.running) this.loadBackupStatus();
+    if (this.gmailBackupStatus()?.running) this.loadGmailBackupStatus();
+  }
+
+  /** Live label when a backup is currently processing this account, else null. */
+  rowBackupLive(email: string): string | null {
+    const target = email.toLowerCase();
+    const parts: string[] = [];
+    const drive = this.backupStatus();
+    if (drive?.running && drive.progress?.currentUser?.toLowerCase() === target)
+      parts.push(`Drive · ${drive.progress.currentUserItems.toLocaleString()} files`);
+    const gmail = this.gmailBackupStatus();
+    if (gmail?.running && gmail.progress?.currentUser?.toLowerCase() === target)
+      parts.push(`Gmail · ${gmail.progress.currentUserItems.toLocaleString()} msgs`);
+    return parts.length ? parts.join(' · ') : null;
+  }
 
   loadUsers() {
     this.loading.set(true);

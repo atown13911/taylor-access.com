@@ -571,6 +571,7 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new
         {
             running = GoogleDriveBackupWorker.IsRunning,
+            progress = GoogleDriveBackupWorker.Progress,
             runs,
             perUser,
             failedFiles = failed
@@ -639,6 +640,7 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new
         {
             running = GoogleGmailBackupWorker.IsRunning,
+            progress = GoogleGmailBackupWorker.Progress,
             runs,
             perUser,
             failedMessages = failed

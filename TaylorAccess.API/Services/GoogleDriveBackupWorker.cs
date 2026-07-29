@@ -5,6 +5,19 @@ using TaylorAccess.API.Models;
 
 namespace TaylorAccess.API.Services;
 
+/// <summary>Live snapshot of an in-flight backup pass, read by the status endpoints.</summary>
+public sealed class GoogleBackupProgress
+{
+    public string? CurrentUser { get; set; }
+    public int UsersProcessed { get; set; }
+    public int UsersTotal { get; set; }
+    public int ItemsBackedUp { get; set; }
+    public int ItemsSkipped { get; set; }
+    public int ItemsFailed { get; set; }
+    /// <summary>Items handled (backed up + skipped + failed) for the current user in this pass.</summary>
+    public int CurrentUserItems { get; set; }
+}
+
 /// <summary>
 /// Copies every domain user's Drive files into the Railway bucket.
 /// Binary files are downloaded as-is; Google-native docs are exported
@@ -15,6 +28,9 @@ public sealed class GoogleDriveBackupWorker
 {
     private static readonly SemaphoreSlim RunGate = new(1, 1);
     public static bool IsRunning { get; private set; }
+
+    /// <summary>Progress of the current run; null when idle. Values may be a few items stale.</summary>
+    public static GoogleBackupProgress? Progress { get; private set; }
 
     private static readonly Dictionary<string, (string ExportMime, string Extension)> GoogleExports = new()
     {
@@ -67,10 +83,17 @@ public sealed class GoogleDriveBackupWorker
                 ? await GetAllUserEmailsAsync(ct)
                 : new List<string> { onlyEmail.Trim() };
             _logger.LogInformation("[Drive backup] Starting ({Trigger}): {Count} users.", trigger, emails.Count);
+            Progress = new GoogleBackupProgress { UsersTotal = emails.Count };
 
             foreach (var email in emails)
             {
                 ct.ThrowIfCancellationRequested();
+                var progress = Progress;
+                if (progress != null)
+                {
+                    progress.CurrentUser = email;
+                    progress.CurrentUserItems = 0;
+                }
                 try
                 {
                     await BackupUserAsync(email, run, ct);
@@ -86,6 +109,7 @@ public sealed class GoogleDriveBackupWorker
                 }
 
                 run.UsersProcessed++;
+                if (Progress != null) Progress.UsersProcessed = run.UsersProcessed;
                 await _db.SaveChangesAsync(ct);
             }
 
@@ -110,8 +134,19 @@ public sealed class GoogleDriveBackupWorker
         finally
         {
             IsRunning = false;
+            Progress = null;
             RunGate.Release();
         }
+    }
+
+    private static void SyncProgress(GoogleDriveBackupRun run)
+    {
+        var p = Progress;
+        if (p == null) return;
+        p.CurrentUserItems++;
+        p.ItemsBackedUp = run.FilesBackedUp;
+        p.ItemsSkipped = run.FilesSkipped;
+        p.ItemsFailed = run.FilesFailed;
     }
 
     private async Task<List<string>> GetAllUserEmailsAsync(CancellationToken ct)
@@ -205,6 +240,7 @@ public sealed class GoogleDriveBackupWorker
             ((md5 != null && existing.Md5 == md5) || (md5 == null && modified != null && existing.ModifiedTime == modified)))
         {
             run.FilesSkipped++;
+            SyncProgress(run);
             return;
         }
 
@@ -273,6 +309,7 @@ public sealed class GoogleDriveBackupWorker
             _db.GoogleDriveBackupFiles.Add(record);
             known[fileId] = record;
         }
+        SyncProgress(run);
         await _db.SaveChangesAsync(ct);
     }
 

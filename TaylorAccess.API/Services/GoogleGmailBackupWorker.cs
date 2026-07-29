@@ -16,6 +16,9 @@ public sealed class GoogleGmailBackupWorker
     private static readonly SemaphoreSlim RunGate = new(1, 1);
     public static bool IsRunning { get; private set; }
 
+    /// <summary>Progress of the current run; null when idle. Values may be a few items stale.</summary>
+    public static GoogleBackupProgress? Progress { get; private set; }
+
     private readonly TaylorAccessDbContext _db;
     private readonly GoogleDirectoryService _directory;
     private readonly BucketStorageService _bucket;
@@ -59,10 +62,17 @@ public sealed class GoogleGmailBackupWorker
                 ? await GetAllUserEmailsAsync(ct)
                 : new List<string> { onlyEmail.Trim() };
             _logger.LogInformation("[Gmail backup] Starting ({Trigger}): {Count} users.", trigger, emails.Count);
+            Progress = new GoogleBackupProgress { UsersTotal = emails.Count };
 
             foreach (var email in emails)
             {
                 ct.ThrowIfCancellationRequested();
+                var progress = Progress;
+                if (progress != null)
+                {
+                    progress.CurrentUser = email;
+                    progress.CurrentUserItems = 0;
+                }
                 try
                 {
                     await BackupUserAsync(email, run, ct);
@@ -78,6 +88,7 @@ public sealed class GoogleGmailBackupWorker
                 }
 
                 run.UsersProcessed++;
+                if (Progress != null) Progress.UsersProcessed = run.UsersProcessed;
                 await _db.SaveChangesAsync(ct);
             }
 
@@ -102,8 +113,19 @@ public sealed class GoogleGmailBackupWorker
         finally
         {
             IsRunning = false;
+            Progress = null;
             RunGate.Release();
         }
+    }
+
+    private static void SyncProgress(GoogleGmailBackupRun run)
+    {
+        var p = Progress;
+        if (p == null) return;
+        p.CurrentUserItems++;
+        p.ItemsBackedUp = run.MessagesBackedUp;
+        p.ItemsSkipped = run.MessagesSkipped;
+        p.ItemsFailed = run.MessagesFailed;
     }
 
     private async Task<List<string>> GetAllUserEmailsAsync(CancellationToken ct)
@@ -177,10 +199,12 @@ public sealed class GoogleGmailBackupWorker
                 if (existing.TryGetValue(messageId, out var record) && record.Status == "backedUp")
                 {
                     run.MessagesSkipped++;
+                    SyncProgress(run);
                     continue;
                 }
 
                 await BackupMessageAsync(client, baseUrl, email, messageId, record, run, ct);
+                SyncProgress(run);
                 pendingSaves++;
                 if (pendingSaves >= 25)
                 {
