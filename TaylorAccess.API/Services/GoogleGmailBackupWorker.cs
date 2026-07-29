@@ -36,14 +36,17 @@ public sealed class GoogleGmailBackupWorker
         _logger = logger;
     }
 
-    /// <summary>Runs a full backup pass. Returns false if a run is already in progress.</summary>
-    public async Task<bool> RunAsync(string trigger, CancellationToken ct)
+    /// <summary>
+    /// Runs a backup pass — the whole domain, or a single account when
+    /// <paramref name="onlyEmail"/> is given. Returns false if a run is already in progress.
+    /// </summary>
+    public async Task<bool> RunAsync(string trigger, CancellationToken ct, string? onlyEmail = null)
     {
         if (!await RunGate.WaitAsync(0, ct))
             return false;
 
         IsRunning = true;
-        var run = new GoogleGmailBackupRun { Trigger = trigger };
+        var run = new GoogleGmailBackupRun { Trigger = trigger.Length > 50 ? trigger[..50] : trigger };
         try
         {
             if (!_bucket.IsConfigured)
@@ -52,7 +55,9 @@ public sealed class GoogleGmailBackupWorker
             _db.GoogleGmailBackupRuns.Add(run);
             await _db.SaveChangesAsync(ct);
 
-            var emails = await GetAllUserEmailsAsync(ct);
+            var emails = string.IsNullOrWhiteSpace(onlyEmail)
+                ? await GetAllUserEmailsAsync(ct)
+                : new List<string> { onlyEmail.Trim() };
             _logger.LogInformation("[Gmail backup] Starting ({Trigger}): {Count} users.", trigger, emails.Count);
 
             foreach (var email in emails)

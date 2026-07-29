@@ -511,9 +511,14 @@ public class GoogleWorkspaceController : ControllerBase
 
     // ----- Drive-to-bucket backup -----
 
-    /// <summary>Starts a Drive backup pass in the background (product owner only).</summary>
+    /// <summary>
+    /// Starts a Drive backup pass in the background (product owner only).
+    /// With ?email= it backs up just that account instead of the whole domain.
+    /// </summary>
     [HttpPost("drive-backup/run")]
-    public async Task<ActionResult> RunDriveBackup([FromServices] IServiceScopeFactory scopeFactory)
+    public async Task<ActionResult> RunDriveBackup(
+        [FromServices] IServiceScopeFactory scopeFactory,
+        [FromQuery] string? email = null)
     {
         if (!_currentUser.IsProductOwner)
             return StatusCode(403, new { error = "Only the product owner can run Drive backups" });
@@ -521,14 +526,15 @@ public class GoogleWorkspaceController : ControllerBase
         if (GoogleDriveBackupWorker.IsRunning)
             return Ok(new { started = false, message = "A backup run is already in progress" });
 
+        var target = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
-            "Google Workspace: manually started Drive-to-bucket backup");
+            $"Google Workspace: manually started Drive-to-bucket backup{(target != null ? $" for {target}" : "")}");
 
         _ = Task.Run(async () =>
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var worker = scope.ServiceProvider.GetRequiredService<GoogleDriveBackupWorker>();
-            await worker.RunAsync("manual", CancellationToken.None);
+            await worker.RunAsync(target != null ? $"manual:{target}" : "manual", CancellationToken.None, target);
         });
 
         return Ok(new { started = true });
@@ -573,9 +579,14 @@ public class GoogleWorkspaceController : ControllerBase
 
     // ----- Gmail-to-bucket backup -----
 
-    /// <summary>Starts a Gmail backup pass in the background (product owner only).</summary>
+    /// <summary>
+    /// Starts a Gmail backup pass in the background (product owner only).
+    /// With ?email= it backs up just that account instead of the whole domain.
+    /// </summary>
     [HttpPost("gmail-backup/run")]
-    public async Task<ActionResult> RunGmailBackup([FromServices] IServiceScopeFactory scopeFactory)
+    public async Task<ActionResult> RunGmailBackup(
+        [FromServices] IServiceScopeFactory scopeFactory,
+        [FromQuery] string? email = null)
     {
         if (!_currentUser.IsProductOwner)
             return StatusCode(403, new { error = "Only the product owner can run Gmail backups" });
@@ -583,14 +594,15 @@ public class GoogleWorkspaceController : ControllerBase
         if (GoogleGmailBackupWorker.IsRunning)
             return Ok(new { started = false, message = "A Gmail backup run is already in progress" });
 
+        var target = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
         await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
-            "Google Workspace: manually started Gmail-to-bucket backup");
+            $"Google Workspace: manually started Gmail-to-bucket backup{(target != null ? $" for {target}" : "")}");
 
         _ = Task.Run(async () =>
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var worker = scope.ServiceProvider.GetRequiredService<GoogleGmailBackupWorker>();
-            await worker.RunAsync("manual", CancellationToken.None);
+            await worker.RunAsync(target != null ? $"manual:{target}" : "manual", CancellationToken.None, target);
         });
 
         return Ok(new { started = true });

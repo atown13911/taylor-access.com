@@ -259,6 +259,7 @@
               <th>Photos</th>
               <th>Last Login</th>
               <th>Quota Used</th>
+              @if (isProductOwner) { <th>Backup</th> }
             </tr>
           </thead>
           <tbody>
@@ -286,6 +287,28 @@
                   </div>
                   <span class="quota-pct">{{ row.usedPercent }}%</span>
                 </td>
+                @if (isProductOwner) {
+                  <td class="actions-cell">
+                    <button class="act-btn" (click)="runUserBackup(row, 'drive')"
+                            [disabled]="userBackupBusy() !== null"
+                            title="Back up this user's Drive files to the bucket">
+                      @if (userBackupBusy() === 'drive:' + row.email) {
+                        <i class='bx bx-loader-alt bx-spin'></i>
+                      } @else {
+                        <i class='bx bx-cloud-upload'></i>
+                      }
+                    </button>
+                    <button class="act-btn" (click)="runUserBackup(row, 'gmail')"
+                            [disabled]="userBackupBusy() !== null"
+                            title="Back up this user's Gmail to the bucket">
+                      @if (userBackupBusy() === 'gmail:' + row.email) {
+                        <i class='bx bx-loader-alt bx-spin'></i>
+                      } @else {
+                        <i class='bx bx-envelope'></i>
+                      }
+                    </button>
+                  </td>
+                }
               </tr>
             }
           </tbody>

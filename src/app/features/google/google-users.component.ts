@@ -377,6 +377,38 @@ export class GoogleUsersComponent implements OnInit {
 
   lastGmailBackupRun = computed(() => this.gmailBackupStatus()?.runs?.[0] ?? null);
 
+  // ----- Per-user backup (product owner only) -----
+  /** "drive:email" / "gmail:email" while a start request is in flight. */
+  userBackupBusy = signal<string | null>(null);
+
+  runUserBackup(row: UserStorage, kind: 'drive' | 'gmail') {
+    const label = kind === 'drive' ? 'Drive' : 'Gmail';
+    const running = kind === 'drive' ? this.backupStatus()?.running : this.gmailBackupStatus()?.running;
+    if (running) {
+      this.toast.info(`A ${label} backup run is already in progress — try again when it finishes`, 'Google');
+      return;
+    }
+    if (!confirm(`Back up ${label} for ${row.email} to the storage bucket now?`)) return;
+
+    this.userBackupBusy.set(`${kind}:${row.email}`);
+    this.http.post<any>(`${this.apiUrl}/api/v1/google/${kind}-backup/run`, null, { params: { email: row.email } }).subscribe({
+      next: (res) => {
+        this.userBackupBusy.set(null);
+        if (res?.started) {
+          this.toast.champagne(`${label} backup started — ${row.email}`, 'Google');
+        } else {
+          this.toast.info(res?.message || 'A backup run is already in progress', 'Google');
+        }
+        if (kind === 'drive') this.loadBackupStatus();
+        else this.loadGmailBackupStatus();
+      },
+      error: (err) => {
+        this.userBackupBusy.set(null);
+        this.toast.error(err?.error?.error || `Failed to start ${label} backup`, 'Google');
+      }
+    });
+  }
+
   gmailBackupTotals = computed(() => {
     const perUser = this.gmailBackupStatus()?.perUser ?? [];
     return {
