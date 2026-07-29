@@ -86,6 +86,20 @@ public sealed class GoogleLoginEvent
     public string? IpAddress { get; set; }
 }
 
+/// <summary>An admin role assigned to a user (Directory API roleAssignments + roles).</summary>
+public sealed class GoogleRoleAssignmentInfo
+{
+    public string RoleAssignmentId { get; set; } = "";
+    public string RoleId { get; set; } = "";
+    public string RoleName { get; set; } = "";
+    public string RoleDescription { get; set; } = "";
+    public bool IsSuperAdminRole { get; set; }
+    public bool IsSystemRole { get; set; }
+    /// <summary>CUSTOMER (entire domain) or ORG_UNIT.</summary>
+    public string ScopeType { get; set; } = "";
+    public string? OrgUnitId { get; set; }
+}
+
 /// <summary>Most recent OAuth token audit event per connected app (Reports API `token` log).</summary>
 public sealed class GoogleTokenActivity
 {
@@ -288,6 +302,97 @@ public class GoogleDirectoryService
         }
 
         return (true, null, removed);
+    }
+
+    /// <summary>
+    /// Lists the admin role assignments for a user, resolved against the domain's
+    /// role definitions so names and descriptions are included.
+    /// </summary>
+    public async Task<(List<GoogleRoleAssignmentInfo>? Roles, string? Error)> ListUserRolesAsync(
+        string userKey,
+        CancellationToken cancellationToken = default)
+    {
+        var (token, tokenError) = await AcquireTokenAsync(RoleManagementScope, cancellationToken);
+        if (token == null)
+            return (null, tokenError);
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Google serializes int64 ids as JSON strings, but be tolerant of numbers too.
+        static string ReadId(JsonElement el, string prop)
+        {
+            if (!el.TryGetProperty(prop, out var v)) return "";
+            return v.ValueKind == JsonValueKind.Number ? v.GetRawText() : v.GetString() ?? "";
+        }
+
+        var assignments = new List<GoogleRoleAssignmentInfo>();
+        string? pageToken = null;
+        do
+        {
+            var url = "https://admin.googleapis.com/admin/directory/v1/customer/my_customer/roleassignments" +
+                      $"?userKey={Uri.EscapeDataString(userKey)}&maxResults=200" +
+                      (pageToken != null ? "&pageToken=" + Uri.EscapeDataString(pageToken) : "");
+            var (doc, error) = await GetJsonAsync(client, url, $"role assignments for {userKey}", cancellationToken);
+            if (doc == null)
+                return (null, error);
+            using (doc)
+            {
+                if (doc.RootElement.TryGetProperty("items", out var items))
+                    foreach (var item in items.EnumerateArray())
+                        assignments.Add(new GoogleRoleAssignmentInfo
+                        {
+                            RoleAssignmentId = ReadId(item, "roleAssignmentId"),
+                            RoleId = ReadId(item, "roleId"),
+                            ScopeType = GetString(item, "scopeType"),
+                            OrgUnitId = NullIfEmpty(GetString(item, "orgUnitId"))
+                        });
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            }
+        } while (!string.IsNullOrEmpty(pageToken));
+
+        if (assignments.Count == 0)
+            return (assignments, null);
+
+        // Resolve role ids to names/descriptions. Non-fatal on failure — raw ids still render.
+        pageToken = null;
+        var rolesById = new Dictionary<string, JsonElement>();
+        var roleDocs = new List<JsonDocument>();
+        try
+        {
+            do
+            {
+                var url = "https://admin.googleapis.com/admin/directory/v1/customer/my_customer/roles?maxResults=100" +
+                          (pageToken != null ? "&pageToken=" + Uri.EscapeDataString(pageToken) : "");
+                var (doc, error) = await GetJsonAsync(client, url, "domain role definitions", cancellationToken);
+                if (doc == null)
+                {
+                    _logger.LogWarning("Google Directory role definitions lookup failed: {Error}", error);
+                    break;
+                }
+                roleDocs.Add(doc);
+                if (doc.RootElement.TryGetProperty("items", out var items))
+                    foreach (var item in items.EnumerateArray())
+                        rolesById[ReadId(item, "roleId")] = item;
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            } while (!string.IsNullOrEmpty(pageToken));
+
+            foreach (var assignment in assignments)
+            {
+                if (!rolesById.TryGetValue(assignment.RoleId, out var role)) continue;
+                assignment.RoleName = GetString(role, "roleName");
+                assignment.RoleDescription = GetString(role, "roleDescription");
+                assignment.IsSuperAdminRole = GetBool(role, "isSuperAdminRole");
+                assignment.IsSystemRole = GetBool(role, "isSystemRole");
+            }
+        }
+        finally
+        {
+            foreach (var doc in roleDocs) doc.Dispose();
+        }
+
+        return (assignments, null);
     }
 
     /// <summary>

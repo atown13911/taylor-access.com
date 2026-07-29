@@ -287,6 +287,17 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new { success = true });
     }
 
+    /// <summary>Admin roles assigned to a user, resolved with role names from the domain.</summary>
+    [HttpGet("workspace-users/{id}/roles")]
+    public async Task<ActionResult> GetUserRoles(string id, CancellationToken cancellationToken)
+    {
+        var (roles, error) = await _directory.ListUserRolesAsync(id, cancellationToken);
+        if (roles == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = roles });
+    }
+
     [HttpGet("workspace-users/{id}/groups")]
     public async Task<ActionResult> GetUserGroups(string id, CancellationToken cancellationToken)
     {

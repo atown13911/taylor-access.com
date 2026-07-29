@@ -33,6 +33,17 @@ interface TokenActivity {
   lastEvent: string;
 }
 
+interface RoleAssignment {
+  roleAssignmentId: string;
+  roleId: string;
+  roleName: string;
+  roleDescription: string;
+  isSuperAdminRole: boolean;
+  isSystemRole: boolean;
+  scopeType: string;
+  orgUnitId: string | null;
+}
+
 interface GroupInfo {
   id: string;
   name: string;
@@ -514,6 +525,10 @@ export class GoogleUsersComponent implements OnInit {
   openRegister(user: GoogleUser) {
     this.registerUser.set(user);
     this.showBackupCodes.set(false);
+    this.registerTab.set('overview');
+    this.roles.set([]);
+    this.rolesError.set(null);
+    this.rolesLoadedFor = null;
     if (!user.deleted) this.loadSecurity(user);
     else { this.security.set(null); this.securityError.set(null); }
   }
@@ -523,6 +538,51 @@ export class GoogleUsersComponent implements OnInit {
     this.security.set(null);
     this.securityError.set(null);
     this.toolModal.set(null);
+  }
+
+  // ----- Drawer sub-tabs (overview / roles) -----
+  registerTab = signal<'overview' | 'roles'>('overview');
+  roles = signal<RoleAssignment[]>([]);
+  rolesLoading = signal(false);
+  rolesError = signal<string | null>(null);
+  private rolesLoadedFor: string | null = null;
+
+  setRegisterTab(tab: 'overview' | 'roles') {
+    this.registerTab.set(tab);
+    if (tab === 'roles') this.loadRoles();
+  }
+
+  loadRoles() {
+    const user = this.registerUser();
+    if (!user || this.rolesLoadedFor === user.id) return;
+    this.rolesLoadedFor = user.id;
+    this.rolesLoading.set(true);
+    this.rolesError.set(null);
+    this.roles.set([]);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/workspace-users/${encodeURIComponent(user.id)}/roles`).subscribe({
+      next: (res) => { this.roles.set(res?.data || []); this.rolesLoading.set(false); },
+      error: (err) => {
+        this.rolesLoadedFor = null;   // allow retry on next tab visit
+        this.rolesLoading.set(false);
+        this.rolesError.set(err?.error?.error || 'Failed to load role assignments');
+      }
+    });
+  }
+
+  /** "_GROUPS_ADMIN_ROLE" → "Groups Admin Role"; custom roles pass through as-is. */
+  roleDisplayName(role: RoleAssignment): string {
+    const name = role.roleName || `Role ${role.roleId}`;
+    if (!name.includes('_')) return name;
+    return name
+      .replace(/^_+/, '')
+      .split('_')
+      .filter(part => part.length)
+      .map(part => part.charAt(0) + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  roleScopeLabel(role: RoleAssignment): string {
+    return role.scopeType === 'ORG_UNIT' ? 'Org unit' : 'Entire domain';
   }
 
   manageFromRegister() {

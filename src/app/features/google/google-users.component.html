@@ -318,7 +318,47 @@
         <button class="btn-close" (click)="closeRegister()"><i class='bx bx-x'></i></button>
       </div>
 
+      <div class="drawer-tabs">
+        <button class="drawer-tab" [class.active]="registerTab() === 'overview'" (click)="setRegisterTab('overview')">
+          <i class='bx bx-id-card'></i> Overview
+        </button>
+        <button class="drawer-tab" [class.active]="registerTab() === 'roles'" (click)="setRegisterTab('roles')">
+          <i class='bx bx-shield-quarter'></i> Roles
+        </button>
+      </div>
+
       <div class="register-body">
+        @if (registerTab() === 'roles') {
+
+        <h3 class="section-title">Assigned Admin Roles</h3>
+        @if (rolesLoading()) {
+          <p class="empty-hint"><i class='bx bx-loader-alt bx-spin'></i> Loading role assignments...</p>
+        } @else if (rolesError()) {
+          <p class="empty-hint error-hint"><i class='bx bx-error-circle'></i> {{ rolesError() }}</p>
+        } @else if (!roles().length) {
+          <p class="empty-hint">No admin roles assigned on the domain</p>
+        } @else {
+          <table class="tool-table roles-table">
+            <thead><tr><th>Role</th><th>Scope</th></tr></thead>
+            <tbody>
+              @for (role of roles(); track role.roleAssignmentId) {
+                <tr>
+                  <td>
+                    <strong>{{ roleDisplayName(role) }}</strong>
+                    @if (role.isSuperAdminRole) { <span class="role-badge admin">Super Admin</span> }
+                    @if (role.roleDescription && role.roleDescription !== role.roleName) {
+                      <span class="sec-sub">{{ role.roleDescription }}</span>
+                    }
+                  </td>
+                  <td>{{ roleScopeLabel(role) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        } @else {
+
         <h3 class="section-title">Account</h3>
         <div class="detail-grid">
           <div class="detail"><label>First Name</label><span>{{ user.givenName || '—' }}</span></div>
@@ -462,6 +502,8 @@
               </button>
             }
           </div>
+        }
+
         }
       </div>
 
