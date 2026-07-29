@@ -80,6 +80,10 @@
 .user-cell { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .avatar-fallback { display: inline-flex; align-items: center; justify-content: center; background: rgba(0,212,255,0.12); color: var(--cyan); font-weight: 700; font-size: 0.8rem; }
+.group-avatar i { font-size: 1rem; }
+.group-row { cursor: pointer; }
+.group-desc, .group-aliases { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.78rem; }
+.group-modal-sub { margin: 0 0 12px; font-size: 0.78rem; color: var(--text-secondary); }
 
 .role-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; background: rgba(150,150,150,0.1); color: #999;
   &.admin { background: rgba(255,165,0,0.12); color: #ffa500; }

@@ -308,6 +308,37 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new { data = groups });
     }
 
+    /// <summary>All Google groups on the domain.</summary>
+    [HttpGet("groups")]
+    public async Task<ActionResult> GetDomainGroups(CancellationToken cancellationToken)
+    {
+        var (groups, error) = await _directory.ListDomainGroupsAsync(cancellationToken);
+        if (groups == null)
+            return StatusCode(502, new { error });
+
+        return Ok(new { data = groups.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList() });
+    }
+
+    /// <summary>Direct members of a group — owners first, then managers, then members.</summary>
+    [HttpGet("groups/{id}/members")]
+    public async Task<ActionResult> GetGroupMembers(string id, CancellationToken cancellationToken)
+    {
+        var (members, error) = await _directory.GetGroupMembersAsync(id, cancellationToken);
+        if (members == null)
+            return StatusCode(502, new { error });
+
+        if (!_currentUser.IsProductOwner)
+            members = members.Where(m => !GoogleDirectoryService.IsHiddenUser(m.Email)).ToList();
+
+        var roleOrder = new Dictionary<string, int> { ["OWNER"] = 0, ["MANAGER"] = 1, ["MEMBER"] = 2 };
+        var sorted = members
+            .OrderBy(m => roleOrder.TryGetValue(m.Role, out var order) ? order : 3)
+            .ThenBy(m => m.Email, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return Ok(new { data = sorted });
+    }
+
     [HttpGet("workspace-users/{id}/licenses")]
     public async Task<ActionResult> GetUserLicenses(
         string id, [FromQuery] string email, CancellationToken cancellationToken)

@@ -18,6 +18,9 @@
     <button class="page-tab" [class.active]="pageTab() === 'storage'" (click)="setPageTab('storage')">
       <i class='bx bx-data'></i> Data Storage
     </button>
+    <button class="page-tab" [class.active]="pageTab() === 'groups'" (click)="setPageTab('groups')">
+      <i class='bx bx-group'></i> Groups
+    </button>
     @if (isProductOwner) {
       <button class="page-tab restricted" [class.active]="pageTab() === 'restricted'" (click)="setPageTab('restricted')">
         <i class='bx bx-lock-alt'></i> Restricted Access
@@ -25,7 +28,7 @@
     }
   </div>
 
-  @if (pageTab() !== 'storage') {
+  @if (pageTab() === 'domain' || pageTab() === 'restricted') {
 
   @if (pageTab() === 'restricted') {
     <div class="restricted-banner">
@@ -149,6 +152,73 @@
       </table>
     </div>
   }
+
+  } @else if (pageTab() === 'groups') {
+
+    <div class="stats-row">
+      <div class="stat cyan"><span class="stat-val">{{ groupStats().total }}</span><span class="stat-lbl">Groups</span></div>
+      <div class="stat"><span class="stat-val">{{ groupStats().members }}</span><span class="stat-lbl">Direct Members</span></div>
+      <div class="stat"><span class="stat-val">{{ groupStats().adminCreated }}</span><span class="stat-lbl">Admin Created</span></div>
+      <div class="stat red"><span class="stat-val">{{ groupStats().empty }}</span><span class="stat-lbl">Empty</span></div>
+    </div>
+
+    <div class="filters-bar">
+      <div class="search-box"><i class='bx bx-search'></i><input type="text" placeholder="Search group name, email, description..." [ngModel]="groupSearch()" (ngModelChange)="groupSearch.set($event)"></div>
+    </div>
+
+    @if (groupsLoading()) {
+      <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading Google groups...</p></div>
+    } @else if (groupsError()) {
+      <div class="empty-state error"><i class='bx bx-error-circle'></i><h3>Could not load groups</h3><p>{{ groupsError() }}</p></div>
+    } @else if (filteredGroups().length === 0) {
+      <div class="empty-state"><i class='bx bx-group'></i><h3>No groups found</h3><p>No Google groups match the current filters</p></div>
+    } @else {
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th>Email</th>
+              <th>Description</th>
+              <th>Aliases</th>
+              <th>Created By</th>
+              <th>Members</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of filteredGroups(); track group.id) {
+              <tr class="group-row" (click)="openGroupMembers(group)" title="View members">
+                <td>
+                  <div class="user-cell">
+                    <span class="avatar avatar-fallback group-avatar"><i class='bx bx-group'></i></span>
+                    <strong>{{ group.name }}</strong>
+                  </div>
+                </td>
+                <td class="mono">{{ group.email }}</td>
+                <td class="group-desc">{{ group.description || '—' }}</td>
+                <td class="mono group-aliases">
+                  @if (group.aliases?.length) {
+                    {{ group.aliases!.join(', ') }}
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>
+                  <span class="role-badge" [class.delegated]="group.adminCreated">{{ group.adminCreated ? 'Admin' : 'User' }}</span>
+                </td>
+                <td><strong>{{ group.directMembersCount || 0 }}</strong></td>
+                <td class="actions-cell">
+                  <button class="act-btn" (click)="openGroupMembers(group); $event.stopPropagation()" title="View members">
+                    <i class='bx bx-chevron-right'></i>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
 
   } @else {
 
@@ -851,6 +921,67 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" (click)="closeManage()">Close</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Group Members Popup -->
+@if (membersGroup(); as group) {
+  <div class="modal-overlay" (click)="closeGroupMembers()">
+    <div class="modal-content tool-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2><i class='bx bx-group'></i> {{ group.name }}</h2>
+        <button class="btn-close" (click)="closeGroupMembers()"><i class='bx bx-x'></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="group-modal-sub">
+          <span class="mono">{{ group.email }}</span>
+          @if (group.description) { · {{ group.description }} }
+        </p>
+        @if (groupMembersLoading()) {
+          <p class="empty-hint"><i class='bx bx-loader-alt bx-spin'></i> Loading members...</p>
+        } @else if (groupMembersError()) {
+          <p class="empty-hint error-hint"><i class='bx bx-error-circle'></i> {{ groupMembersError() }}</p>
+        } @else if (groupMembers().length === 0) {
+          <p class="empty-hint">This group has no members</p>
+        } @else {
+          <table class="tool-table">
+            <thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Type</th><th>Status</th></tr></thead>
+            <tbody>
+              @for (member of groupMembers(); track member.id) {
+                <tr>
+                  <td>
+                    <div class="user-cell">
+                      @if (memberPhoto(member)) {
+                        <img class="avatar" [src]="memberPhoto(member)" alt="" referrerpolicy="no-referrer">
+                      } @else if (member.type === 'GROUP') {
+                        <span class="avatar avatar-fallback group-avatar"><i class='bx bx-group'></i></span>
+                      } @else {
+                        <span class="avatar avatar-fallback">{{ memberName(member).charAt(0) | uppercase }}</span>
+                      }
+                      <strong>{{ memberName(member) }}</strong>
+                    </div>
+                  </td>
+                  <td class="mono">{{ member.email }}</td>
+                  <td>
+                    <span class="role-badge" [class.admin]="member.role === 'OWNER'" [class.delegated]="member.role === 'MANAGER'">
+                      {{ member.role | lowercase }}
+                    </span>
+                  </td>
+                  <td>{{ member.type === 'GROUP' ? 'Nested group' : (member.type | lowercase) }}</td>
+                  <td>
+                    @if (member.status) {
+                      <span class="status-badge" [class]="member.status.toLowerCase()">{{ member.status | lowercase }}</span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
       </div>
     </div>
   </div>

@@ -50,6 +50,16 @@ interface GroupInfo {
   email: string;
   description: string;
   directMembersCount: number;
+  adminCreated?: boolean;
+  aliases?: string[];
+}
+
+interface GroupMemberInfo {
+  id: string;
+  email: string;
+  role: string;    // OWNER | MANAGER | MEMBER
+  type: string;    // USER | GROUP | CUSTOMER
+  status: string;  // ACTIVE | SUSPENDED | ...
 }
 
 interface LicenseInfo {
@@ -204,9 +214,9 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   actionBusyId = signal<string | null>(null);
 
   // ----- Page tabs -----
-  pageTab = signal<'domain' | 'storage' | 'restricted'>('domain');
+  pageTab = signal<'domain' | 'storage' | 'restricted' | 'groups'>('domain');
 
-  setPageTab(tab: 'domain' | 'storage' | 'restricted') {
+  setPageTab(tab: 'domain' | 'storage' | 'restricted' | 'groups') {
     this.pageTab.set(tab);
     if (tab === 'storage' && !this.storageLoaded) this.loadStorage();
     if (tab === 'storage' && this.isProductOwner) {
@@ -215,6 +225,94 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
       this.loadAccountTotals();
     }
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
+    if (tab === 'groups' && !this.groupsLoaded) this.loadDomainGroups();
+  }
+
+  // ----- Groups tab -----
+  private groupsLoaded = false;
+  groupsLoading = signal(false);
+  groupsError = signal<string | null>(null);
+  domainGroups = signal<GroupInfo[]>([]);
+  groupSearch = signal('');
+
+  loadDomainGroups() {
+    this.groupsLoaded = true;
+    this.groupsLoading.set(true);
+    this.groupsError.set(null);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/groups`).subscribe({
+      next: (res) => {
+        this.domainGroups.set(res?.data || []);
+        this.groupsLoading.set(false);
+      },
+      error: (err) => {
+        this.domainGroups.set([]);
+        this.groupsLoading.set(false);
+        this.groupsError.set(err?.error?.error || 'Failed to load Google groups');
+      }
+    });
+  }
+
+  filteredGroups = computed(() => {
+    const search = this.groupSearch().toLowerCase();
+    let list = this.domainGroups();
+    if (search) {
+      list = list.filter(g =>
+        g.name?.toLowerCase().includes(search) ||
+        g.email?.toLowerCase().includes(search) ||
+        g.description?.toLowerCase().includes(search) ||
+        g.aliases?.some(a => a.toLowerCase().includes(search))
+      );
+    }
+    return list;
+  });
+
+  groupStats = computed(() => {
+    const all = this.domainGroups();
+    return {
+      total: all.length,
+      members: all.reduce((sum, g) => sum + (g.directMembersCount || 0), 0),
+      adminCreated: all.filter(g => g.adminCreated).length,
+      empty: all.filter(g => !g.directMembersCount).length
+    };
+  });
+
+  // ----- Group members modal -----
+  membersGroup = signal<GroupInfo | null>(null);
+  groupMembers = signal<GroupMemberInfo[]>([]);
+  groupMembersLoading = signal(false);
+  groupMembersError = signal<string | null>(null);
+
+  openGroupMembers(group: GroupInfo) {
+    this.membersGroup.set(group);
+    this.groupMembers.set([]);
+    this.groupMembersError.set(null);
+    this.groupMembersLoading.set(true);
+    this.http.get<any>(`${this.apiUrl}/api/v1/google/groups/${encodeURIComponent(group.id)}/members`).subscribe({
+      next: (res) => {
+        this.groupMembers.set(res?.data || []);
+        this.groupMembersLoading.set(false);
+      },
+      error: (err) => {
+        this.groupMembersLoading.set(false);
+        this.groupMembersError.set(err?.error?.error || 'Failed to load group members');
+      }
+    });
+  }
+
+  closeGroupMembers() {
+    this.membersGroup.set(null);
+  }
+
+  memberName(member: GroupMemberInfo): string {
+    if (member.type === 'GROUP') {
+      return this.domainGroups().find(g => g.email.toLowerCase() === member.email.toLowerCase())?.name || member.email;
+    }
+    return this.userByEmail().get(member.email.toLowerCase())?.fullName || member.email;
+  }
+
+  memberPhoto(member: GroupMemberInfo): string | null {
+    if (member.type !== 'USER') return null;
+    return this.userByEmail().get(member.email.toLowerCase())?.thumbnailPhotoUrl || null;
   }
 
   // ----- Restricted access tab (product owner only) -----
@@ -245,14 +343,21 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   sourceUsers = computed(() =>
     this.pageTab() === 'restricted' ? this.restrictedUsers() : this.users());
 
-  viewLoading = computed(() =>
-    this.pageTab() === 'restricted' ? this.restrictedLoading() : this.loading());
+  viewLoading = computed(() => {
+    if (this.pageTab() === 'restricted') return this.restrictedLoading();
+    if (this.pageTab() === 'groups') return this.groupsLoading();
+    return this.loading();
+  });
 
-  viewError = computed(() =>
-    this.pageTab() === 'restricted' ? this.restrictedError() : this.loadError());
+  viewError = computed(() => {
+    if (this.pageTab() === 'restricted') return this.restrictedError();
+    if (this.pageTab() === 'groups') return this.groupsError();
+    return this.loadError();
+  });
 
   refreshCurrentTab() {
     if (this.pageTab() === 'restricted') this.loadRestricted();
+    else if (this.pageTab() === 'groups') this.loadDomainGroups();
     else this.loadUsers();
   }
 

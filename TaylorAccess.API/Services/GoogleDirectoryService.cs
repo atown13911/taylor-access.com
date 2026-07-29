@@ -69,6 +69,21 @@ public sealed class GoogleGroupInfo
     public string Email { get; set; } = "";
     public string Description { get; set; } = "";
     public long DirectMembersCount { get; set; }
+    public bool AdminCreated { get; set; }
+    public List<string> Aliases { get; set; } = new();
+}
+
+/// <summary>One member of a Workspace group (Directory Members API).</summary>
+public sealed class GoogleGroupMemberInfo
+{
+    public string Id { get; set; } = "";
+    public string Email { get; set; } = "";
+    /// <summary>OWNER | MANAGER | MEMBER</summary>
+    public string Role { get; set; } = "";
+    /// <summary>USER | GROUP | CUSTOMER</summary>
+    public string Type { get; set; } = "";
+    /// <summary>ACTIVE | SUSPENDED | ARCHIVED (empty for nested groups)</summary>
+    public string Status { get; set; } = "";
 }
 
 public sealed class GoogleLicenseInfo
@@ -558,6 +573,90 @@ public class GoogleDirectoryService
         } while (!string.IsNullOrEmpty(pageToken));
 
         return (groups, null);
+    }
+
+    /// <summary>All groups on the domain (Directory Groups API).</summary>
+    public async Task<(List<GoogleGroupInfo>? Groups, string? Error)> ListDomainGroupsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var groups = new List<GoogleGroupInfo>();
+        string? pageToken = null;
+        do
+        {
+            var url = "https://admin.googleapis.com/admin/directory/v1/groups?customer=my_customer&maxResults=200"
+                      + (pageToken != null ? $"&pageToken={Uri.EscapeDataString(pageToken)}" : "");
+            var (doc, error) = await GetJsonWithScopeAsync(url, GroupReadScope, "domain groups", cancellationToken);
+            if (doc == null)
+                return (null, error);
+
+            using (doc)
+            {
+                if (doc.RootElement.TryGetProperty("groups", out var items))
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        var group = new GoogleGroupInfo
+                        {
+                            Id = ReadString(item, "id"),
+                            Name = ReadString(item, "name"),
+                            Email = ReadString(item, "email"),
+                            Description = ReadString(item, "description"),
+                            DirectMembersCount = ReadLong(item, "directMembersCount"),
+                            AdminCreated = item.TryGetProperty("adminCreated", out var ac) &&
+                                           ac.ValueKind == JsonValueKind.True
+                        };
+                        if (item.TryGetProperty("aliases", out var aliases) && aliases.ValueKind == JsonValueKind.Array)
+                            group.Aliases = aliases.EnumerateArray()
+                                .Select(a => a.GetString() ?? "")
+                                .Where(a => a.Length > 0)
+                                .ToList();
+                        groups.Add(group);
+                    }
+                }
+
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            }
+        } while (!string.IsNullOrEmpty(pageToken));
+
+        return (groups, null);
+    }
+
+    /// <summary>Direct members of a group (Directory Members API).</summary>
+    public async Task<(List<GoogleGroupMemberInfo>? Members, string? Error)> GetGroupMembersAsync(
+        string groupKey, CancellationToken cancellationToken = default)
+    {
+        var members = new List<GoogleGroupMemberInfo>();
+        string? pageToken = null;
+        do
+        {
+            var url = $"https://admin.googleapis.com/admin/directory/v1/groups/{Uri.EscapeDataString(groupKey)}/members?maxResults=200"
+                      + (pageToken != null ? $"&pageToken={Uri.EscapeDataString(pageToken)}" : "");
+            var (doc, error) = await GetJsonWithScopeAsync(url, GroupReadScope, $"members of {groupKey}", cancellationToken);
+            if (doc == null)
+                return (null, error);
+
+            using (doc)
+            {
+                if (doc.RootElement.TryGetProperty("members", out var items))
+                {
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        members.Add(new GoogleGroupMemberInfo
+                        {
+                            Id = ReadString(item, "id"),
+                            Email = ReadString(item, "email"),
+                            Role = ReadString(item, "role"),
+                            Type = ReadString(item, "type"),
+                            Status = ReadString(item, "status")
+                        });
+                    }
+                }
+
+                pageToken = doc.RootElement.TryGetProperty("nextPageToken", out var np) ? np.GetString() : null;
+            }
+        } while (!string.IsNullOrEmpty(pageToken));
+
+        return (members, null);
     }
 
     // Products checked for license assignments (Enterprise License Manager API has no per-user query).
