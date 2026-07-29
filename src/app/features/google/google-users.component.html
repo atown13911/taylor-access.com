@@ -257,7 +257,7 @@
     } @else if (filteredStorage().length === 0) {
       <div class="empty-state"><i class='bx bx-data'></i><h3>No storage data</h3><p>No usage data matches the current filters</p></div>
     } @else {
-      <div class="users-table">
+      <div class="users-table storage-table">
         <table>
           <thead>
             <tr>
@@ -269,7 +269,12 @@
               <th>Photos</th>
               <th>Last Login</th>
               <th>Quota Used</th>
-              @if (isProductOwner) { <th>Backup</th> }
+              @if (isProductOwner) {
+                <th>Drive Backup</th>
+                <th>Gmail Backup</th>
+                <th>Backup Status</th>
+                <th></th>
+              }
             </tr>
           </thead>
           <tbody>
@@ -298,12 +303,18 @@
                   <span class="quota-pct">{{ row.usedPercent }}%</span>
                 </td>
                 @if (isProductOwner) {
-                  <td class="actions-cell">
+                  <td class="backup-size">{{ driveBackupLabel(row.email) || '—' }}</td>
+                  <td class="backup-size">{{ gmailBackupLabel(row.email) || '—' }}</td>
+                  <td class="backup-status-cell">
                     @if (rowBackupLive(row.email); as live) {
                       <span class="row-backup-live" title="Backup currently processing this account (backed up + unchanged + failed items this pass)">
                         <i class='bx bx-loader-alt bx-spin'></i> {{ live }}
                       </span>
+                    } @else {
+                      <span class="backup-idle">Idle</span>
                     }
+                  </td>
+                  <td class="actions-cell">
                     <button class="act-btn" (click)="runUserBackup(row, 'drive')"
                             [disabled]="userBackupBusy() !== null"
                             title="Back up this user's Drive files to the bucket">

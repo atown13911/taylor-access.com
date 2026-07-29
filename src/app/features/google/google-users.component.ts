@@ -389,6 +389,31 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
 
   lastGmailBackupRun = computed(() => this.gmailBackupStatus()?.runs?.[0] ?? null);
 
+  // ----- Per-user bucket totals (what each account already has backed up) -----
+  private driveBackupByEmail = computed(() => {
+    const map = new Map<string, { files: number; bytes: number }>();
+    for (const u of this.backupStatus()?.perUser ?? []) map.set(u.email.toLowerCase(), u);
+    return map;
+  });
+
+  private gmailBackupByEmail = computed(() => {
+    const map = new Map<string, { messages: number; bytes: number }>();
+    for (const u of this.gmailBackupStatus()?.perUser ?? []) map.set(u.email.toLowerCase(), u);
+    return map;
+  });
+
+  driveBackupLabel(email: string): string | null {
+    const info = this.driveBackupByEmail().get(email.toLowerCase());
+    if (!info || info.files === 0) return null;
+    return `${this.formatBytes(info.bytes)} · ${info.files.toLocaleString()} files`;
+  }
+
+  gmailBackupLabel(email: string): string | null {
+    const info = this.gmailBackupByEmail().get(email.toLowerCase());
+    if (!info || info.messages === 0) return null;
+    return `${this.formatBytes(info.bytes)} · ${info.messages.toLocaleString()} msgs`;
+  }
+
   // ----- Per-user backup (product owner only) -----
   /** "drive:email" / "gmail:email" while a start request is in flight. */
   userBackupBusy = signal<string | null>(null);

@@ -94,8 +94,19 @@
 }
 
 .actions-cell { white-space: nowrap; }
-.row-backup-live { display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; padding: 2px 8px; border-radius: 8px; background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25); color: var(--cyan); font-size: 0.68rem; font-weight: 600; vertical-align: middle;
+.row-backup-live { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 8px; background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25); color: var(--cyan); font-size: 0.68rem; font-weight: 600; vertical-align: middle;
   i { font-size: 0.85rem; }
+}
+.backup-idle { font-size: 0.66rem; color: var(--text-secondary); opacity: 0.55; text-transform: uppercase; letter-spacing: 0.5px; }
+
+// The storage view has more columns — tighten spacing so it fits comfortably.
+.storage-table {
+  thead th { padding: 9px 10px; }
+  td { padding: 8px 10px; font-size: 0.78rem; }
+  .mono { font-size: 0.72rem; }
+  .backup-size { font-size: 0.72rem; color: var(--text-secondary); }
+  .backup-status-cell { min-width: 90px; }
+  .actions-cell { text-align: right; }
 }
 .act-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; margin-right: 2px;
   i { font-size: 1rem; }
