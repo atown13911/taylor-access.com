@@ -143,6 +143,20 @@ interface GmailBackupStatus {
   failedMessages: number;
 }
 
+interface GoogleAccountTotal {
+  email: string;
+  driveFiles: number | null;
+  gmailMessages: number | null;
+  error: string | null;
+  fetchedAt: string;
+}
+
+interface AccountTotalsStatus {
+  running: boolean;
+  progress: BackupProgress | null;
+  data: GoogleAccountTotal[];
+}
+
 interface GoogleUser {
   id: string;
   email: string;
@@ -198,6 +212,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     if (tab === 'storage' && this.isProductOwner) {
       this.loadBackupStatus();
       this.loadGmailBackupStatus();
+      this.loadAccountTotals();
     }
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
   }
@@ -307,6 +322,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     if (this.isProductOwner) {
       this.loadBackupStatus();
       this.loadGmailBackupStatus();
+      this.loadAccountTotals();
     }
   }
 
@@ -412,6 +428,76 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     const info = this.gmailBackupByEmail().get(email.toLowerCase());
     if (!info || info.messages === 0) return null;
     return `${this.formatBytes(info.bytes)} · ${info.messages.toLocaleString()} msgs`;
+  }
+
+  // ----- What Google currently holds per account (product owner only) -----
+  accountTotals = signal<AccountTotalsStatus | null>(null);
+  accountTotalsBusy = signal(false);
+
+  loadAccountTotals() {
+    this.http.get<AccountTotalsStatus>(`${this.apiUrl}/api/v1/google/account-totals`).subscribe({
+      next: (res) => this.accountTotals.set(res),
+      error: () => this.accountTotals.set(null)
+    });
+  }
+
+  refreshAccountTotals() {
+    if (this.accountTotals()?.running) {
+      this.toast.info('A Google recount is already in progress', 'Google');
+      return;
+    }
+    this.accountTotalsBusy.set(true);
+    this.http.post<any>(`${this.apiUrl}/api/v1/google/account-totals/refresh`, {}).subscribe({
+      next: (res) => {
+        this.accountTotalsBusy.set(false);
+        if (res?.started) this.toast.champagne('Recounting Drive files and Gmail messages in Google', 'Google');
+        else this.toast.info(res?.message || 'A recount is already in progress', 'Google');
+        this.loadAccountTotals();
+      },
+      error: (err) => {
+        this.accountTotalsBusy.set(false);
+        this.toast.error(err?.error?.error || 'Failed to start recount', 'Google');
+      }
+    });
+  }
+
+  private accountTotalsByEmail = computed(() => {
+    const map = new Map<string, GoogleAccountTotal>();
+    for (const t of this.accountTotals()?.data ?? []) map.set(t.email.toLowerCase(), t);
+    return map;
+  });
+
+  accountTotalsDate = computed(() => {
+    const rows = this.accountTotals()?.data ?? [];
+    if (rows.length === 0) return null;
+    return rows.reduce((max, r) => r.fetchedAt > max ? r.fetchedAt : max, rows[0].fetchedAt);
+  });
+
+  driveGoogleLabel(email: string): string | null {
+    const t = this.accountTotalsByEmail().get(email.toLowerCase());
+    if (t?.driveFiles == null) return null;
+    return `${t.driveFiles.toLocaleString()} files`;
+  }
+
+  gmailGoogleLabel(email: string): string | null {
+    const t = this.accountTotalsByEmail().get(email.toLowerCase());
+    if (t?.gmailMessages == null) return null;
+    return `${t.gmailMessages.toLocaleString()} msgs`;
+  }
+
+  /** 'ok' when the bucket has at least as many items as Google, 'behind' when short, null when unknown. */
+  driveCompareState(email: string): 'ok' | 'behind' | null {
+    const total = this.accountTotalsByEmail().get(email.toLowerCase())?.driveFiles;
+    if (total == null) return null;
+    const backed = this.driveBackupByEmail().get(email.toLowerCase())?.files ?? 0;
+    return backed >= total ? 'ok' : 'behind';
+  }
+
+  gmailCompareState(email: string): 'ok' | 'behind' | null {
+    const total = this.accountTotalsByEmail().get(email.toLowerCase())?.gmailMessages;
+    if (total == null) return null;
+    const backed = this.gmailBackupByEmail().get(email.toLowerCase())?.messages ?? 0;
+    return backed >= total ? 'ok' : 'behind';
   }
 
   // ----- Per-user backup (product owner only) -----
@@ -536,6 +622,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     if (this.pageTab() !== 'storage' || !this.isProductOwner) return;
     if (this.backupStatus()?.running) this.loadBackupStatus();
     if (this.gmailBackupStatus()?.running) this.loadGmailBackupStatus();
+    if (this.accountTotals()?.running) this.loadAccountTotals();
   }
 
   /** Live label when a backup is currently processing this account, else null. */

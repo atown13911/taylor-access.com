@@ -168,6 +168,21 @@
       <button class="btn btn-secondary btn-sm" (click)="refreshStorage()" [disabled]="storageLoading()">
         <i class='bx bx-refresh'></i> Refresh
       </button>
+      @if (isProductOwner) {
+        @if (accountTotals()?.running) {
+          <span class="report-date google-count-live">
+            <i class='bx bx-loader-alt bx-spin'></i>
+            Counting in Google — {{ accountTotals()?.progress?.usersProcessed || 0 }} of {{ accountTotals()?.progress?.usersTotal || 0 }} accounts
+          </span>
+        } @else if (accountTotalsDate()) {
+          <span class="report-date">Google counts as of {{ accountTotalsDate() | date:'MMM d, h:mm a' }}</span>
+        }
+        <button class="btn btn-secondary btn-sm" (click)="refreshAccountTotals()"
+                [disabled]="accountTotalsBusy() || accountTotals()?.running"
+                title="Recount Drive files and Gmail messages currently in Google for every account">
+          <i class='bx bx-calculator'></i> Recount Google
+        </button>
+      }
     </div>
 
     @if (isProductOwner) {
@@ -271,7 +286,9 @@
               <th>Quota Used</th>
               @if (isProductOwner) {
                 <th>Drive Backup</th>
+                <th title="Drive files currently in Google (owned, not trashed, backupable types)">Drive in Google</th>
                 <th>Gmail Backup</th>
+                <th title="Total Gmail messages currently in Google (includes spam/trash)">Gmail in Google</th>
                 <th>Backup Status</th>
                 <th></th>
               }
@@ -304,7 +321,17 @@
                 </td>
                 @if (isProductOwner) {
                   <td class="backup-size">{{ driveBackupLabel(row.email) || '—' }}</td>
+                  <td class="backup-size google-count" [class.count-ok]="driveCompareState(row.email) === 'ok'"
+                      [class.count-behind]="driveCompareState(row.email) === 'behind'"
+                      title="Files currently in this account's Google Drive">
+                    {{ driveGoogleLabel(row.email) || '—' }}
+                  </td>
                   <td class="backup-size">{{ gmailBackupLabel(row.email) || '—' }}</td>
+                  <td class="backup-size google-count" [class.count-ok]="gmailCompareState(row.email) === 'ok'"
+                      [class.count-behind]="gmailCompareState(row.email) === 'behind'"
+                      title="Messages currently in this account's Gmail (includes spam/trash)">
+                    {{ gmailGoogleLabel(row.email) || '—' }}
+                  </td>
                   <td class="backup-status-cell">
                     @if (rowBackupLive(row.email); as live) {
                       <span class="row-backup-live" title="Backup currently processing this account (backed up + unchanged + failed items this pass)">

@@ -261,6 +261,7 @@ builder.Services.AddScoped<GoogleDirectoryService>();
 builder.Services.AddSingleton<BucketStorageService>();
 builder.Services.AddScoped<GoogleDriveBackupWorker>();
 builder.Services.AddScoped<GoogleGmailBackupWorker>();
+builder.Services.AddScoped<GoogleAccountTotalsWorker>();
 builder.Services.AddScoped<PerformanceSyncOrchestrator>();
 builder.Services.AddScoped<CrmPerformanceBackfillService>();
 builder.Services.AddScoped<InsuranceChargingEstimateService>();
@@ -684,6 +685,17 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleGmailBackupMessages_User_Message""
             ON ""GoogleGmailBackupMessages"" (""UserEmail"", ""MessageId"");
+
+        CREATE TABLE IF NOT EXISTS ""GoogleAccountTotals"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""Email"" VARCHAR(256) NOT NULL,
+            ""DriveFiles"" BIGINT NULL,
+            ""GmailMessages"" BIGINT NULL,
+            ""Error"" VARCHAR(500) NULL,
+            ""FetchedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleAccountTotals_Email""
+            ON ""GoogleAccountTotals"" (""Email"");
 
         CREATE TABLE IF NOT EXISTS ""GoogleGmailBackupRuns"" (
             ""Id"" SERIAL PRIMARY KEY,

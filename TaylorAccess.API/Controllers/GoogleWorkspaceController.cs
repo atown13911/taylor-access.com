@@ -646,6 +646,63 @@ public class GoogleWorkspaceController : ControllerBase
             failedMessages = failed
         });
     }
+
+    // ----- Per-account Google totals (in Google vs in bucket) -----
+
+    /// <summary>
+    /// Cached "what Google holds" counts per account (product owner only).
+    /// Auto-starts a background recount when empty or older than 24 hours.
+    /// </summary>
+    [HttpGet("account-totals")]
+    public async Task<ActionResult> GetAccountTotals(
+        [FromServices] IServiceScopeFactory scopeFactory,
+        CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can view Google account totals" });
+
+        var totals = await _context.GoogleAccountTotals.AsNoTracking()
+            .OrderBy(t => t.Email)
+            .ToListAsync(cancellationToken);
+
+        var stale = totals.Count == 0 || totals.Max(t => t.FetchedAt) < DateTime.UtcNow.AddHours(-24);
+        if (stale && !GoogleAccountTotalsWorker.IsRunning)
+            StartAccountTotalsScan(scopeFactory);
+
+        return Ok(new
+        {
+            running = GoogleAccountTotalsWorker.IsRunning,
+            progress = GoogleAccountTotalsWorker.Progress,
+            data = totals
+        });
+    }
+
+    /// <summary>Starts a Google account recount in the background (product owner only).</summary>
+    [HttpPost("account-totals/refresh")]
+    public async Task<ActionResult> RefreshAccountTotals([FromServices] IServiceScopeFactory scopeFactory)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can refresh Google account totals" });
+
+        if (GoogleAccountTotalsWorker.IsRunning)
+            return Ok(new { started = false, message = "A recount is already in progress" });
+
+        await _auditService.LogAsync("update", "GoogleWorkspaceUser", null,
+            "Google Workspace: manually started per-account Google totals recount");
+
+        StartAccountTotalsScan(scopeFactory);
+        return Ok(new { started = true });
+    }
+
+    private static void StartAccountTotalsScan(IServiceScopeFactory scopeFactory)
+    {
+        _ = Task.Run(async () =>
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var worker = scope.ServiceProvider.GetRequiredService<GoogleAccountTotalsWorker>();
+            await worker.RunAsync(CancellationToken.None);
+        });
+    }
 }
 
 public class GoogleTransferRequest
