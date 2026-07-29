@@ -3379,10 +3379,34 @@ public class MotivController : ControllerBase
 
         var city = PickString(src, "city", "city_name", "cityName", "current_city", "currentCity");
         var state = PickString(src, "state", "state_name", "stateName", "state_code", "stateCode", "region", "province");
+        var description = PickString(src, "description");
+        if (string.IsNullOrWhiteSpace(city) || string.IsNullOrWhiteSpace(state))
+        {
+            // Motive locations carry the place only as text ("Tampa, FL" or
+            // "1.7 mi SW of Orlando, FL") — mine city/state out of it so map
+            // clients can show a place label instead of "No GPS".
+            var (descCity, descState) = ParseCityStateFromLocationDescription(description);
+            if (string.IsNullOrWhiteSpace(city)) city = descCity;
+            if (string.IsNullOrWhiteSpace(state)) state = descState;
+        }
         if (!string.IsNullOrWhiteSpace(city)) payload["city"] = city;
         if (!string.IsNullOrWhiteSpace(state)) payload["state"] = state;
+        if (!string.IsNullOrWhiteSpace(description)) payload["description"] = description;
+        var locatedAt = PickString(src, "located_at", "locatedAt");
+        if (!string.IsNullOrWhiteSpace(locatedAt)) payload["located_at"] = locatedAt;
 
         return JsonSerializer.SerializeToElement(payload);
+    }
+
+    private static (string? City, string? State) ParseCityStateFromLocationDescription(string? description)
+    {
+        var text = (description ?? "").Trim();
+        if (text.Length == 0) return (null, null);
+        var match = Regex.Match(text, @"\bof\s+([A-Za-z .'\-]+),\s*([A-Z]{2})\s*$");
+        if (!match.Success)
+            match = Regex.Match(text, @"^([A-Za-z .'\-]+),\s*([A-Z]{2})\s*$");
+        if (!match.Success) return (null, null);
+        return (match.Groups[1].Value.Trim(), match.Groups[2].Value.Trim());
     }
 
     private static (decimal? Latitude, decimal? Longitude) TryExtractLatLon(JsonElement? locationElement)
