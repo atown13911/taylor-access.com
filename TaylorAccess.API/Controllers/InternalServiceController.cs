@@ -1471,7 +1471,189 @@ public class InternalServiceController : ControllerBase
             .ThenByDescending(r => r.UpdatedAt)
             .ToList();
 
-        return Ok(new { data = preferred, count = preferred.Count });
+        var photoKeys = preferred
+            .SelectMany(r => new[] { r.TrailerId, r.PermitNumber, r.AssignedTruckNumber })
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var weekStartUtc = StartOfWeekUtc(DateTime.UtcNow);
+        var latestPhotos = photoKeys.Count == 0
+            ? new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase)
+            : await _db.TrailerPhotos
+                .AsNoTracking()
+                .Where(p => photoKeys.Contains(p.TrailerId))
+                .GroupBy(p => p.TrailerId)
+                .Select(g => new { TrailerId = g.Key, LastPhotoAt = g.Max(p => p.CreatedAt) })
+                .ToDictionaryAsync(x => x.TrailerId, x => x.LastPhotoAt, StringComparer.OrdinalIgnoreCase);
+
+        var payload = preferred.Select(r =>
+        {
+            DateTime? lastPhotoAt = null;
+            foreach (var key in new[] { r.TrailerId, r.PermitNumber, r.AssignedTruckNumber })
+            {
+                if (string.IsNullOrWhiteSpace(key)) continue;
+                if (latestPhotos.TryGetValue(key.Trim(), out var at)
+                    && (lastPhotoAt == null || at > lastPhotoAt))
+                    lastPhotoAt = at;
+            }
+
+            var photoTakenThisWeek = lastPhotoAt.HasValue && lastPhotoAt.Value >= weekStartUtc;
+            return new
+            {
+                r.Id,
+                r.TrailerId,
+                r.OrganizationId,
+                r.PermitNumber,
+                r.PermitType,
+                r.State,
+                r.Vendor,
+                r.TrailerStatus,
+                r.AssignedDriverId,
+                r.AssignedDriverName,
+                r.AssignedTruckNumber,
+                r.Year,
+                r.Vin,
+                r.Notes,
+                r.ExpiryDate,
+                r.UpdatedAt,
+                r.HasFile,
+                lastPhotoAt,
+                photoTakenThisWeek,
+                photoDueThisWeek = !photoTakenThisWeek
+            };
+        }).ToList();
+
+        return Ok(new { data = payload, count = payload.Count });
+    }
+
+    /// <summary>Weekly trailer condition photo from T-Tac Driver (via VanTac).</summary>
+    [HttpPost("drivers/{driverId:int}/trailers/{trailerId}/photos")]
+    [RequestSizeLimit(25 * 1024 * 1024)]
+    public async Task<ActionResult> UploadDriverTrailerPhoto(
+        int driverId,
+        string trailerId,
+        [FromForm] IFormFile? file)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driver = await _db.Drivers.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == driverId && !d.IsDeleted);
+        if (driver == null)
+            return NotFound(new { error = "Driver not found" });
+
+        var normalizedTrailerId = (trailerId ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedTrailerId))
+            return BadRequest(new { error = "Trailer id is required" });
+        if (file == null || file.Length <= 0)
+            return BadRequest(new { error = "No file provided" });
+
+        var assignmentCandidates = await _db.TrailerAssignments
+            .AsNoTracking()
+            .Where(a => a.AssignedDriverId == driverId)
+            .OrderByDescending(a => a.UpdatedAt)
+            .ToListAsync();
+
+        var assignment = assignmentCandidates.FirstOrDefault(a =>
+            string.Equals(a.TrailerId, normalizedTrailerId, StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(a.PermitNumber)
+                && string.Equals(a.PermitNumber, normalizedTrailerId, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(a.AssignedTruckNumber)
+                && string.Equals(a.AssignedTruckNumber, normalizedTrailerId, StringComparison.OrdinalIgnoreCase)));
+
+        if (assignment == null)
+            return NotFound(new { error = "Trailer is not assigned to this driver" });
+
+        var storageTrailerId = !string.IsNullOrWhiteSpace(assignment.PermitNumber)
+            ? assignment.PermitNumber!.Trim()
+            : assignment.TrailerId.Trim();
+
+        var weekStartUtc = StartOfWeekUtc(DateTime.UtcNow);
+        var aliasIds = new[]
+            {
+                storageTrailerId,
+                assignment.TrailerId,
+                assignment.PermitNumber,
+                assignment.AssignedTruckNumber
+            }
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Select(v => v!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var alreadyThisWeek = await _db.TrailerPhotos.AsNoTracking().AnyAsync(p =>
+            aliasIds.Contains(p.TrailerId) && p.CreatedAt >= weekStartUtc);
+
+        using var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream);
+        var bytes = memoryStream.ToArray();
+        if (bytes.Length == 0)
+            return BadRequest(new { error = "Empty file" });
+
+        var photo = new TrailerPhoto
+        {
+            TrailerId = storageTrailerId,
+            OrganizationId = assignment.OrganizationId,
+            FileName = string.IsNullOrWhiteSpace(file.FileName)
+                ? $"trailer-{storageTrailerId}-{DateTime.UtcNow:yyyyMMddHHmmss}.jpg"
+                : file.FileName,
+            ContentType = string.IsNullOrWhiteSpace(file.ContentType)
+                ? "image/jpeg"
+                : file.ContentType,
+            FileSize = bytes.LongLength,
+            FileContent = Convert.ToBase64String(bytes),
+            UploadedByUserId = null,
+            UploadedBy = !string.IsNullOrWhiteSpace(driver.Email)
+                ? driver.Email
+                : $"driver:{driverId}",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _db.TrailerPhotos.Add(photo);
+        await _db.SaveChangesAsync();
+
+        _db.TrailerAssignmentLogs.Add(new TrailerAssignmentLog
+        {
+            TrailerId = storageTrailerId,
+            OrganizationId = assignment.OrganizationId,
+            EventType = "photo_uploaded",
+            DriverId = driverId,
+            DriverName = assignment.AssignedDriverName ?? driver.Name,
+            TruckNumber = assignment.AssignedTruckNumber,
+            TrailerStatus = assignment.TrailerStatus,
+            PhotoId = photo.Id,
+            PhotoFileName = photo.FileName,
+            ChangedByUserId = null,
+            ChangedBy = photo.UploadedBy,
+            Notes = alreadyThisWeek
+                ? "Weekly trailer photo replaced via T-Tac Driver"
+                : "Weekly trailer photo uploaded via T-Tac Driver",
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            id = photo.Id,
+            trailerId = photo.TrailerId,
+            lastPhotoAt = photo.CreatedAt,
+            photoTakenThisWeek = true,
+            photoDueThisWeek = false,
+            replacedExisting = alreadyThisWeek,
+            message = alreadyThisWeek
+                ? "Weekly photo updated"
+                : "Weekly photo submitted"
+        });
+    }
+
+    private static DateTime StartOfWeekUtc(DateTime utcNow)
+    {
+        // Weeks run Monday 00:00 UTC → Sunday.
+        var date = utcNow.Date;
+        var diff = ((int)date.DayOfWeek + 6) % 7; // Monday=0 … Sunday=6
+        return DateTime.SpecifyKind(date.AddDays(-diff), DateTimeKind.Utc);
     }
 
     /// <summary>Compliance documents for a driver (used by T-Tac Driver via VanTac).</summary>
