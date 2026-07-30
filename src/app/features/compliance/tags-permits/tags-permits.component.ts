@@ -960,9 +960,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }
 
   getTrailerAgreementLabel(p: any): string {
-    const info = this.getTrailerAgreementInfo(p);
-    if (!info.hasFile) return 'Missing';
-    return info.fileName ? 'Uploaded' : 'Uploaded';
+    if (!this.hasTrailerAgreement(p)) return 'Upload';
+    return 'Uploaded';
   }
 
   onTrailerAgreementClick(p: any, event?: Event): void {
@@ -973,6 +972,13 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     } else {
       this.openUploadDoc(p);
     }
+  }
+
+  uploadTrailerAgreement(p: any, event?: Event): void {
+    event?.stopPropagation();
+    if (!p) return;
+    if (this.uploadingDoc() && this.uploadTarget()?.id === p?.id) return;
+    this.openUploadDoc(p);
   }
 
   getTrailerAgreementInfo(source: any): { hasFile: boolean; fileName: string | null } {
@@ -1332,11 +1338,23 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   // ── Document handling ──────────────────────────────────────────────────
 
   openUploadDoc(p: any): void {
+    if (!p) return;
+    if (this.activeTab() === 'trailer') {
+      const trailerId = String(this.resolveTrailerId(p) ?? p?.id ?? '').trim();
+      if (!trailerId) {
+        this.toast.error('Could not resolve trailer id for agreement upload', 'Upload Failed');
+        return;
+      }
+    }
     this.uploadTarget.set(p);
     this.permitDocFile = null;
-    // Trigger a hidden file input
-    const input = document.getElementById('permit-doc-input') as HTMLInputElement;
-    if (input) { input.value = ''; input.click(); }
+    const input = document.getElementById('permit-doc-input') as HTMLInputElement | null;
+    if (!input) {
+      this.toast.error('Upload control is unavailable — refresh and try again', 'Upload Failed');
+      return;
+    }
+    input.value = '';
+    input.click();
   }
 
   onPermitDocSelected(event: Event): void {
@@ -1356,22 +1374,82 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     fd.append('file', file);
 
     this.http.post(`${this.resolvePermitDocBase(p)}/upload`, fd).subscribe({
-      next: async () => {
-        this.toast.success(`Document uploaded for ${this.activeTab() === 'trailer' ? 'trailer' : 'permit'} #${p.permitNumber}`, 'Uploaded');
+      next: async (res: any) => {
+        const label = this.activeTab() === 'trailer' ? 'trailer' : 'permit';
+        this.toast.success(`Agreement uploaded for ${label} #${p.permitNumber}`, 'Uploaded');
         this.uploadingDoc.set(false);
-        this.uploadTarget.set(null);
         this.permitDocFile = null;
         if (this.activeTab() === 'trailer') {
-          const trailerId = this.resolveTrailerId(p);
-          await this.loadTrailerAssignmentsFromApi([String(trailerId ?? '').trim()]);
+          const trailerId = String(this.resolveTrailerId(p) ?? p?.id ?? '').trim();
+          const fileName = String(res?.fileName || file.name || '').trim() || null;
+          if (trailerId) {
+            this.patchLocalTrailerAgreement(trailerId, p.permitNumber, {
+              hasFile: true,
+              fileName
+            });
+            await this.loadTrailerAssignmentsFromApi([trailerId]);
+          }
+          const drawer = this.selectedTrailerDrawer();
+          if (drawer && String(this.resolveTrailerId(drawer) ?? drawer?.id ?? '') === trailerId) {
+            this.selectedTrailerDrawer.set({
+              ...drawer,
+              hasFile: true,
+              fileName
+            });
+          }
         }
+        this.uploadTarget.set(null);
         this.loadData();
       },
-      error: () => {
-        this.toast.error('Failed to upload document', 'Error');
+      error: (err: any) => {
+        this.toast.error(this.getApiErrorMessage(err, 'Failed to upload agreement'), 'Upload Failed');
         this.uploadingDoc.set(false);
       }
     });
+  }
+
+  private patchLocalTrailerAgreement(
+    trailerId: string,
+    permitNumber: unknown,
+    patch: { hasFile: boolean; fileName: string | null }
+  ): void {
+    const next = { ...this.trailerAssignments() };
+    const keys = new Set<string>([trailerId]);
+    const permit = String(permitNumber ?? '').trim();
+    if (permit) keys.add(permit);
+    for (const key of keys) {
+      const existing = next[key] || this.createEmptyAssignmentRecord(key);
+      next[key] = {
+        ...existing,
+        hasFile: patch.hasFile,
+        fileName: patch.fileName
+      };
+    }
+    this.trailerAssignments.set(next);
+  }
+
+  private createEmptyAssignmentRecord(trailerId: string): TrailerAssignmentRecord {
+    return {
+      permitNumber: trailerId,
+      permitType: 'trailer',
+      state: '',
+      issueDate: null,
+      expiryDate: null,
+      cost: null,
+      vendor: 'other',
+      chargeFrequency: 'monthly',
+      trailerStatus: 'active',
+      assignedDriverId: null,
+      assignedDriverName: '',
+      driverOverride: false,
+      lastAssignedDriverId: null,
+      lastAssignedDriverName: '',
+      inactivatedAt: null,
+      assignedTruckNumber: '',
+      notes: '',
+      fileName: null,
+      hasFile: false
+    };
   }
 
   openTrailerPhotoPicker(): void {

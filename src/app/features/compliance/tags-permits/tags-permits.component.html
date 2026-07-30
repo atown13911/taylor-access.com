@@ -289,6 +289,18 @@
               </td>
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
+                <button
+                  class="tp-icon-btn upload"
+                  [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id"
+                  [title]="hasTrailerAgreement(p) ? 'Replace agreement' : 'Upload agreement'"
+                  [disabled]="uploadingDoc() && uploadTarget()?.id === p.id"
+                  (click)="uploadTrailerAgreement(p, $event)">
+                  @if (uploadingDoc() && uploadTarget()?.id === p.id) {
+                    <i class="bx bx-loader-alt bx-spin"></i>
+                  } @else {
+                    <i class="bx bx-upload"></i>
+                  }
+                </button>
                 @if (getTrailerDisplayDriver(p).name && !getTrailerDisplayDriver(p).historical) {
                   <button class="tp-icon-btn" title="Unassign driver" (click)="$event.stopPropagation(); unassignTrailerDriver(p)">
                     <i class="bx bx-user-x"></i>
@@ -707,6 +719,18 @@
             </div>
           } @else {
             <p class="tp-drawer-agreement-help">Upload the leasing or rental agreement for this trailer.</p>
+            <div class="tp-trailer-drawer-actions">
+              <button
+                class="tp-btn primary"
+                [disabled]="uploadingDoc() && uploadTarget()?.id === selectedTrailerDrawer()?.id"
+                (click)="uploadTrailerAgreement(selectedTrailerDrawer())">
+                @if (uploadingDoc() && uploadTarget()?.id === selectedTrailerDrawer()?.id) {
+                  <i class="bx bx-loader-alt bx-spin"></i> Uploading...
+                } @else {
+                  <i class="bx bx-upload"></i> Upload Agreement
+                }
+              </button>
+            </div>
           }
         </div>
       } @else if (trailerDrawerTab() === 'photos') {
