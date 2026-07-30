@@ -127,6 +127,16 @@ public class TrailerAssignmentsController : ControllerBase
             previousTruck,
             previousStatus);
 
+        // Keep sibling org rows for the same trailer in sync so PO/Van Tac
+        // clears/assigns cannot diverge from Landmark (Heather) and vice versa.
+        if (hasUnrestrictedAccess
+            && (request.ClearAssignedDriver == true
+                || request.AssignedDriverId.HasValue
+                || request.AssignedDriverName != null))
+        {
+            await SyncSiblingAssignmentDriversAsync(assignment, organizationId);
+        }
+
         await _context.SaveChangesAsync();
         return Ok(new { data = MapAssignment(assignment) });
     }
@@ -712,26 +722,64 @@ public class TrailerAssignmentsController : ControllerBase
         return query.Where(a => a.OrganizationId == 0);
     }
 
+    private async Task SyncSiblingAssignmentDriversAsync(TrailerAssignment source, int sourceOrganizationId)
+    {
+        var siblings = await _context.TrailerAssignments
+            .Where(a => a.Id != source.Id
+                && (a.TrailerId == source.TrailerId
+                    || (source.PermitNumber != null && a.PermitNumber == source.PermitNumber)
+                    || (source.PermitNumber != null && a.TrailerId == source.PermitNumber)
+                    || (a.PermitNumber != null && a.PermitNumber == source.TrailerId)))
+            .ToListAsync();
+
+        foreach (var sibling in siblings)
+        {
+            if (sibling.OrganizationId == sourceOrganizationId) continue;
+
+            if (source.AssignedDriverId.HasValue || !string.IsNullOrWhiteSpace(source.AssignedDriverName))
+            {
+                sibling.AssignedDriverId = source.AssignedDriverId;
+                sibling.AssignedDriverName = source.AssignedDriverName;
+                sibling.LastAssignedDriverId = source.LastAssignedDriverId;
+                sibling.LastAssignedDriverName = source.LastAssignedDriverName;
+            }
+            else
+            {
+                if (sibling.AssignedDriverId.HasValue || !string.IsNullOrWhiteSpace(sibling.AssignedDriverName))
+                {
+                    sibling.LastAssignedDriverId = sibling.AssignedDriverId;
+                    sibling.LastAssignedDriverName = sibling.AssignedDriverName;
+                }
+                sibling.AssignedDriverId = null;
+                sibling.AssignedDriverName = null;
+            }
+
+            sibling.DriverOverride = true;
+            sibling.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
     /// <summary>
     /// When the same trailer has rows in multiple orgs, pick the display row.
-    /// A preferred-org blank override must not hide another org's named driver.
+    /// Prefer a row with a current assigned driver over a preferred-org blank
+    /// that only retains LastAssigned* (e.g. Van Tac clear shadowing Landmark).
     /// </summary>
     private static TrailerAssignment PickPrimaryAssignment(
         IReadOnlyList<TrailerAssignment> candidates,
         int preferredOrgId)
     {
-        static bool HasDriverName(TrailerAssignment a) =>
-            !string.IsNullOrWhiteSpace(a.AssignedDriverName)
-            || !string.IsNullOrWhiteSpace(a.LastAssignedDriverName);
+        static bool HasCurrentDriver(TrailerAssignment a) =>
+            a.AssignedDriverId.HasValue
+            || !string.IsNullOrWhiteSpace(a.AssignedDriverName);
 
         static bool IsActiveStatus(TrailerAssignment a) =>
             string.Equals(a.TrailerStatus, "active", StringComparison.OrdinalIgnoreCase);
 
         return candidates
-            .OrderByDescending(HasDriverName)
+            .OrderByDescending(HasCurrentDriver)
             .ThenByDescending(IsActiveStatus)
             .ThenByDescending(a => preferredOrgId > 0 && a.OrganizationId == preferredOrgId)
-            .ThenByDescending(a => a.DriverOverride && HasDriverName(a))
+            .ThenByDescending(a => a.DriverOverride && HasCurrentDriver(a))
             .ThenByDescending(a => a.UpdatedAt)
             .First();
     }
