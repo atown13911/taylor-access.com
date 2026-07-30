@@ -221,7 +221,7 @@
         <tbody>
           @for (p of filteredTrailerPermits(); track $index) {
             <tr class="tp-row-clickable" (click)="openTrailerDrawer(p)">
-              <td class="tp-mono">{{ p.permitNumber }}</td>
+              <td class="tp-mono tp-trailer-num">{{ p.permitNumber }}</td>
               <td class="tp-trailer-photo-cell">
                 <div class="tp-trailer-photo-stack">
                   @if (getTrailerPhotoThumb(p)) {
