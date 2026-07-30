@@ -290,13 +290,17 @@
               <td><span class="tp-status" [class]="getTrailerAssignmentStatus(p)">{{ getTrailerStatusLabel(p) }}</span></td>
               <td class="tp-actions">
                 <button
-                  class="tp-icon-btn upload"
+                  class="tp-icon-btn"
+                  [class.upload]="!hasTrailerAgreement(p)"
+                  [class.agreement]="hasTrailerAgreement(p)"
                   [class.uploading]="uploadingDoc() && uploadTarget()?.id === p.id"
-                  [title]="hasTrailerAgreement(p) ? 'Replace agreement' : 'Upload agreement'"
+                  [title]="hasTrailerAgreement(p) ? 'View agreement' : 'Upload agreement'"
                   [disabled]="uploadingDoc() && uploadTarget()?.id === p.id"
-                  (click)="uploadTrailerAgreement(p, $event)">
+                  (click)="onTrailerAgreementClick(p, $event)">
                   @if (uploadingDoc() && uploadTarget()?.id === p.id) {
                     <i class="bx bx-loader-alt bx-spin"></i>
+                  } @else if (hasTrailerAgreement(p)) {
+                    <i class="bx bx-file"></i>
                   } @else {
                     <i class="bx bx-upload"></i>
                   }

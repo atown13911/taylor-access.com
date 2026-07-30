@@ -217,6 +217,12 @@
     &:hover { background: rgba(255,165,0,0.18); border-color: rgba(255,165,0,0.6); }
     &.uploading { opacity: 0.7; cursor: wait; }
   }
+  &.agreement {
+    background: rgba(134, 239, 172, 0.12);
+    color: #86efac;
+    border: 1px solid rgba(134, 239, 172, 0.35);
+    &:hover { background: rgba(134, 239, 172, 0.22); }
+  }
 }
 
 .tp-fuel-card-details-grid {
