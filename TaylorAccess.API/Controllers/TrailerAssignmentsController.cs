@@ -66,10 +66,15 @@ public class TrailerAssignmentsController : ControllerBase
                 var primary = PickPrimaryAssignment(candidates, preferredOrgId);
                 var documentSource = candidates
                     .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.FileContent));
+                // Prefer the caller's org for TrailerStatus (returned/inactive) even when
+                // driver is taken from a sibling org that still says "active".
+                var statusSource = preferredOrgId > 0
+                    ? candidates.FirstOrDefault(a => a.OrganizationId == preferredOrgId) ?? primary
+                    : primary;
                 return new
                 {
                     UpdatedAt = primary.UpdatedAt,
-                    Row = MapAssignment(primary, documentSource)
+                    Row = MapAssignment(primary, documentSource, statusSource)
                 };
             })
             .OrderByDescending(x => x.UpdatedAt)
@@ -127,14 +132,14 @@ public class TrailerAssignmentsController : ControllerBase
             previousTruck,
             previousStatus);
 
-        // Keep sibling org rows for the same trailer in sync so PO/Van Tac
-        // clears/assigns cannot diverge from Landmark (Heather) and vice versa.
-        if (hasUnrestrictedAccess
-            && (request.ClearAssignedDriver == true
-                || request.AssignedDriverId.HasValue
-                || request.AssignedDriverName != null))
+        // Trailer assignments are shared fleet-wide: keep every org copy of this
+        // trailer aligned so Landmark / Van Tac / PO all see the same driver.
+        if (request.ClearAssignedDriver == true
+            || request.AssignedDriverId.HasValue
+            || request.AssignedDriverName != null
+            || !string.IsNullOrWhiteSpace(request.TrailerStatus))
         {
-            await SyncSiblingAssignmentDriversAsync(assignment, organizationId);
+            await SyncSiblingAssignmentsAsync(assignment, organizationId);
         }
 
         await _context.SaveChangesAsync();
@@ -169,13 +174,8 @@ public class TrailerAssignmentsController : ControllerBase
             if (!string.IsNullOrWhiteSpace(a.AssignedTruckNumber)) aliases.Add(a.AssignedTruckNumber);
         }
 
+        // History is shared fleet-wide (same as assignment list).
         var logQuery = _context.TrailerAssignmentLogs.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess)
-        {
-            logQuery = organizationId > 0
-                ? logQuery.Where(l => l.OrganizationId == organizationId || l.OrganizationId == 0)
-                : logQuery.Where(l => l.OrganizationId == 0);
-        }
 
         var aliasList = aliases.ToList();
         var rows = await logQuery
@@ -192,12 +192,6 @@ public class TrailerAssignmentsController : ControllerBase
             .ToHashSet();
 
         var photoQuery = _context.TrailerPhotos.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess)
-        {
-            photoQuery = organizationId > 0
-                ? photoQuery.Where(p => p.OrganizationId == organizationId || p.OrganizationId == 0)
-                : photoQuery.Where(p => p.OrganizationId == 0);
-        }
 
         var orphanPhotos = await photoQuery
             .Where(p => aliasList.Contains(p.TrailerId) && !loggedPhotoIds.Contains(p.Id))
@@ -248,12 +242,12 @@ public class TrailerAssignmentsController : ControllerBase
         if (string.IsNullOrWhiteSpace(normalizedTrailerId))
             return BadRequest(new { error = "Trailer id is required" });
 
-        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
         var organizationId = user.OrganizationId ?? 0;
-        if (!hasUnrestrictedAccess && organizationId <= 0)
+        if (organizationId <= 0)
             organizationId = 0;
 
-        var targets = await FindWritableAssignmentsAsync(normalizedTrailerId, hasUnrestrictedAccess, organizationId);
+        // Shared fleet: clear every org copy of this trailer.
+        var targets = await FindWritableAssignmentsAsync(normalizedTrailerId, sharedFleet: true, organizationId);
         if (targets.Count == 0)
         {
             targets.Add(new TrailerAssignment
@@ -328,12 +322,12 @@ public class TrailerAssignmentsController : ControllerBase
         if (string.IsNullOrWhiteSpace(normalizedTrailerId))
             return BadRequest(new { error = "Trailer id is required" });
 
-        var hasUnrestrictedAccess = user.IsProductOwner() || user.IsSuperAdmin();
         var organizationId = user.OrganizationId ?? 0;
-        if (!hasUnrestrictedAccess && organizationId <= 0)
+        if (organizationId <= 0)
             organizationId = 0;
 
-        var targets = await FindWritableAssignmentsAsync(normalizedTrailerId, hasUnrestrictedAccess, organizationId);
+        // Shared fleet: deactivate every org copy of this trailer.
+        var targets = await FindWritableAssignmentsAsync(normalizedTrailerId, sharedFleet: true, organizationId);
         if (targets.Count == 0)
         {
             targets.Add(new TrailerAssignment
@@ -392,11 +386,12 @@ public class TrailerAssignmentsController : ControllerBase
 
     private async Task<List<TrailerAssignment>> FindWritableAssignmentsAsync(
         string normalizedTrailerId,
-        bool hasUnrestrictedAccess,
+        bool sharedFleet,
         int organizationId)
     {
         var query = _context.TrailerAssignments.AsQueryable();
-        if (!hasUnrestrictedAccess)
+        // Shared fleet view: always touch every org row for this trailer.
+        if (!sharedFleet)
             query = query.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
 
         return await query
@@ -708,21 +703,21 @@ public class TrailerAssignmentsController : ControllerBase
         photoUrl = log.PhotoId.HasValue ? $"/api/v1/trailer-photos/photo/{log.PhotoId.Value}/view" : null
     };
 
+    /// <summary>
+    /// Trailer assignments are a shared fleet record for anyone with Access
+    /// page permission — do not partition the list by OrganizationId.
+    /// </summary>
     private static IQueryable<TrailerAssignment> FilterAssignmentsByUser(
         IQueryable<TrailerAssignment> query,
         Models.User user,
         bool hasUnrestrictedAccess)
     {
-        if (hasUnrestrictedAccess)
-            return query;
-
-        if (user.OrganizationId is int orgId && orgId > 0)
-            return query.Where(a => a.OrganizationId == orgId || a.OrganizationId == 0);
-
-        return query.Where(a => a.OrganizationId == 0);
+        _ = user;
+        _ = hasUnrestrictedAccess;
+        return query;
     }
 
-    private async Task SyncSiblingAssignmentDriversAsync(TrailerAssignment source, int sourceOrganizationId)
+    private async Task SyncSiblingAssignmentsAsync(TrailerAssignment source, int sourceOrganizationId)
     {
         var siblings = await _context.TrailerAssignments
             .Where(a => a.Id != source.Id
@@ -754,6 +749,8 @@ public class TrailerAssignmentsController : ControllerBase
                 sibling.AssignedDriverName = null;
             }
 
+            sibling.TrailerStatus = source.TrailerStatus;
+            sibling.InactivatedAt = source.InactivatedAt;
             sibling.DriverOverride = true;
             sibling.UpdatedAt = DateTime.UtcNow;
         }
@@ -843,9 +840,13 @@ public class TrailerAssignmentsController : ControllerBase
         });
     }
 
-    private static object MapAssignment(TrailerAssignment a, TrailerAssignment? documentSource = null)
+    private static object MapAssignment(
+        TrailerAssignment a,
+        TrailerAssignment? documentSource = null,
+        TrailerAssignment? statusSource = null)
     {
         var doc = documentSource ?? a;
+        var statusFrom = statusSource ?? a;
         var hasFile = !string.IsNullOrWhiteSpace(a.FileContent) || !string.IsNullOrWhiteSpace(doc.FileContent);
         var fileName = !string.IsNullOrWhiteSpace(a.FileName) ? a.FileName : doc.FileName;
 
@@ -861,7 +862,7 @@ public class TrailerAssignmentsController : ControllerBase
             cost = a.Cost,
             vendor = a.Vendor,
             chargeFrequency = a.ChargeFrequency,
-            trailerStatus = a.TrailerStatus,
+            trailerStatus = statusFrom.TrailerStatus,
             assignedDriverId = a.AssignedDriverId,
             assignedDriverName = a.AssignedDriverName,
             driverOverride = a.DriverOverride,
