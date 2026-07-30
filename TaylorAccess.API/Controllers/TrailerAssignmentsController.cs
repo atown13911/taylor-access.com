@@ -66,15 +66,11 @@ public class TrailerAssignmentsController : ControllerBase
                 var primary = PickPrimaryAssignment(candidates, preferredOrgId);
                 var documentSource = candidates
                     .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.FileContent));
-                // Prefer the caller's org for TrailerStatus (returned/inactive) even when
-                // driver is taken from a sibling org that still says "active".
-                var statusSource = preferredOrgId > 0
-                    ? candidates.FirstOrDefault(a => a.OrganizationId == preferredOrgId) ?? primary
-                    : primary;
+                // Shared fleet: same driver + status for every Access user.
                 return new
                 {
                     UpdatedAt = primary.UpdatedAt,
-                    Row = MapAssignment(primary, documentSource, statusSource)
+                    Row = MapAssignment(primary, documentSource, primary)
                 };
             })
             .OrderByDescending(x => x.UpdatedAt)
