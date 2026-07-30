@@ -1420,6 +1420,60 @@ public class InternalServiceController : ControllerBase
         return null;
     }
 
+    /// <summary>Trailers currently assigned to a driver (T-Tac Driver Equipment tab via VanTac).</summary>
+    [HttpGet("drivers/{driverId:int}/trailers")]
+    public async Task<ActionResult> GetDriverTrailers(int driverId)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var driverExists = await _db.Drivers.AsNoTracking().AnyAsync(d => d.Id == driverId);
+        if (!driverExists)
+            return NotFound(new { error = "Driver not found" });
+
+        var rows = await _db.TrailerAssignments
+            .AsNoTracking()
+            .Where(a => a.AssignedDriverId == driverId)
+            .OrderByDescending(a => a.UpdatedAt)
+            .Select(a => new
+            {
+                a.Id,
+                a.TrailerId,
+                a.OrganizationId,
+                a.PermitNumber,
+                a.PermitType,
+                a.State,
+                a.Vendor,
+                a.TrailerStatus,
+                a.AssignedDriverId,
+                a.AssignedDriverName,
+                a.AssignedTruckNumber,
+                a.Year,
+                a.Vin,
+                a.Notes,
+                a.ExpiryDate,
+                a.UpdatedAt,
+                HasFile = a.FileContent != null && a.FileContent != ""
+            })
+            .ToListAsync();
+
+        // Prefer active assignments; keep inactive only when nothing active exists for that trailer id.
+        var preferred = rows
+            .GroupBy(r => r.TrailerId, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var active = g.FirstOrDefault(x =>
+                    string.Equals(x.TrailerStatus, "active", StringComparison.OrdinalIgnoreCase));
+                return active ?? g.First();
+            })
+            .OrderByDescending(r =>
+                string.Equals(r.TrailerStatus, "active", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenByDescending(r => r.UpdatedAt)
+            .ToList();
+
+        return Ok(new { data = preferred, count = preferred.Count });
+    }
+
     /// <summary>Compliance documents for a driver (used by T-Tac Driver via VanTac).</summary>
     [HttpGet("drivers/{driverId:int}/documents")]
     public async Task<ActionResult> GetDriverDocuments(int driverId)
