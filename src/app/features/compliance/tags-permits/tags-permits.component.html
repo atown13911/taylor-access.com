@@ -204,6 +204,8 @@
             <th>Trailer #</th>
             <th>Photos</th>
             <th>Type</th>
+            <th>Year</th>
+            <th>VIN #</th>
             <th>Vendor</th>
             <th>State</th>
             <th>Assigned Driver</th>
@@ -239,6 +241,8 @@
                 </div>
               </td>
               <td><span class="tp-type-badge">{{ p.permitType }}</span></td>
+              <td class="tp-mono">{{ p.year || '—' }}</td>
+              <td class="tp-mono tp-vin-cell" [title]="p.vin || ''">{{ p.vin || '—' }}</td>
               <td>{{ getTrailerVendorLabel(p.vendor) }}</td>
               <td>{{ p.state || '—' }}</td>
               <td>
@@ -323,7 +327,7 @@
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="13" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
+            <tr><td colspan="15" class="tp-empty">No trailer tags found. Click "Add Trailer" to create one.</td></tr>
           }
         </tbody>
       </table>
@@ -518,6 +522,18 @@
                 </div>
               }
             </div>
+            @if (activeTab() === 'trailer') {
+              <div class="tp-form-row">
+                <div class="tp-form-group">
+                  <label>Year</label>
+                  <input type="number" [(ngModel)]="permitForm.year" placeholder="e.g. 2022" min="1900" max="2100">
+                </div>
+                <div class="tp-form-group">
+                  <label>VIN #</label>
+                  <input type="text" [(ngModel)]="permitForm.vin" placeholder="Trailer VIN" maxlength="50">
+                </div>
+              </div>
+            }
             <div class="tp-form-row">
               <div class="tp-form-group">
                 <label>{{ modalRegionLabel() }}</label>

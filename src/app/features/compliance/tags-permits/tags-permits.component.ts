@@ -24,6 +24,8 @@ type TrailerAssignmentRecord = {
   inactivatedAt?: string | null;
   assignedTruckNumber?: string;
   notes?: string;
+  year?: number | null;
+  vin?: string | null;
   fileName?: string | null;
   hasFile?: boolean;
 };
@@ -98,7 +100,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
   }>>({});
   readonly trailerVendorOptions = ['ryder', 'metro', 'taylor_leasing', 'other'] as const;
 
-  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+  permitForm: any = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', year: null, vin: '', notes: '' };
 
   filteredPermits = computed(() => {
     let list = this.permits().filter((p: any) => {
@@ -180,6 +182,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
         (p.vendorLabel || p.vendor || '').toLowerCase().includes(search) ||
         (p.assignedDriverName || '').toLowerCase().includes(search) ||
         (p.assignedTruckNumber || '').toLowerCase().includes(search) ||
+        (p.vin || '').toLowerCase().includes(search) ||
+        String(p.year ?? '').includes(search) ||
         (p.state || '').toLowerCase().includes(search)
       );
     }
@@ -592,6 +596,14 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     return 'other';
   }
 
+  private normalizeTrailerYear(value: unknown): number | null {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    const year = Math.trunc(n);
+    if (year < 1900 || year > 2100) return null;
+    return year;
+  }
+
   getTrailerVendorLabel(value: unknown): string {
     const vendor = this.normalizeTrailerVendor(value);
     if (vendor === 'ryder') return 'Ryder';
@@ -689,6 +701,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       inactivatedAt: row?.inactivatedAt ?? null,
       assignedTruckNumber: row?.assignedTruckNumber ?? '',
       notes: row?.notes ?? '',
+      year: this.normalizeTrailerYear(row?.year),
+      vin: String(row?.vin ?? '').trim() || null,
       fileName: row?.fileName ?? null,
       hasFile: !!row?.hasFile
     };
@@ -803,7 +817,9 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       assignedDriverId: values.assignedDriverId ?? null,
       assignedDriverName: values.assignedDriverName ?? null,
       assignedTruckNumber: values.assignedTruckNumber ?? null,
-      notes: values.notes ?? null
+      notes: values.notes ?? null,
+      year: values.year ?? null,
+      vin: values.vin ?? null
     };
     if (options?.clearAssignedDriver) {
       payload['clearAssignedDriver'] = true;
@@ -891,7 +907,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           : tab === 'cables'
             ? 'cable'
             : (tab === 'trailer' ? 'standard_equipment' : 'overweight');
-    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: defaultType, state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', year: null, vin: '', notes: '' };
     this.editingPermit.set(null);
     this.trailerModalTab.set('details');
     this.resetTrailerPhotoState();
@@ -909,7 +925,10 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       vendor: this.normalizeTrailerVendor(p.vendor || p.lessor || p.leasingVendor || p.provider),
       chargeFrequency: p.chargeFrequency || p.billingFrequency || p.rateFrequency || p.frequency || 'monthly',
       trailerStatus: p.trailerStatus || this.getTrailerAssignmentStatus(p),
-      assignedDriverId: p.assignedDriverId, assignedTruckNumber: p.assignedTruckNumber || '', notes: p.notes || '',
+      assignedDriverId: p.assignedDriverId, assignedTruckNumber: p.assignedTruckNumber || '',
+      year: this.normalizeTrailerYear(p.year),
+      vin: String(p.vin || '').trim(),
+      notes: p.notes || '',
       photoUrl: p.photoUrl || p.imageUrl || p.trailerPhotoUrl || p.avatarUrl || null
     };
     this.trailerModalTab.set('details');
@@ -922,7 +941,7 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     this.editingPermit.set(null);
     this.trailerModalTab.set('details');
     this.resetTrailerPhotoState();
-    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', notes: '' };
+    this.permitForm = { trailerId: null, permitNumber: '', permitType: 'overweight', state: '', issueDate: '', expiryDate: '', cost: null, vendor: 'other', chargeFrequency: 'monthly', trailerStatus: 'active', assignedDriverId: null, assignedTruckNumber: '', year: null, vin: '', notes: '' };
   }
 
   openTrailerDrawer(row: any): void {
@@ -1034,6 +1053,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       trailerStatus: row.trailerStatus || this.permitForm.trailerStatus || 'active',
       assignedDriverId: row.assignedDriverId ?? this.permitForm.assignedDriverId ?? null,
       assignedTruckNumber: row.assignedTruckNumber || this.permitForm.assignedTruckNumber || '',
+      year: row.year ?? this.permitForm.year ?? null,
+      vin: row.vin || this.permitForm.vin || '',
       notes: row.notes || this.permitForm.notes || '',
       photoUrl: row.photoUrl || row.imageUrl || this.permitForm.photoUrl || null
     };
@@ -1447,6 +1468,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       inactivatedAt: null,
       assignedTruckNumber: '',
       notes: '',
+      year: null,
+      vin: null,
       fileName: null,
       hasFile: false
     };
@@ -2116,6 +2139,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       hasFile: assignment.hasFile,
       fileName: assignment.fileName
     });
+    const year = this.normalizeTrailerYear(assignment.year ?? t?.year ?? t?.Year ?? t?.modelYear ?? t?.trailerYear);
+    const vin = String(assignment.vin || t?.vin || t?.Vin || t?.serialNumber || t?.SerialNumber || '').trim();
 
     return {
       id: trailerId,
@@ -2138,6 +2163,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       assignedTruckNumber: assignment.assignedTruckNumber || t?.number || t?.trailerNumber || t?.unitNumber || t?.truckNumber || '',
       status: resolvedTrailerStatus,
       notes: assignment.notes || t?.notes || '',
+      year,
+      vin,
       photoUrl: resolvedPhotoUrl,
       hasFile: agreement.hasFile,
       fileName: agreement.fileName
@@ -2178,6 +2205,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       assignedTruckNumber: assignment.assignedTruckNumber || assignment.permitNumber || key,
       status,
       notes: assignment.notes || '',
+      year: this.normalizeTrailerYear(assignment.year),
+      vin: String(assignment.vin || '').trim(),
       photoUrl: null,
       hasFile: agreement.hasFile,
       fileName: agreement.fileName
@@ -2195,6 +2224,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
     const selectedTrailerStatus = this.normalizeTrailerStatus(this.permitForm.trailerStatus);
     const persistedDriverId = this.permitForm.assignedDriverId ?? null;
     const persistedDriverName = assignedDriverName;
+    const trailerYear = this.normalizeTrailerYear(this.permitForm.year);
+    const trailerVin = String(this.permitForm.vin || '').trim();
     const trailerBody: any = {
       number: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
       trailerNumber: this.permitForm.assignedTruckNumber || this.permitForm.permitNumber,
@@ -2205,6 +2236,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       issueDate: this.permitForm.issueDate ? new Date(this.permitForm.issueDate).toISOString() : null,
       expiryDate: this.permitForm.expiryDate ? new Date(this.permitForm.expiryDate).toISOString() : null,
       cost: this.permitForm.cost ?? null,
+      year: trailerYear,
+      vin: trailerVin || null,
       vendor: this.normalizeTrailerVendor(this.permitForm.vendor),
       lessor: this.normalizeTrailerVendor(this.permitForm.vendor),
       leasingVendor: this.normalizeTrailerVendor(this.permitForm.vendor),
@@ -2229,6 +2262,8 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
       registrationStartDate: trailerBody.issueDate,
       registrationExpiry: trailerBody.expiryDate,
       purchasePrice: trailerBody.cost,
+      year: trailerYear,
+      vin: trailerVin || null,
       vendor: trailerBody.vendor,
       lessor: trailerBody.lessor,
       leasingVendor: trailerBody.leasingVendor,
@@ -2282,7 +2317,9 @@ export class TagsPermitsComponent implements OnInit, OnDestroy {
           assignedDriverName: persistedDriverName || '',
           driverOverride: true,
           assignedTruckNumber: trailerBody.number || '',
-          notes: trailerBody.notes || ''
+          notes: trailerBody.notes || '',
+          year: trailerYear,
+          vin: trailerVin || null
         }, { clearAssignedDriver: !persistedDriverId });
       }
 

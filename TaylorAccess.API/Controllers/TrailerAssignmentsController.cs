@@ -757,6 +757,8 @@ public class TrailerAssignmentsController : ControllerBase
         }
         if (request.AssignedTruckNumber != null) assignment.AssignedTruckNumber = request.AssignedTruckNumber;
         if (request.Notes != null) assignment.Notes = request.Notes;
+        if (request.Year.HasValue) assignment.Year = request.Year;
+        if (request.Vin != null) assignment.Vin = string.IsNullOrWhiteSpace(request.Vin) ? null : request.Vin.Trim();
         if (request.LastAssignedDriverId.HasValue) assignment.LastAssignedDriverId = request.LastAssignedDriverId;
         if (request.LastAssignedDriverName != null) assignment.LastAssignedDriverName = request.LastAssignedDriverName;
         if (request.InactivatedAt.HasValue) assignment.InactivatedAt = request.InactivatedAt;
@@ -779,6 +781,8 @@ public class TrailerAssignmentsController : ControllerBase
             AssignedDriverName = item.AssignedDriverName,
             AssignedTruckNumber = item.AssignedTruckNumber,
             Notes = item.Notes,
+            Year = item.Year,
+            Vin = item.Vin,
             ClearAssignedDriver = item.ClearAssignedDriver
         });
     }
@@ -810,6 +814,8 @@ public class TrailerAssignmentsController : ControllerBase
             inactivatedAt = a.InactivatedAt,
             assignedTruckNumber = a.AssignedTruckNumber,
             notes = a.Notes,
+            year = a.Year,
+            vin = a.Vin,
             fileName,
             hasFile,
             createdAt = a.CreatedAt,
@@ -914,6 +920,8 @@ public class TrailerAssignmentUpsertRequest
     public string? AssignedDriverName { get; set; }
     public string? AssignedTruckNumber { get; set; }
     public string? Notes { get; set; }
+    public int? Year { get; set; }
+    public string? Vin { get; set; }
     public bool? ClearAssignedDriver { get; set; }
     public bool? DriverOverride { get; set; }
     public int? LastAssignedDriverId { get; set; }

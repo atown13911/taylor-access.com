@@ -60,6 +60,11 @@ public class TrailerAssignment
 
     public string? Notes { get; set; }
 
+    public int? Year { get; set; }
+
+    [MaxLength(50)]
+    public string? Vin { get; set; }
+
     public string? FileName { get; set; }
 
     public string? FileContent { get; set; }

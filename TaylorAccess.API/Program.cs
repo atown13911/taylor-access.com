@@ -765,6 +765,8 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""LastAssignedDriverId"" INTEGER NULL;
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""LastAssignedDriverName"" VARCHAR(150) NULL;
         ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""InactivatedAt"" TIMESTAMP NULL;
+        ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""Year"" INTEGER NULL;
+        ALTER TABLE ""TrailerAssignments"" ADD COLUMN IF NOT EXISTS ""Vin"" VARCHAR(50) NULL;
 
         CREATE TABLE IF NOT EXISTS ""TrailerAssignmentLogs"" (
             ""Id"" SERIAL PRIMARY KEY,

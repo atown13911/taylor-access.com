@@ -610,6 +610,14 @@
   width: 110px;
 }
 
+.tp-vin-cell {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
 .tp-agreement-chip {
   border: none;
   border-radius: 999px;
