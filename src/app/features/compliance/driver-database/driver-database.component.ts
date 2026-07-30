@@ -289,18 +289,26 @@ export class DriverDatabaseComponent implements OnInit {
     };
   }
 
+  /** Missing/expired docs that should not flip overall / display driver status. */
+  private readonly statusExemptKeys = new Set([
+    'training',
+    'permits',
+    'irp',
+    'escrowDeductionSignup'
+  ]);
+
   private computeOverallStatusFromCache(
     statusCache: Record<string, 'compliant' | 'expiring' | 'expired' | 'none'>
   ): string {
-    const redExceptionItems = new Set(['training', 'permits', 'irp']);
     let hasBlockingRed = false;
     let hasExpiring = false;
     let compliantCount = 0;
 
     for (const item of this.complianceMatrixKeys) {
+      if (this.statusExemptKeys.has(item)) continue;
       const status = statusCache[item] ?? 'none';
       const isRed = status === 'expired' || status === 'none';
-      if (isRed && !redExceptionItems.has(item)) hasBlockingRed = true;
+      if (isRed) hasBlockingRed = true;
       if (status === 'expiring') hasExpiring = true;
       if (status === 'compliant') compliantCount++;
     }
@@ -314,7 +322,7 @@ export class DriverDatabaseComponent implements OnInit {
   private computeOtherStatusFromCache(
     statusCache: Record<string, 'compliant' | 'expiring' | 'expired' | 'none'>
   ): 'compliant' | 'expiring' | 'expired' | 'none' {
-    const items = ['i9', 'w9', 'directDeposit', 'deduction', 'escrowDeductionSignup'];
+    const items = ['i9', 'w9', 'directDeposit', 'deduction'];
     let hasExpiring = false;
     let hasExpired = false;
     let hasMissing = false;
@@ -875,8 +883,7 @@ export class DriverDatabaseComponent implements OnInit {
     'i9',
     'w9',
     'directDeposit',
-    'deduction',
-    'escrowDeductionSignup'
+    'deduction'
   ];
 
   selectDriver(driver: any) {
@@ -1204,7 +1211,7 @@ export class DriverDatabaseComponent implements OnInit {
 
   getOtherStatus(driver: any): 'compliant' | 'expiring' | 'expired' | 'none' {
     if (driver?._otherStatus) return driver._otherStatus;
-    const items = ['i9', 'w9', 'directDeposit', 'deduction', 'escrowDeductionSignup'];
+    const items = ['i9', 'w9', 'directDeposit', 'deduction'];
     let hasExpiring = false;
     let hasExpired = false;
     let hasMissing = false;
@@ -1236,7 +1243,7 @@ export class DriverDatabaseComponent implements OnInit {
       expired: 'Expired',
       none: 'Not on File'
     };
-    return `Other (I-9, W-9, Direct Deposit, Deduction, Escrow): ${labels[this.getOtherStatus(driver)]}`;
+    return `Other (I-9, W-9, Direct Deposit, Deduction): ${labels[this.getOtherStatus(driver)]}`;
   }
 
   attachDocsToDrivers(): void {
@@ -1388,15 +1395,15 @@ export class DriverDatabaseComponent implements OnInit {
   getOverallStatus(driver: any): string {
     if (driver?._overallStatus) return driver._overallStatus;
     const items = ['cdl', 'medical', 'mvr', 'drug', 'dqf', 'employment', 'training', 'insurance', 'vehicle', 'permits', 'ifta', 'irp', 'safety', 'violations', 'i9', 'w9', 'directDeposit', 'deduction'];
-    const redExceptionItems = new Set(['training', 'permits', 'irp']);
     let hasBlockingRed = false;
     let hasExpiring = false;
     let compliantCount = 0;
 
     for (const item of items) {
+      if (this.statusExemptKeys.has(item)) continue;
       const status = this.getItemStatus(driver, item);
       const isRed = status === 'expired' || status === 'none';
-      if (isRed && !redExceptionItems.has(item)) hasBlockingRed = true;
+      if (isRed) hasBlockingRed = true;
       if (status === 'expiring') hasExpiring = true;
       if (status === 'compliant') compliantCount++;
     }
