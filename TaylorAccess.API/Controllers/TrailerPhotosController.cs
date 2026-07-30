@@ -21,15 +21,14 @@ public class TrailerPhotosController : ControllerBase
         _currentUserService = currentUserService;
     }
 
+    /// <summary>
+    /// Trailer photos are shared fleet-wide for anyone with Access permission.
+    /// </summary>
     private IQueryable<TrailerPhoto> FilterPhotosByUser(IQueryable<TrailerPhoto> query, Models.User user, bool hasUnrestrictedAccess)
     {
-        if (hasUnrestrictedAccess)
-            return query;
-
-        if (user.OrganizationId is int orgId && orgId > 0)
-            return query.Where(p => p.OrganizationId == orgId || p.OrganizationId == 0);
-
-        return query.Where(p => p.OrganizationId == 0);
+        _ = user;
+        _ = hasUnrestrictedAccess;
+        return query;
     }
 
     private IQueryable<TrailerPhoto> BuildPhotoQuery(Models.User user, bool hasUnrestrictedAccess) =>
@@ -52,10 +51,8 @@ public class TrailerPhotosController : ControllerBase
 
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
+        // Shared fleet: aliases resolve across every org's assignment rows.
         var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess && organizationId > 0)
-            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
-
         var assignments = await assignmentQuery.ToListAsync();
         var expandedIds = ExpandTrailerIdAliases(idList, assignments);
 
@@ -203,10 +200,8 @@ public class TrailerPhotosController : ControllerBase
         if (!hasUnrestrictedAccess && organizationId <= 0)
             organizationId = 0;
 
+        // Shared fleet: aliases resolve across every org's assignment rows.
         var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess && organizationId > 0)
-            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
-
         var assignments = await assignmentQuery.ToListAsync();
         var expandedIds = ExpandTrailerIdAliases(new[] { normalizedTrailerId }, assignments);
         var preferredTrailerId = assignments
@@ -288,10 +283,8 @@ public class TrailerPhotosController : ControllerBase
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
         var organizationId = user.OrganizationId ?? 0;
+        // Shared fleet: aliases resolve across every org's assignment rows.
         var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess && organizationId > 0)
-            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
-
         var assignments = await assignmentQuery.ToListAsync();
         var expandedIds = ExpandTrailerIdAliases(new[] { normalizedTrailerId }, assignments);
 
@@ -345,10 +338,8 @@ public class TrailerPhotosController : ControllerBase
         var query = BuildPhotoQuery(user, hasUnrestrictedAccess);
 
         var organizationId = user.OrganizationId ?? 0;
+        // Shared fleet: aliases resolve across every org's assignment rows.
         var assignmentQuery = _context.TrailerAssignments.AsNoTracking().AsQueryable();
-        if (!hasUnrestrictedAccess && organizationId > 0)
-            assignmentQuery = assignmentQuery.Where(a => a.OrganizationId == organizationId || a.OrganizationId == 0);
-
         var assignments = await assignmentQuery.ToListAsync();
         var expandedIds = ExpandTrailerIdAliases(new[] { normalizedTrailerId }, assignments);
 
