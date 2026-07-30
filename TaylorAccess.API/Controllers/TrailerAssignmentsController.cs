@@ -260,6 +260,12 @@ public class TrailerAssignmentsController : ControllerBase
             var previousDriverId = assignment.AssignedDriverId;
             var previousDriverName = assignment.AssignedDriverName;
 
+            if (previousDriverId.HasValue || !string.IsNullOrWhiteSpace(previousDriverName))
+            {
+                assignment.LastAssignedDriverId = previousDriverId;
+                assignment.LastAssignedDriverName = previousDriverName;
+            }
+
             assignment.AssignedDriverId = null;
             assignment.AssignedDriverName = null;
             assignment.DriverOverride = true;
@@ -274,6 +280,8 @@ public class TrailerAssignmentsController : ControllerBase
                     EventType = "unassigned",
                     PreviousDriverId = previousDriverId,
                     PreviousDriverName = previousDriverName,
+                    DriverId = assignment.LastAssignedDriverId,
+                    DriverName = assignment.LastAssignedDriverName,
                     TruckNumber = assignment.AssignedTruckNumber,
                     TrailerStatus = assignment.TrailerStatus,
                     ChangedByUserId = user.Id > 0 ? user.Id : null,
