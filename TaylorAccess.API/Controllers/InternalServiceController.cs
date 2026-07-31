@@ -152,6 +152,92 @@ public class InternalServiceController : ControllerBase
         return Ok(new { year, periodType = normalizedType, organizationId = orgId, data = snapshots });
     }
 
+    /// <summary>
+    /// Persisted Motive safety / performance events for a date window (DB read).
+    /// Used by Accounting pay-stub performance reviews.
+    /// </summary>
+    [HttpGet("motiv/safety-events")]
+    public async Task<ActionResult> GetStoredSafetyEvents(
+        [FromQuery] string? startDate = null,
+        [FromQuery] string? endDate = null,
+        [FromQuery] string? driverName = null,
+        [FromQuery] int limit = 500)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+
+        var (start, end, startIso, endIso) = MotiveDriverAnalysisHelpers.ParseRange(startDate, endDate);
+        var endExclusive = end.Date.AddDays(1);
+        var safeLimit = Math.Clamp(limit, 1, 2000);
+        var needle = NormalizeDriverNameKey(driverName);
+
+        var query = _db.MotivSafetyEvents.AsNoTracking()
+            .Where(e => e.EventAt == null || (e.EventAt >= start && e.EventAt < endExclusive));
+
+        var rows = await query
+            .OrderByDescending(e => e.EventAt)
+            .Take(safeLimit * 4)
+            .Select(e => new
+            {
+                e.Id,
+                e.ExternalId,
+                e.EventAt,
+                e.EventType,
+                e.Severity,
+                e.DriverName,
+                e.VehicleLabel,
+                e.Location,
+                e.Status,
+                e.HasVideo
+            })
+            .ToListAsync();
+
+        if (!string.IsNullOrWhiteSpace(needle))
+        {
+            rows = rows
+                .Where(e => DriverNamesMatch(needle, e.DriverName))
+                .Take(safeLimit)
+                .ToList();
+        }
+        else
+        {
+            rows = rows.Take(safeLimit).ToList();
+        }
+
+        return Ok(new
+        {
+            source = "motiv-db",
+            endpoint = "safety-events",
+            startDate = startIso,
+            endDate = endIso,
+            rows = rows.Count,
+            data = rows
+        });
+    }
+
+    private static string NormalizeDriverNameKey(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+        var chars = name.Trim().ToLowerInvariant()
+            .Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c))
+            .ToArray();
+        return string.Join(' ', new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool DriverNamesMatch(string needleNormalized, string? candidate)
+    {
+        var hay = NormalizeDriverNameKey(candidate);
+        if (string.IsNullOrWhiteSpace(needleNormalized) || string.IsNullOrWhiteSpace(hay))
+            return false;
+        if (hay == needleNormalized || hay.Contains(needleNormalized) || needleNormalized.Contains(hay))
+            return true;
+        var a = needleNormalized.Split(' ');
+        var b = hay.Split(' ');
+        if (a.Length == 0 || b.Length == 0) return false;
+        // Match on last-name token when both sides have a multi-part name.
+        return a[^1] == b[^1] && (a.Length == 1 || b.Length == 1 || a[0][0] == b[0][0]);
+    }
+
     /// <summary>Cached Motive driver-analysis snapshot (fast DB read for VanTac Analysis tab).</summary>
     [HttpGet("motiv/driver-analysis")]
     public async Task<ActionResult> GetCachedDriverAnalysis(
