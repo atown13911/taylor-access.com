@@ -609,6 +609,33 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   /** "drive:email" / "gmail:email" while a start request is in flight. */
   userBackupBusy = signal<string | null>(null);
 
+  /** Email currently being moved to Restricted Access. */
+  restrictBusy = signal<string | null>(null);
+
+  moveToRestricted(email: string) {
+    if (!this.isProductOwner || !email) return;
+    if (!confirm(
+      `Move ${email} to Restricted Access?\n\n` +
+      `They will disappear from Domain and Data Storage for everyone except the product owner.`
+    )) return;
+
+    this.restrictBusy.set(email);
+    this.http.post<any>(`${this.apiUrl}/api/v1/google/workspace-users/restricted`, { email }).subscribe({
+      next: () => {
+        this.restrictBusy.set(null);
+        const key = email.toLowerCase();
+        this.storage.update(rows => rows.filter(r => r.email.toLowerCase() !== key));
+        this.users.update(rows => rows.filter(u => u.email.toLowerCase() !== key));
+        this.restrictedLoaded = false;
+        this.toast.champagne(`Moved ${email} to Restricted Access`, 'Google');
+      },
+      error: (err) => {
+        this.restrictBusy.set(null);
+        this.toast.error(err?.error?.error || 'Failed to move account to Restricted Access', 'Google');
+      }
+    });
+  }
+
   runUserBackup(row: UserStorage, kind: 'drive' | 'gmail') {
     const label = kind === 'drive' ? 'Drive' : 'Gmail';
     const running = kind === 'drive' ? this.backupStatus()?.running : this.gmailBackupStatus()?.running;

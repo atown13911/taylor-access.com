@@ -136,6 +136,7 @@ public class TaylorAccessDbContext : DbContext
     public DbSet<GoogleGmailBackupMessage> GoogleGmailBackupMessages => Set<GoogleGmailBackupMessage>();
     public DbSet<GoogleGmailBackupRun> GoogleGmailBackupRuns => Set<GoogleGmailBackupRun>();
     public DbSet<GoogleAccountTotal> GoogleAccountTotals => Set<GoogleAccountTotal>();
+    public DbSet<GoogleRestrictedWorkspaceUser> GoogleRestrictedWorkspaceUsers => Set<GoogleRestrictedWorkspaceUser>();
     public DbSet<MotivSafetyEvent> MotivSafetyEvents => Set<MotivSafetyEvent>();
     public DbSet<MotivDriverAnalysisCache> MotivDriverAnalysisCaches => Set<MotivDriverAnalysisCache>();
     public DbSet<FuelCardAssignment> FuelCardAssignments => Set<FuelCardAssignment>();
@@ -268,6 +269,10 @@ public class TaylorAccessDbContext : DbContext
 
         modelBuilder.Entity<FuelCardAssignment>()
             .HasIndex(f => new { f.OrganizationId, f.CardId })
+            .IsUnique();
+
+        modelBuilder.Entity<GoogleRestrictedWorkspaceUser>()
+            .HasIndex(r => r.Email)
             .IsUnique();
     }
 }

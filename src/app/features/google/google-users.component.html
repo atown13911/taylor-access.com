@@ -123,7 +123,7 @@
               <td>{{ user.creationTime ? (user.creationTime | date:'MMM d, y') : '—' }}</td>
               <td><span class="status-badge" [class]="getStatus(user)" [title]="getStatusTooltip(user)">{{ getStatus(user) }}</span></td>
               <td class="actions-cell" (click)="$event.stopPropagation()">
-                @if (actionBusyId() === user.id) {
+                @if (actionBusyId() === user.id || restrictBusy() === user.email) {
                   <i class='bx bx-loader-alt bx-spin action-spinner'></i>
                 } @else {
                   @switch (getStatus(user)) {
@@ -131,14 +131,23 @@
                       <button class="act-btn" (click)="openManage(user)" title="Manage account (profile, password, aliases, admin)"><i class='bx bx-edit'></i></button>
                       <button class="act-btn warn" (click)="runAction(user, 'suspend', 'Suspend')" title="Suspend account (blocks sign-in, reversible)"><i class='bx bx-user-x'></i></button>
                       <button class="act-btn" (click)="runAction(user, 'signout', 'Sign out everywhere for')" title="Sign out of all sessions"><i class='bx bx-log-out'></i></button>
+                      @if (isProductOwner && pageTab() === 'domain') {
+                        <button class="act-btn warn" (click)="moveToRestricted(user.email)" title="Move to Restricted Access"><i class='bx bx-lock-alt'></i></button>
+                      }
                     }
                     @case ('suspended') {
                       <button class="act-btn" (click)="openManage(user)" title="Manage account (profile, password, aliases, admin)"><i class='bx bx-edit'></i></button>
                       <button class="act-btn good" (click)="runAction(user, 'unsuspend', 'Unsuspend')" title="Unsuspend account (restores sign-in)"><i class='bx bx-user-check'></i></button>
                       <button class="act-btn" (click)="runAction(user, 'archive', 'Archive')" title="Archive account (moves to Archived User license)"><i class='bx bx-archive-in'></i></button>
+                      @if (isProductOwner && pageTab() === 'domain') {
+                        <button class="act-btn warn" (click)="moveToRestricted(user.email)" title="Move to Restricted Access"><i class='bx bx-lock-alt'></i></button>
+                      }
                     }
                     @case ('archived') {
                       <button class="act-btn good" (click)="runAction(user, 'unarchive', 'Unarchive')" title="Unarchive account (restores active license)"><i class='bx bx-archive-out'></i></button>
+                      @if (isProductOwner && pageTab() === 'domain') {
+                        <button class="act-btn warn" (click)="moveToRestricted(user.email)" title="Move to Restricted Access"><i class='bx bx-lock-alt'></i></button>
+                      }
                     }
                     @case ('deleted') {
                       <button class="act-btn good" (click)="runAction(user, 'undelete', 'Restore')" title="Restore deleted account"><i class='bx bx-undo'></i></button>
@@ -413,7 +422,7 @@
                   </td>
                   <td class="actions-cell">
                     <button class="act-btn" (click)="runUserBackup(row, 'drive')"
-                            [disabled]="userBackupBusy() !== null"
+                            [disabled]="userBackupBusy() !== null || restrictBusy() !== null"
                             title="Back up this user's Drive files to the bucket">
                       @if (userBackupBusy() === 'drive:' + row.email) {
                         <i class='bx bx-loader-alt bx-spin'></i>
@@ -422,12 +431,21 @@
                       }
                     </button>
                     <button class="act-btn" (click)="runUserBackup(row, 'gmail')"
-                            [disabled]="userBackupBusy() !== null"
+                            [disabled]="userBackupBusy() !== null || restrictBusy() !== null"
                             title="Back up this user's Gmail to the bucket">
                       @if (userBackupBusy() === 'gmail:' + row.email) {
                         <i class='bx bx-loader-alt bx-spin'></i>
                       } @else {
                         <i class='bx bx-envelope'></i>
+                      }
+                    </button>
+                    <button class="act-btn warn" (click)="moveToRestricted(row.email)"
+                            [disabled]="userBackupBusy() !== null || restrictBusy() !== null"
+                            title="Move to Restricted Access (hidden from Domain &amp; Data Storage)">
+                      @if (restrictBusy() === row.email) {
+                        <i class='bx bx-loader-alt bx-spin'></i>
+                      } @else {
+                        <i class='bx bx-lock-alt'></i>
                       }
                     </button>
                   </td>

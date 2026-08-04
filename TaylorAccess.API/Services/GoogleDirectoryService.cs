@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -211,24 +212,104 @@ public class GoogleDirectoryService
         if (deletedError != null)
             _logger.LogWarning("Google Directory deleted-users query failed: {Error}", deletedError);
 
+        await EnsureDynamicHiddenLoadedAsync(cancellationToken);
+
         if (restrictedOnly)
             users.RemoveAll(u =>
-                !HiddenUsers.Contains(u.Email) && !u.Aliases.Any(a => HiddenUsers.Contains(a)));
+                !IsHiddenUser(u.Email) && !u.Aliases.Any(IsHiddenUser));
         else
             users.RemoveAll(u =>
-                HiddenUsers.Contains(u.Email) || u.Aliases.Any(a => HiddenUsers.Contains(a)));
+                IsHiddenUser(u.Email) || u.Aliases.Any(IsHiddenUser));
 
         return new GoogleDirectoryResult { Success = true, Users = users };
     }
 
-    public static bool IsHiddenUser(string email) => HiddenUsers.Contains(email);
+    public static bool IsHiddenUser(string email) =>
+        !string.IsNullOrWhiteSpace(email) &&
+        (EnvHiddenUsers.Contains(email) || DynamicHiddenUsers.ContainsKey(email));
 
-    // Accounts never exposed through the workspace-users listing (comma-separated env override).
-    private static readonly HashSet<string> HiddenUsers =
+    // Seed / env allowlist — always restricted (comma-separated override).
+    private static readonly HashSet<string> EnvHiddenUsers =
         (Environment.GetEnvironmentVariable("GOOGLE_HIDDEN_WORKSPACE_USERS")
             ?? "austin.taylor@taylor-corp.net,anatomic@taylor-corp.net,ana.t@landmark-trucking.com")
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    // Runtime additions from GoogleRestrictedWorkspaceUsers (product-owner UI).
+    private static readonly ConcurrentDictionary<string, byte> DynamicHiddenUsers =
+        new(StringComparer.OrdinalIgnoreCase);
+    private static int _dynamicHiddenLoaded; // 0 = not loaded, 1 = loaded
+
+    public async Task EnsureRestrictedUsersLoadedAsync(CancellationToken cancellationToken = default)
+        => await EnsureDynamicHiddenLoadedAsync(cancellationToken);
+
+    private async Task EnsureDynamicHiddenLoadedAsync(CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.CompareExchange(ref _dynamicHiddenLoaded, 1, 0) != 0)
+            return;
+
+        try
+        {
+            var emails = await _context.GoogleRestrictedWorkspaceUsers
+                .AsNoTracking()
+                .Select(r => r.Email)
+                .ToListAsync(cancellationToken);
+            foreach (var email in emails)
+            {
+                if (!string.IsNullOrWhiteSpace(email))
+                    DynamicHiddenUsers.TryAdd(email.Trim(), 0);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Allow retry on next call if the table isn't ready yet.
+            Interlocked.Exchange(ref _dynamicHiddenLoaded, 0);
+            _logger.LogWarning(ex, "Failed to load restricted Workspace users from database");
+        }
+    }
+
+    /// <summary>
+    /// Adds an account to Restricted Access (DB + in-memory cache). Idempotent.
+    /// Returns true when newly added, false when already restricted.
+    /// </summary>
+    public async Task<(bool Added, string? Error)> AddRestrictedUserAsync(
+        string email,
+        string? createdByEmail,
+        CancellationToken cancellationToken = default)
+    {
+        var normalized = (email ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(normalized) || !normalized.Contains('@'))
+            return (false, "A valid email is required");
+
+        await EnsureDynamicHiddenLoadedAsync(cancellationToken);
+
+        if (IsHiddenUser(normalized))
+            return (false, null);
+
+        try
+        {
+            _context.GoogleRestrictedWorkspaceUsers.Add(new GoogleRestrictedWorkspaceUser
+            {
+                Email = normalized,
+                CreatedAt = DateTime.UtcNow,
+                CreatedByEmail = string.IsNullOrWhiteSpace(createdByEmail) ? null : createdByEmail.Trim()
+            });
+            await _context.SaveChangesAsync(cancellationToken);
+            DynamicHiddenUsers.TryAdd(normalized, 0);
+            return (true, null);
+        }
+        catch (DbUpdateException)
+        {
+            // Unique index race — treat as already restricted.
+            DynamicHiddenUsers.TryAdd(normalized, 0);
+            return (false, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restrict Workspace user {Email}", normalized);
+            return (false, "Failed to move account to Restricted Access");
+        }
+    }
 
     /// <summary>
     /// Executes an admin action against a Workspace account. Supported actions:
@@ -1002,6 +1083,8 @@ public class GoogleDirectoryService
     private async Task<(List<GoogleUserStorage>? Usage, string? Error)> FetchUsageForDateAsync(
         string date, bool includeHidden, CancellationToken cancellationToken)
     {
+        await EnsureDynamicHiddenLoadedAsync(cancellationToken);
+
         const string parameters = "accounts:used_quota_in_mb,accounts:drive_used_quota_in_mb," +
                                   "accounts:gmail_used_quota_in_mb,accounts:gplus_photos_used_quota_in_mb," +
                                   "accounts:used_quota_in_percentage";
@@ -1024,7 +1107,7 @@ public class GoogleDirectoryService
                     foreach (var report in reports.EnumerateArray())
                     {
                         var email = report.TryGetProperty("entity", out var entity) ? ReadString(entity, "userEmail") : "";
-                        if (string.IsNullOrEmpty(email) || (!includeHidden && HiddenUsers.Contains(email)))
+                        if (string.IsNullOrEmpty(email) || (!includeHidden && IsHiddenUser(email)))
                             continue;
 
                         var row = new GoogleUserStorage { Email = email };

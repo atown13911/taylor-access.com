@@ -33,6 +33,11 @@ public class GoogleUserAliasRequest
     public string? Email { get; set; }
 }
 
+public class GoogleRestrictedUserRequest
+{
+    public string Email { get; set; } = "";
+}
+
 [ApiController]
 [Route("api/v1/google")]
 [Authorize]
@@ -88,6 +93,33 @@ public class GoogleWorkspaceController : ControllerBase
             return StatusCode(502, new { error = result.Error });
 
         return Ok(new { data = result.Users });
+    }
+
+    /// <summary>
+    /// Moves a Workspace account into Restricted Access (hidden from Domain /
+    /// Data Storage for non–product-owners). Product owner only.
+    /// </summary>
+    [HttpPost("workspace-users/restricted")]
+    public async Task<ActionResult> AddRestrictedWorkspaceUser(
+        [FromBody] GoogleRestrictedUserRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!_currentUser.IsProductOwner)
+            return StatusCode(403, new { error = "Only the product owner can move accounts to Restricted Access" });
+
+        var email = (request.Email ?? "").Trim();
+        if (string.IsNullOrEmpty(email))
+            return BadRequest(new { error = "email is required" });
+
+        var (added, error) = await _directory.AddRestrictedUserAsync(
+            email, _currentUser.Email, cancellationToken);
+        if (error != null)
+            return StatusCode(500, new { error });
+
+        await _auditService.LogAsync("restrict", "GoogleWorkspaceUser", null,
+            $"Google Workspace: moved {email} to Restricted Access");
+
+        return Ok(new { success = true, added, email = email.ToLowerInvariant() });
     }
 
     /// <summary>
@@ -327,6 +359,7 @@ public class GoogleWorkspaceController : ControllerBase
         if (members == null)
             return StatusCode(502, new { error });
 
+        await _directory.EnsureRestrictedUsersLoadedAsync(cancellationToken);
         if (!_currentUser.IsProductOwner)
             members = members.Where(m => !GoogleDirectoryService.IsHiddenUser(m.Email)).ToList();
 
@@ -396,6 +429,8 @@ public class GoogleWorkspaceController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var cutoff = DateTime.UtcNow.Date.AddDays(-Math.Clamp(days, 1, 3650));
+
+        await _directory.EnsureRestrictedUsersLoadedAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(email))
         {

@@ -697,6 +697,15 @@ using (var scope = app.Services.CreateScope())
         CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleAccountTotals_Email""
             ON ""GoogleAccountTotals"" (""Email"");
 
+        CREATE TABLE IF NOT EXISTS ""GoogleRestrictedWorkspaceUsers"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""Email"" VARCHAR(256) NOT NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
+            ""CreatedByEmail"" VARCHAR(256) NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ""UX_GoogleRestrictedWorkspaceUsers_Email""
+            ON ""GoogleRestrictedWorkspaceUsers"" (""Email"");
+
         CREATE TABLE IF NOT EXISTS ""GoogleGmailBackupRuns"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""StartedAt"" TIMESTAMP NOT NULL DEFAULT NOW(),
