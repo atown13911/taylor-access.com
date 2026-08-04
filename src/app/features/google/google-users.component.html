@@ -161,26 +161,6 @@
                       <button class="act-btn good" (click)="runAction(user, 'undelete', 'Restore')" title="Restore deleted account"><i class='bx bx-undo'></i></button>
                     }
                   }
-                  @if (showRestrictedBackupActions(user)) {
-                    <button class="act-btn" (click)="runUserBackup(user, 'drive')"
-                            [disabled]="userBackupBusy() !== null"
-                            title="Back up this user's Drive files to the bucket">
-                      @if (userBackupBusy() === 'drive:' + user.email) {
-                        <i class='bx bx-loader-alt bx-spin'></i>
-                      } @else {
-                        <i class='bx bx-cloud-upload'></i>
-                      }
-                    </button>
-                    <button class="act-btn" (click)="runUserBackup(user, 'gmail')"
-                            [disabled]="userBackupBusy() !== null"
-                            title="Back up this user's Gmail to the bucket">
-                      @if (userBackupBusy() === 'gmail:' + user.email) {
-                        <i class='bx bx-loader-alt bx-spin'></i>
-                      } @else {
-                        <i class='bx bx-envelope'></i>
-                      }
-                    </button>
-                  }
                 }
               </td>
             </tr>

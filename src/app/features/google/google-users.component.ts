@@ -659,15 +659,6 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   }
 
   // ----- Per-user backup (product owner only) -----
-  /** Restricted-tab backup actions are limited to this account. */
-  private static readonly RestrictedBackupEmail = 'dino.cehajic@taylor-corp.net';
-
-  showRestrictedBackupActions(user: { email: string }): boolean {
-    return this.isProductOwner
-      && this.pageTab() === 'restricted'
-      && user.email.toLowerCase() === GoogleUsersComponent.RestrictedBackupEmail;
-  }
-
   /** "drive:email" / "gmail:email" while a start request is in flight. */
   userBackupBusy = signal<string | null>(null);
 
