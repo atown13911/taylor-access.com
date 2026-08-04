@@ -14,8 +14,15 @@
   &.restricted.active { background: rgba(255,170,0,0.1); border-color: rgba(255,170,0,0.4); color: #ffaa00; }
 }
 
-.restricted-banner { display: flex; align-items: center; gap: 10px; padding: 10px 16px; margin-bottom: 18px; background: rgba(255,170,0,0.07); border: 1px solid rgba(255,170,0,0.25); border-radius: 10px; color: #ffc04d; font-size: 0.8rem;
+.restricted-banner { display: flex; align-items: center; gap: 10px; padding: 10px 16px; margin-bottom: 14px; background: rgba(255,170,0,0.07); border: 1px solid rgba(255,170,0,0.25); border-radius: 10px; color: #ffc04d; font-size: 0.8rem;
   i { font-size: 1.1rem; }
+}
+
+.view-selector { display: inline-flex; gap: 6px; margin-bottom: 18px; padding: 4px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; }
+.view-opt { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: none; border-radius: 8px; background: transparent; color: var(--text-secondary); font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  i { font-size: 0.95rem; }
+  &:hover { color: var(--text-primary); }
+  &.active { background: rgba(255,170,0,0.15); color: #ffaa00; }
 }
 
 .report-date { align-self: center; font-size: 0.72rem; color: var(--text-secondary); margin-left: auto; }

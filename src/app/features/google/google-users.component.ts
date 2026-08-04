@@ -215,6 +215,8 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
 
   // ----- Page tabs -----
   pageTab = signal<'domain' | 'storage' | 'restricted' | 'groups'>('domain');
+  /** Within Restricted Access: domain-style rows vs storage/backup columns. */
+  restrictedView = signal<'domain' | 'storage'>('domain');
 
   setPageTab(tab: 'domain' | 'storage' | 'restricted' | 'groups') {
     this.pageTab.set(tab);
@@ -227,7 +229,20 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     // Storage rows resolve names/last-login from restricted users too.
     if (tab === 'storage' && this.isProductOwner && !this.restrictedLoaded) this.loadRestricted();
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
+    if (tab === 'restricted' && this.restrictedView() === 'storage') this.ensureRestrictedStorageData();
     if (tab === 'groups' && !this.groupsLoaded) this.loadDomainGroups();
+  }
+
+  setRestrictedView(view: 'domain' | 'storage') {
+    this.restrictedView.set(view);
+    if (view === 'storage') this.ensureRestrictedStorageData();
+  }
+
+  private ensureRestrictedStorageData() {
+    if (!this.storageLoaded) this.loadStorage();
+    this.loadBackupStatus();
+    this.loadGmailBackupStatus();
+    this.loadAccountTotals();
   }
 
   // ----- Groups tab -----
@@ -358,8 +373,11 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   });
 
   refreshCurrentTab() {
-    if (this.pageTab() === 'restricted') this.loadRestricted();
-    else if (this.pageTab() === 'groups') this.loadDomainGroups();
+    if (this.pageTab() === 'restricted') {
+      this.loadRestricted();
+      if (this.restrictedView() === 'storage') this.refreshStorage();
+    } else if (this.pageTab() === 'groups') this.loadDomainGroups();
+    else if (this.pageTab() === 'storage') this.refreshStorage();
     else this.loadUsers();
   }
 
@@ -390,6 +408,38 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     }
     return [...list].sort((a, b) => b.usedMb - a.usedMb);
   });
+
+  /** Data Storage rows limited to Restricted Access accounts. */
+  filteredRestrictedStorage = computed(() => {
+    const restricted = new Set(
+      this.restrictedUsers().map(u => u.email.toLowerCase())
+    );
+    const search = this.storageSearch().toLowerCase();
+    let list = this.storage().filter(s => restricted.has(s.email.toLowerCase()));
+    if (search) {
+      list = list.filter(s => {
+        const user = this.userByEmail().get(s.email.toLowerCase());
+        return s.email.toLowerCase().includes(search) ||
+          (user?.fullName || '').toLowerCase().includes(search);
+      });
+    }
+    return [...list].sort((a, b) => b.usedMb - a.usedMb);
+  });
+
+  restrictedStorageTotals = computed(() => {
+    const list = this.filteredRestrictedStorage();
+    return {
+      used: list.reduce((sum, s) => sum + s.usedMb, 0),
+      drive: list.reduce((sum, s) => sum + s.driveMb, 0),
+      gmail: list.reduce((sum, s) => sum + s.gmailMb, 0),
+      photos: list.reduce((sum, s) => sum + s.photosMb, 0)
+    };
+  });
+
+  isRestrictedEmail(email: string): boolean {
+    const key = email.toLowerCase();
+    return this.restrictedUsers().some(u => u.email.toLowerCase() === key);
+  }
 
   storageTotals = computed(() => {
     const list = this.storage();
@@ -768,7 +818,8 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     if (tab !== 'storage' && tab !== 'restricted') return;
     if (this.backupStatus()?.running) this.loadBackupStatus();
     if (this.gmailBackupStatus()?.running) this.loadGmailBackupStatus();
-    if (tab === 'storage' && this.accountTotals()?.running) this.loadAccountTotals();
+    const storageLike = tab === 'storage' || this.restrictedView() === 'storage';
+    if (storageLike && this.accountTotals()?.running) this.loadAccountTotals();
   }
 
   /** Live label when a backup is currently processing this account, else null. */

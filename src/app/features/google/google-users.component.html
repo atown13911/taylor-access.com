@@ -28,14 +28,22 @@
     }
   </div>
 
-  @if (pageTab() === 'domain' || pageTab() === 'restricted') {
-
   @if (pageTab() === 'restricted') {
     <div class="restricted-banner">
       <i class='bx bx-shield-quarter'></i>
       Restricted accounts are hidden from the Domain list and only visible to the product owner.
     </div>
+    <div class="view-selector">
+      <button type="button" class="view-opt" [class.active]="restrictedView() === 'domain'" (click)="setRestrictedView('domain')">
+        <i class='bx bx-globe'></i> Domain
+      </button>
+      <button type="button" class="view-opt" [class.active]="restrictedView() === 'storage'" (click)="setRestrictedView('storage')">
+        <i class='bx bx-data'></i> Data Storage
+      </button>
+    </div>
   }
+
+  @if (pageTab() === 'domain' || (pageTab() === 'restricted' && restrictedView() === 'domain')) {
 
   <div class="stats-row">
     <div class="stat"><span class="stat-val">{{ stats().total }}</span><span class="stat-lbl">Total Users</span></div>
@@ -240,6 +248,139 @@
                 <td class="actions-cell">
                   <button class="act-btn" (click)="openGroupMembers(group); $event.stopPropagation()" title="View members">
                     <i class='bx bx-chevron-right'></i>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+  } @else if (pageTab() === 'restricted' && restrictedView() === 'storage') {
+
+    <div class="stats-row storage-stats">
+      <div class="stat cyan"><span class="stat-val">{{ formatMb(restrictedStorageTotals().used) }}</span><span class="stat-lbl">Total Used</span></div>
+      <div class="stat"><span class="stat-val">{{ formatMb(restrictedStorageTotals().drive) }}</span><span class="stat-lbl">Drive</span></div>
+      <div class="stat"><span class="stat-val">{{ formatMb(restrictedStorageTotals().gmail) }}</span><span class="stat-lbl">Gmail</span></div>
+      <div class="stat"><span class="stat-val">{{ formatMb(restrictedStorageTotals().photos) }}</span><span class="stat-lbl">Photos</span></div>
+      <div class="stat"><span class="stat-val">{{ filteredRestrictedStorage().length }}</span><span class="stat-lbl">Accounts</span></div>
+    </div>
+
+    <div class="filters-bar">
+      <div class="search-box"><i class='bx bx-search'></i><input type="text" placeholder="Search name or email..." [ngModel]="storageSearch()" (ngModelChange)="storageSearch.set($event)"></div>
+      @if (storageReportDate()) {
+        <span class="report-date">Report date: {{ storageReportDate() | date:'MMM d, y' }} (Google usage reports lag ~2 days)</span>
+      }
+      <button class="btn btn-secondary btn-sm" (click)="refreshStorage()" [disabled]="storageLoading()">
+        <i class='bx bx-refresh'></i> Refresh
+      </button>
+      @if (accountTotals()?.running) {
+        <span class="report-date google-count-live">
+          <i class='bx bx-loader-alt bx-spin'></i>
+          Counting in Google — {{ accountTotals()?.progress?.usersProcessed || 0 }} of {{ accountTotals()?.progress?.usersTotal || 0 }} accounts
+        </span>
+      } @else if (accountTotalsDate()) {
+        <span class="report-date">Google counts as of {{ accountTotalsDate() | date:'MMM d, h:mm a' }}</span>
+      }
+      <button class="btn btn-secondary btn-sm" (click)="refreshAccountTotals()"
+              [disabled]="accountTotalsBusy() || accountTotals()?.running"
+              title="Recount Drive files and Gmail messages currently in Google for every account">
+        <i class='bx bx-calculator'></i> Recount Google
+      </button>
+    </div>
+
+    @if (storageLoading() || restrictedLoading()) {
+      <div class="loading-state"><i class='bx bx-loader-alt bx-spin'></i><p>Loading storage usage...</p></div>
+    } @else if (storageError() || restrictedError()) {
+      <div class="empty-state error"><i class='bx bx-error-circle'></i><h3>Could not load storage usage</h3><p>{{ storageError() || restrictedError() }}</p></div>
+    } @else if (filteredRestrictedStorage().length === 0) {
+      <div class="empty-state"><i class='bx bx-data'></i><h3>No storage data</h3><p>No usage data for restricted accounts matches the current filters</p></div>
+    } @else {
+      <div class="users-table storage-table">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Email</th>
+              <th>Total Used</th>
+              <th>Drive</th>
+              <th>Gmail</th>
+              <th>Photos</th>
+              <th>Last Login</th>
+              <th>Quota Used</th>
+              <th>Drive Backup</th>
+              <th title="Drive files currently in Google (owned, not trashed, backupable types)">Drive in Google</th>
+              <th>Gmail Backup</th>
+              <th title="Total Gmail messages currently in Google (includes spam/trash)">Gmail in Google</th>
+              <th>Backup Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of filteredRestrictedStorage(); track row.email) {
+              <tr>
+                <td>
+                  <div class="user-cell">
+                    @if (storageUserPhoto(row.email)) {
+                      <img class="avatar" [src]="storageUserPhoto(row.email)" alt="" referrerpolicy="no-referrer">
+                    } @else {
+                      <span class="avatar avatar-fallback">{{ storageUserName(row.email).charAt(0) | uppercase }}</span>
+                    }
+                    <strong>{{ storageUserName(row.email) }}</strong>
+                  </div>
+                </td>
+                <td class="mono">{{ row.email }}</td>
+                <td><strong>{{ formatMb(row.usedMb) }}</strong></td>
+                <td>{{ formatMb(row.driveMb) }}</td>
+                <td>{{ formatMb(row.gmailMb) }}</td>
+                <td>{{ formatMb(row.photosMb) }}</td>
+                <td>{{ storageUserLastLogin(row.email) ? (storageUserLastLogin(row.email) | date:'MMM d, y, h:mm a') : 'Never' }}</td>
+                <td class="quota-cell">
+                  <div class="quota-bar">
+                    <div class="quota-fill" [class.warn]="row.usedPercent >= 80" [style.width.%]="row.usedPercent > 100 ? 100 : row.usedPercent"></div>
+                  </div>
+                  <span class="quota-pct">{{ row.usedPercent }}%</span>
+                </td>
+                <td class="backup-size">{{ driveBackupLabel(row.email) || '—' }}</td>
+                <td class="backup-size google-count" [class.count-ok]="driveCompareState(row.email) === 'ok'"
+                    [class.count-behind]="driveCompareState(row.email) === 'behind'"
+                    title="Files currently in this account's Google Drive">
+                  {{ driveGoogleLabel(row.email) || '—' }}
+                </td>
+                <td class="backup-size">{{ gmailBackupLabel(row.email) || '—' }}</td>
+                <td class="backup-size google-count" [class.count-ok]="gmailCompareState(row.email) === 'ok'"
+                    [class.count-behind]="gmailCompareState(row.email) === 'behind'"
+                    title="Messages currently in this account's Gmail (includes spam/trash)">
+                  {{ gmailGoogleLabel(row.email) || '—' }}
+                </td>
+                <td class="backup-status-cell">
+                  @if (rowBackupLive(row.email); as live) {
+                    <span class="row-backup-live" title="Backup currently processing this account (backed up + unchanged + failed items this pass)">
+                      <i class='bx bx-loader-alt bx-spin'></i> {{ live }}
+                    </span>
+                  } @else {
+                    <span class="backup-idle">Idle</span>
+                  }
+                </td>
+                <td class="actions-cell">
+                  <button class="act-btn" (click)="runUserBackup(row, 'drive')"
+                          [disabled]="userBackupBusy() !== null"
+                          title="Back up this user's Drive files to the bucket">
+                    @if (userBackupBusy() === 'drive:' + row.email) {
+                      <i class='bx bx-loader-alt bx-spin'></i>
+                    } @else {
+                      <i class='bx bx-cloud-upload'></i>
+                    }
+                  </button>
+                  <button class="act-btn" (click)="runUserBackup(row, 'gmail')"
+                          [disabled]="userBackupBusy() !== null"
+                          title="Back up this user's Gmail to the bucket">
+                    @if (userBackupBusy() === 'gmail:' + row.email) {
+                      <i class='bx bx-loader-alt bx-spin'></i>
+                    } @else {
+                      <i class='bx bx-envelope'></i>
+                    }
                   </button>
                 </td>
               </tr>
@@ -459,15 +600,17 @@
                         <i class='bx bx-envelope'></i>
                       }
                     </button>
-                    <button class="act-btn warn" (click)="moveToRestricted(row.email)"
-                            [disabled]="userBackupBusy() !== null || restrictBusy() !== null"
-                            title="Move to Restricted Access (hidden from Domain &amp; Data Storage)">
-                      @if (restrictBusy() === row.email) {
-                        <i class='bx bx-loader-alt bx-spin'></i>
-                      } @else {
-                        <i class='bx bx-lock-alt'></i>
-                      }
-                    </button>
+                    @if (!isRestrictedEmail(row.email)) {
+                      <button class="act-btn warn" (click)="moveToRestricted(row.email)"
+                              [disabled]="userBackupBusy() !== null || restrictBusy() !== null"
+                              title="Move to Restricted Access (hidden from Domain &amp; Data Storage)">
+                        @if (restrictBusy() === row.email) {
+                          <i class='bx bx-loader-alt bx-spin'></i>
+                        } @else {
+                          <i class='bx bx-lock-alt'></i>
+                        }
+                      </button>
+                    }
                   </td>
                 }
               </tr>
