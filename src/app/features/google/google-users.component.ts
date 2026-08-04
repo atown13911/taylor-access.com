@@ -219,10 +219,10 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   setPageTab(tab: 'domain' | 'storage' | 'restricted' | 'groups') {
     this.pageTab.set(tab);
     if (tab === 'storage' && !this.storageLoaded) this.loadStorage();
-    if (tab === 'storage' && this.isProductOwner) {
+    if ((tab === 'storage' || tab === 'restricted') && this.isProductOwner) {
       this.loadBackupStatus();
       this.loadGmailBackupStatus();
-      this.loadAccountTotals();
+      if (tab === 'storage') this.loadAccountTotals();
     }
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
     if (tab === 'groups' && !this.groupsLoaded) this.loadDomainGroups();
@@ -606,6 +606,15 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   }
 
   // ----- Per-user backup (product owner only) -----
+  /** Restricted-tab backup actions are limited to this account. */
+  private static readonly RestrictedBackupEmail = 'dino.cahajic@taylor-corp.net';
+
+  showRestrictedBackupActions(user: { email: string }): boolean {
+    return this.isProductOwner
+      && this.pageTab() === 'restricted'
+      && user.email.toLowerCase() === GoogleUsersComponent.RestrictedBackupEmail;
+  }
+
   /** "drive:email" / "gmail:email" while a start request is in flight. */
   userBackupBusy = signal<string | null>(null);
 
@@ -636,7 +645,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
     });
   }
 
-  runUserBackup(row: UserStorage, kind: 'drive' | 'gmail') {
+  runUserBackup(row: { email: string }, kind: 'drive' | 'gmail') {
     const label = kind === 'drive' ? 'Drive' : 'Gmail';
     const running = kind === 'drive' ? this.backupStatus()?.running : this.gmailBackupStatus()?.running;
     if (running) {
@@ -751,10 +760,12 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   private statusPollId: ReturnType<typeof setInterval> | null = null;
 
   private pollBackupStatuses() {
-    if (this.pageTab() !== 'storage' || !this.isProductOwner) return;
+    if (!this.isProductOwner) return;
+    const tab = this.pageTab();
+    if (tab !== 'storage' && tab !== 'restricted') return;
     if (this.backupStatus()?.running) this.loadBackupStatus();
     if (this.gmailBackupStatus()?.running) this.loadGmailBackupStatus();
-    if (this.accountTotals()?.running) this.loadAccountTotals();
+    if (tab === 'storage' && this.accountTotals()?.running) this.loadAccountTotals();
   }
 
   /** Live label when a backup is currently processing this account, else null. */
