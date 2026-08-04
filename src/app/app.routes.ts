@@ -77,6 +77,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/system/database/database.component').then(m => m.DatabaseComponent)
       },
       {
+        path: 'inventory',
+        loadComponent: () =>
+          import('./features/system/inventory/inventory.component').then((m) => m.InventoryComponent),
+      },
+      {
         path: 'drivers',
         loadComponent: () => import('./features/fleet/driver-list/driver-list.component').then(m => m.DriverListComponent)
       },

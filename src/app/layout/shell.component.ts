@@ -158,6 +158,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         { label: 'Structure', icon: 'bx bx-sitemap', route: '/structure' },
         { label: 'Database', icon: 'bx bx-data', route: '/database' },
       ]
+    },
+    {
+      label: 'System',
+      items: [
+        { label: 'Inventory', icon: 'bx bx-key', route: '/inventory' },
+      ]
     }
   ];
 

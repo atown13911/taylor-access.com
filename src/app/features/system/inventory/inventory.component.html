@@ -1,0 +1,226 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-content">
+      <h1><i class="bx bx-key"></i> Inventory</h1>
+      <p class="subtitle">Outside sites, logins, and quick links for terminals and portals</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
+        <i class="bx" [class.bx-loader-alt]="loading()" [class.bx-spin]="loading()" [class.bx-refresh]="!loading()"></i>
+        Refresh
+      </button>
+      <button class="btn btn-primary" type="button" (click)="openNew()">
+        <i class="bx bx-plus"></i> Add Site
+      </button>
+    </div>
+  </header>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="bx bx-globe"></i></div>
+      <div class="stat-content">
+        <span class="stat-value">{{ stats().total }}</span>
+        <span class="stat-label">Total Sites</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon success"><i class="bx bx-check-circle"></i></div>
+      <div class="stat-content">
+        <span class="stat-value">{{ stats().active }}</span>
+        <span class="stat-label">Active</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon warning"><i class="bx bx-hide"></i></div>
+      <div class="stat-content">
+        <span class="stat-value">{{ stats().inactive }}</span>
+        <span class="stat-label">Inactive</span>
+      </div>
+    </div>
+  </div>
+
+  @if (showForm()) {
+    <section class="form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() == null ? 'Add Site' : 'Edit Site' }}</h2>
+        <button class="btn-icon" type="button" (click)="cancelForm()" title="Close">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Site name *</span>
+          <input type="text" [(ngModel)]="form.name" placeholder="e.g. Ports America Tampa" />
+        </label>
+        <label class="field">
+          <span>Website URL *</span>
+          <input type="url" [(ngModel)]="form.url" placeholder="https://portal.example.com" />
+        </label>
+        <label class="field">
+          <span>Username</span>
+          <input type="text" [(ngModel)]="form.username" autocomplete="off" placeholder="Login username" />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input type="text" [(ngModel)]="form.password" autocomplete="off" placeholder="Login password" />
+        </label>
+        <label class="field">
+          <span>Category</span>
+          <select [(ngModel)]="form.category">
+            <option value="">— Select —</option>
+            @for (cat of categories; track cat) {
+              <option [value]="cat">{{ cat }}</option>
+            }
+          </select>
+        </label>
+        <label class="field checkbox-field">
+          <span>Active</span>
+          <input type="checkbox" [(ngModel)]="form.isActive" />
+        </label>
+        <label class="field full">
+          <span>Notes</span>
+          <textarea rows="2" [(ngModel)]="form.notes" placeholder="Account owner, MFA notes, etc."></textarea>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" type="button" (click)="cancelForm()" [disabled]="saving()">Cancel</button>
+        <button class="btn btn-primary" type="button" (click)="save()" [disabled]="saving()">
+          <i class="bx" [class.bx-loader-alt]="saving()" [class.bx-spin]="saving()" [class.bx-save]="!saving()"></i>
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+    </section>
+  }
+
+  <div class="toolbar">
+    <div class="tabs">
+      <button type="button" [class.active]="statusTab() === 'active'" (click)="setStatusTab('active')">
+        Active <span class="tab-count">{{ stats().active }}</span>
+      </button>
+      <button type="button" [class.active]="statusTab() === 'inactive'" (click)="setStatusTab('inactive')">
+        Inactive <span class="tab-count">{{ stats().inactive }}</span>
+      </button>
+    </div>
+    <div class="search-wrap">
+      <i class="bx bx-search"></i>
+      <input
+        type="search"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+        placeholder="Search name, URL, username, category…"
+      />
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    @if (loading() && !filtered().length) {
+      <div class="empty">Loading inventory…</div>
+    } @else if (!filtered().length) {
+      <div class="empty">
+        @if (searchQuery().trim()) {
+          No {{ statusTab() }} sites match your search.
+        } @else if (statusTab() === 'inactive') {
+          No inactive sites.
+        } @else {
+          No active sites yet. Click <strong>Add Site</strong> to track a portal login and link.
+        }
+      </div>
+    } @else {
+      <table class="data-table">
+        <colgroup>
+          <col class="col-site" />
+          <col class="col-link" />
+          <col class="col-user" />
+          <col class="col-pass" />
+          <col class="col-cat" />
+          <col class="col-notes" />
+          <col class="col-actions" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Site</th>
+            <th>Link</th>
+            <th>Username</th>
+            <th>Password</th>
+            <th>Category</th>
+            <th>Notes</th>
+            <th class="th-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filtered(); track row.id) {
+            <tr>
+              <td>
+                <div class="site-name" [title]="row.name">{{ row.name }}</div>
+              </td>
+              <td>
+                <a
+                  class="site-link"
+                  href="{{ row.url }}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  (click)="$event.preventDefault(); openSite(row.url)"
+                  [title]="row.url"
+                >
+                  <i class="bx bx-link-external"></i>
+                  <span>{{ displayHost(row.url) }}</span>
+                </a>
+              </td>
+              <td>
+                <div class="cred-cell">
+                  <span class="mono" [title]="row.username || ''">{{ row.username || '—' }}</span>
+                  <span class="cred-actions">
+                    @if (row.username) {
+                      <button class="btn-icon sm" type="button" title="Copy username" (click)="copyText(row.username, 'Username')">
+                        <i class="bx bx-copy"></i>
+                      </button>
+                    }
+                  </span>
+                </div>
+              </td>
+              <td>
+                <div class="cred-cell">
+                  <span class="mono">
+                    @if (!row.password) {
+                      —
+                    } @else if (isPasswordRevealed(row.id)) {
+                      {{ row.password }}
+                    } @else {
+                      ••••••••
+                    }
+                  </span>
+                  <span class="cred-actions">
+                    @if (row.password) {
+                      <button class="btn-icon sm" type="button" title="Show / hide" (click)="togglePassword(row.id)">
+                        <i class="bx" [class.bx-show]="!isPasswordRevealed(row.id)" [class.bx-hide]="isPasswordRevealed(row.id)"></i>
+                      </button>
+                      <button class="btn-icon sm" type="button" title="Copy password" (click)="copyText(row.password, 'Password')">
+                        <i class="bx bx-copy"></i>
+                      </button>
+                    }
+                  </span>
+                </div>
+              </td>
+              <td>
+                @if (row.category) {
+                  <span class="badge">{{ row.category }}</span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td class="notes-cell" [title]="row.notes || ''">{{ row.notes || '—' }}</td>
+              <td class="actions">
+                <button class="btn-icon" type="button" title="Open site" (click)="openSite(row.url)">
+                  <i class="bx bx-link-external"></i>
+                </button>
+                <button class="btn-icon" type="button" title="Edit" (click)="openEdit(row)">
+                  <i class="bx bx-edit"></i>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>
