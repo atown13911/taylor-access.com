@@ -407,11 +407,13 @@ public class GoogleWorkspaceController : ControllerBase
         return Ok(new { data = activity });
     }
 
-    /// <summary>Per-user storage usage across the domain (Drive, Gmail, Photos).</summary>
+    /// <summary>Per-user storage usage across the domain (Drive, Gmail, Photos).
+    /// Product owners also see Restricted Access accounts.</summary>
     [HttpGet("storage-usage")]
     public async Task<ActionResult> GetStorageUsage(CancellationToken cancellationToken)
     {
-        var (usage, reportDate, error) = await _directory.GetStorageUsageAsync(includeHidden: false, cancellationToken);
+        var (usage, reportDate, error) = await _directory.GetStorageUsageAsync(
+            includeHidden: _currentUser.IsProductOwner, cancellationToken);
         if (usage == null)
             return StatusCode(502, new { error });
 

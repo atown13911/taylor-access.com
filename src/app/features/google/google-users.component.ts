@@ -224,6 +224,8 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
       this.loadGmailBackupStatus();
       if (tab === 'storage') this.loadAccountTotals();
     }
+    // Storage rows resolve names/last-login from restricted users too.
+    if (tab === 'storage' && this.isProductOwner && !this.restrictedLoaded) this.loadRestricted();
     if (tab === 'restricted' && !this.restrictedLoaded) this.loadRestricted();
     if (tab === 'groups' && !this.groupsLoaded) this.loadDomainGroups();
   }
@@ -402,6 +404,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   userByEmail = computed(() => {
     const map = new Map<string, GoogleUser>();
     for (const u of this.users()) map.set(u.email.toLowerCase(), u);
+    for (const u of this.restrictedUsers()) map.set(u.email.toLowerCase(), u);
     return map;
   });
 
@@ -633,7 +636,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
       next: () => {
         this.restrictBusy.set(null);
         const key = email.toLowerCase();
-        this.storage.update(rows => rows.filter(r => r.email.toLowerCase() !== key));
+        // Product owner still sees restricted accounts on Data Storage — only drop from Domain.
         this.users.update(rows => rows.filter(u => u.email.toLowerCase() !== key));
         this.restrictedLoaded = false;
         this.toast.champagne(`Moved ${email} to Restricted Access`, 'Google');
