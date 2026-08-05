@@ -228,6 +228,20 @@ public class GoogleDirectoryService
         !string.IsNullOrWhiteSpace(email) &&
         (EnvHiddenUsers.Contains(email) || DynamicHiddenUsers.ContainsKey(email));
 
+    /// <summary>
+    /// Emails in Restricted Access (env seed + DB). Used by suite apps to hide
+    /// these accounts from domain pickers outside the product-owner Restricted tab.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetHiddenEmailsAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureDynamicHiddenLoadedAsync(cancellationToken);
+        return EnvHiddenUsers
+            .Concat(DynamicHiddenUsers.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(e => e, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     // Seed / env allowlist — always restricted (comma-separated override).
     private static readonly HashSet<string> EnvHiddenUsers =
         (Environment.GetEnvironmentVariable("GOOGLE_HIDDEN_WORKSPACE_USERS")

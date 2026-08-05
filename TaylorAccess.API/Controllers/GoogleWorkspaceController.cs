@@ -96,6 +96,17 @@ public class GoogleWorkspaceController : ControllerBase
     }
 
     /// <summary>
+    /// Emails in Restricted Access (env + DB). Any authenticated suite caller may
+    /// use this to filter domain directories — full profiles stay product-owner only.
+    /// </summary>
+    [HttpGet("workspace-users/hidden-emails")]
+    public async Task<ActionResult> GetHiddenWorkspaceEmails(CancellationToken cancellationToken)
+    {
+        var emails = await _directory.GetHiddenEmailsAsync(cancellationToken);
+        return Ok(new { data = emails });
+    }
+
+    /// <summary>
     /// Moves a Workspace account into Restricted Access (hidden from Domain /
     /// Data Storage for non–product-owners). Product owner only.
     /// </summary>
