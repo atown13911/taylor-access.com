@@ -398,7 +398,11 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
 
   filteredStorage = computed(() => {
     const search = this.storageSearch().toLowerCase();
-    let list = this.storage();
+    const restricted = new Set(
+      this.restrictedUsers().map(u => u.email.toLowerCase())
+    );
+    // Open Data Storage never lists Restricted Access accounts.
+    let list = this.storage().filter(s => !restricted.has(s.email.toLowerCase()));
     if (search) {
       list = list.filter(s => {
         const user = this.userByEmail().get(s.email.toLowerCase());
@@ -442,7 +446,7 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   }
 
   storageTotals = computed(() => {
-    const list = this.storage();
+    const list = this.filteredStorage();
     return {
       used: list.reduce((sum, s) => sum + s.usedMb, 0),
       drive: list.reduce((sum, s) => sum + s.driveMb, 0),
