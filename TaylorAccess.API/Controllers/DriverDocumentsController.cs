@@ -36,39 +36,12 @@ public class DriverDocumentsController : ControllerBase
         if (user == null)
             return Unauthorized(new { error = "Not authenticated" });
 
-        var userRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
-        var canBypassOrgFilter =
-            userRole == "product_owner" ||
-            userRole == "superadmin" ||
-            userRole == "super_admin" ||
-            userRole == "development" ||
-            userRole == "admin" ||
-            userRole == "administrator";
-
-        var allowedOrgIds = new HashSet<int>();
-        if (!canBypassOrgFilter)
-        {
-            var membershipOrgIds = await _currentUserService.GetUserOrganizationIdsAsync();
-            foreach (var id in membershipOrgIds)
-            {
-                if (id > 0) allowedOrgIds.Add(id);
-            }
-
-            if (user.OrganizationId.HasValue && user.OrganizationId.Value > 0)
-                allowedOrgIds.Add(user.OrganizationId.Value);
-
-            if (allowedOrgIds.Count == 0)
-                return BadRequest(new { error = "User must belong to an organization" });
-        }
-
+        // Shared fleet-wide with Driver Compliance Database — same docs for every Access user.
         limit = Math.Clamp(limit, 1, 10000);
 
         var query = _context.DriverDocuments
             .AsNoTracking()
             .AsQueryable();
-
-        if (!canBypassOrgFilter)
-            query = query.Where(d => allowedOrgIds.Contains(d.OrganizationId));
 
         if (driverId.HasValue) query = query.Where(d => d.DriverId == driverId.Value);
         if (!string.IsNullOrEmpty(category)) query = query.Where(d => d.Category == category);

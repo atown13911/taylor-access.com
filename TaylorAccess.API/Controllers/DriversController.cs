@@ -126,6 +126,7 @@ public class DriversController : ControllerBase
     /// <summary>
     /// Compliance matrix payload: drivers plus lightweight document metadata in one round trip.
     /// Includes drivers referenced by documents even when soft-deleted (archived compliance history).
+    /// Shared fleet-wide for every authenticated Access user (no org filter).
     /// </summary>
     [HttpGet("compliance-board")]
     public async Task<ActionResult<object>> GetComplianceBoard(
@@ -136,40 +137,13 @@ public class DriversController : ControllerBase
         if (user == null)
             return Unauthorized(new { error = "Not authenticated" });
 
-        var userRole = (user.Role ?? string.Empty).Trim().ToLowerInvariant();
-        var canBypassOrgFilter =
-            userRole == "product_owner" ||
-            userRole == "superadmin" ||
-            userRole == "super_admin" ||
-            userRole == "development" ||
-            userRole == "admin" ||
-            userRole == "administrator";
-
-        var allowedOrgIds = new HashSet<int>();
-        if (!canBypassOrgFilter)
-        {
-            var membershipOrgIds = await _currentUserService.GetUserOrganizationIdsAsync();
-            foreach (var id in membershipOrgIds)
-            {
-                if (id > 0) allowedOrgIds.Add(id);
-            }
-
-            if (user.OrganizationId.HasValue && user.OrganizationId.Value > 0)
-                allowedOrgIds.Add(user.OrganizationId.Value);
-
-            if (allowedOrgIds.Count == 0)
-                return BadRequest(new { error = "User must belong to an organization" });
-        }
-
+        // Fleet-wide for every authenticated Access user — same board as product owner.
         limit = Math.Clamp(limit, 1, 10000);
 
         var activeDriverQuery = _context.Drivers
             .AsNoTracking()
             .Where(d => !d.IsDeleted)
             .AsQueryable();
-
-        if (!canBypassOrgFilter)
-            activeDriverQuery = activeDriverQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -209,11 +183,7 @@ public class DriversController : ControllerBase
             })
             .ToListAsync();
 
-        var docQuery = _context.DriverDocuments.AsNoTracking().AsQueryable();
-        if (!canBypassOrgFilter)
-            docQuery = docQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
-
-        var documents = await docQuery
+        var documents = await _context.DriverDocuments.AsNoTracking()
             .Select(d => new ComplianceBoardDocumentRow
             {
                 Id = d.Id,
@@ -240,15 +210,9 @@ public class DriversController : ControllerBase
 
         if (missingDocDriverIds.Count > 0)
         {
-            var supplementalQuery = _context.Drivers
+            var supplementalDrivers = await _context.Drivers
                 .AsNoTracking()
                 .Where(d => missingDocDriverIds.Contains(d.Id))
-                .AsQueryable();
-
-            if (!canBypassOrgFilter)
-                supplementalQuery = supplementalQuery.Where(d => allowedOrgIds.Contains(d.OrganizationId));
-
-            var supplementalDrivers = await supplementalQuery
                 .OrderBy(d => d.Name)
                 .Select(d => new ComplianceBoardDriverRow
                 {
