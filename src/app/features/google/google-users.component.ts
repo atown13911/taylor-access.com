@@ -589,7 +589,14 @@ export class GoogleUsersComponent implements OnInit, OnDestroy {
   gmailBackupLabel(email: string): string | null {
     const info = this.gmailBackupByEmail().get(email.toLowerCase());
     if (!info || info.messages === 0) return null;
-    return `${this.formatBytes(info.bytes)} · ${info.messages.toLocaleString()} msgs`;
+    return this.formatBytes(info.bytes);
+  }
+
+  /** Message rows stored in GoogleGmailBackupMessages (backedUp). */
+  gmailDbLabel(email: string): string | null {
+    const info = this.gmailBackupByEmail().get(email.toLowerCase());
+    if (!info || info.messages === 0) return null;
+    return `${info.messages.toLocaleString()} msgs`;
   }
 
   // ----- What Google currently holds per account (product owner only) -----

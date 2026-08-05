@@ -291,7 +291,8 @@
               <th>Quota Used</th>
               <th>Drive Backup</th>
               <th title="Drive files currently in Google (owned, not trashed, backupable types)">Drive in Google</th>
-              <th>Gmail Backup</th>
+              <th title="Gmail backup size stored in the bucket">Gmail Backup</th>
+              <th title="Message records stored in the Taylor Access database (GoogleGmailBackupMessages)">Msgs in DB</th>
               <th title="Total Gmail messages currently in Google (includes spam/trash)">Gmail in Google</th>
               <th>Backup Status</th>
               <th></th>
@@ -329,6 +330,11 @@
                   {{ driveGoogleLabel(row.email) || '—' }}
                 </td>
                 <td class="backup-size">{{ gmailBackupLabel(row.email) || '—' }}</td>
+                <td class="backup-size google-count" [class.count-ok]="gmailCompareState(row.email) === 'ok'"
+                    [class.count-behind]="gmailCompareState(row.email) === 'behind'"
+                    title="Messages stored in the Taylor Access database for this account">
+                  {{ gmailDbLabel(row.email) || '—' }}
+                </td>
                 <td class="backup-size google-count" [class.count-ok]="gmailCompareState(row.email) === 'ok'"
                     [class.count-behind]="gmailCompareState(row.email) === 'behind'"
                     title="Messages currently in this account's Gmail (includes spam/trash)">
@@ -507,7 +513,8 @@
               @if (isProductOwner) {
                 <th>Drive Backup</th>
                 <th title="Drive files currently in Google (owned, not trashed, backupable types)">Drive in Google</th>
-                <th>Gmail Backup</th>
+                <th title="Gmail backup size stored in the bucket">Gmail Backup</th>
+                <th title="Message records stored in the Taylor Access database (GoogleGmailBackupMessages)">Msgs in DB</th>
                 <th title="Total Gmail messages currently in Google (includes spam/trash)">Gmail in Google</th>
                 <th>Backup Status</th>
                 <th></th>
@@ -547,6 +554,11 @@
                     {{ driveGoogleLabel(row.email) || '—' }}
                   </td>
                   <td class="backup-size">{{ gmailBackupLabel(row.email) || '—' }}</td>
+                  <td class="backup-size google-count" [class.count-ok]="gmailCompareState(row.email) === 'ok'"
+                      [class.count-behind]="gmailCompareState(row.email) === 'behind'"
+                      title="Messages stored in the Taylor Access database for this account">
+                    {{ gmailDbLabel(row.email) || '—' }}
+                  </td>
                   <td class="backup-size google-count" [class.count-ok]="gmailCompareState(row.email) === 'ok'"
                       [class.count-behind]="gmailCompareState(row.email) === 'behind'"
                       title="Messages currently in this account's Gmail (includes spam/trash)">
