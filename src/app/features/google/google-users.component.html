@@ -250,7 +250,7 @@
     <div class="filters-bar">
       <div class="search-box"><i class='bx bx-search'></i><input type="text" placeholder="Search name or email..." [ngModel]="storageSearch()" (ngModelChange)="storageSearch.set($event)"></div>
       @if (storageReportDate()) {
-        <span class="report-date">Report date: {{ storageReportDate() | date:'MMM d, y' }} (Google usage reports lag ~2 days)</span>
+        <span class="report-date">Report date: {{ storageReportDate() | date:'MMM d, y' }} (Google usage reports lag several days)</span>
       }
       <button class="btn btn-secondary btn-sm" (click)="refreshStorage()" [disabled]="storageLoading()">
         <i class='bx bx-refresh'></i> Refresh
@@ -389,7 +389,7 @@
     <div class="filters-bar">
       <div class="search-box"><i class='bx bx-search'></i><input type="text" placeholder="Search name or email..." [ngModel]="storageSearch()" (ngModelChange)="storageSearch.set($event)"></div>
       @if (storageReportDate()) {
-        <span class="report-date">Report date: {{ storageReportDate() | date:'MMM d, y' }} (Google usage reports lag ~2 days)</span>
+        <span class="report-date">Report date: {{ storageReportDate() | date:'MMM d, y' }} (Google usage reports lag several days)</span>
       }
       <button class="btn btn-secondary btn-sm" (click)="refreshStorage()" [disabled]="storageLoading()">
         <i class='bx bx-refresh'></i> Refresh

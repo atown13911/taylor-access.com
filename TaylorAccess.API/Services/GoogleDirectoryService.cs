@@ -1066,32 +1066,70 @@ public class GoogleDirectoryService
     }
 
     /// <summary>
-    /// Per-user storage usage from the Reports usage API. Usage reports lag ~2 days,
-    /// so we walk back from 2 to 6 days until Google has data.
+    /// Per-user storage usage from the Reports usage API. Usage reports lag several days
+    /// (sometimes a week+). Prefer Google's "later than YYYY-MM-DD" hint from the 400 body,
+    /// then walk back further as a fallback.
     /// </summary>
     public async Task<(List<GoogleUserStorage>? Usage, string? ReportDate, string? Error)> GetStorageUsageAsync(
         bool includeHidden = false,
         CancellationToken cancellationToken = default)
     {
         string? firstError = null;
-        for (var daysBack = 2; daysBack <= 6; daysBack++)
+        var tried = new HashSet<string>(StringComparer.Ordinal);
+
+        // Start a couple days back (reports are never same-day), then widen.
+        for (var daysBack = 2; daysBack <= 14; daysBack++)
         {
             var date = DateTime.UtcNow.AddDays(-daysBack).ToString("yyyy-MM-dd");
+            if (!tried.Add(date))
+                continue;
+
             var (usage, error) = await FetchUsageForDateAsync(date, includeHidden, cancellationToken);
             if (usage != null && usage.Count > 0)
                 return (usage, date, null);
 
-            if (error != null)
-            {
-                if (error.Contains("authorization failed", StringComparison.OrdinalIgnoreCase))
-                    return (null, null, error);
-                firstError ??= error;
-            }
+            if (error == null)
+                continue;
+
+            if (error.Contains("authorization failed", StringComparison.OrdinalIgnoreCase))
+                return (null, null, error);
+
+            firstError ??= error;
+
+            // Google tells us the newest available date — jump straight there.
+            var available = TryParseUsageAvailableDate(error);
+            if (available == null || !tried.Add(available))
+                continue;
+
+            var (hintUsage, hintError) = await FetchUsageForDateAsync(available, includeHidden, cancellationToken);
+            if (hintUsage != null && hintUsage.Count > 0)
+                return (hintUsage, available, null);
+            if (hintError != null)
+                firstError ??= hintError;
         }
 
         return firstError != null
             ? (null, null, firstError)
             : (new List<GoogleUserStorage>(), null, null);
+    }
+
+    /// <summary>
+    /// Pulls YYYY-MM-DD from errors like:
+    /// "Data for dates later than 2026-07-31 is not yet available."
+    /// </summary>
+    private static string? TryParseUsageAvailableDate(string error)
+    {
+        const string marker = "later than ";
+        var idx = error.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return null;
+        var start = idx + marker.Length;
+        if (start + 10 > error.Length) return null;
+        var candidate = error.Substring(start, 10);
+        return DateTime.TryParseExact(candidate, "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out _)
+            ? candidate
+            : null;
     }
 
     private async Task<(List<GoogleUserStorage>? Usage, string? Error)> FetchUsageForDateAsync(
