@@ -425,9 +425,9 @@
             <div class="form-group sms-optin-group">
               <label class="sms-optin-toggle">
                 <input type="checkbox" [ngModel]="driverForm().smsOptIn" (ngModelChange)="updateField('smsOptIn', $event)">
-                SMS opt-in — driver consents to receive dispatch and system alert text messages
+                Optional: SMS opt-in — driver consents to receive dispatch and system alert texts (not required to use our services)
               </label>
-              <small class="sms-optin-hint">Uncheck if the driver has revoked consent (replied STOP). DrayTac will not text opted-out drivers.</small>
+              <small class="sms-optin-hint">Unchecked by default. Only check after express consent (e.g. replied YES). Opted-out drivers are never texted.</small>
             </div>
           </div>
         </div>

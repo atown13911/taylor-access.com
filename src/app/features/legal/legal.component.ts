@@ -23,7 +23,7 @@ export class LegalComponent {
     : this.route.snapshot.data['doc'] === 'optin' ? 'optin'
     : 'terms';
 
-  readonly lastUpdated = 'August 6, 2026';
+  readonly lastUpdated = 'August 7, 2026';
   readonly companyName = 'Taylor Logistics';
   readonly contactEmail = 'dispatch@taylor-access.com';
 }

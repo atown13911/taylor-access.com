@@ -143,7 +143,7 @@ export class DriversComponent implements OnInit {
     email: '',
     personalEmail: '',
     phone: '',
-    smsOptIn: true,
+    smsOptIn: false,
     fleetId: null as number | null,
     divisionId: null as number | null,
     driverTerminalId: null as number | null,
@@ -560,7 +560,7 @@ export class DriversComponent implements OnInit {
 
   resetForms(): void {
     this.driverForm.set({
-      name: '', email: '', personalEmail: '', phone: '', smsOptIn: true, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: '', licenseState: '', licenseExpiry: '',
+      name: '', email: '', personalEmail: '', phone: '', smsOptIn: false, fleetId: null, divisionId: null, driverTerminalId: null, licenseNumber: '', licenseState: '', licenseExpiry: '',
       dateOfBirth: '', address: '', city: '', state: '', zip: '', emergencyContact: '',
       emergencyPhone: '', hireDate: '', payRate: 0, payType: 'mile'
     });

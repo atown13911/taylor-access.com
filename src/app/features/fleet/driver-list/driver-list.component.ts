@@ -117,7 +117,7 @@ export class DriverListComponent implements OnInit {
     name: '',
     email: '',
     phone: '',
-    smsOptIn: true,
+    smsOptIn: false,
     organizationId: null as number | null,
     fleetId: null as number | null,
     divisionId: null as number | null,
@@ -1476,7 +1476,7 @@ export class DriverListComponent implements OnInit {
 
   resetForm(): void {
     this.driverForm.set({
-      name: '', email: '', phone: '', smsOptIn: true, organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
+      name: '', email: '', phone: '', smsOptIn: false, organizationId: null, fleetId: null, divisionId: null, driverTerminalId: null,
       licenseNumber: '', licenseState: '', licenseExpiry: '', dateOfBirth: '',
       address: '', city: '', state: '', zip: '', ssn: '',
       truckNumber: '', truckMake: '', truckModel: '', truckYear: null, truckVin: '', truckTag: '', twiccCardNumber: '', twiccExpiry: '', fuelCardNumber: '',
