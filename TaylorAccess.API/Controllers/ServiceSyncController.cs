@@ -80,7 +80,18 @@ public class ServiceSyncController : ControllerBase
     {
         if (!ValidateKey()) return Unauthorized(new { error = "Invalid sync key" });
 
+        var orgMemberships = await _context.UserOrganizations
+            .AsNoTracking()
+            .Select(uo => new { uo.UserId, uo.OrganizationId, uo.IsPrimary })
+            .ToListAsync();
+        var orgsByUser = orgMemberships
+            .GroupBy(uo => uo.UserId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.OrganizationId).Distinct().ToList());
+
         var users = await _context.Users
+            .AsNoTracking()
             .Select(u => new
             {
                 u.Id, u.Name, u.Alias, u.Email, u.Phone, u.Role, u.Status,
@@ -89,7 +100,17 @@ public class ServiceSyncController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { data = users, total = users.Count });
+        var payload = users.Select(u => new
+        {
+            u.Id, u.Name, u.Alias, u.Email, u.Phone, u.Role, u.Status,
+            u.Avatar, u.JobTitle, u.OrganizationId, u.DepartmentId,
+            u.City, u.Country, u.LastLoginAt, u.CreatedAt,
+            organizationIds = orgsByUser.TryGetValue(u.Id, out var ids)
+                ? ids
+                : (u.OrganizationId.HasValue ? new List<int> { u.OrganizationId.Value } : new List<int>())
+        }).ToList();
+
+        return Ok(new { data = payload, total = payload.Count });
     }
 
     [HttpGet("organizations")]
