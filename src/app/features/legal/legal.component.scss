@@ -1,42 +1,43 @@
 .legal-page {
   min-height: 100vh;
-  padding: 3rem 1.5rem;
-  background: var(--bg-primary, #010409);
+  padding: 2.5rem 1.25rem;
+  background: #f4f6f8;
   display: flex;
   justify-content: center;
 }
 
 .legal-card {
-  max-width: 820px;
+  max-width: 860px;
   width: 100%;
-  background: var(--bg-secondary, #0d1117);
-  border: 1px solid var(--border-color, #21262d);
+  background: #ffffff;
+  border: 1px solid #d0d7de;
   border-radius: 12px;
-  padding: 2.5rem 2.75rem;
-  color: var(--text-primary, #e6edf3);
+  padding: 2rem 2.4rem 2.5rem;
+  color: #1f2328;
   line-height: 1.65;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 
   h1 {
     margin: 0 0 0.25rem;
-    font-size: 1.6rem;
-    color: var(--cyan, #00e5ff);
+    font-size: 1.7rem;
+    color: #0b3d4a;
   }
 
   .updated {
-    font-size: 0.8rem;
-    color: var(--text-muted, #8b949e);
+    font-size: 0.82rem;
+    color: #57606a;
     margin-bottom: 1.75rem;
   }
 
   h2 {
-    font-size: 1.05rem;
+    font-size: 1.08rem;
     margin: 1.75rem 0 0.5rem;
-    color: var(--text-primary, #e6edf3);
+    color: #0b3d4a;
   }
 
   p, li {
-    font-size: 0.9rem;
-    color: var(--text-secondary, #c9d1d9);
+    font-size: 0.95rem;
+    color: #24292f;
   }
 
   ul {
@@ -47,113 +48,213 @@
   }
 
   a {
-    color: var(--cyan, #00e5ff);
+    color: #0969da;
   }
 
   .cross-link {
     margin-top: 2rem;
     padding-top: 1rem;
-    border-top: 1px solid var(--border-color, #21262d);
+    border-top: 1px solid #d0d7de;
+  }
+}
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1.75rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #c6d6dc;
+  border-radius: 12px;
+  background: #f0f7fa;
+}
+
+.brand-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #0d1117;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0b3d4a;
+  letter-spacing: 0.01em;
+}
+
+.brand-legal {
+  font-size: 0.92rem;
+  color: #24292f;
+  margin-top: 0.1rem;
+}
+
+.brand-contact {
+  font-size: 0.82rem;
+  color: #57606a;
+  margin-top: 0.2rem;
+}
+
+.sms-thread {
+  margin: 1rem 0 1.25rem;
+  padding: 1.1rem 1.15rem 1.2rem;
+  border: 1px solid #c6d6dc;
+  border-radius: 12px;
+  background: #f8fbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.sms-thread-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid #d0d7de;
+
+  img {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: #0d1117;
+  }
+}
+
+.sms-thread-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0b3d4a;
+}
+
+.sms-thread-label {
+  font-size: 0.75rem;
+  color: #57606a;
+}
+
+.sms-bubble {
+  max-width: 92%;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.92rem;
+
+  p {
+    margin: 0;
+    color: inherit;
+    font-size: inherit;
   }
 
-  .consent-quote {
-    margin: 0.75rem 0 1rem;
-    padding: 0.9rem 1.1rem;
-    border-left: 3px solid var(--cyan, #00e5ff);
-    background: rgba(0, 229, 255, 0.05);
-    border-radius: 0 8px 8px 0;
-    font-size: 0.88rem;
-    color: var(--text-secondary, #c9d1d9);
+  .sms-from {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+    font-weight: 700;
   }
 
-  .ui-proof {
-    margin: 0.75rem 0 1rem;
-    padding: 1rem 1.25rem;
-    border: 1px solid var(--border-color, #21262d);
-    border-radius: 10px;
-    background: var(--bg-primary, #010409);
+  &.outbound {
+    align-self: flex-start;
+    background: #ffffff;
+    border: 1px solid #8bb8c4;
+    color: #1f2328;
 
-    .ui-proof-title {
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted, #8b949e);
-      margin-bottom: 0.6rem;
-    }
-
-    .ui-proof-toggle {
-      display: flex;
-      align-items: center;
-      gap: 0.55rem;
-      font-size: 0.85rem;
-      color: var(--text-primary, #e6edf3);
-
-      input[type='checkbox'] {
-        width: 15px;
-        height: 15px;
-        accent-color: var(--cyan, #00e5ff);
-      }
-    }
-
-    .ui-proof-hint {
-      display: block;
-      margin-top: 0.35rem;
-      font-size: 0.7rem;
-      color: var(--text-muted, #8b949e);
-    }
+    .sms-from { color: #0b3d4a; }
   }
 
-  .sms-thread {
-    margin: 1rem 0 1.25rem;
-    padding: 1rem 1.1rem 1.15rem;
-    border: 1px solid var(--border-color, #21262d);
-    border-radius: 12px;
-    background: var(--bg-primary, #010409);
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-  }
+  &.inbound {
+    align-self: flex-end;
+    background: #e8f5e9;
+    border: 1px solid #81c784;
+    color: #1b5e20;
 
-  .sms-thread-label {
+    .sms-from { color: #1b5e20; }
+  }
+}
+
+.ui-proof {
+  margin: 0.75rem 0 1rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid #c6d6dc;
+  border-radius: 12px;
+  background: #f8fbfc;
+}
+
+.ui-proof-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid #d0d7de;
+
+  img {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #0d1117;
+  }
+}
+
+.ui-proof-company {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0b3d4a;
+}
+
+.ui-proof-title {
+  font-size: 0.78rem;
+  color: #57606a;
+}
+
+.ui-proof-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.ui-proof-field {
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.55rem 0.7rem;
+
+  span {
+    display: block;
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted, #8b949e);
-    margin-bottom: 0.15rem;
+    letter-spacing: 0.04em;
+    color: #57606a;
   }
 
-  .sms-bubble {
-    max-width: 92%;
-    padding: 0.7rem 0.85rem;
-    border-radius: 12px;
-    font-size: 0.85rem;
-
-    p {
-      margin: 0;
-      color: inherit;
-      font-size: inherit;
-    }
-
-    .sms-from {
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 0.3rem;
-      opacity: 0.75;
-    }
-
-    &.outbound {
-      align-self: flex-start;
-      background: rgba(0, 229, 255, 0.12);
-      border: 1px solid rgba(0, 229, 255, 0.28);
-      color: var(--text-primary, #e6edf3);
-    }
-
-    &.inbound {
-      align-self: flex-end;
-      background: rgba(35, 134, 54, 0.22);
-      border: 1px solid rgba(35, 134, 54, 0.4);
-      color: var(--text-primary, #e6edf3);
-    }
+  em {
+    font-style: normal;
+    font-size: 0.88rem;
+    color: #1f2328;
   }
+}
+
+.ui-proof-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.9rem;
+  color: #1f2328;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+    accent-color: #0b3d4a;
+  }
+}
+
+.ui-proof-hint {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  color: #57606a;
 }

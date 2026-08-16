@@ -1,5 +1,17 @@
 <div class="legal-page">
   <div class="legal-card">
+    <header class="brand-header">
+      <img class="brand-logo" src="assets/brand/access-logo.png" alt="Landmark Trucking / Taylor Access" width="72" height="72">
+      <div class="brand-copy">
+        <div class="brand-name">Landmark Trucking</div>
+        <div class="brand-legal">Taylor Logistics · Taylor Access</div>
+        <div class="brand-contact">
+          <a href="https://taylor-access.com">taylor-access.com</a>
+          · dispatch&#64;taylor-access.com
+        </div>
+      </div>
+    </header>
+
     @if (doc === 'terms') {
       <h1>Terms &amp; Conditions</h1>
       <p class="updated">Last updated: {{ lastUpdated }}</p>
@@ -164,10 +176,16 @@
       <p><strong>Opt-in keywords:</strong> START, YES, 1</p>
 
       <div class="sms-thread" aria-label="Example first-text opt-in conversation">
-        <div class="sms-thread-label">Example opt-in conversation</div>
+        <div class="sms-thread-brand">
+          <img src="assets/brand/access-logo.png" alt="Landmark Trucking" width="40" height="40">
+          <div>
+            <div class="sms-thread-title">Landmark Trucking</div>
+            <div class="sms-thread-label">Example opt-in conversation (toll-free SMS)</div>
+          </div>
+        </div>
 
         <div class="sms-bubble outbound">
-          <div class="sms-from">Landmark Trucking (toll-free)</div>
+          <div class="sms-from">Landmark Trucking</div>
           <p>
             Landmark Trucking: You are invited to receive dispatch texts (loads, schedule changes, and
             operational alerts). Msg frequency varies. Msg &amp; data rates may apply. Reply STOP to opt
@@ -181,7 +199,7 @@
         </div>
 
         <div class="sms-bubble outbound">
-          <div class="sms-from">Landmark Trucking (toll-free)</div>
+          <div class="sms-from">Landmark Trucking</div>
           <p>
             You are confirmed for Landmark Trucking dispatch texts. Reply STOP to cancel, HELP for help.
           </p>
@@ -207,7 +225,23 @@
         our services with this box left unchecked.
       </p>
       <div class="ui-proof">
-        <div class="ui-proof-title">Driver Profile — Basic Information</div>
+        <div class="ui-proof-brand">
+          <img src="assets/brand/access-logo.png" alt="Landmark Trucking" width="36" height="36">
+          <div>
+            <div class="ui-proof-company">Landmark Trucking</div>
+            <div class="ui-proof-title">Driver Profile — Basic Information</div>
+          </div>
+        </div>
+        <div class="ui-proof-fields">
+          <div class="ui-proof-field">
+            <span>Full Name</span>
+            <em>Driver name on file</em>
+          </div>
+          <div class="ui-proof-field">
+            <span>Mobile Phone</span>
+            <em>Number used for dispatch texts</em>
+          </div>
+        </div>
         <label class="ui-proof-toggle">
           <input type="checkbox" disabled>
           Optional: SMS opt-in — I consent to receive Landmark Trucking dispatch and system alert texts.

@@ -7,13 +7,19 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'src', 'assets');
 mkdirSync(outDir, { recursive: true });
 
+const target = process.env.SMS_OPT_IN_URL || 'https://taylor-access.com/sms-opt-in';
+
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
-await page.goto('https://taylor-access.com/sms-opt-in', {
+const page = await browser.newPage({
+  viewport: { width: 1280, height: 1600 },
+  deviceScaleFactor: 2,
+});
+await page.goto(target, {
   waitUntil: 'networkidle',
   timeout: 60000,
 });
-await page.waitForTimeout(1500);
+await page.waitForSelector('.brand-header');
+await page.waitForTimeout(800);
 
 const fullPath = join(outDir, 'sms-opt-in-proof.png');
 await page.screenshot({ path: fullPath, fullPage: true });
