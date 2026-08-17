@@ -19,6 +19,7 @@ public class AccountabilityController : ControllerBase
     private readonly TaylorAccessDbContext _db;
     private readonly CurrentUserService _currentUser;
     private static int _schemaReady;
+    private static readonly SemaphoreSlim SchemaLock = new(1, 1);
     private static readonly HashSet<string> Roles = new(StringComparer.OrdinalIgnoreCase)
     {
         "Accountable", "Responsible", "Consulted", "Informed"
@@ -51,59 +52,83 @@ public class AccountabilityController : ControllerBase
 
     private async Task EnsureSchemaAsync()
     {
-        if (Interlocked.CompareExchange(ref _schemaReady, 1, 0) == 1) return;
-        var conn = _db.Database.GetDbConnection();
-        if (conn.State != System.Data.ConnectionState.Open)
-            await conn.OpenAsync();
+        if (Volatile.Read(ref _schemaReady) == 1) return;
+        await SchemaLock.WaitAsync();
+        try
+        {
+            if (Volatile.Read(ref _schemaReady) == 1) return;
+            var conn = await OpenAsync();
+            // Commit each statement so a later seed failure cannot roll back CREATE TABLE.
+            await ExecAsync(conn, @"
+                CREATE TABLE IF NOT EXISTS ""AccountabilityEntries"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""JobPosition"" varchar(200) NOT NULL,
+                    ""Individual"" varchar(200),
+                    ""Notes"" text,
+                    ""CreatedBy"" varchar(150),
+                    ""UpdatedBy"" varchar(150),
+                    ""CreatedAt"" timestamptz NOT NULL DEFAULT now(),
+                    ""UpdatedAt"" timestamptz NOT NULL DEFAULT now()
+                )");
+            await ExecAsync(conn, @"
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EmployeeId"" INTEGER;
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""ReportsToId"" INTEGER;
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""AccountabilityRole"" varchar(30) NOT NULL DEFAULT 'Accountable';
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""SeatStatus"" varchar(30) NOT NULL DEFAULT 'Active';
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EffectiveStart"" date;
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EffectiveEnd"" date;
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""ScopeTags"" text;
+                ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""KeyResults"" text");
+            await ExecAsync(conn, @"
+                CREATE INDEX IF NOT EXISTS idx_accountability_position ON ""AccountabilityEntries"" (""JobPosition"");
+                CREATE INDEX IF NOT EXISTS idx_accountability_employee ON ""AccountabilityEntries"" (""EmployeeId"");
+                CREATE INDEX IF NOT EXISTS idx_accountability_reports ON ""AccountabilityEntries"" (""ReportsToId"");
+                CREATE INDEX IF NOT EXISTS idx_accountability_status ON ""AccountabilityEntries"" (""SeatStatus"")");
+            await ExecAsync(conn, @"
+                CREATE TABLE IF NOT EXISTS ""AccountabilityScopes"" (
+                    ""Id"" SERIAL PRIMARY KEY,
+                    ""Name"" varchar(120) NOT NULL,
+                    ""IsSystem"" boolean NOT NULL DEFAULT false,
+                    ""CreatedBy"" varchar(150),
+                    ""CreatedAt"" timestamptz NOT NULL DEFAULT now()
+                )");
+            await ExecAsync(conn, @"
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_accountability_scopes_name
+                    ON ""AccountabilityScopes"" (LOWER(""Name""))");
+            await ExecAsync(conn, @"
+                INSERT INTO ""AccountabilityScopes"" (""Name"", ""IsSystem"")
+                SELECT seed.""Name"", true
+                FROM (VALUES
+                    ('Dispatch & Load Planning'),
+                    ('Owner-Operator Settlements & CPM'),
+                    ('Compliance / Safety / Drug Testing'),
+                    ('Recruiting & IC Agreements'),
+                    ('Bosnia Operations / Payroll'),
+                    ('Tech / TMS / Integrations'),
+                    ('Accounting / P&L / Factoring'),
+                    ('Insurance & Risk')
+                ) AS seed(""Name"")
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM ""AccountabilityScopes"" s
+                    WHERE LOWER(s.""Name"") = LOWER(seed.""Name"")
+                )");
+            Volatile.Write(ref _schemaReady, 1);
+        }
+        catch
+        {
+            Volatile.Write(ref _schemaReady, 0);
+            throw;
+        }
+        finally
+        {
+            SchemaLock.Release();
+        }
+    }
+
+    private static async Task ExecAsync(DbConnection conn, string sql)
+    {
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            CREATE TABLE IF NOT EXISTS ""AccountabilityEntries"" (
-                ""Id"" SERIAL PRIMARY KEY,
-                ""JobPosition"" varchar(200) NOT NULL,
-                ""Individual"" varchar(200),
-                ""Notes"" text,
-                ""CreatedBy"" varchar(150),
-                ""UpdatedBy"" varchar(150),
-                ""CreatedAt"" timestamptz NOT NULL DEFAULT now(),
-                ""UpdatedAt"" timestamptz NOT NULL DEFAULT now()
-            );
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EmployeeId"" INTEGER;
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""ReportsToId"" INTEGER;
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""AccountabilityRole"" varchar(30) NOT NULL DEFAULT 'Accountable';
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""SeatStatus"" varchar(30) NOT NULL DEFAULT 'Active';
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EffectiveStart"" date;
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EffectiveEnd"" date;
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""ScopeTags"" text;
-            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""KeyResults"" text;
-            CREATE INDEX IF NOT EXISTS idx_accountability_position ON ""AccountabilityEntries"" (""JobPosition"");
-            CREATE INDEX IF NOT EXISTS idx_accountability_employee ON ""AccountabilityEntries"" (""EmployeeId"");
-            CREATE INDEX IF NOT EXISTS idx_accountability_reports ON ""AccountabilityEntries"" (""ReportsToId"");
-            CREATE INDEX IF NOT EXISTS idx_accountability_status ON ""AccountabilityEntries"" (""SeatStatus"");
-            CREATE TABLE IF NOT EXISTS ""AccountabilityScopes"" (
-                ""Id"" SERIAL PRIMARY KEY,
-                ""Name"" varchar(120) NOT NULL,
-                ""IsSystem"" boolean NOT NULL DEFAULT false,
-                ""CreatedBy"" varchar(150),
-                ""CreatedAt"" timestamptz NOT NULL DEFAULT now()
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_accountability_scopes_name
-                ON ""AccountabilityScopes"" (LOWER(""Name""));
-            INSERT INTO ""AccountabilityScopes"" (""Name"", ""IsSystem"")
-            SELECT seed.""Name"", true
-            FROM (VALUES
-                ('Dispatch & Load Planning'),
-                ('Owner-Operator Settlements & CPM'),
-                ('Compliance / Safety / Drug Testing'),
-                ('Recruiting & IC Agreements'),
-                ('Bosnia Operations / Payroll'),
-                ('Tech / TMS / Integrations'),
-                ('Accounting / P&L / Factoring'),
-                ('Insurance & Risk')
-            ) AS seed(""Name"")
-            WHERE NOT EXISTS (
-                SELECT 1 FROM ""AccountabilityScopes"" s
-                WHERE LOWER(s.""Name"") = LOWER(seed.""Name"")
-            );";
+        cmd.CommandText = sql;
         await cmd.ExecuteNonQueryAsync();
     }
 

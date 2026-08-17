@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, catchError, map, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export type AccountabilityRole = 'Accountable' | 'Responsible' | 'Consulted' | 'Informed';
@@ -110,6 +110,7 @@ export class AccountabilityService {
   loadScopes(): Observable<AccountabilityScope[]> {
     return this.http.get<{ data?: AccountabilityScope[] }>(this.url('/scopes')).pipe(
       map((res) => res?.data || []),
+      catchError(() => of(this.fallbackScopes())),
       tap((rows) => this._scopes.set(rows.length ? rows : this.fallbackScopes()))
     );
   }
