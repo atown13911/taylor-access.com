@@ -238,6 +238,9 @@
       <button type="button" [class.active]="viewMode() === 'chart'" (click)="viewMode.set('chart')">
         <i class="bx bx-git-branch"></i> Org chart
       </button>
+      <button type="button" [class.active]="viewMode() === 'scope'" (click)="viewMode.set('scope')">
+        <i class="bx bx-target-lock"></i> Scope
+      </button>
     </div>
   </div>
 
@@ -257,6 +260,39 @@
     <div class="org-wrap">
       @for (node of orgRoots(); track node.row.id) {
         <ng-container *ngTemplateOutlet="orgNode; context: { $implicit: node }"></ng-container>
+      }
+    </div>
+  } @else if (viewMode() === 'scope') {
+    <div class="scope-wrap">
+      @for (group of scopeGroups(); track group.domain) {
+        <section class="scope-card" [class.empty]="!group.seats.length" [class.unassigned]="group.domain === 'Unassigned'">
+          <header class="scope-head">
+            <h3>{{ group.domain }}</h3>
+            <span>{{ group.seats.length }} {{ group.seats.length === 1 ? 'seat' : 'seats' }}</span>
+          </header>
+          @if (!group.seats.length) {
+            <p class="scope-gap">No owner assigned</p>
+          } @else {
+            <div class="scope-seats">
+              @for (row of group.seats; track row.id) {
+                <button type="button" class="scope-seat" (click)="openDetails(row)">
+                  <div class="scope-seat-top">
+                    <strong>{{ row.jobPosition }}</strong>
+                    <span class="role-badge" [attr.data-role]="row.accountabilityRole">{{ row.accountabilityRole }}</span>
+                  </div>
+                  <div class="scope-seat-name">
+                    @if (row.seatStatus === 'Vacant' && !row.individual) {
+                      Vacant
+                    } @else {
+                      {{ row.individual || 'Unassigned' }}
+                    }
+                  </div>
+                  <span class="status-badge" [attr.data-status]="row.seatStatus">{{ row.seatStatus }}</span>
+                </button>
+              }
+            </div>
+          }
+        </section>
       }
     </div>
   } @else {

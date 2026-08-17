@@ -48,6 +48,11 @@ interface OrgNode {
   children: OrgNode[];
 }
 
+interface ScopeGroup {
+  domain: string;
+  seats: AccountabilityEntry[];
+}
+
 @Component({
   selector: 'app-accountability',
   standalone: true,
@@ -72,7 +77,7 @@ export class AccountabilityComponent implements OnInit {
   searchQuery = signal('');
   statusFilter = signal<string>('');
   domainFilter = signal('');
-  viewMode = signal<'list' | 'chart'>('list');
+  viewMode = signal<'list' | 'chart' | 'scope'>('list');
   showForm = signal(false);
   detailRow = signal<AccountabilityEntry | null>(null);
   editingId = signal<number | null>(null);
@@ -147,6 +152,42 @@ export class AccountabilityComponent implements OnInit {
         this.employeeOrg(emp).toLowerCase().includes(q)
       );
     });
+  });
+
+  scopeGroups = computed(() => {
+    const rows = this.filtered();
+    const selected = this.domainFilter();
+    const known = selected ? [selected] : [...this.domains];
+    const extras = new Set<string>();
+    if (!selected) {
+      for (const row of this.entries()) {
+        for (const tag of row.scopeTags || []) {
+          if (!known.includes(tag)) extras.add(tag);
+        }
+      }
+    }
+
+    const groups: ScopeGroup[] = [...known, ...extras].map((domain) => ({
+      domain,
+      seats: rows
+        .filter((row) => (row.scopeTags || []).includes(domain))
+        .slice()
+        .sort((a, b) => {
+          const roleRank = (role?: string | null) =>
+            role === 'Accountable' ? 0 : role === 'Responsible' ? 1 : 2;
+          return roleRank(a.accountabilityRole) - roleRank(b.accountabilityRole)
+            || a.jobPosition.localeCompare(b.jobPosition);
+        }),
+    }));
+
+    if (!selected) {
+      groups.push({
+        domain: 'Unassigned',
+        seats: rows.filter((row) => !(row.scopeTags || []).length),
+      });
+    }
+
+    return groups;
   });
 
   orgRoots = computed(() => {
