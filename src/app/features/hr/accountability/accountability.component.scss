@@ -1,4 +1,4 @@
-.page-container { padding: 24px; max-width: 1280px; margin: 0 auto; }
+.page-container { padding: 24px; max-width: 1480px; margin: 0 auto; }
 
 .page-header {
   display: flex;
@@ -66,7 +66,8 @@
 }
 .field.full { grid-column: 1 / -1; }
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   background: #121225;
   border: 1px solid #2d2d46;
   border-radius: 8px;
@@ -74,6 +75,86 @@
   padding: 10px 12px;
   font: inherit;
   resize: vertical;
+}
+.field em {
+  font-style: normal;
+  color: #8e8ea8;
+  font-weight: 400;
+}
+
+.stat-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.stat {
+  min-width: 110px;
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 10px;
+  color: #e8e8f0;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.stat strong { font-size: 1.2rem; }
+.stat span { color: #8e8ea8; font-size: 0.75rem; }
+.stat.active { border-color: #4fc3f7; box-shadow: 0 0 0 1px rgba(79, 195, 247, 0.25); }
+.stat.vacant.active, .stat.vacant strong { color: #fca5a5; }
+.stat.interim.active, .stat.interim strong { color: #fcd34d; }
+.stat.trans.active, .stat.trans strong { color: #93c5fd; }
+
+.role-pills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.role-pill {
+  background: #121225;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  color: #e8e8f0;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.role-pill strong { font-size: 0.86rem; }
+.role-pill em { color: #8e8ea8; font-size: 0.72rem; font-style: normal; }
+.role-pill.active { border-color: #4fc3f7; background: rgba(79, 195, 247, 0.1); }
+
+.tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag {
+  background: #121225;
+  border: 1px solid #2d2d46;
+  color: #c8c8dc;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.tag.on { background: rgba(79, 195, 247, 0.14); border-color: #4fc3f7; color: #fff; }
+
+.kpi-list { display: flex; flex-direction: column; gap: 8px; }
+.kpi-row { display: flex; gap: 8px; align-items: center; }
+.kpi-row input { flex: 1; }
+.link-btn {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: #4fc3f7;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font: inherit;
 }
 
 .roster-select { position: relative; }
@@ -218,6 +299,33 @@
   margin-bottom: 14px;
   flex-wrap: wrap;
 }
+.filter-select {
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px;
+  font: inherit;
+  min-width: 220px;
+}
+.view-toggle {
+  display: flex;
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.view-toggle button {
+  background: transparent;
+  border: none;
+  color: #b8b8d0;
+  padding: 9px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.view-toggle button.active { background: #2a2a40; color: #fff; }
 
 .search-wrap {
   position: relative;
@@ -252,14 +360,8 @@
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
-  min-width: 720px;
+  min-width: 1100px;
 }
-
-.col-position { width: 22%; }
-.col-individual { width: 20%; }
-.col-notes { width: 48%; }
-.col-actions { width: 10%; }
 
 .data-table th,
 .data-table td {
@@ -291,12 +393,56 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.notes-cell {
-  color: #a0a0b8;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.seat-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.role-badge,
+.status-badge,
+.mini-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
   white-space: nowrap;
+}
+.role-badge { background: rgba(79, 195, 247, 0.12); color: #7dd3fc; }
+.role-badge[data-role="Responsible"] { background: rgba(167, 139, 250, 0.14); color: #c4b5fd; }
+.role-badge[data-role="Consulted"] { background: rgba(251, 191, 36, 0.12); color: #fcd34d; }
+.role-badge[data-role="Informed"] { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+.status-badge { background: rgba(34, 197, 94, 0.12); color: #86efac; }
+.status-badge[data-status="Vacant"] { background: rgba(239, 68, 68, 0.14); color: #fca5a5; }
+.status-badge[data-status="Interim"] { background: rgba(245, 158, 11, 0.14); color: #fcd34d; }
+.status-badge[data-status="Transitioning"] { background: rgba(59, 130, 246, 0.14); color: #93c5fd; }
+.mini-chip { background: #121225; color: #b8b8d0; border: 1px solid #2d2d46; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.chip-cell { display: flex; flex-wrap: wrap; gap: 4px; }
+.kpi-cell span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpi-cell em { color: #8e8ea8; font-style: normal; font-size: 0.75rem; }
+.reports-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vacant-label { color: #fca5a5; font-weight: 600; }
+.muted { color: #8e8ea8; }
+
+.org-wrap { display: flex; flex-direction: column; gap: 16px; }
+.org-node { display: flex; flex-direction: column; gap: 10px; }
+.org-card {
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 10px;
+  padding: 12px 14px;
+  max-width: 360px;
+  cursor: pointer;
+}
+.org-card:hover { border-color: #4fc3f7; }
+.org-card-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.org-card-top strong { color: #fff; }
+.org-person { color: #e8e8f0; margin-top: 6px; }
+.org-role { color: #8e8ea8; font-size: 0.78rem; margin: 4px 0 8px; }
+.org-children {
+  margin-left: 28px;
+  padding-left: 16px;
+  border-left: 1px solid #2d2d46;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .actions {
@@ -328,8 +474,12 @@
   color: #8e8ea8;
 }
 
+@media (max-width: 900px) {
+  .role-pills { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 720px) {
   .form-grid { grid-template-columns: 1fr; }
   .profile-grid { grid-template-columns: 1fr; }
   .search-wrap { max-width: none; }
+  .role-pills { grid-template-columns: 1fr; }
 }

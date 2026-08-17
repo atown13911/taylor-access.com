@@ -6,10 +6,16 @@ import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
 import { OrganizationContextService } from '../../../core/services/organization-context.service';
+import { AuthService } from '../../../core/services/auth.service';
 import {
+  ACCOUNTABILITY_ROLES,
   AccountabilityEntry,
+  AccountabilityRole,
   AccountabilityWritePayload,
   AccountabilityService,
+  SCOPE_DOMAINS,
+  SEAT_STATUSES,
+  SeatStatus,
 } from '../../../core/services/accountability.service';
 
 interface RosterEmployee {
@@ -37,6 +43,11 @@ interface RosterEmployee {
   terminal?: { name?: string | null; code?: string | null } | null;
 }
 
+interface OrgNode {
+  row: AccountabilityEntry;
+  children: OrgNode[];
+}
+
 @Component({
   selector: 'app-accountability',
   standalone: true,
@@ -50,10 +61,18 @@ export class AccountabilityComponent implements OnInit {
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private orgContext = inject(OrganizationContextService);
+  private auth = inject(AuthService);
+
+  readonly roles = ACCOUNTABILITY_ROLES;
+  readonly statuses = SEAT_STATUSES;
+  readonly domains = SCOPE_DOMAINS;
 
   loading = signal(false);
   saving = signal(false);
   searchQuery = signal('');
+  statusFilter = signal<string>('');
+  domainFilter = signal('');
+  viewMode = signal<'list' | 'chart'>('list');
   showForm = signal(false);
   editingId = signal<number | null>(null);
   employees = signal<RosterEmployee[]>([]);
@@ -71,23 +90,66 @@ export class AccountabilityComponent implements OnInit {
     return this.employees().find((emp) => emp.id === id) ?? null;
   });
 
+  reportsToOptions = computed(() => {
+    const editing = this.editingId();
+    return this.entries()
+      .filter((row) => row.id !== editing)
+      .slice()
+      .sort((a, b) => a.jobPosition.localeCompare(b.jobPosition));
+  });
+
+  counts = computed(() => {
+    const rows = this.entries();
+    return {
+      all: rows.length,
+      vacant: rows.filter((r) => r.seatStatus === 'Vacant').length,
+      interim: rows.filter((r) => r.seatStatus === 'Interim').length,
+      transitioning: rows.filter((r) => r.seatStatus === 'Transitioning').length,
+      myReports: this.directReportIds().size,
+    };
+  });
+
   filtered = computed(() => {
     const q = this.searchQuery().trim().toLowerCase();
-    let rows = this.entries();
-    if (q) {
-      rows = rows.filter((e) => {
-        const emp = this.rosterFor(e);
-        return (
-          e.jobPosition.toLowerCase().includes(q) ||
-          (e.individual || '').toLowerCase().includes(q) ||
-          (e.notes || '').toLowerCase().includes(q) ||
-          (emp?.email || '').toLowerCase().includes(q) ||
-          this.employeeDepartment(emp).toLowerCase().includes(q) ||
-          this.employeeOrg(emp).toLowerCase().includes(q)
-        );
-      });
+    const status = this.statusFilter();
+    const domain = this.domainFilter();
+    const mine = this.directReportIds();
+    return this.entries().filter((e) => {
+      if (status === 'my-reports' && !mine.has(e.id)) return false;
+      if (status && status !== 'my-reports' && (e.seatStatus || 'Active') !== status) return false;
+      if (domain && !(e.scopeTags || []).includes(domain)) return false;
+      if (!q) return true;
+      const emp = this.rosterFor(e);
+      const reportsTo = this.reportsToLabel(e).toLowerCase();
+      return (
+        e.jobPosition.toLowerCase().includes(q) ||
+        (e.individual || '').toLowerCase().includes(q) ||
+        (e.notes || '').toLowerCase().includes(q) ||
+        (e.accountabilityRole || '').toLowerCase().includes(q) ||
+        (e.seatStatus || '').toLowerCase().includes(q) ||
+        (e.scopeTags || []).some((tag) => tag.toLowerCase().includes(q)) ||
+        (e.keyResults || []).some((kpi) => kpi.toLowerCase().includes(q)) ||
+        reportsTo.includes(q) ||
+        (emp?.email || '').toLowerCase().includes(q) ||
+        this.employeeDepartment(emp).toLowerCase().includes(q) ||
+        this.employeeOrg(emp).toLowerCase().includes(q)
+      );
+    });
+  });
+
+  orgRoots = computed(() => {
+    const rows = this.filtered();
+    const ids = new Set(rows.map((r) => r.id));
+    const byParent = new Map<number, AccountabilityEntry[]>();
+    for (const row of rows) {
+      const parent = row.reportsToId && ids.has(row.reportsToId) ? row.reportsToId : 0;
+      const list = byParent.get(parent) || [];
+      list.push(row);
+      byParent.set(parent, list);
     }
-    return rows;
+    const build = (parentId: number): OrgNode[] =>
+      (byParent.get(parentId) || []).map((row) => ({ row, children: build(row.id) }));
+    return build(0);
   });
 
   filteredEmployees = computed(() => {
@@ -142,7 +204,15 @@ export class AccountabilityComponent implements OnInit {
       individual: row.individual || '',
       notes: row.notes || '',
       employeeId: row.employeeId ?? null,
+      reportsToId: row.reportsToId ?? null,
+      accountabilityRole: (row.accountabilityRole as AccountabilityRole) || 'Accountable',
+      seatStatus: (row.seatStatus as SeatStatus) || 'Active',
+      effectiveStart: this.toDateInput(row.effectiveStart),
+      effectiveEnd: this.toDateInput(row.effectiveEnd),
+      scopeTags: [...(row.scopeTags || [])],
+      keyResults: [...(row.keyResults || [])],
     };
+    if (!this.form.keyResults?.length) this.form.keyResults = [''];
     this.syncEmployeePicker(row);
     this.showForm.set(true);
   }
@@ -171,6 +241,38 @@ export class AccountabilityComponent implements OnInit {
     this.form.employeeId = emp.id;
     if (title) this.form.jobPosition = title;
     this.showEmployeeList.set(false);
+  }
+
+  toggleDomain(tag: string): void {
+    const current = this.form.scopeTags || [];
+    this.form.scopeTags = current.includes(tag)
+      ? current.filter((item) => item !== tag)
+      : [...current, tag];
+  }
+
+  hasDomain(tag: string): boolean {
+    return (this.form.scopeTags || []).includes(tag);
+  }
+
+  addKpi(): void {
+    const current = this.form.keyResults || [];
+    if (current.length >= 5) return;
+    this.form.keyResults = [...current, ''];
+  }
+
+  removeKpi(index: number): void {
+    const current = [...(this.form.keyResults || [])];
+    current.splice(index, 1);
+    this.form.keyResults = current.length ? current : [''];
+  }
+
+  updateKpi(index: number, value: string): void {
+    if (!this.form.keyResults) this.form.keyResults = [''];
+    this.form.keyResults[index] = value;
+  }
+
+  trackKpi(_index: number, _item: string): number {
+    return _index;
   }
 
   employeeTitle(emp: RosterEmployee | null | undefined): string {
@@ -228,6 +330,33 @@ export class AccountabilityComponent implements OnInit {
     return this.findEmployeeByName(row.individual || '') ?? null;
   }
 
+  reportsToLabel(row: AccountabilityEntry): string {
+    if (!row.reportsToId) return '';
+    const parent = this.entries().find((item) => item.id === row.reportsToId);
+    if (!parent) return '';
+    return parent.individual ? `${parent.jobPosition} · ${parent.individual}` : parent.jobPosition;
+  }
+
+  roleHint(role: string | null | undefined): string {
+    return this.roles.find((item) => item.value === role)?.hint || '';
+  }
+
+  dateRange(row: AccountabilityEntry): string {
+    const start = this.toDateInput(row.effectiveStart);
+    const end = this.toDateInput(row.effectiveEnd);
+    if (!start && !end) return '';
+    if (start && end) return `${start} → ${end}`;
+    if (start) return `From ${start}`;
+    return `Until ${end}`;
+  }
+
+  updatedLabel(row: AccountabilityEntry): string {
+    if (!row.updatedAt) return '';
+    const when = new Date(row.updatedAt);
+    const stamp = Number.isNaN(when.getTime()) ? row.updatedAt : when.toLocaleDateString();
+    return row.updatedBy ? `${stamp} · ${row.updatedBy}` : stamp;
+  }
+
   save(): void {
     const jobPosition = (this.form.jobPosition || '').trim();
     if (!jobPosition) {
@@ -240,12 +369,24 @@ export class AccountabilityComponent implements OnInit {
       this.employees().find((emp) => emp.id === this.selectedEmployeeId()) ||
       this.findEmployeeByName(typedName);
     const individual = matched?.name?.trim() || typedName || null;
+    const reportsToId = this.form.reportsToId ? Number(this.form.reportsToId) : null;
+    if (reportsToId && reportsToId === this.editingId()) {
+      this.toast.error('A seat cannot report to itself');
+      return;
+    }
 
     const payload: AccountabilityWritePayload = {
       jobPosition,
       individual,
       notes: (this.form.notes || '').trim() || null,
       employeeId: matched?.id ?? null,
+      reportsToId,
+      accountabilityRole: this.form.accountabilityRole || 'Accountable',
+      seatStatus: this.form.seatStatus || 'Active',
+      effectiveStart: this.form.effectiveStart || null,
+      effectiveEnd: this.form.effectiveEnd || null,
+      scopeTags: this.form.scopeTags || [],
+      keyResults: (this.form.keyResults || []).map((item) => item.trim()).filter(Boolean),
     };
 
     this.saving.set(true);
@@ -268,7 +409,7 @@ export class AccountabilityComponent implements OnInit {
 
   async remove(row: AccountabilityEntry): Promise<void> {
     const ok = await this.confirm.danger(
-      `Remove "${row.jobPosition}" from the accountability chart?`,
+      `Remove "${row.jobPosition}" from the accountability chart? Direct reports will be unlinked.`,
       'Remove Position'
     );
     if (!ok) return;
@@ -280,7 +421,19 @@ export class AccountabilityComponent implements OnInit {
   }
 
   private blankForm(): AccountabilityWritePayload {
-    return { jobPosition: '', individual: '', notes: '', employeeId: null };
+    return {
+      jobPosition: '',
+      individual: '',
+      notes: '',
+      employeeId: null,
+      reportsToId: null,
+      accountabilityRole: 'Accountable',
+      seatStatus: 'Active',
+      effectiveStart: '',
+      effectiveEnd: '',
+      scopeTags: [],
+      keyResults: [''],
+    };
   }
 
   private resetEmployeePicker(): void {
@@ -303,6 +456,22 @@ export class AccountabilityComponent implements OnInit {
     const needle = name.trim().toLowerCase();
     if (!needle) return undefined;
     return this.employees().find((emp) => (emp.name || '').trim().toLowerCase() === needle);
+  }
+
+  private toDateInput(value?: string | null): string {
+    if (!value) return '';
+    return String(value).slice(0, 10);
+  }
+
+  private directReportIds(): Set<number> {
+    const userId = Number(this.auth.currentUser()?.id);
+    if (!userId) return new Set();
+    const mySeats = this.entries().filter((row) => row.employeeId === userId).map((row) => row.id);
+    return new Set(
+      this.entries()
+        .filter((row) => row.reportsToId != null && mySeats.includes(row.reportsToId))
+        .map((row) => row.id)
+    );
   }
 
   private async loadEmployees(): Promise<void> {

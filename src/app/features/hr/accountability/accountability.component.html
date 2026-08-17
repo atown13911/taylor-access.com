@@ -2,7 +2,7 @@
   <header class="page-header">
     <div class="header-content">
       <h1><i class="bx bx-sitemap"></i> Accountability</h1>
-      <p class="subtitle">Who owns what — job positions, the individual holding each seat, and their responsibilities</p>
+      <p class="subtitle">Who owns what, who they report to, and the results each seat is measured on</p>
     </div>
     <div class="header-actions">
       <button class="btn btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
@@ -14,6 +14,24 @@
       </button>
     </div>
   </header>
+
+  <div class="stat-row">
+    <button type="button" class="stat" [class.active]="statusFilter() === ''" (click)="statusFilter.set('')">
+      <strong>{{ counts().all }}</strong><span>Seats</span>
+    </button>
+    <button type="button" class="stat vacant" [class.active]="statusFilter() === 'Vacant'" (click)="statusFilter.set(statusFilter() === 'Vacant' ? '' : 'Vacant')">
+      <strong>{{ counts().vacant }}</strong><span>Vacant</span>
+    </button>
+    <button type="button" class="stat interim" [class.active]="statusFilter() === 'Interim'" (click)="statusFilter.set(statusFilter() === 'Interim' ? '' : 'Interim')">
+      <strong>{{ counts().interim }}</strong><span>Interim</span>
+    </button>
+    <button type="button" class="stat trans" [class.active]="statusFilter() === 'Transitioning'" (click)="statusFilter.set(statusFilter() === 'Transitioning' ? '' : 'Transitioning')">
+      <strong>{{ counts().transitioning }}</strong><span>Transitioning</span>
+    </button>
+    <button type="button" class="stat" [class.active]="statusFilter() === 'my-reports'" (click)="statusFilter.set(statusFilter() === 'my-reports' ? '' : 'my-reports')">
+      <strong>{{ counts().myReports }}</strong><span>My reports</span>
+    </button>
+  </div>
 
   @if (showForm()) {
     <section class="form-panel">
@@ -59,6 +77,53 @@
           <span>Job position *</span>
           <input type="text" [(ngModel)]="form.jobPosition" placeholder="e.g. Dispatch Manager" />
         </label>
+
+        <label class="field">
+          <span>Reports to</span>
+          <select [(ngModel)]="form.reportsToId">
+            <option [ngValue]="null">Top of chart</option>
+            @for (seat of reportsToOptions(); track seat.id) {
+              <option [ngValue]="seat.id">
+                {{ seat.jobPosition }}{{ seat.individual ? ' · ' + seat.individual : '' }}
+              </option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Seat status</span>
+          <select [(ngModel)]="form.seatStatus">
+            @for (status of statuses; track status) {
+              <option [ngValue]="status">{{ status }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Effective start</span>
+          <input type="date" [(ngModel)]="form.effectiveStart" />
+        </label>
+        <label class="field">
+          <span>Effective end</span>
+          <input type="date" [(ngModel)]="form.effectiveEnd" />
+        </label>
+
+        <div class="field full">
+          <span>Ownership role</span>
+          <div class="role-pills">
+            @for (role of roles; track role.value) {
+              <button
+                type="button"
+                class="role-pill"
+                [class.active]="form.accountabilityRole === role.value"
+                (click)="form.accountabilityRole = role.value"
+              >
+                <strong>{{ role.label }}</strong>
+                <em>{{ role.hint }}</em>
+              </button>
+            }
+          </div>
+        </div>
+
         @if (selectedEmployee(); as emp) {
           <div class="profile-card">
             <div class="profile-head">
@@ -103,21 +168,40 @@
                 <span>Role</span>
                 <strong>{{ emp.role || '—' }}</strong>
               </div>
-              @if (emp.employeeNumber) {
-                <div class="profile-item">
-                  <span>Employee #</span>
-                  <strong>{{ emp.employeeNumber }}</strong>
-                </div>
-              }
-              @if (employeeLocation(emp)) {
-                <div class="profile-item">
-                  <span>Location</span>
-                  <strong>{{ employeeLocation(emp) }}</strong>
-                </div>
-              }
             </div>
           </div>
         }
+
+        <div class="field full">
+          <span>Scope / Domain</span>
+          <div class="tag-row">
+            @for (tag of domains; track tag) {
+              <button type="button" class="tag" [class.on]="hasDomain(tag)" (click)="toggleDomain(tag)">
+                {{ tag }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <div class="field full">
+          <span>Key results / KPIs <em>(up to 5)</em></span>
+          <div class="kpi-list">
+            @for (kpi of form.keyResults; track trackKpi($index, kpi); let i = $index) {
+              <div class="kpi-row">
+                <input type="text" [ngModel]="kpi" (ngModelChange)="updateKpi(i, $event)" placeholder="e.g. On-time delivery %, Settlement accuracy" />
+                <button class="btn-icon" type="button" title="Remove KPI" (click)="removeKpi(i)">
+                  <i class="bx bx-minus"></i>
+                </button>
+              </div>
+            }
+          </div>
+          @if ((form.keyResults?.length || 0) < 5) {
+            <button class="link-btn" type="button" (click)="addKpi()">
+              <i class="bx bx-plus"></i> Add KPI
+            </button>
+          }
+        </div>
+
         <label class="field full">
           <span>Notes / Responsibilities</span>
           <textarea rows="3" [(ngModel)]="form.notes" placeholder="What this seat is accountable for"></textarea>
@@ -140,35 +224,53 @@
         type="search"
         [ngModel]="searchQuery()"
         (ngModelChange)="searchQuery.set($event)"
-        placeholder="Search position, individual, notes…"
+        placeholder="Search position, person, domain, KPI, notes…"
       />
+    </div>
+    <select class="filter-select" [ngModel]="domainFilter()" (ngModelChange)="domainFilter.set($event)">
+      <option value="">All domains</option>
+      @for (tag of domains; track tag) {
+        <option [value]="tag">{{ tag }}</option>
+      }
+    </select>
+    <div class="view-toggle">
+      <button type="button" [class.active]="viewMode() === 'list'" (click)="viewMode.set('list')">
+        <i class="bx bx-list-ul"></i> List
+      </button>
+      <button type="button" [class.active]="viewMode() === 'chart'" (click)="viewMode.set('chart')">
+        <i class="bx bx-git-branch"></i> Org chart
+      </button>
     </div>
   </div>
 
-  <div class="table-wrap">
-    @if (loading() && !filtered().length) {
-      <div class="empty">Loading accountability chart…</div>
-    } @else if (!filtered().length) {
+  @if (loading() && !filtered().length) {
+    <div class="table-wrap"><div class="empty">Loading accountability chart…</div></div>
+  } @else if (!filtered().length) {
+    <div class="table-wrap">
       <div class="empty">
-        @if (searchQuery().trim()) {
-          No positions match your search.
+        @if (searchQuery().trim() || statusFilter() || domainFilter()) {
+          No seats match the current filters.
         } @else {
           No positions yet. Click <strong>Add Position</strong> to start building the chart.
         }
       </div>
-    } @else {
+    </div>
+  } @else if (viewMode() === 'chart') {
+    <div class="org-wrap">
+      @for (node of orgRoots(); track node.row.id) {
+        <ng-container *ngTemplateOutlet="orgNode; context: { $implicit: node }"></ng-container>
+      }
+    </div>
+  } @else {
+    <div class="table-wrap">
       <table class="data-table">
-        <colgroup>
-          <col class="col-position" />
-          <col class="col-individual" />
-          <col class="col-notes" />
-          <col class="col-actions" />
-        </colgroup>
         <thead>
           <tr>
-            <th>Job Position</th>
+            <th>Seat</th>
             <th>Individual</th>
-            <th>Notes / Responsibilities</th>
+            <th>Reports To</th>
+            <th>Scope</th>
+            <th>KPIs</th>
             <th class="th-actions">Actions</th>
           </tr>
         </thead>
@@ -177,20 +279,49 @@
             <tr>
               <td>
                 <div class="position-name" [title]="row.jobPosition">{{ row.jobPosition }}</div>
+                <div class="seat-meta">
+                  <span class="role-badge" [attr.data-role]="row.accountabilityRole">{{ row.accountabilityRole }}</span>
+                  <span class="status-badge" [attr.data-status]="row.seatStatus">{{ row.seatStatus }}</span>
+                </div>
               </td>
               <td>
-                @if (rosterFor(row); as emp) {
+                @if (row.seatStatus === 'Vacant' && !row.individual) {
+                  <span class="vacant-label">Vacant seat</span>
+                } @else if (rosterFor(row); as emp) {
                   <div class="person-cell">
                     <div class="person-name" [title]="emp.name">{{ emp.name }}</div>
-                    <div class="person-sub" [title]="emp.email || employeeDepartment(emp)">
-                      {{ emp.email || employeeDepartment(emp) || employeeOrg(emp) || '—' }}
-                    </div>
+                    <div class="person-sub">{{ emp.email || employeeDepartment(emp) || '—' }}</div>
                   </div>
                 } @else {
                   <span [title]="row.individual || ''">{{ row.individual || '—' }}</span>
                 }
               </td>
-              <td class="notes-cell" [title]="row.notes || ''">{{ row.notes || '—' }}</td>
+              <td>
+                <div class="reports-cell" [title]="reportsToLabel(row)">{{ reportsToLabel(row) || '—' }}</div>
+              </td>
+              <td>
+                <div class="chip-cell">
+                  @for (tag of row.scopeTags || []; track tag) {
+                    <span class="mini-chip">{{ tag }}</span>
+                  }
+                  @if (!(row.scopeTags || []).length) { <span class="muted">—</span> }
+                </div>
+              </td>
+              <td>
+                <div class="kpi-cell" [title]="(row.keyResults || []).join(', ')">
+                  @if ((row.keyResults || []).length) {
+                    <span>{{ row.keyResults![0] }}</span>
+                    @if (row.keyResults!.length > 1) {
+                      <em>+{{ row.keyResults!.length - 1 }} more</em>
+                    }
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </div>
+                @if (dateRange(row) || updatedLabel(row)) {
+                  <div class="person-sub">{{ dateRange(row) || updatedLabel(row) }}</div>
+                }
+              </td>
               <td class="actions">
                 <button class="btn-icon" type="button" title="Edit" (click)="openEdit(row)">
                   <i class="bx bx-edit"></i>
@@ -203,6 +334,39 @@
           }
         </tbody>
       </table>
+    </div>
+  }
+</div>
+
+<ng-template #orgNode let-node>
+  <div class="org-node" [attr.data-status]="node.row.seatStatus">
+    <div class="org-card" (click)="openEdit(node.row)">
+      <div class="org-card-top">
+        <strong>{{ node.row.jobPosition }}</strong>
+        <span class="status-badge" [attr.data-status]="node.row.seatStatus">{{ node.row.seatStatus }}</span>
+      </div>
+      <div class="org-person">
+        @if (node.row.seatStatus === 'Vacant' && !node.row.individual) {
+          Vacant
+        } @else {
+          {{ node.row.individual || 'Unassigned' }}
+        }
+      </div>
+      <div class="org-role">{{ node.row.accountabilityRole }}</div>
+      @if ((node.row.scopeTags || []).length) {
+        <div class="chip-cell">
+          @for (tag of (node.row.scopeTags || []).slice(0, 2); track tag) {
+            <span class="mini-chip">{{ tag }}</span>
+          }
+        </div>
+      }
+    </div>
+    @if (node.children.length) {
+      <div class="org-children">
+        @for (child of node.children; track child.row.id) {
+          <ng-container *ngTemplateOutlet="orgNode; context: { $implicit: child }"></ng-container>
+        }
+      </div>
     }
   </div>
-</div>
+</ng-template>
