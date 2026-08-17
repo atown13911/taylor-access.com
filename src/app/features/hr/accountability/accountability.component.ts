@@ -123,6 +123,7 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
   domainFilter = signal('');
   viewMode = signal<'list' | 'chart' | 'scope'>('list');
   chartTab = signal<'employee' | 'departments'>('employee');
+  chartFullscreen = signal(false);
   departments = signal<DepartmentRow[]>([]);
   showForm = signal(false);
   detailRow = signal<AccountabilityEntry | null>(null);
@@ -413,11 +414,22 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.setChartFullscreen(false);
     this.destroyOrgChart();
   }
 
   setView(mode: 'list' | 'chart' | 'scope'): void {
+    if (mode !== 'chart') this.setChartFullscreen(false);
     this.viewMode.set(mode);
+  }
+
+  toggleChartFullscreen(): void {
+    this.setChartFullscreen(!this.chartFullscreen());
+  }
+
+  setChartFullscreen(on: boolean): void {
+    this.chartFullscreen.set(on);
+    this.scheduleOrgChartResize();
   }
 
   setChartTab(tab: 'employee' | 'departments'): void {
@@ -449,7 +461,11 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.detailRow()) this.closeDetails();
+    if (this.detailRow()) {
+      this.closeDetails();
+      return;
+    }
+    if (this.chartFullscreen()) this.setChartFullscreen(false);
   }
 
   openDetails(row: AccountabilityEntry, event?: Event): void {
@@ -820,7 +836,7 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
 
   @HostListener('window:resize')
   onWindowResize(): void {
-    if (this.viewMode() === 'chart') this.fitOrgChart();
+    if (this.viewMode() === 'chart') this.resizeOrgChart();
   }
 
   private employeeDepartmentId(emp: RosterEmployee): number | null {
@@ -986,6 +1002,22 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
       this.orgChart.expandAll();
     }
     this.orgChart.fit();
+  }
+
+  private scheduleOrgChartResize(): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.resizeOrgChart());
+    });
+  }
+
+  private resizeOrgChart(): void {
+    const host = this.orgChartHost()?.nativeElement;
+    if (!this.orgChart || !host) return;
+    this.orgChart
+      .svgWidth(Math.max(host.clientWidth, 320))
+      .svgHeight(Math.max(host.clientHeight, 320))
+      .render()
+      .fit();
   }
 
   private destroyOrgChart(): void {

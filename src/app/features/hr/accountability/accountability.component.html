@@ -268,7 +268,7 @@
       </div>
     </div>
   } @else if (viewMode() === 'chart') {
-    <div class="org-chart-panel">
+    <div class="org-chart-panel" [class.fullscreen]="chartFullscreen()">
       <div class="org-chart-toolbar">
         <div class="org-chart-tabs">
           <button type="button" [class.active]="chartTab() === 'employee'" (click)="setChartTab('employee')">
@@ -297,6 +297,15 @@
           </button>
           <button type="button" class="btn btn-secondary" (click)="exportOrgChart()">
             <i class="bx bx-export"></i> PNG
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            (click)="toggleChartFullscreen()"
+            [attr.title]="chartFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+          >
+            <i class="bx" [class.bx-exit-fullscreen]="chartFullscreen()" [class.bx-fullscreen]="!chartFullscreen()"></i>
+            {{ chartFullscreen() ? 'Exit' : 'Fullscreen' }}
           </button>
         </div>
       </div>
