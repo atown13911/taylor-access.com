@@ -74,6 +74,7 @@ export class AccountabilityComponent implements OnInit {
   domainFilter = signal('');
   viewMode = signal<'list' | 'chart'>('list');
   showForm = signal(false);
+  detailRow = signal<AccountabilityEntry | null>(null);
   editingId = signal<number | null>(null);
   employees = signal<RosterEmployee[]>([]);
   employeeQuery = signal('');
@@ -88,6 +89,17 @@ export class AccountabilityComponent implements OnInit {
     const id = this.selectedEmployeeId();
     if (id == null) return null;
     return this.employees().find((emp) => emp.id === id) ?? null;
+  });
+
+  detailEmployee = computed(() => {
+    const row = this.detailRow();
+    return row ? this.rosterFor(row) : null;
+  });
+
+  detailReports = computed(() => {
+    const row = this.detailRow();
+    if (!row) return [];
+    return this.entries().filter((item) => item.reportsToId === row.id);
   });
 
   reportsToOptions = computed(() => {
@@ -177,6 +189,27 @@ export class AccountabilityComponent implements OnInit {
   @HostListener('document:click')
   closeEmployeeList(): void {
     this.showEmployeeList.set(false);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.detailRow()) this.closeDetails();
+  }
+
+  openDetails(row: AccountabilityEntry, event?: Event): void {
+    event?.stopPropagation();
+    this.detailRow.set(row);
+  }
+
+  closeDetails(): void {
+    this.detailRow.set(null);
+  }
+
+  editFromDetails(): void {
+    const row = this.detailRow();
+    if (!row) return;
+    this.closeDetails();
+    this.openEdit(row);
   }
 
   reload(): void {
@@ -415,7 +448,10 @@ export class AccountabilityComponent implements OnInit {
     if (!ok) return;
 
     this.api.delete(row.id).subscribe({
-      next: () => this.toast.success('Position removed'),
+      next: () => {
+        if (this.detailRow()?.id === row.id) this.closeDetails();
+        this.toast.success('Position removed');
+      },
       error: () => this.toast.error('Failed to remove position'),
     });
   }

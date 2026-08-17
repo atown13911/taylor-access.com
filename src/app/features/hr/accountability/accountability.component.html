@@ -274,7 +274,7 @@
         </thead>
         <tbody>
           @for (row of filtered(); track row.id) {
-            <tr>
+            <tr class="clickable-row" (click)="openDetails(row)">
               <td>
                 <div class="position-name" [title]="row.jobPosition">{{ row.jobPosition }}</div>
                 <div class="seat-meta">
@@ -322,7 +322,7 @@
                   <div class="person-sub">{{ dateRange(row) || updatedLabel(row) }}</div>
                 }
               </td>
-              <td class="actions">
+              <td class="actions" (click)="$event.stopPropagation()">
                 <button class="btn-icon" type="button" title="Edit" (click)="openEdit(row)">
                   <i class="bx bx-edit"></i>
                 </button>
@@ -340,7 +340,7 @@
 
 <ng-template #orgNode let-node>
   <div class="org-node" [attr.data-status]="node.row.seatStatus">
-    <div class="org-card" (click)="openEdit(node.row)">
+    <div class="org-card" (click)="openDetails(node.row)">
       <div class="org-card-top">
         <strong>{{ node.row.jobPosition }}</strong>
         <span class="status-badge" [attr.data-status]="node.row.seatStatus">{{ node.row.seatStatus }}</span>
@@ -370,3 +370,124 @@
     }
   </div>
 </ng-template>
+
+@if (detailRow(); as row) {
+  <div class="modal-overlay" (click)="closeDetails()">
+    <div class="detail-modal" (click)="$event.stopPropagation()">
+      <div class="form-header">
+        <div>
+          <h2>{{ row.jobPosition }}</h2>
+          <div class="seat-meta">
+            <span class="role-badge" [attr.data-role]="row.accountabilityRole">{{ row.accountabilityRole }}</span>
+            <span class="status-badge" [attr.data-status]="row.seatStatus">{{ row.seatStatus }}</span>
+          </div>
+        </div>
+        <button class="btn-icon" type="button" (click)="closeDetails()" title="Close">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+
+      @if (detailEmployee(); as emp) {
+        <div class="profile-card">
+          <div class="profile-head">
+            @if (emp.avatarUrl) {
+              <img class="avatar" [src]="emp.avatarUrl" [alt]="emp.name" />
+            } @else {
+              <div class="avatar initials">{{ initials(emp.name) }}</div>
+            }
+            <div class="profile-identity">
+              <div class="profile-name">{{ emp.name }}</div>
+              <div class="profile-meta">
+                {{ employeeTitle(emp) || row.jobPosition }}
+                @if (emp.alias) { <span>· {{ emp.alias }}</span> }
+              </div>
+            </div>
+          </div>
+          <div class="profile-grid">
+            <div class="profile-item"><span>Email</span><strong>{{ emp.email || '—' }}</strong></div>
+            <div class="profile-item"><span>Phone</span><strong>{{ employeePhone(emp) || '—' }}</strong></div>
+            <div class="profile-item"><span>Department</span><strong>{{ employeeDepartment(emp) || '—' }}</strong></div>
+            <div class="profile-item"><span>Organization</span><strong>{{ employeeOrg(emp) || '—' }}</strong></div>
+            <div class="profile-item"><span>Entity</span><strong>{{ employeeEntity(emp) || 'Corporate' }}</strong></div>
+            <div class="profile-item"><span>Location</span><strong>{{ employeeLocation(emp) || '—' }}</strong></div>
+          </div>
+        </div>
+      } @else {
+        <div class="profile-card">
+          <div class="profile-name">{{ row.individual || 'Vacant seat' }}</div>
+          <div class="profile-meta">No matching roster profile</div>
+        </div>
+      }
+
+      <div class="detail-grid">
+        <div class="profile-item">
+          <span>Reports to</span>
+          <strong>{{ reportsToLabel(row) || 'Top of chart' }}</strong>
+        </div>
+        <div class="profile-item">
+          <span>Effective dates</span>
+          <strong>{{ dateRange(row) || 'Not set' }}</strong>
+        </div>
+        <div class="profile-item">
+          <span>Last updated</span>
+          <strong>{{ updatedLabel(row) || '—' }}</strong>
+        </div>
+        <div class="profile-item">
+          <span>Direct reports</span>
+          <strong>{{ detailReports().length || 'None' }}</strong>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Scope / Domain</h3>
+        <div class="chip-cell">
+          @for (tag of row.scopeTags || []; track tag) {
+            <span class="mini-chip">{{ tag }}</span>
+          }
+          @if (!(row.scopeTags || []).length) {
+            <span class="muted">No domains assigned</span>
+          }
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Key results / KPIs</h3>
+        @if ((row.keyResults || []).length) {
+          <ol class="detail-kpis">
+            @for (kpi of row.keyResults || []; track kpi) {
+              <li>{{ kpi }}</li>
+            }
+          </ol>
+        } @else {
+          <p class="muted">No KPIs recorded for this seat.</p>
+        }
+      </div>
+
+      <div class="detail-section">
+        <h3>Notes / Responsibilities</h3>
+        <p class="detail-notes">{{ row.notes || 'No notes yet.' }}</p>
+      </div>
+
+      @if (detailReports().length) {
+        <div class="detail-section">
+          <h3>Direct reports</h3>
+          <div class="report-list">
+            @for (report of detailReports(); track report.id) {
+              <button type="button" class="report-link" (click)="openDetails(report)">
+                <strong>{{ report.jobPosition }}</strong>
+                <span>{{ report.individual || 'Vacant' }}</span>
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="form-actions">
+        <button class="btn btn-secondary" type="button" (click)="closeDetails()">Close</button>
+        <button class="btn btn-primary" type="button" (click)="editFromDetails()">
+          <i class="bx bx-edit"></i> Edit seat
+        </button>
+      </div>
+    </div>
+  </div>
+}
