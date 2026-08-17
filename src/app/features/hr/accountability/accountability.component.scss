@@ -140,6 +140,20 @@
   cursor: pointer;
 }
 .tag.on { background: rgba(79, 195, 247, 0.14); border-color: #4fc3f7; color: #fff; }
+.add-scope-inline {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.add-scope-inline input {
+  flex: 1;
+  background: #121225;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px;
+  font: inherit;
+}
 
 .kpi-list { display: flex; flex-direction: column; gap: 8px; }
 .kpi-row { display: flex; gap: 8px; align-items: center; }
@@ -448,7 +462,31 @@
   color: #fff;
   font-size: 0.95rem;
 }
+.scope-head-meta { display: flex; align-items: center; gap: 6px; }
 .scope-head span { color: #8e8ea8; font-size: 0.75rem; }
+.add-scope-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 160px;
+  border-style: dashed;
+}
+.add-scope-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: #e8e8f0;
+  cursor: pointer;
+  text-align: left;
+  padding: 4px;
+}
+.add-scope-btn i { color: #4fc3f7; font-size: 1.4rem; }
+.add-scope-btn span { color: #8e8ea8; font-size: 0.8rem; }
 .scope-gap {
   margin: 0;
   color: #fca5a5;

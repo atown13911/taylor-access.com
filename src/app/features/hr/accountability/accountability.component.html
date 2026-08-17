@@ -175,11 +175,22 @@
         <div class="field full">
           <span>Scope / Domain</span>
           <div class="tag-row">
-            @for (tag of domains; track tag) {
+            @for (tag of domainNames(); track tag) {
               <button type="button" class="tag" [class.on]="hasDomain(tag)" (click)="toggleDomain(tag)">
                 {{ tag }}
               </button>
             }
+          </div>
+          <div class="add-scope-inline">
+            <input
+              type="text"
+              [(ngModel)]="newScopeName"
+              placeholder="Add a new scope…"
+              (keydown.enter)="addScope(true)"
+            />
+            <button class="btn btn-secondary" type="button" (click)="addScope(true)" [disabled]="savingScope()">
+              Add scope
+            </button>
           </div>
         </div>
 
@@ -227,7 +238,7 @@
     </div>
     <select class="filter-select" [ngModel]="domainFilter()" (ngModelChange)="domainFilter.set($event)">
       <option value="">All domains</option>
-      @for (tag of domains; track tag) {
+      @for (tag of domainNames(); track tag) {
         <option [value]="tag">{{ tag }}</option>
       }
     </select>
@@ -244,9 +255,9 @@
     </div>
   </div>
 
-  @if (loading() && !filtered().length) {
+  @if (loading() && !filtered().length && viewMode() !== 'scope') {
     <div class="table-wrap"><div class="empty">Loading accountability chart…</div></div>
-  } @else if (!filtered().length) {
+  } @else if (!filtered().length && viewMode() !== 'scope') {
     <div class="table-wrap">
       <div class="empty">
         @if (searchQuery().trim() || statusFilter() || domainFilter()) {
@@ -264,11 +275,43 @@
     </div>
   } @else if (viewMode() === 'scope') {
     <div class="scope-wrap">
+      <section class="scope-card add-scope-card">
+        @if (!showAddScope()) {
+          <button type="button" class="add-scope-btn" (click)="showAddScope.set(true)">
+            <i class="bx bx-plus"></i>
+            <strong>Add scope</strong>
+            <span>Create a new domain to assign seats</span>
+          </button>
+        } @else {
+          <label class="field">
+            <span>New scope</span>
+            <input
+              type="text"
+              [(ngModel)]="newScopeName"
+              placeholder="e.g. Customer Service / Claims"
+              (keydown.enter)="addScope()"
+            />
+          </label>
+          <div class="form-actions">
+            <button class="btn btn-secondary" type="button" (click)="showAddScope.set(false); newScopeName = ''">Cancel</button>
+            <button class="btn btn-primary" type="button" (click)="addScope()" [disabled]="savingScope()">
+              {{ savingScope() ? 'Adding…' : 'Add scope' }}
+            </button>
+          </div>
+        }
+      </section>
       @for (group of scopeGroups(); track group.domain) {
         <section class="scope-card" [class.empty]="!group.seats.length" [class.unassigned]="group.domain === 'Unassigned'">
           <header class="scope-head">
             <h3>{{ group.domain }}</h3>
-            <span>{{ group.seats.length }} {{ group.seats.length === 1 ? 'seat' : 'seats' }}</span>
+            <div class="scope-head-meta">
+              <span>{{ group.seats.length }} {{ group.seats.length === 1 ? 'seat' : 'seats' }}</span>
+              @if (canRemoveScope(group.domain)) {
+                <button class="btn-icon danger" type="button" title="Remove scope" (click)="removeScope(group.domain, $event)">
+                  <i class="bx bx-trash"></i>
+                </button>
+              }
+            </div>
           </header>
           @if (!group.seats.length) {
             <p class="scope-gap">No owner assigned</p>

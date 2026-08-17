@@ -70,7 +70,11 @@ export class AccountabilityComponent implements OnInit {
 
   readonly roles = ACCOUNTABILITY_ROLES;
   readonly statuses = SEAT_STATUSES;
-  readonly domains = SCOPE_DOMAINS;
+  scopes = this.api.scopes;
+  domainNames = computed(() => {
+    const names = this.scopes().map((scope) => scope.name);
+    return names.length ? names : [...SCOPE_DOMAINS];
+  });
 
   loading = signal(false);
   saving = signal(false);
@@ -85,6 +89,9 @@ export class AccountabilityComponent implements OnInit {
   employeeQuery = signal('');
   showEmployeeList = signal(false);
   selectedEmployeeId = signal<number | null>(null);
+  showAddScope = signal(false);
+  newScopeName = '';
+  savingScope = signal(false);
 
   form: AccountabilityWritePayload = this.blankForm();
 
@@ -157,7 +164,7 @@ export class AccountabilityComponent implements OnInit {
   scopeGroups = computed(() => {
     const rows = this.filtered();
     const selected = this.domainFilter();
-    const known = selected ? [selected] : [...this.domains];
+    const known = selected ? [selected] : [...this.domainNames()];
     const extras = new Set<string>();
     if (!selected) {
       for (const row of this.entries()) {
@@ -262,6 +269,58 @@ export class AccountabilityComponent implements OnInit {
         this.toast.error('Failed to load accountability chart');
       },
     });
+    this.api.loadScopes().subscribe({
+      error: () => this.toast.error('Failed to load scopes'),
+    });
+  }
+
+  addScope(assignToForm = false): void {
+    const name = this.newScopeName.trim();
+    if (name.length < 2) {
+      this.toast.error('Enter a scope name');
+      return;
+    }
+    if (this.domainNames().some((item) => item.toLowerCase() === name.toLowerCase())) {
+      this.toast.error('That scope already exists');
+      return;
+    }
+    this.savingScope.set(true);
+    this.api.createScope(name).subscribe({
+      next: (scope) => {
+        this.savingScope.set(false);
+        this.newScopeName = '';
+        this.showAddScope.set(false);
+        if (assignToForm) this.toggleDomain(scope.name);
+        this.toast.success('Scope added');
+      },
+      error: (err) => {
+        this.savingScope.set(false);
+        this.toast.error(err?.error?.error || 'Failed to add scope');
+      },
+    });
+  }
+
+  async removeScope(name: string, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    const scope = this.scopes().find((item) => item.name === name);
+    if (!scope || scope.isSystem || scope.id < 0) {
+      this.toast.error('Built-in scopes cannot be removed');
+      return;
+    }
+    const ok = await this.confirm.danger(`Remove scope "${name}"? Seats keep the tag until you edit them.`, 'Remove Scope');
+    if (!ok) return;
+    this.api.deleteScope(scope.id).subscribe({
+      next: () => {
+        if (this.domainFilter() === name) this.domainFilter.set('');
+        this.toast.success('Scope removed');
+      },
+      error: (err) => this.toast.error(err?.error?.error || 'Failed to remove scope'),
+    });
+  }
+
+  canRemoveScope(name: string): boolean {
+    const scope = this.scopes().find((item) => item.name === name);
+    return !!scope && !scope.isSystem && scope.id > 0;
   }
 
   openNew(): void {

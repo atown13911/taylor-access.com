@@ -45,6 +45,14 @@ export interface AccountabilityEntry {
   updatedAt?: string;
 }
 
+export interface AccountabilityScope {
+  id: number;
+  name: string;
+  isSystem?: boolean;
+  createdBy?: string | null;
+  createdAt?: string;
+}
+
 export interface AccountabilityWritePayload {
   jobPosition: string;
   individual?: string | null;
@@ -63,7 +71,9 @@ export interface AccountabilityWritePayload {
 export class AccountabilityService {
   private http = inject(HttpClient);
   private readonly _entries = signal<AccountabilityEntry[]>([]);
+  private readonly _scopes = signal<AccountabilityScope[]>([]);
   readonly entries = this._entries.asReadonly();
+  readonly scopes = this._scopes.asReadonly();
 
   private url(path = ''): string {
     return `${environment.apiUrl}/api/v1/accountability${path}`;
@@ -95,6 +105,30 @@ export class AccountabilityService {
     return this.http.delete<void>(this.url(`/${id}`)).pipe(
       tap(() => this._entries.update((list) => list.filter((e) => e.id !== id)))
     );
+  }
+
+  loadScopes(): Observable<AccountabilityScope[]> {
+    return this.http.get<{ data?: AccountabilityScope[] }>(this.url('/scopes')).pipe(
+      map((res) => res?.data || []),
+      tap((rows) => this._scopes.set(rows.length ? rows : this.fallbackScopes()))
+    );
+  }
+
+  createScope(name: string): Observable<AccountabilityScope> {
+    return this.http.post<{ data: AccountabilityScope }>(this.url('/scopes'), { name }).pipe(
+      map((res) => res.data),
+      tap((row) => this._scopes.update((list) => [...list, row].sort((a, b) => a.name.localeCompare(b.name))))
+    );
+  }
+
+  deleteScope(id: number): Observable<void> {
+    return this.http.delete<void>(this.url(`/scopes/${id}`)).pipe(
+      tap(() => this._scopes.update((list) => list.filter((item) => item.id !== id)))
+    );
+  }
+
+  private fallbackScopes(): AccountabilityScope[] {
+    return SCOPE_DOMAINS.map((name, index) => ({ id: -(index + 1), name, isSystem: true }));
   }
 
   private normalize(row: AccountabilityEntry): AccountabilityEntry {

@@ -78,7 +78,32 @@ public class AccountabilityController : ControllerBase
             CREATE INDEX IF NOT EXISTS idx_accountability_position ON ""AccountabilityEntries"" (""JobPosition"");
             CREATE INDEX IF NOT EXISTS idx_accountability_employee ON ""AccountabilityEntries"" (""EmployeeId"");
             CREATE INDEX IF NOT EXISTS idx_accountability_reports ON ""AccountabilityEntries"" (""ReportsToId"");
-            CREATE INDEX IF NOT EXISTS idx_accountability_status ON ""AccountabilityEntries"" (""SeatStatus"");";
+            CREATE INDEX IF NOT EXISTS idx_accountability_status ON ""AccountabilityEntries"" (""SeatStatus"");
+            CREATE TABLE IF NOT EXISTS ""AccountabilityScopes"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""Name"" varchar(120) NOT NULL,
+                ""IsSystem"" boolean NOT NULL DEFAULT false,
+                ""CreatedBy"" varchar(150),
+                ""CreatedAt"" timestamptz NOT NULL DEFAULT now()
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_accountability_scopes_name
+                ON ""AccountabilityScopes"" (LOWER(""Name""));
+            INSERT INTO ""AccountabilityScopes"" (""Name"", ""IsSystem"")
+            SELECT seed.""Name"", true
+            FROM (VALUES
+                ('Dispatch & Load Planning'),
+                ('Owner-Operator Settlements & CPM'),
+                ('Compliance / Safety / Drug Testing'),
+                ('Recruiting & IC Agreements'),
+                ('Bosnia Operations / Payroll'),
+                ('Tech / TMS / Integrations'),
+                ('Accounting / P&L / Factoring'),
+                ('Insurance & Risk')
+            ) AS seed(""Name"")
+            WHERE NOT EXISTS (
+                SELECT 1 FROM ""AccountabilityScopes"" s
+                WHERE LOWER(s.""Name"") = LOWER(seed.""Name"")
+            );";
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -203,6 +228,90 @@ public class AccountabilityController : ControllerBase
         AddParam(cmd, "id", id);
         var affected = await cmd.ExecuteNonQueryAsync();
         if (affected == 0) return NotFound(new { error = "Entry not found" });
+        return Ok(new { ok = true });
+    }
+
+    public class ScopeDto
+    {
+        public string? Name { get; set; }
+    }
+
+    [HttpGet("scopes")]
+    public async Task<IActionResult> ListScopes()
+    {
+        await EnsureSchemaAsync();
+        var conn = await OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT ""Id"",""Name"",""IsSystem"",""CreatedBy"",""CreatedAt""
+            FROM ""AccountabilityScopes""
+            ORDER BY ""IsSystem"" DESC, ""Name""";
+        var rows = new List<object>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            rows.Add(new
+            {
+                id = reader.GetInt32(0),
+                name = reader.GetString(1),
+                isSystem = !reader.IsDBNull(2) && reader.GetBoolean(2),
+                createdBy = reader.IsDBNull(3) ? null : reader.GetString(3),
+                createdAt = reader.IsDBNull(4) ? (DateTime?)null : reader.GetDateTime(4),
+            });
+        }
+        return Ok(new { data = rows, total = rows.Count });
+    }
+
+    [HttpPost("scopes")]
+    public async Task<IActionResult> CreateScope([FromBody] ScopeDto input)
+    {
+        await EnsureSchemaAsync();
+        var name = (input.Name ?? "").Trim();
+        if (name.Length < 2) return BadRequest(new { error = "Scope name is required" });
+        if (name.Length > 120) return BadRequest(new { error = "Scope name is too long" });
+
+        var user = await _currentUser.GetUserAsync();
+        var by = user?.Email ?? user?.Name ?? "user";
+        var conn = await OpenAsync();
+
+        await using var exists = conn.CreateCommand();
+        exists.CommandText = @"SELECT ""Id"" FROM ""AccountabilityScopes"" WHERE LOWER(""Name"") = LOWER(@name)";
+        AddParam(exists, "name", name);
+        var existing = await exists.ExecuteScalarAsync();
+        if (existing != null) return BadRequest(new { error = "That scope already exists" });
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO ""AccountabilityScopes"" (""Name"",""IsSystem"",""CreatedBy"")
+            VALUES (@name, false, @by)
+            RETURNING ""Id"",""CreatedAt""";
+        AddParam(cmd, "name", name);
+        AddParam(cmd, "by", by);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return StatusCode(500, new { error = "Failed to create scope" });
+        return Ok(new
+        {
+            data = new
+            {
+                id = reader.GetInt32(0),
+                name,
+                isSystem = false,
+                createdBy = by,
+                createdAt = reader.GetDateTime(1),
+            }
+        });
+    }
+
+    [HttpDelete("scopes/{id:int}")]
+    public async Task<IActionResult> DeleteScope(int id)
+    {
+        await EnsureSchemaAsync();
+        var conn = await OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"DELETE FROM ""AccountabilityScopes"" WHERE ""Id"" = @id AND ""IsSystem"" = false";
+        AddParam(cmd, "id", id);
+        var affected = await cmd.ExecuteNonQueryAsync();
+        if (affected == 0) return BadRequest(new { error = "Scope not found or cannot be removed" });
         return Ok(new { ok = true });
     }
 
