@@ -50,7 +50,8 @@ interface RosterEmployee {
   city?: string | null;
   state?: string | null;
   position?: { title?: string | null } | null;
-  department?: { name?: string | null } | null;
+  departmentId?: number | null;
+  department?: { id?: number | null; name?: string | null } | null;
   organization?: { name?: string | null } | null;
   satellite?: { name?: string | null; code?: string | null } | null;
   agency?: { name?: string | null; code?: string | null } | null;
@@ -68,6 +69,20 @@ interface OrgChartNode {
   avatar: string;
   initials: string;
   isRoot?: boolean;
+  kind?: 'seat' | 'org' | 'division' | 'department' | 'person';
+  employeeId?: number | null;
+}
+
+interface DepartmentRow {
+  id: number;
+  name: string;
+  code?: string | null;
+  status?: string | null;
+  organizationName?: string | null;
+  divisionId?: number | null;
+  divisionName?: string | null;
+  managerName?: string | null;
+  employeeCount?: number;
 }
 
 interface ScopeGroup {
@@ -107,6 +122,8 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
   statusFilter = signal<string>('');
   domainFilter = signal('');
   viewMode = signal<'list' | 'chart' | 'scope'>('list');
+  chartTab = signal<'employee' | 'departments'>('employee');
+  departments = signal<DepartmentRow[]>([]);
   showForm = signal(false);
   detailRow = signal<AccountabilityEntry | null>(null);
   editingId = signal<number | null>(null);
@@ -238,6 +255,8 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
         domains: (row.scopeTags || []).slice(0, 2),
         avatar: emp?.avatarUrl || '',
         initials: this.initials(row.individual || emp?.name || row.jobPosition),
+        kind: 'seat' as const,
+        employeeId: row.employeeId ?? emp?.id ?? null,
       } satisfies OrgChartNode;
     });
     const roots = nodes.filter((node) => node.parentId == null);
@@ -259,6 +278,107 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
     ];
   });
 
+  departmentChartData = computed<OrgChartNode[]>(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    const domain = this.domainFilter();
+    const depts = this.departments();
+    const people = this.employees().filter((emp) => {
+      if (domain) {
+        const seat = this.entries().find((row) => row.employeeId === emp.id);
+        if (seat && !(seat.scopeTags || []).includes(domain)) return false;
+      }
+      return true;
+    });
+
+    const DIV = 2_000_000;
+    const DEPT = 3_000_000;
+    const EMP = 4_000_000;
+    const UNASSIGNED = -1;
+    const nodes: OrgChartNode[] = [{
+      id: 0,
+      parentId: null,
+      position: 'Departments',
+      name: depts.length ? `${depts.length} departments` : 'Operating structure',
+      role: '',
+      status: 'Active',
+      domains: [],
+      avatar: '',
+      initials: 'DP',
+      isRoot: true,
+      kind: 'org',
+    }];
+
+    const divisions = new Map<number, string>();
+    for (const dept of depts) {
+      if (dept.divisionId && dept.divisionName) divisions.set(dept.divisionId, dept.divisionName);
+    }
+    for (const [id, name] of divisions) {
+      nodes.push({
+        id: DIV + id,
+        parentId: 0,
+        position: name,
+        name: 'Division',
+        role: 'Division',
+        status: 'Active',
+        domains: [],
+        avatar: '',
+        initials: this.initials(name),
+        kind: 'division',
+      });
+    }
+
+    const knownDeptIds = new Set(depts.map((dept) => dept.id));
+    for (const dept of depts) {
+      const rosterCount = people.filter((emp) => this.employeeDepartmentId(emp) === dept.id).length;
+      nodes.push({
+        id: DEPT + dept.id,
+        parentId: dept.divisionId && divisions.has(dept.divisionId) ? DIV + dept.divisionId : 0,
+        position: dept.name,
+        name: dept.managerName || 'No manager assigned',
+        role: `${rosterCount || dept.employeeCount || 0} people`,
+        status: dept.status || 'Active',
+        domains: dept.code ? [dept.code] : [],
+        avatar: '',
+        initials: this.initials(dept.name),
+        kind: 'department',
+      });
+    }
+
+    const assigned = new Set<number>();
+    for (const emp of people) {
+      const deptId = this.employeeDepartmentId(emp);
+      if (!deptId || !knownDeptIds.has(deptId)) continue;
+      assigned.add(emp.id);
+      nodes.push(this.personNode(EMP + emp.id, DEPT + deptId, emp));
+    }
+
+    const unassigned = people.filter((emp) => !assigned.has(emp.id));
+    if (unassigned.length) {
+      nodes.push({
+        id: UNASSIGNED,
+        parentId: 0,
+        position: 'Unassigned',
+        name: `${unassigned.length} people without a department`,
+        role: 'Unassigned',
+        status: 'Vacant',
+        domains: [],
+        avatar: '',
+        initials: 'NA',
+        kind: 'department',
+      });
+      for (const emp of unassigned) {
+        nodes.push(this.personNode(EMP + emp.id, UNASSIGNED, emp));
+      }
+    }
+
+    if (!query) return nodes;
+    return this.filterChartTree(nodes, query);
+  });
+
+  activeOrgChartData = computed(() =>
+    this.chartTab() === 'departments' ? this.departmentChartData() : this.orgChartData()
+  );
+
   filteredEmployees = computed(() => {
     const q = this.employeeQuery().trim().toLowerCase();
     const rows = this.employees();
@@ -279,15 +399,17 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
   constructor() {
     effect(() => {
       const mode = this.viewMode();
-      const data = this.orgChartData();
+      const tab = this.chartTab();
+      const data = this.activeOrgChartData();
       const host = this.orgChartHost()?.nativeElement ?? null;
-      untracked(() => this.syncOrgChart(mode, host, data));
+      untracked(() => this.syncOrgChart(mode, tab, host, data));
     });
   }
 
   ngOnInit(): void {
     this.reload();
     this.loadEmployees();
+    this.loadDepartments();
   }
 
   ngOnDestroy(): void {
@@ -296,6 +418,12 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
 
   setView(mode: 'list' | 'chart' | 'scope'): void {
     this.viewMode.set(mode);
+  }
+
+  setChartTab(tab: 'employee' | 'departments'): void {
+    if (this.chartTab() === tab) return;
+    this.chartTab.set(tab);
+    this.destroyOrgChart();
   }
 
   fitOrgChart(): void {
@@ -695,8 +823,101 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
     if (this.viewMode() === 'chart') this.fitOrgChart();
   }
 
+  private employeeDepartmentId(emp: RosterEmployee): number | null {
+    const fromField = Number(emp.departmentId);
+    if (Number.isFinite(fromField) && fromField > 0) return fromField;
+    const fromNested = Number(emp.department?.id);
+    if (Number.isFinite(fromNested) && fromNested > 0) return fromNested;
+    return null;
+  }
+
+  private personNode(id: number, parentId: number, emp: RosterEmployee): OrgChartNode {
+    return {
+      id,
+      parentId,
+      position: this.employeeTitle(emp) || emp.role || 'Employee',
+      name: emp.name,
+      role: this.employeeDepartment(emp) || 'Roster',
+      status: emp.status || 'Active',
+      domains: [],
+      avatar: emp.avatarUrl || '',
+      initials: this.initials(emp.name),
+      kind: 'person',
+      employeeId: emp.id,
+    };
+  }
+
+  private filterChartTree(nodes: OrgChartNode[], query: string): OrgChartNode[] {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const children = new Map<number, number[]>();
+    for (const node of nodes) {
+      if (node.parentId == null) continue;
+      const list = children.get(node.parentId) || [];
+      list.push(node.id);
+      children.set(node.parentId, list);
+    }
+
+    const matches = (node: OrgChartNode) =>
+      node.position.toLowerCase().includes(query)
+      || node.name.toLowerCase().includes(query)
+      || node.role.toLowerCase().includes(query)
+      || node.domains.some((tag) => tag.toLowerCase().includes(query));
+
+    const keep = new Set<number>();
+    const addAncestors = (id: number) => {
+      let current: OrgChartNode | undefined = byId.get(id);
+      while (current) {
+        keep.add(current.id);
+        current = current.parentId == null ? undefined : byId.get(current.parentId);
+      }
+    };
+    const addDescendants = (id: number) => {
+      keep.add(id);
+      for (const childId of children.get(id) || []) addDescendants(childId);
+    };
+
+    for (const node of nodes) {
+      if (!matches(node)) continue;
+      addAncestors(node.id);
+      if (node.kind === 'org' || node.kind === 'division' || node.kind === 'department') {
+        addDescendants(node.id);
+      }
+    }
+
+    return nodes.filter((node) => keep.has(node.id));
+  }
+
+  private async loadDepartments(): Promise<void> {
+    try {
+      const url = this.orgContext.addOrgParam(
+        `${environment.apiUrl}/api/v1/departments?pageSize=500&adminReport=true&includeAll=true`
+      );
+      const response: any = await this.http.get(url).toPromise();
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      this.departments.set(
+        rows
+          .filter((row: any) => row?.id && (row.name || '').trim())
+          .map((row: any) => ({
+            id: Number(row.id),
+            name: String(row.name || '').trim(),
+            code: row.code || null,
+            status: row.status || 'active',
+            organizationName: row.organizationName || null,
+            divisionId: row.divisionId ? Number(row.divisionId) : null,
+            divisionName: row.divisionName || null,
+            managerName: row.managerName || null,
+            employeeCount: Number(row.employeeCount || 0),
+          }))
+          .sort((a: DepartmentRow, b: DepartmentRow) => a.name.localeCompare(b.name))
+      );
+    } catch {
+      this.departments.set([]);
+    }
+  }
+
   private syncOrgChart(
     mode: 'list' | 'chart' | 'scope',
+    tab: 'employee' | 'departments',
     host: HTMLDivElement | null,
     data: OrgChartNode[]
   ): void {
@@ -712,7 +933,11 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
       this.orgChart = new OrgChart<OrgChartNode>()
         .container(host)
         .nodeWidth(() => 268)
-        .nodeHeight((d: any) => (d?.data?.isRoot || d?.isRoot ? 86 : 122))
+        .nodeHeight((d: any) => {
+          const node = d?.data || d;
+          if (node?.isRoot || node?.kind === 'org' || node?.kind === 'division') return 86;
+          return 122;
+        })
         .childrenMargin(() => 56)
         .siblingsMargin(() => 24)
         .compact(false)
@@ -731,10 +956,16 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
           this.setAttribute('stroke-width', '1.5');
         })
         .onNodeClick((node: any) => {
-          const id = Number(node?.data?.id);
-          if (!id || node?.data?.isRoot) return;
+          const dataNode = node?.data as OrgChartNode | undefined;
+          if (!dataNode || dataNode.isRoot || dataNode.kind === 'org' || dataNode.kind === 'division' || dataNode.kind === 'department') {
+            return;
+          }
           this.zone.run(() => {
-            const row = this.entries().find((item) => item.id === id);
+            const bySeat = this.entries().find((item) => item.id === dataNode.id && dataNode.kind !== 'person');
+            const byEmployee = dataNode.employeeId
+              ? this.entries().find((item) => item.employeeId === dataNode.employeeId)
+              : undefined;
+            const row = bySeat || byEmployee;
             if (row) this.openDetails(row);
           });
         });

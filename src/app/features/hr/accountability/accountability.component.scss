@@ -536,6 +536,25 @@
   padding: 10px 12px;
   border-bottom: 1px solid #2d2d46;
 }
+.org-chart-tabs {
+  display: flex;
+  background: #121225;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.org-chart-tabs button {
+  background: transparent;
+  border: none;
+  color: #b8b8d0;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+}
+.org-chart-tabs button.active { background: #2a2a40; color: #fff; }
 .org-chart-hint { color: #8e8ea8; font-size: 0.78rem; }
 .org-chart-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .org-chart-actions .btn { padding: 8px 12px; }

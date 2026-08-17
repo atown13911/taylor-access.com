@@ -270,7 +270,21 @@
   } @else if (viewMode() === 'chart') {
     <div class="org-chart-panel">
       <div class="org-chart-toolbar">
-        <span class="org-chart-hint">Scroll to zoom · drag to pan · click a seat for details</span>
+        <div class="org-chart-tabs">
+          <button type="button" [class.active]="chartTab() === 'employee'" (click)="setChartTab('employee')">
+            <i class="bx bx-user"></i> Employee
+          </button>
+          <button type="button" [class.active]="chartTab() === 'departments'" (click)="setChartTab('departments')">
+            <i class="bx bx-briefcase"></i> Departments
+          </button>
+        </div>
+        <span class="org-chart-hint">
+          @if (chartTab() === 'departments') {
+            Scroll to zoom · drag to pan · departments and the people in them
+          } @else {
+            Scroll to zoom · drag to pan · click a seat for details
+          }
+        </span>
         <div class="org-chart-actions">
           <button type="button" class="btn btn-secondary" (click)="fitOrgChart()">
             <i class="bx bx-expand"></i> Fit
