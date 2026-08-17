@@ -938,11 +938,14 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
           if (node?.isRoot || node?.kind === 'org' || node?.kind === 'division') return 86;
           return 122;
         })
-        .childrenMargin(() => 56)
-        .siblingsMargin(() => 24)
-        .compact(false)
+        .childrenMargin(() => 48)
+        .siblingsMargin(() => 18)
+        .compactMarginPair(() => 36)
+        .compactMarginBetween(() => 14)
+        .compact(true)
+        .scaleExtent([0.55, 2.4])
         .layout('top')
-        .initialExpandLevel(20)
+        .initialExpandLevel(tab === 'departments' ? 1 : 8)
         .duration(350)
         .defaultFont('Inter, Segoe UI, sans-serif')
         .imageName('accountability-org-chart')
@@ -971,13 +974,18 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
         });
     }
 
+    const compact = tab === 'departments' || data.length > 8;
     this.orgChart
+      .compact(compact)
       .svgWidth(width)
       .svgHeight(height)
       .data(data)
-      .render()
-      .expandAll()
-      .fit();
+      .render();
+
+    if (tab === 'employee' && data.length <= 20) {
+      this.orgChart.expandAll();
+    }
+    this.orgChart.fit();
   }
 
   private destroyOrgChart(): void {

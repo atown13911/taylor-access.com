@@ -9,6 +9,9 @@ declare module 'd3-org-chart' {
     childrenMargin(fn: (d: unknown) => number): this;
     siblingsMargin(fn: (d: unknown) => number): this;
     compact(value: boolean): this;
+    compactMarginPair(fn: (d: unknown) => number): this;
+    compactMarginBetween(fn: (d: unknown) => number): this;
+    scaleExtent(extent: [number, number]): this;
     layout(value: string): this;
     initialExpandLevel(level: number): this;
     nodeContent(fn: (d: unknown) => string): this;
