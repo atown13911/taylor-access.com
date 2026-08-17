@@ -75,6 +75,42 @@
   font: inherit;
   resize: vertical;
 }
+
+.roster-select { position: relative; }
+.roster-select input { width: 100%; }
+.roster-list {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #16162a;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+.roster-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #e8e8f0;
+}
+.roster-list li:hover,
+.roster-list li.selected { background: rgba(79, 195, 247, 0.12); }
+.roster-list .emp-name { font-weight: 600; }
+.roster-list .emp-title { color: #8e8ea8; font-size: 0.78rem; }
+.roster-list .empty-opt {
+  cursor: default;
+  color: #8e8ea8;
+}
+.roster-list .empty-opt:hover { background: transparent; }
 .form-actions {
   display: flex;
   justify-content: flex-end;

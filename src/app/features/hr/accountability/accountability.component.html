@@ -24,13 +24,40 @@
         </button>
       </div>
       <div class="form-grid">
+        <label class="field" (click)="$event.stopPropagation()">
+          <span>Individual</span>
+          <div class="roster-select">
+            <input
+              type="search"
+              [ngModel]="employeeQuery()"
+              (ngModelChange)="onEmployeeQuery($event)"
+              (focus)="showEmployeeList.set(true)"
+              placeholder="Select from employee roster"
+              autocomplete="off"
+            />
+            @if (showEmployeeList()) {
+              <ul class="roster-list">
+                @for (emp of filteredEmployees(); track emp.id) {
+                  <li
+                    [class.selected]="selectedEmployeeId() === emp.id"
+                    (mousedown)="pickEmployee(emp, $event)"
+                  >
+                    <span class="emp-name">{{ emp.name }}</span>
+                    @if (employeeTitle(emp)) {
+                      <span class="emp-title">{{ employeeTitle(emp) }}</span>
+                    }
+                  </li>
+                }
+                @if (!filteredEmployees().length) {
+                  <li class="empty-opt">No matching employees</li>
+                }
+              </ul>
+            }
+          </div>
+        </label>
         <label class="field">
           <span>Job position *</span>
           <input type="text" [(ngModel)]="form.jobPosition" placeholder="e.g. Dispatch Manager" />
-        </label>
-        <label class="field">
-          <span>Individual</span>
-          <input type="text" [(ngModel)]="form.individual" placeholder="Who holds this seat" />
         </label>
         <label class="field full">
           <span>Notes / Responsibilities</span>

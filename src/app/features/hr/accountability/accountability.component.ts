@@ -1,13 +1,24 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
+import { OrganizationContextService } from '../../../core/services/organization-context.service';
 import {
   AccountabilityEntry,
   AccountabilityWritePayload,
   AccountabilityService,
 } from '../../../core/services/accountability.service';
+
+interface RosterEmployee {
+  id: number;
+  name: string;
+  email?: string | null;
+  jobTitle?: string | null;
+  position?: { title?: string | null } | null;
+}
 
 @Component({
   selector: 'app-accountability',
@@ -18,14 +29,20 @@ import {
 })
 export class AccountabilityComponent implements OnInit {
   private api = inject(AccountabilityService);
+  private http = inject(HttpClient);
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
+  private orgContext = inject(OrganizationContextService);
 
   loading = signal(false);
   saving = signal(false);
   searchQuery = signal('');
   showForm = signal(false);
   editingId = signal<number | null>(null);
+  employees = signal<RosterEmployee[]>([]);
+  employeeQuery = signal('');
+  showEmployeeList = signal(false);
+  selectedEmployeeId = signal<number | null>(null);
 
   form: AccountabilityWritePayload = this.blankForm();
 
@@ -45,8 +62,30 @@ export class AccountabilityComponent implements OnInit {
     return rows;
   });
 
+  filteredEmployees = computed(() => {
+    const q = this.employeeQuery().trim().toLowerCase();
+    const rows = this.employees();
+    if (!q) return rows.slice(0, 80);
+    return rows
+      .filter((emp) => {
+        const title = this.employeeTitle(emp).toLowerCase();
+        return (
+          (emp.name || '').toLowerCase().includes(q) ||
+          (emp.email || '').toLowerCase().includes(q) ||
+          title.includes(q)
+        );
+      })
+      .slice(0, 80);
+  });
+
   ngOnInit(): void {
     this.reload();
+    this.loadEmployees();
+  }
+
+  @HostListener('document:click')
+  closeEmployeeList(): void {
+    this.showEmployeeList.set(false);
   }
 
   reload(): void {
@@ -63,6 +102,7 @@ export class AccountabilityComponent implements OnInit {
   openNew(): void {
     this.editingId.set(null);
     this.form = this.blankForm();
+    this.resetEmployeePicker();
     this.showForm.set(true);
   }
 
@@ -73,12 +113,39 @@ export class AccountabilityComponent implements OnInit {
       individual: row.individual || '',
       notes: row.notes || '',
     };
+    this.syncEmployeePicker(row.individual || '');
     this.showForm.set(true);
   }
 
   cancelForm(): void {
     this.showForm.set(false);
     this.editingId.set(null);
+    this.resetEmployeePicker();
+  }
+
+  onEmployeeQuery(value: string): void {
+    this.employeeQuery.set(value);
+    this.form.individual = value;
+    this.selectedEmployeeId.set(null);
+    this.showEmployeeList.set(true);
+  }
+
+  pickEmployee(emp: RosterEmployee, event?: Event): void {
+    event?.stopPropagation();
+    const name = (emp.name || '').trim();
+    const title = this.employeeTitle(emp);
+    this.selectedEmployeeId.set(emp.id);
+    this.employeeQuery.set(name);
+    this.form.individual = name;
+    if (title && !(this.form.jobPosition || '').trim()) {
+      this.form.jobPosition = title;
+    }
+    this.showEmployeeList.set(false);
+  }
+
+  employeeTitle(emp: RosterEmployee | null | undefined): string {
+    if (!emp) return '';
+    return String(emp.position?.title || emp.jobTitle || '').trim();
   }
 
   save(): void {
@@ -88,9 +155,13 @@ export class AccountabilityComponent implements OnInit {
       return;
     }
 
+    const typedName = (this.form.individual || this.employeeQuery() || '').trim();
+    const matched = this.findEmployeeByName(typedName);
+    const individual = matched?.name?.trim() || typedName || null;
+
     const payload: AccountabilityWritePayload = {
       jobPosition,
-      individual: (this.form.individual || '').trim() || null,
+      individual,
       notes: (this.form.notes || '').trim() || null,
     };
 
@@ -102,6 +173,7 @@ export class AccountabilityComponent implements OnInit {
         this.saving.set(false);
         this.showForm.set(false);
         this.editingId.set(null);
+        this.resetEmployeePicker();
         this.toast.success(id == null ? 'Position added' : 'Position updated');
       },
       error: (err) => {
@@ -126,5 +198,55 @@ export class AccountabilityComponent implements OnInit {
 
   private blankForm(): AccountabilityWritePayload {
     return { jobPosition: '', individual: '', notes: '' };
+  }
+
+  private resetEmployeePicker(): void {
+    this.employeeQuery.set('');
+    this.selectedEmployeeId.set(null);
+    this.showEmployeeList.set(false);
+  }
+
+  private syncEmployeePicker(name: string): void {
+    const match = this.findEmployeeByName(name);
+    this.employeeQuery.set(match?.name || name);
+    this.selectedEmployeeId.set(match?.id ?? null);
+    this.showEmployeeList.set(false);
+  }
+
+  private findEmployeeByName(name: string): RosterEmployee | undefined {
+    const needle = name.trim().toLowerCase();
+    if (!needle) return undefined;
+    return this.employees().find((emp) => (emp.name || '').trim().toLowerCase() === needle);
+  }
+
+  private async loadEmployees(): Promise<void> {
+    try {
+      const limit = 250;
+      const firstUrl = this.orgContext.addOrgParam(
+        `${environment.apiUrl}/api/v1/employee-roster?limit=${limit}&status=active`
+      );
+      const firstResponse: any = await this.http.get(firstUrl).toPromise();
+      const firstData = Array.isArray(firstResponse?.data) ? firstResponse.data : [];
+      const totalPages = Math.max(1, Number(firstResponse?.meta?.pages || 1));
+      const allRows: RosterEmployee[] = [...firstData];
+
+      for (let page = 2; page <= totalPages; page++) {
+        const pageUrl = this.orgContext.addOrgParam(
+          `${environment.apiUrl}/api/v1/employee-roster?limit=${limit}&status=active&page=${page}`
+        );
+        const pageResponse: any = await this.http.get(pageUrl).toPromise();
+        if (Array.isArray(pageResponse?.data) && pageResponse.data.length) {
+          allRows.push(...pageResponse.data);
+        }
+      }
+
+      this.employees.set(
+        allRows
+          .filter((emp) => emp?.id && (emp.name || '').trim())
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      );
+    } catch {
+      this.employees.set([]);
+    }
   }
 }
