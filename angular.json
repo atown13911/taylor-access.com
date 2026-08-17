@@ -36,7 +36,11 @@
             "styles": [
               "src/styles.scss"
             ],
-            "scripts": []
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "d3-org-chart",
+              "d3-flextree"
+            ]
           },
           "configurations": {
             "production": {

@@ -1,7 +1,21 @@
-import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  NgZone,
+  OnDestroy,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { OrgChart } from 'd3-org-chart';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
 import { ConfirmService } from '../../../core/services/confirm.service';
@@ -43,9 +57,17 @@ interface RosterEmployee {
   terminal?: { name?: string | null; code?: string | null } | null;
 }
 
-interface OrgNode {
-  row: AccountabilityEntry;
-  children: OrgNode[];
+interface OrgChartNode {
+  id: number;
+  parentId: number | null;
+  position: string;
+  name: string;
+  role: string;
+  status: string;
+  domains: string[];
+  avatar: string;
+  initials: string;
+  isRoot?: boolean;
 }
 
 interface ScopeGroup {
@@ -60,13 +82,16 @@ interface ScopeGroup {
   templateUrl: './accountability.component.html',
   styleUrls: ['./accountability.component.scss'],
 })
-export class AccountabilityComponent implements OnInit {
+export class AccountabilityComponent implements OnInit, OnDestroy {
   private api = inject(AccountabilityService);
   private http = inject(HttpClient);
   private toast = inject(ToastService);
   private confirm = inject(ConfirmService);
   private orgContext = inject(OrganizationContextService);
   private auth = inject(AuthService);
+  private zone = inject(NgZone);
+  private orgChartHost = viewChild<ElementRef<HTMLDivElement>>('orgChartHost');
+  private orgChart: OrgChart<OrgChartNode> | null = null;
 
   readonly roles = ACCOUNTABILITY_ROLES;
   readonly statuses = SEAT_STATUSES;
@@ -197,19 +222,41 @@ export class AccountabilityComponent implements OnInit {
     return groups;
   });
 
-  orgRoots = computed(() => {
+  orgChartData = computed<OrgChartNode[]>(() => {
     const rows = this.filtered();
     const ids = new Set(rows.map((r) => r.id));
-    const byParent = new Map<number, AccountabilityEntry[]>();
-    for (const row of rows) {
-      const parent = row.reportsToId && ids.has(row.reportsToId) ? row.reportsToId : 0;
-      const list = byParent.get(parent) || [];
-      list.push(row);
-      byParent.set(parent, list);
-    }
-    const build = (parentId: number): OrgNode[] =>
-      (byParent.get(parentId) || []).map((row) => ({ row, children: build(row.id) }));
-    return build(0);
+    const nodes = rows.map((row) => {
+      const emp = this.rosterFor(row);
+      const vacant = row.seatStatus === 'Vacant' && !row.individual;
+      return {
+        id: row.id,
+        parentId: row.reportsToId && ids.has(row.reportsToId) ? row.reportsToId : null,
+        position: row.jobPosition,
+        name: vacant ? 'Vacant' : row.individual || emp?.name || 'Unassigned',
+        role: row.accountabilityRole || 'Accountable',
+        status: row.seatStatus || 'Active',
+        domains: (row.scopeTags || []).slice(0, 2),
+        avatar: emp?.avatarUrl || '',
+        initials: this.initials(row.individual || emp?.name || row.jobPosition),
+      } satisfies OrgChartNode;
+    });
+    const roots = nodes.filter((node) => node.parentId == null);
+    if (roots.length <= 1) return nodes;
+    return [
+      {
+        id: 0,
+        parentId: null,
+        position: 'Accountability',
+        name: 'Operating chart',
+        role: '',
+        status: 'Active',
+        domains: [],
+        avatar: '',
+        initials: 'AC',
+        isRoot: true,
+      },
+      ...nodes.map((node) => (node.parentId == null ? { ...node, parentId: 0 } : node)),
+    ];
   });
 
   filteredEmployees = computed(() => {
@@ -229,9 +276,42 @@ export class AccountabilityComponent implements OnInit {
       .slice(0, 80);
   });
 
+  constructor() {
+    effect(() => {
+      const mode = this.viewMode();
+      const data = this.orgChartData();
+      const host = this.orgChartHost()?.nativeElement ?? null;
+      untracked(() => this.syncOrgChart(mode, host, data));
+    });
+  }
+
   ngOnInit(): void {
     this.reload();
     this.loadEmployees();
+  }
+
+  ngOnDestroy(): void {
+    this.destroyOrgChart();
+  }
+
+  setView(mode: 'list' | 'chart' | 'scope'): void {
+    this.viewMode.set(mode);
+  }
+
+  fitOrgChart(): void {
+    this.orgChart?.fit();
+  }
+
+  expandOrgChart(): void {
+    this.orgChart?.expandAll().fit();
+  }
+
+  collapseOrgChart(): void {
+    this.orgChart?.collapseAll().fit();
+  }
+
+  exportOrgChart(): void {
+    this.orgChart?.exportImg({ full: true, backgroundColor: '#121225' });
   }
 
   @HostListener('document:click')
@@ -608,6 +688,121 @@ export class AccountabilityComponent implements OnInit {
         .filter((row) => row.reportsToId != null && mySeats.includes(row.reportsToId))
         .map((row) => row.id)
     );
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    if (this.viewMode() === 'chart') this.fitOrgChart();
+  }
+
+  private syncOrgChart(
+    mode: 'list' | 'chart' | 'scope',
+    host: HTMLDivElement | null,
+    data: OrgChartNode[]
+  ): void {
+    if (mode !== 'chart' || !host || !data.length) {
+      if (mode !== 'chart') this.destroyOrgChart();
+      return;
+    }
+
+    const width = Math.max(host.clientWidth, 320);
+    const height = Math.max(host.clientHeight, 520);
+
+    if (!this.orgChart) {
+      this.orgChart = new OrgChart<OrgChartNode>()
+        .container(host)
+        .nodeWidth(() => 268)
+        .nodeHeight((d: any) => (d?.data?.isRoot || d?.isRoot ? 86 : 122))
+        .childrenMargin(() => 56)
+        .siblingsMargin(() => 24)
+        .compact(false)
+        .layout('top')
+        .initialExpandLevel(20)
+        .duration(350)
+        .defaultFont('Inter, Segoe UI, sans-serif')
+        .imageName('accountability-org-chart')
+        .nodeContent((node: any) => this.orgNodeHtml(node?.data as OrgChartNode))
+        .buttonContent(({ node }) => {
+          const count = node?.data?._directSubordinatesPaging ?? node?.data?._directSubordinates ?? '';
+          return `<div style="width:28px;height:28px;border-radius:999px;background:#1a1a2e;border:1px solid #4fc3f7;color:#7dd3fc;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">${count}</div>`;
+        })
+        .linkUpdate(function (this: any) {
+          this.setAttribute('stroke', '#3d3d5c');
+          this.setAttribute('stroke-width', '1.5');
+        })
+        .onNodeClick((node: any) => {
+          const id = Number(node?.data?.id);
+          if (!id || node?.data?.isRoot) return;
+          this.zone.run(() => {
+            const row = this.entries().find((item) => item.id === id);
+            if (row) this.openDetails(row);
+          });
+        });
+    }
+
+    this.orgChart
+      .svgWidth(width)
+      .svgHeight(height)
+      .data(data)
+      .render()
+      .expandAll()
+      .fit();
+  }
+
+  private destroyOrgChart(): void {
+    this.orgChart = null;
+    const host = this.orgChartHost()?.nativeElement;
+    if (host) host.innerHTML = '';
+  }
+
+  private orgNodeHtml(node: OrgChartNode | undefined): string {
+    if (!node) return '';
+    const position = this.escapeHtml(node.position || '');
+    const name = this.escapeHtml(node.name || '');
+    if (node.isRoot) {
+      return `
+        <div style="width:100%;height:100%;padding:12px 14px;box-sizing:border-box;background:#16162a;border:1px solid #4fc3f7;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:4px;">
+          <div style="color:#fff;font-weight:700;font-size:14px;">${position}</div>
+          <div style="color:#8e8ea8;font-size:12px;">${name}</div>
+        </div>`;
+    }
+    const role = this.escapeHtml(node.role || '');
+    const status = this.escapeHtml(node.status || '');
+    const statusColor = node.status === 'Vacant' ? '#fca5a5'
+      : node.status === 'Interim' ? '#fcd34d'
+      : node.status === 'Transitioning' ? '#93c5fd'
+      : '#86efac';
+    const statusBg = node.status === 'Vacant' ? 'rgba(239,68,68,.14)'
+      : node.status === 'Interim' ? 'rgba(245,158,11,.14)'
+      : node.status === 'Transitioning' ? 'rgba(59,130,246,.14)'
+      : 'rgba(34,197,94,.12)';
+    const chips = (node.domains || [])
+      .map((tag) => `<span style="display:inline-block;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#121225;border:1px solid #2d2d46;color:#b8b8d0;border-radius:999px;padding:2px 7px;font-size:10px;">${this.escapeHtml(tag)}</span>`)
+      .join('');
+    const avatar = node.avatar
+      ? `<img src="${this.escapeHtml(node.avatar)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;" />`
+      : `<div style="width:36px;height:36px;border-radius:50%;background:rgba(79,195,247,.18);color:#4fc3f7;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">${this.escapeHtml(node.initials || '')}</div>`;
+    return `
+      <div style="width:100%;height:100%;padding:10px 12px;box-sizing:border-box;background:#1a1a2e;border:1px solid #2d2d46;border-radius:12px;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${avatar}
+          <div style="min-width:0;flex:1;">
+            <div style="color:#fff;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${position}</div>
+            <div style="color:#e8e8f0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+          </div>
+          <span style="flex-shrink:0;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:700;color:${statusColor};background:${statusBg};">${status}</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span style="color:#8e8ea8;font-size:11px;">${role}</span>
+          <div style="display:flex;gap:4px;min-width:0;">${chips}</div>
+        </div>
+      </div>`;
+  }
+
+  private escapeHtml(value: string): string {
+    return String(value).replace(/[&<>"']/g, (ch) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch
+    ));
   }
 
   private async loadEmployees(): Promise<void> {

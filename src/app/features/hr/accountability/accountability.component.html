@@ -243,13 +243,13 @@
       }
     </select>
     <div class="view-toggle">
-      <button type="button" [class.active]="viewMode() === 'list'" (click)="viewMode.set('list')">
+      <button type="button" [class.active]="viewMode() === 'list'" (click)="setView('list')">
         <i class="bx bx-list-ul"></i> List
       </button>
-      <button type="button" [class.active]="viewMode() === 'chart'" (click)="viewMode.set('chart')">
+      <button type="button" [class.active]="viewMode() === 'chart'" (click)="setView('chart')">
         <i class="bx bx-git-branch"></i> Org chart
       </button>
-      <button type="button" [class.active]="viewMode() === 'scope'" (click)="viewMode.set('scope')">
+      <button type="button" [class.active]="viewMode() === 'scope'" (click)="setView('scope')">
         <i class="bx bx-target-lock"></i> Scope
       </button>
     </div>
@@ -268,10 +268,25 @@
       </div>
     </div>
   } @else if (viewMode() === 'chart') {
-    <div class="org-wrap">
-      @for (node of orgRoots(); track node.row.id) {
-        <ng-container *ngTemplateOutlet="orgNode; context: { $implicit: node }"></ng-container>
-      }
+    <div class="org-chart-panel">
+      <div class="org-chart-toolbar">
+        <span class="org-chart-hint">Scroll to zoom · drag to pan · click a seat for details</span>
+        <div class="org-chart-actions">
+          <button type="button" class="btn btn-secondary" (click)="fitOrgChart()">
+            <i class="bx bx-expand"></i> Fit
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="expandOrgChart()">
+            <i class="bx bx-plus"></i> Expand
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="collapseOrgChart()">
+            <i class="bx bx-minus"></i> Collapse
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="exportOrgChart()">
+            <i class="bx bx-export"></i> PNG
+          </button>
+        </div>
+      </div>
+      <div #orgChartHost class="org-chart-host"></div>
     </div>
   } @else if (viewMode() === 'scope') {
     <div class="scope-wrap">
@@ -416,39 +431,6 @@
     </div>
   }
 </div>
-
-<ng-template #orgNode let-node>
-  <div class="org-node" [attr.data-status]="node.row.seatStatus">
-    <div class="org-card" (click)="openDetails(node.row)">
-      <div class="org-card-top">
-        <strong>{{ node.row.jobPosition }}</strong>
-        <span class="status-badge" [attr.data-status]="node.row.seatStatus">{{ node.row.seatStatus }}</span>
-      </div>
-      <div class="org-person">
-        @if (node.row.seatStatus === 'Vacant' && !node.row.individual) {
-          Vacant
-        } @else {
-          {{ node.row.individual || 'Unassigned' }}
-        }
-      </div>
-      <div class="org-role">{{ node.row.accountabilityRole }}</div>
-      @if ((node.row.scopeTags || []).length) {
-        <div class="chip-cell">
-          @for (tag of (node.row.scopeTags || []).slice(0, 2); track tag) {
-            <span class="mini-chip">{{ tag }}</span>
-          }
-        </div>
-      }
-    </div>
-    @if (node.children.length) {
-      <div class="org-children">
-        @for (child of node.children; track child.row.id) {
-          <ng-container *ngTemplateOutlet="orgNode; context: { $implicit: child }"></ng-container>
-        }
-      </div>
-    }
-  </div>
-</ng-template>
 
 @if (detailRow(); as row) {
   <div class="modal-overlay" (click)="closeDetails()">

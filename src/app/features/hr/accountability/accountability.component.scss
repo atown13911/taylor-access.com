@@ -518,29 +518,33 @@
 .scope-seat-top strong { color: #fff; font-size: 0.88rem; }
 .scope-seat-name { color: #c8c8dc; font-size: 0.84rem; }
 
-.org-wrap { display: flex; flex-direction: column; gap: 16px; }
-.org-node { display: flex; flex-direction: column; gap: 10px; }
-.org-card {
+.org-chart-panel {
   background: #1a1a2e;
   border: 1px solid #2d2d46;
-  border-radius: 10px;
-  padding: 12px 14px;
-  max-width: 360px;
-  cursor: pointer;
-}
-.org-card:hover { border-color: #4fc3f7; }
-.org-card-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-.org-card-top strong { color: #fff; }
-.org-person { color: #e8e8f0; margin-top: 6px; }
-.org-role { color: #8e8ea8; font-size: 0.78rem; margin: 4px 0 8px; }
-.org-children {
-  margin-left: 28px;
-  padding-left: 16px;
-  border-left: 1px solid #2d2d46;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 640px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
+.org-chart-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2d2d46;
+}
+.org-chart-hint { color: #8e8ea8; font-size: 0.78rem; }
+.org-chart-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.org-chart-actions .btn { padding: 8px 12px; }
+.org-chart-host {
+  flex: 1;
+  min-height: 560px;
+  background: #121225;
+}
+.org-chart-host svg { display: block; }
 
 .actions {
   display: flex;
