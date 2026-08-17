@@ -271,6 +271,10 @@ export class AccountabilityComponent implements OnInit {
     this.form.keyResults[index] = value;
   }
 
+  trackByIndex(index: number): number {
+    return index;
+  }
+
   employeeTitle(emp: RosterEmployee | null | undefined): string {
     if (!emp) return '';
     return String(emp.position?.title || emp.jobTitle || '').trim();

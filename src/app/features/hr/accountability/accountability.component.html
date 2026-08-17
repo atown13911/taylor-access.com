@@ -186,14 +186,12 @@
         <div class="field full">
           <span>Key results / KPIs <em>(up to 5)</em></span>
           <div class="kpi-list">
-            @for (kpi of form.keyResults; track $index; let i = $index) {
-              <div class="kpi-row">
-                <input type="text" [ngModel]="kpi" (ngModelChange)="updateKpi(i, $event)" placeholder="e.g. On-time delivery %, Settlement accuracy" />
-                <button class="btn-icon" type="button" title="Remove KPI" (click)="removeKpi(i)">
-                  <i class="bx bx-minus"></i>
-                </button>
-              </div>
-            }
+            <div class="kpi-row" *ngFor="let kpi of form.keyResults; let i = index; trackBy: trackByIndex">
+              <input type="text" [ngModel]="kpi" (ngModelChange)="updateKpi(i, $event)" placeholder="e.g. On-time delivery %, Settlement accuracy" />
+              <button class="btn-icon" type="button" title="Remove KPI" (click)="removeKpi(i)">
+                <i class="bx bx-minus"></i>
+              </button>
+            </div>
           </div>
           @if ((form.keyResults?.length || 0) < 5) {
             <button class="link-btn" type="button" (click)="addKpi()">
