@@ -828,6 +828,13 @@ using (var scope = app.Services.CreateScope())
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""KeysFob"" VARCHAR(100) NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""EquipmentNotes"" VARCHAR(500) NULL;
 
+        CREATE TABLE IF NOT EXISTS ""ZoomUserRecords"" (
+            ""Id"" SERIAL PRIMARY KEY,
+            ""Email"" VARCHAR(255) NULL,
+            ""ZoomUserId"" VARCHAR(100) NULL,
+            ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+
         CREATE TABLE IF NOT EXISTS ""OfficeInventoryItems"" (
             ""Id"" SERIAL PRIMARY KEY,
             ""OrganizationId"" INTEGER NOT NULL,

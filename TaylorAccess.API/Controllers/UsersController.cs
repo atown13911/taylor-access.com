@@ -341,15 +341,25 @@ public class UsersController : ControllerBase
             user.CellPhone = request.CellPhone ?? user.CellPhone;
             user.CellPhoneCountry = request.CellPhoneCountry ?? user.CellPhoneCountry;
             user.PersonalEmail = request.PersonalEmail ?? user.PersonalEmail;
-            // Auto-link Zoom account when ZoomEmail is set
-            if (!string.IsNullOrEmpty(request.ZoomEmail) && request.ZoomEmail != user.ZoomEmail)
+            // Auto-link Zoom when the email changes. The directory table is optional —
+            // a missing ZoomUserRecords relation must never fail the employee save.
+            if (!string.IsNullOrWhiteSpace(request.ZoomEmail))
             {
-                user.ZoomEmail = request.ZoomEmail;
-                var zoomUser = await _context.ZoomUserRecords
-                    .FirstOrDefaultAsync(z => z.Email != null && z.Email.ToLower() == request.ZoomEmail.ToLower());
-                if (zoomUser != null)
+                var zoomEmail = request.ZoomEmail.Trim();
+                if (!string.Equals(zoomEmail, user.ZoomEmail, StringComparison.OrdinalIgnoreCase))
                 {
-                    user.ZoomUserId = zoomUser.ZoomUserId;
+                    user.ZoomEmail = zoomEmail;
+                    try
+                    {
+                        var zoomUser = await _context.ZoomUserRecords
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(z => z.Email != null && z.Email.ToLower() == zoomEmail.ToLower());
+                        if (zoomUser != null)
+                            user.ZoomUserId = zoomUser.ZoomUserId;
+                    }
+                    catch (Exception)
+                    {
+                    }
                 }
             }
             else
