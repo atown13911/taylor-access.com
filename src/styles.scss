@@ -296,3 +296,21 @@ tr:hover td { background: var(--accent-03); }
   50% { filter: hue-rotate(18deg) saturate(1.25); opacity: 1; }
   100% { filter: hue-rotate(0deg) saturate(1); opacity: 0.76; }
 }
+
+body.accountability-fullscreen {
+  .sidebar,
+  .topbar {
+    display: none !important;
+  }
+
+  .main-content {
+    width: 100vw;
+    height: 100dvh;
+  }
+
+  .content-area {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100dvh;
+  }
+}

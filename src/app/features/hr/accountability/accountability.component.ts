@@ -1,6 +1,7 @@
 import {
   Component,
   ElementRef,
+  HostBinding,
   HostListener,
   NgZone,
   OnDestroy,
@@ -124,6 +125,11 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
   viewMode = signal<'list' | 'chart' | 'scope'>('list');
   chartTab = signal<'employee' | 'departments'>('employee');
   chartFullscreen = signal(false);
+
+  @HostBinding('class.section-fullscreen')
+  get sectionFullscreenHost(): boolean {
+    return this.chartFullscreen();
+  }
   departments = signal<DepartmentRow[]>([]);
   showForm = signal(false);
   detailRow = signal<AccountabilityEntry | null>(null);
@@ -419,16 +425,21 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
   }
 
   setView(mode: 'list' | 'chart' | 'scope'): void {
-    if (mode !== 'chart') this.setChartFullscreen(false);
     this.viewMode.set(mode);
+    this.setChartFullscreen(mode === 'chart');
   }
 
   toggleChartFullscreen(): void {
-    this.setChartFullscreen(!this.chartFullscreen());
+    if (this.chartFullscreen()) {
+      this.setView('list');
+      return;
+    }
+    this.setView('chart');
   }
 
   setChartFullscreen(on: boolean): void {
     this.chartFullscreen.set(on);
+    document.body.classList.toggle('accountability-fullscreen', on);
     this.scheduleOrgChartResize();
   }
 
@@ -465,7 +476,7 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
       this.closeDetails();
       return;
     }
-    if (this.chartFullscreen()) this.setChartFullscreen(false);
+    if (this.chartFullscreen()) this.setView('list');
   }
 
   openDetails(row: AccountabilityEntry, event?: Event): void {
@@ -959,7 +970,7 @@ export class AccountabilityComponent implements OnInit, OnDestroy {
         .compactMarginPair(() => 36)
         .compactMarginBetween(() => 14)
         .compact(true)
-        .scaleExtent([0.55, 2.4])
+        .scaleExtent([0.2, 2.4])
         .layout('top')
         .initialExpandLevel(tab === 'departments' ? 1 : 8)
         .duration(350)

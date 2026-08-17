@@ -1,4 +1,5 @@
-<div class="page-container">
+<div class="page-container" [class.section-fullscreen]="chartFullscreen()">
+  @if (!chartFullscreen()) {
   <header class="page-header">
     <div class="header-content">
       <h1><i class="bx bx-sitemap"></i> Accountability</h1>
@@ -32,6 +33,7 @@
       <strong>{{ counts().myReports }}</strong><span>My reports</span>
     </button>
   </div>
+  }
 
   @if (showForm()) {
     <section class="form-panel">
@@ -226,6 +228,7 @@
     </section>
   }
 
+  @if (!chartFullscreen()) {
   <div class="toolbar">
     <div class="search-wrap">
       <i class="bx bx-search"></i>
@@ -254,6 +257,7 @@
       </button>
     </div>
   </div>
+  }
 
   @if (loading() && !filtered().length && viewMode() !== 'scope') {
     <div class="table-wrap"><div class="empty">Loading accountability chart…</div></div>
@@ -268,8 +272,12 @@
       </div>
     </div>
   } @else if (viewMode() === 'chart') {
-    <div class="org-chart-panel" [class.fullscreen]="chartFullscreen()">
+    <div class="org-chart-panel">
       <div class="org-chart-toolbar">
+        <div class="org-chart-brand">
+          <i class="bx bx-sitemap"></i>
+          <strong>Accountability</strong>
+        </div>
         <div class="org-chart-tabs">
           <button type="button" [class.active]="chartTab() === 'employee'" (click)="setChartTab('employee')">
             <i class="bx bx-user"></i> Employee
@@ -301,11 +309,11 @@
           <button
             type="button"
             class="btn btn-secondary"
-            (click)="toggleChartFullscreen()"
-            [attr.title]="chartFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+            (click)="setView('list')"
+            title="Exit fullscreen"
           >
-            <i class="bx" [class.bx-exit-fullscreen]="chartFullscreen()" [class.bx-fullscreen]="!chartFullscreen()"></i>
-            {{ chartFullscreen() ? 'Exit' : 'Fullscreen' }}
+            <i class="bx bx-exit-fullscreen"></i>
+            Exit
           </button>
         </div>
       </div>
