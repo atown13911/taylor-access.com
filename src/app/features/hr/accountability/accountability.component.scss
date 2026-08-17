@@ -1,0 +1,206 @@
+.page-container { padding: 24px; max-width: 1280px; margin: 0 auto; }
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.page-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: #fff;
+  font-size: 1.6rem;
+}
+
+.page-header h1 i { color: var(--primary, #4fc3f7); }
+.subtitle { color: #8e8ea8; margin: 4px 0 0; }
+.header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-primary { background: var(--primary, #4fc3f7); color: #0b1220; }
+.btn-secondary { background: #2a2a40; color: #fff; }
+
+.form-panel {
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.form-header h2 { margin: 0; color: #fff; font-size: 1.1rem; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #b8b8d0;
+  font-size: 0.85rem;
+}
+.field.full { grid-column: 1 / -1; }
+.field input,
+.field textarea {
+  background: #121225;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 420px;
+}
+.search-wrap i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8e8ea8;
+}
+.search-wrap input {
+  width: 100%;
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px 10px 36px;
+  font: inherit;
+}
+
+.table-wrap {
+  background: #1a1a2e;
+  border: 1px solid #2d2d46;
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 720px;
+}
+
+.col-position { width: 22%; }
+.col-individual { width: 20%; }
+.col-notes { width: 48%; }
+.col-actions { width: 10%; }
+
+.data-table th,
+.data-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #2d2d46;
+  vertical-align: middle;
+}
+.data-table th {
+  color: #8e8ea8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.data-table td { color: #e8e8f0; font-size: 0.92rem; }
+.data-table tbody tr:hover { background: rgba(79, 195, 247, 0.04); }
+
+.th-actions,
+.actions {
+  text-align: right;
+}
+
+.position-name {
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-cell {
+  color: #a0a0b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.btn-icon {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #b8b8d0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-icon:hover { background: #2a2a40; color: #fff; }
+.btn-icon.danger:hover { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #8e8ea8;
+}
+
+@media (max-width: 720px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .search-wrap { max-width: none; }
+}

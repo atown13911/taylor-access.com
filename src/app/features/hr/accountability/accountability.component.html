@@ -1,0 +1,113 @@
+<div class="page-container">
+  <header class="page-header">
+    <div class="header-content">
+      <h1><i class="bx bx-sitemap"></i> Accountability</h1>
+      <p class="subtitle">Who owns what — job positions, the individual holding each seat, and their responsibilities</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary" type="button" (click)="reload()" [disabled]="loading()">
+        <i class="bx" [class.bx-loader-alt]="loading()" [class.bx-spin]="loading()" [class.bx-refresh]="!loading()"></i>
+        Refresh
+      </button>
+      <button class="btn btn-primary" type="button" (click)="openNew()">
+        <i class="bx bx-plus"></i> Add Position
+      </button>
+    </div>
+  </header>
+
+  @if (showForm()) {
+    <section class="form-panel">
+      <div class="form-header">
+        <h2>{{ editingId() == null ? 'Add Position' : 'Edit Position' }}</h2>
+        <button class="btn-icon" type="button" (click)="cancelForm()" title="Close">
+          <i class="bx bx-x"></i>
+        </button>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Job position *</span>
+          <input type="text" [(ngModel)]="form.jobPosition" placeholder="e.g. Dispatch Manager" />
+        </label>
+        <label class="field">
+          <span>Individual</span>
+          <input type="text" [(ngModel)]="form.individual" placeholder="Who holds this seat" />
+        </label>
+        <label class="field full">
+          <span>Notes / Responsibilities</span>
+          <textarea rows="3" [(ngModel)]="form.notes" placeholder="What this seat is accountable for"></textarea>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" type="button" (click)="cancelForm()" [disabled]="saving()">Cancel</button>
+        <button class="btn btn-primary" type="button" (click)="save()" [disabled]="saving()">
+          <i class="bx" [class.bx-loader-alt]="saving()" [class.bx-spin]="saving()" [class.bx-save]="!saving()"></i>
+          {{ saving() ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+    </section>
+  }
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <i class="bx bx-search"></i>
+      <input
+        type="search"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+        placeholder="Search position, individual, notes…"
+      />
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    @if (loading() && !filtered().length) {
+      <div class="empty">Loading accountability chart…</div>
+    } @else if (!filtered().length) {
+      <div class="empty">
+        @if (searchQuery().trim()) {
+          No positions match your search.
+        } @else {
+          No positions yet. Click <strong>Add Position</strong> to start building the chart.
+        }
+      </div>
+    } @else {
+      <table class="data-table">
+        <colgroup>
+          <col class="col-position" />
+          <col class="col-individual" />
+          <col class="col-notes" />
+          <col class="col-actions" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Job Position</th>
+            <th>Individual</th>
+            <th>Notes / Responsibilities</th>
+            <th class="th-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filtered(); track row.id) {
+            <tr>
+              <td>
+                <div class="position-name" [title]="row.jobPosition">{{ row.jobPosition }}</div>
+              </td>
+              <td>
+                <span [title]="row.individual || ''">{{ row.individual || '—' }}</span>
+              </td>
+              <td class="notes-cell" [title]="row.notes || ''">{{ row.notes || '—' }}</td>
+              <td class="actions">
+                <button class="btn-icon" type="button" title="Edit" (click)="openEdit(row)">
+                  <i class="bx bx-edit"></i>
+                </button>
+                <button class="btn-icon danger" type="button" title="Remove" (click)="remove(row)">
+                  <i class="bx bx-trash"></i>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

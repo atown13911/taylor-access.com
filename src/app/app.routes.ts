@@ -127,6 +127,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/hr/performance-reviews/performance-reviews.component').then(m => m.PerformanceReviewsComponent)
       },
       {
+        path: 'hr/accountability',
+        loadComponent: () => import('./features/hr/accountability/accountability.component').then(m => m.AccountabilityComponent)
+      },
+      {
         path: 'hr/documents',
         loadComponent: () => import('./features/hr/documents/hr-documents.component').then(m => m.HrDocumentsComponent)
       },
