@@ -271,10 +271,6 @@ export class AccountabilityComponent implements OnInit {
     this.form.keyResults[index] = value;
   }
 
-  trackKpi(_index: number, _item: string): number {
-    return _index;
-  }
-
   employeeTitle(emp: RosterEmployee | null | undefined): string {
     if (!emp) return '';
     return String(emp.position?.title || emp.jobTitle || '').trim();

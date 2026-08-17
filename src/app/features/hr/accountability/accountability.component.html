@@ -186,7 +186,7 @@
         <div class="field full">
           <span>Key results / KPIs <em>(up to 5)</em></span>
           <div class="kpi-list">
-            @for (kpi of form.keyResults; track trackKpi($index, kpi); let i = $index) {
+            @for (kpi of form.keyResults; track $index; let i = $index) {
               <div class="kpi-row">
                 <input type="text" [ngModel]="kpi" (ngModelChange)="updateKpi(i, $event)" placeholder="e.g. On-time delivery %, Settlement accuracy" />
                 <button class="btn-icon" type="button" title="Remove KPI" (click)="removeKpi(i)">
@@ -287,13 +287,15 @@
               <td>
                 @if (row.seatStatus === 'Vacant' && !row.individual) {
                   <span class="vacant-label">Vacant seat</span>
-                } @else if (rosterFor(row); as emp) {
-                  <div class="person-cell">
-                    <div class="person-name" [title]="emp.name">{{ emp.name }}</div>
-                    <div class="person-sub">{{ emp.email || employeeDepartment(emp) || '—' }}</div>
-                  </div>
                 } @else {
-                  <span [title]="row.individual || ''">{{ row.individual || '—' }}</span>
+                  @if (rosterFor(row); as emp) {
+                    <div class="person-cell">
+                      <div class="person-name" [title]="emp.name">{{ emp.name }}</div>
+                      <div class="person-sub">{{ emp.email || employeeDepartment(emp) || '—' }}</div>
+                    </div>
+                  } @else {
+                    <span [title]="row.individual || ''">{{ row.individual || '—' }}</span>
+                  }
                 }
               </td>
               <td>
