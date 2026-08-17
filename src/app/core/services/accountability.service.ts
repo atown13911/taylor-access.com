@@ -8,6 +8,7 @@ export interface AccountabilityEntry {
   jobPosition: string;
   individual?: string | null;
   notes?: string | null;
+  employeeId?: number | null;
   createdBy?: string | null;
   updatedBy?: string | null;
   createdAt?: string;
@@ -18,6 +19,7 @@ export interface AccountabilityWritePayload {
   jobPosition: string;
   individual?: string | null;
   notes?: string | null;
+  employeeId?: number | null;
 }
 
 @Injectable({ providedIn: 'root' })

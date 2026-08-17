@@ -15,9 +15,26 @@ import {
 interface RosterEmployee {
   id: number;
   name: string;
+  alias?: string | null;
   email?: string | null;
+  personalEmail?: string | null;
+  phone?: string | null;
+  workPhone?: string | null;
+  cellPhone?: string | null;
   jobTitle?: string | null;
+  role?: string | null;
+  status?: string | null;
+  avatarUrl?: string | null;
+  employeeNumber?: string | null;
+  hireDate?: string | null;
+  city?: string | null;
+  state?: string | null;
   position?: { title?: string | null } | null;
+  department?: { name?: string | null } | null;
+  organization?: { name?: string | null } | null;
+  satellite?: { name?: string | null; code?: string | null } | null;
+  agency?: { name?: string | null; code?: string | null } | null;
+  terminal?: { name?: string | null; code?: string | null } | null;
 }
 
 @Component({
@@ -48,16 +65,27 @@ export class AccountabilityComponent implements OnInit {
 
   entries = this.api.entries;
 
+  selectedEmployee = computed(() => {
+    const id = this.selectedEmployeeId();
+    if (id == null) return null;
+    return this.employees().find((emp) => emp.id === id) ?? null;
+  });
+
   filtered = computed(() => {
     const q = this.searchQuery().trim().toLowerCase();
     let rows = this.entries();
     if (q) {
-      rows = rows.filter(
-        (e) =>
+      rows = rows.filter((e) => {
+        const emp = this.rosterFor(e);
+        return (
           e.jobPosition.toLowerCase().includes(q) ||
           (e.individual || '').toLowerCase().includes(q) ||
-          (e.notes || '').toLowerCase().includes(q)
-      );
+          (e.notes || '').toLowerCase().includes(q) ||
+          (emp?.email || '').toLowerCase().includes(q) ||
+          this.employeeDepartment(emp).toLowerCase().includes(q) ||
+          this.employeeOrg(emp).toLowerCase().includes(q)
+        );
+      });
     }
     return rows;
   });
@@ -72,6 +100,7 @@ export class AccountabilityComponent implements OnInit {
         return (
           (emp.name || '').toLowerCase().includes(q) ||
           (emp.email || '').toLowerCase().includes(q) ||
+          (emp.alias || '').toLowerCase().includes(q) ||
           title.includes(q)
         );
       })
@@ -112,8 +141,9 @@ export class AccountabilityComponent implements OnInit {
       jobPosition: row.jobPosition,
       individual: row.individual || '',
       notes: row.notes || '',
+      employeeId: row.employeeId ?? null,
     };
-    this.syncEmployeePicker(row.individual || '');
+    this.syncEmployeePicker(row);
     this.showForm.set(true);
   }
 
@@ -126,6 +156,7 @@ export class AccountabilityComponent implements OnInit {
   onEmployeeQuery(value: string): void {
     this.employeeQuery.set(value);
     this.form.individual = value;
+    this.form.employeeId = null;
     this.selectedEmployeeId.set(null);
     this.showEmployeeList.set(true);
   }
@@ -137,15 +168,64 @@ export class AccountabilityComponent implements OnInit {
     this.selectedEmployeeId.set(emp.id);
     this.employeeQuery.set(name);
     this.form.individual = name;
-    if (title && !(this.form.jobPosition || '').trim()) {
-      this.form.jobPosition = title;
-    }
+    this.form.employeeId = emp.id;
+    if (title) this.form.jobPosition = title;
     this.showEmployeeList.set(false);
   }
 
   employeeTitle(emp: RosterEmployee | null | undefined): string {
     if (!emp) return '';
     return String(emp.position?.title || emp.jobTitle || '').trim();
+  }
+
+  employeePhone(emp: RosterEmployee | null | undefined): string {
+    if (!emp) return '';
+    return String(emp.cellPhone || emp.workPhone || emp.phone || '').trim();
+  }
+
+  employeeDepartment(emp: RosterEmployee | null | undefined): string {
+    return String(emp?.department?.name || '').trim();
+  }
+
+  employeeOrg(emp: RosterEmployee | null | undefined): string {
+    return String(emp?.organization?.name || '').trim();
+  }
+
+  employeeEntity(emp: RosterEmployee | null | undefined): string {
+    if (!emp) return '';
+    if (emp.satellite?.name) {
+      return emp.satellite.code ? `${emp.satellite.name} (${emp.satellite.code})` : emp.satellite.name;
+    }
+    if (emp.agency?.name) {
+      return emp.agency.code ? `${emp.agency.name} (${emp.agency.code})` : emp.agency.name;
+    }
+    if (emp.terminal?.name) {
+      return emp.terminal.code ? `${emp.terminal.name} (${emp.terminal.code})` : emp.terminal.name;
+    }
+    return '';
+  }
+
+  employeeLocation(emp: RosterEmployee | null | undefined): string {
+    if (!emp) return '';
+    return [emp.city, emp.state].filter(Boolean).join(', ');
+  }
+
+  initials(name: string | null | undefined): string {
+    return String(name || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase();
+  }
+
+  rosterFor(row: AccountabilityEntry): RosterEmployee | null {
+    if (row.employeeId) {
+      const byId = this.employees().find((emp) => emp.id === row.employeeId);
+      if (byId) return byId;
+    }
+    return this.findEmployeeByName(row.individual || '') ?? null;
   }
 
   save(): void {
@@ -156,13 +236,16 @@ export class AccountabilityComponent implements OnInit {
     }
 
     const typedName = (this.form.individual || this.employeeQuery() || '').trim();
-    const matched = this.findEmployeeByName(typedName);
+    const matched =
+      this.employees().find((emp) => emp.id === this.selectedEmployeeId()) ||
+      this.findEmployeeByName(typedName);
     const individual = matched?.name?.trim() || typedName || null;
 
     const payload: AccountabilityWritePayload = {
       jobPosition,
       individual,
       notes: (this.form.notes || '').trim() || null,
+      employeeId: matched?.id ?? null,
     };
 
     this.saving.set(true);
@@ -197,7 +280,7 @@ export class AccountabilityComponent implements OnInit {
   }
 
   private blankForm(): AccountabilityWritePayload {
-    return { jobPosition: '', individual: '', notes: '' };
+    return { jobPosition: '', individual: '', notes: '', employeeId: null };
   }
 
   private resetEmployeePicker(): void {
@@ -206,10 +289,13 @@ export class AccountabilityComponent implements OnInit {
     this.showEmployeeList.set(false);
   }
 
-  private syncEmployeePicker(name: string): void {
-    const match = this.findEmployeeByName(name);
-    this.employeeQuery.set(match?.name || name);
-    this.selectedEmployeeId.set(match?.id ?? null);
+  private syncEmployeePicker(row: AccountabilityEntry): void {
+    const match =
+      (row.employeeId ? this.employees().find((emp) => emp.id === row.employeeId) : undefined) ||
+      this.findEmployeeByName(row.individual || '');
+    this.employeeQuery.set(match?.name || row.individual || '');
+    this.selectedEmployeeId.set(match?.id ?? row.employeeId ?? null);
+    this.form.employeeId = match?.id ?? row.employeeId ?? null;
     this.showEmployeeList.set(false);
   }
 

@@ -59,6 +59,65 @@
           <span>Job position *</span>
           <input type="text" [(ngModel)]="form.jobPosition" placeholder="e.g. Dispatch Manager" />
         </label>
+        @if (selectedEmployee(); as emp) {
+          <div class="profile-card">
+            <div class="profile-head">
+              @if (emp.avatarUrl) {
+                <img class="avatar" [src]="emp.avatarUrl" [alt]="emp.name" />
+              } @else {
+                <div class="avatar initials">{{ initials(emp.name) }}</div>
+              }
+              <div class="profile-identity">
+                <div class="profile-name">{{ emp.name }}</div>
+                <div class="profile-meta">
+                  {{ employeeTitle(emp) || form.jobPosition || 'No title on roster' }}
+                  @if (emp.alias) { <span>· {{ emp.alias }}</span> }
+                </div>
+              </div>
+              @if (emp.status) {
+                <span class="status-chip">{{ emp.status }}</span>
+              }
+            </div>
+            <div class="profile-grid">
+              <div class="profile-item">
+                <span>Email</span>
+                <strong>{{ emp.email || '—' }}</strong>
+              </div>
+              <div class="profile-item">
+                <span>Phone</span>
+                <strong>{{ employeePhone(emp) || '—' }}</strong>
+              </div>
+              <div class="profile-item">
+                <span>Department</span>
+                <strong>{{ employeeDepartment(emp) || '—' }}</strong>
+              </div>
+              <div class="profile-item">
+                <span>Organization</span>
+                <strong>{{ employeeOrg(emp) || '—' }}</strong>
+              </div>
+              <div class="profile-item">
+                <span>Entity</span>
+                <strong>{{ employeeEntity(emp) || 'Corporate' }}</strong>
+              </div>
+              <div class="profile-item">
+                <span>Role</span>
+                <strong>{{ emp.role || '—' }}</strong>
+              </div>
+              @if (emp.employeeNumber) {
+                <div class="profile-item">
+                  <span>Employee #</span>
+                  <strong>{{ emp.employeeNumber }}</strong>
+                </div>
+              }
+              @if (employeeLocation(emp)) {
+                <div class="profile-item">
+                  <span>Location</span>
+                  <strong>{{ employeeLocation(emp) }}</strong>
+                </div>
+              }
+            </div>
+          </div>
+        }
         <label class="field full">
           <span>Notes / Responsibilities</span>
           <textarea rows="3" [(ngModel)]="form.notes" placeholder="What this seat is accountable for"></textarea>
@@ -120,7 +179,16 @@
                 <div class="position-name" [title]="row.jobPosition">{{ row.jobPosition }}</div>
               </td>
               <td>
-                <span [title]="row.individual || ''">{{ row.individual || '—' }}</span>
+                @if (rosterFor(row); as emp) {
+                  <div class="person-cell">
+                    <div class="person-name" [title]="emp.name">{{ emp.name }}</div>
+                    <div class="person-sub" [title]="emp.email || employeeDepartment(emp)">
+                      {{ emp.email || employeeDepartment(emp) || employeeOrg(emp) || '—' }}
+                    </div>
+                  </div>
+                } @else {
+                  <span [title]="row.individual || ''">{{ row.individual || '—' }}</span>
+                }
               </td>
               <td class="notes-cell" [title]="row.notes || ''">{{ row.notes || '—' }}</td>
               <td class="actions">

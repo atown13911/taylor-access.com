@@ -30,6 +30,7 @@ public class AccountabilityController : ControllerBase
         public string? JobPosition { get; set; }
         public string? Individual { get; set; }
         public string? Notes { get; set; }
+        public int? EmployeeId { get; set; }
     }
 
     private async Task EnsureSchemaAsync()
@@ -50,7 +51,9 @@ public class AccountabilityController : ControllerBase
                 ""CreatedAt"" timestamptz NOT NULL DEFAULT now(),
                 ""UpdatedAt"" timestamptz NOT NULL DEFAULT now()
             );
-            CREATE INDEX IF NOT EXISTS idx_accountability_position ON ""AccountabilityEntries"" (""JobPosition"");";
+            CREATE INDEX IF NOT EXISTS idx_accountability_position ON ""AccountabilityEntries"" (""JobPosition"");
+            ALTER TABLE ""AccountabilityEntries"" ADD COLUMN IF NOT EXISTS ""EmployeeId"" INTEGER;
+            CREATE INDEX IF NOT EXISTS idx_accountability_employee ON ""AccountabilityEntries"" (""EmployeeId"");";
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -78,7 +81,7 @@ public class AccountabilityController : ControllerBase
         }
 
         cmd.CommandText = $@"
-            SELECT ""Id"",""JobPosition"",""Individual"",""Notes"",""CreatedBy"",""UpdatedBy"",""CreatedAt"",""UpdatedAt""
+            SELECT ""Id"",""JobPosition"",""Individual"",""Notes"",""CreatedBy"",""UpdatedBy"",""CreatedAt"",""UpdatedAt"",""EmployeeId""
             FROM ""AccountabilityEntries""
             {where}
             ORDER BY ""Id""";
@@ -97,6 +100,7 @@ public class AccountabilityController : ControllerBase
                 updatedBy = reader.IsDBNull(5) ? null : reader.GetString(5),
                 createdAt = reader.IsDBNull(6) ? (DateTime?)null : reader.GetDateTime(6),
                 updatedAt = reader.IsDBNull(7) ? (DateTime?)null : reader.GetDateTime(7),
+                employeeId = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetInt32(8) : (int?)null,
             });
         }
 
@@ -121,12 +125,13 @@ public class AccountabilityController : ControllerBase
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO ""AccountabilityEntries""
-                (""JobPosition"",""Individual"",""Notes"",""CreatedBy"",""UpdatedBy"")
-            VALUES (@jobPosition,@individual,@notes,@by,@by)
+                (""JobPosition"",""Individual"",""Notes"",""EmployeeId"",""CreatedBy"",""UpdatedBy"")
+            VALUES (@jobPosition,@individual,@notes,@employeeId,@by,@by)
             RETURNING ""Id"",""CreatedAt"",""UpdatedAt""";
         AddParam(cmd, "jobPosition", jobPosition);
         AddParam(cmd, "individual", NullIfEmpty(input.Individual));
         AddParam(cmd, "notes", NullIfEmpty(input.Notes));
+        AddParam(cmd, "employeeId", input.EmployeeId);
         AddParam(cmd, "by", by);
 
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -141,6 +146,7 @@ public class AccountabilityController : ControllerBase
                 jobPosition,
                 individual = NullIfEmpty(input.Individual),
                 notes = NullIfEmpty(input.Notes),
+                employeeId = input.EmployeeId,
                 createdBy = by,
                 updatedBy = by,
                 createdAt = reader.GetDateTime(1),
@@ -170,6 +176,7 @@ public class AccountabilityController : ControllerBase
                 ""JobPosition"" = @jobPosition,
                 ""Individual"" = @individual,
                 ""Notes"" = @notes,
+                ""EmployeeId"" = @employeeId,
                 ""UpdatedBy"" = @by,
                 ""UpdatedAt"" = NOW()
             WHERE ""Id"" = @id
@@ -178,6 +185,7 @@ public class AccountabilityController : ControllerBase
         AddParam(cmd, "jobPosition", jobPosition);
         AddParam(cmd, "individual", NullIfEmpty(input.Individual));
         AddParam(cmd, "notes", NullIfEmpty(input.Notes));
+        AddParam(cmd, "employeeId", input.EmployeeId);
         AddParam(cmd, "by", by);
 
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -192,6 +200,7 @@ public class AccountabilityController : ControllerBase
                 jobPosition,
                 individual = NullIfEmpty(input.Individual),
                 notes = NullIfEmpty(input.Notes),
+                employeeId = input.EmployeeId,
                 createdBy = reader.IsDBNull(1) ? null : reader.GetString(1),
                 updatedBy = by,
                 createdAt = reader.GetDateTime(2),
