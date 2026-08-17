@@ -116,10 +116,11 @@ export class NavPermissionService {
       (role || '').trim().toLowerCase(),
     ].filter(Boolean));
 
-    if (Array.from(roleSet).some((r) => this.isAdminRole(r))) return true;
-    if (ALWAYS_ALLOWED_ROUTES.has(normalizedRoute)) return true;
-
     const navPerms = permissions.filter((p) => p.startsWith('nav:') && p !== 'nav:configured');
+    const isProductOwner = Array.from(roleSet).some((r) => r === 'product_owner');
+    if (isProductOwner) return true;
+    if (ALWAYS_ALLOWED_ROUTES.has(normalizedRoute)) return true;
+    if (navPerms.length === 0 && Array.from(roleSet).some((r) => this.isAdminRole(r))) return true;
     const hasComplianceAccess =
       permissions.includes('compliance:view') ||
       permissions.includes('compliance:manage') ||
