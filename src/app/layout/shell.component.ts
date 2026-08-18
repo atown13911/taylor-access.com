@@ -423,9 +423,17 @@ export class ShellComponent implements OnInit, OnDestroy {
         document.documentElement.style.setProperty('--topbar-bg', `rgba(8, 8, 15, ${sidebarOpacity / 100})`);
       }
 
+      // Keep the designed nav backdrop unless the user picked a custom sidebar material.
+      const sidebar = document.querySelector('.sidebar') as HTMLElement;
+      if (sidebar) {
+        sidebar.style.removeProperty('background-image');
+        sidebar.style.removeProperty('background-size');
+        sidebar.style.removeProperty('background-position');
+      }
+
       // Restore sidebar material
       const mat = localStorage.getItem('ta_material');
-      if (mat && mat !== 'none') {
+      if (mat && mat !== 'none' && mat !== 'circuit') {
         const matOpacity = parseInt(localStorage.getItem('ta_material_opacity') || '40');
         const matUrls: any = {
           'dark-wood':'395','stone':'1040','concrete':'1026','marble':'1050','metal':'262','leather':'351','fabric':'139','carbon':'201',
@@ -434,7 +442,6 @@ export class ShellComponent implements OnInit, OnDestroy {
           'circuit':'60','code':'2','server':'180','keyboard':'119','fiber':'366','laptop':'0','hardware':'48','lens':'250',
           'galaxy':'631','nebula-s':'984','stars':'733','aurora':'1057','moon':'683','earth':'985','cosmos':'1062','eclipse':'832',
         };
-        const sidebar = document.querySelector('.sidebar') as HTMLElement;
         const pId = matUrls[mat];
         if (sidebar && pId) {
           const o = 1 - (matOpacity / 100);
