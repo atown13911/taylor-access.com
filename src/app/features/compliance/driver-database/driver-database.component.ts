@@ -523,12 +523,16 @@ export class DriverDatabaseComponent implements OnInit {
     return {
       id: id ? `applicant-${id}` : `applicant-${Math.random().toString(36).slice(2, 10)}`,
       _source: 'applicant',
+      _applicantRecordId: id || null,
       name,
       email: String(applicant?.email ?? applicant?.Email ?? '').trim(),
       phone: String(applicant?.phone ?? applicant?.Phone ?? applicant?.phoneNumber ?? applicant?.PhoneNumber ?? '').trim(),
       licenseNumber: String(applicant?.licenseNumber ?? applicant?.LicenseNumber ?? applicant?.cdlNumber ?? applicant?.CdlNumber ?? '').trim(),
       licenseExpiry: String(applicant?.licenseExpiry ?? applicant?.LicenseExpiry ?? applicant?.cdlExpiry ?? applicant?.CdlExpiry ?? '').trim(),
       status: 'onboarding',
+      // Permanent link set at driver-creation time (see createDriverFromOnboardingProfile). Takes
+      // priority over name/email/phone matching in linkOnboardingApplicants, since it can't drift.
+      linkedDriverId: String(applicant?.linkedDriverId ?? applicant?.LinkedDriverId ?? '').trim() || null,
       createdAt: applicant?.createdAt ?? applicant?.CreatedAt ?? applicant?.appliedDate ?? applicant?.AppliedDate ?? applicant?.appliedAt ?? null,
       updatedAt: applicant?.updatedAt ?? applicant?.UpdatedAt ?? applicant?.modifiedAt ?? applicant?.ModifiedAt ?? null
     };
@@ -1678,6 +1682,13 @@ export class DriverDatabaseComponent implements OnInit {
       const existingApiId = this.resolveApiDriverId(row);
       if (existingApiId) return row;
 
+      // Permanent link recorded at driver-creation time always wins — it can't drift the way
+      // name/email/phone matching can (nicknames, punctuation, later name edits, MOTIV overwrites).
+      const persistedLinkId = String(row?.linkedDriverId ?? '').trim();
+      if (persistedLinkId && this.isApiDriverId(persistedLinkId)) {
+        return this.withLinkedDriverId(row, persistedLinkId);
+      }
+
       const matchedId = this.findBestMatchingDriverId(row, rawDrivers);
       if (matchedId) return this.withLinkedDriverId(row, matchedId);
 
@@ -1719,6 +1730,7 @@ export class DriverDatabaseComponent implements OnInit {
   }
 
   private buildOnboardingDriverPayload(driver: any): any {
+    const applicantRecordId = Number(driver?._applicantRecordId);
     return {
       name: String(driver?.name ?? '').trim(),
       phone: String(driver?.phone ?? '').trim(),
@@ -1728,7 +1740,10 @@ export class DriverDatabaseComponent implements OnInit {
       licenseExpiry: driver?.licenseExpiry || driver?.licenseExpiration || null,
       status: 'onboarding',
       driverType: driver?.driverType || null,
-      notes: 'Auto-created from onboarding compliance flow'
+      notes: 'Auto-created from onboarding compliance flow',
+      // Lets the backend permanently link this new driver back to the applicant record instead of
+      // relying on name matching to rediscover the relationship on every later page load.
+      sourceApplicantId: Number.isFinite(applicantRecordId) && applicantRecordId > 0 ? applicantRecordId : null
     };
   }
 
@@ -1747,12 +1762,25 @@ export class DriverDatabaseComponent implements OnInit {
     };
   }
 
+  /** Loose name key used only as a last-resort matching fallback: strips punctuation (apostrophes,
+   * hyphens, etc.) so minor formatting differences between an applicant's submitted name and their
+   * eventual driver profile name (e.g. "Tre'quan" vs "TreQuan") don't break the match. Nicknames
+   * (e.g. "Bob" vs "Robert") still won't match — that's what the persisted linkedDriverId is for. */
+  private looseNameKey(value: any): string {
+    return String(value ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   private findBestMatchingDriverId(target: any, candidates: any[]): string | null {
     if (!Array.isArray(candidates) || candidates.length === 0) return null;
 
     const targetEmail = String(target?.email ?? '').trim().toLowerCase();
     const targetPhone = String(target?.phone ?? '').replace(/\D+/g, '');
-    const targetName = String(target?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const targetName = this.looseNameKey(target?.name);
 
     const match = candidates.find((candidate: any) => {
       const candidateId = String(candidate?.id ?? '').trim();
@@ -1760,7 +1788,7 @@ export class DriverDatabaseComponent implements OnInit {
 
       const candidateEmail = String(candidate?.email ?? '').trim().toLowerCase();
       const candidatePhone = String(candidate?.phone ?? '').replace(/\D+/g, '');
-      const candidateName = String(candidate?.name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const candidateName = this.looseNameKey(candidate?.name);
 
       if (targetEmail && candidateEmail && targetEmail === candidateEmail) return true;
       if (targetPhone && candidatePhone && targetPhone === candidatePhone) return true;

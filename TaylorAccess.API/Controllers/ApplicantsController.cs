@@ -43,6 +43,7 @@ public class ApplicantsController : ControllerBase
                 a.TrainingGroupAssignment,
                 a.Status,
                 a.IsHistorical,
+                a.LinkedDriverId,
                 appliedDate = a.AppliedDate,
                 a.Notes,
                 a.CvFileName,

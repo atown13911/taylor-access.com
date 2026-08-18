@@ -438,6 +438,22 @@ public class DriversController : ControllerBase
             await _auditService.LogAsync(AuditActions.Create, "Driver", driver.Id, 
                 $"Created driver {driver.Name} - {driver.LicenseNumber}");
 
+            // Permanently link back to the source applicant (instead of relying on name matching,
+            // which silently breaks when the driver's name differs from the applicant's — nicknames,
+            // punctuation, middle names, etc.) and retire the applicant from the active pipeline since
+            // they now have a real driver profile.
+            if (request.SourceApplicantId.HasValue)
+            {
+                var applicant = await _context.ApplicantRecords.FindAsync(request.SourceApplicantId.Value);
+                if (applicant != null)
+                {
+                    applicant.LinkedDriverId = driver.Id;
+                    applicant.IsHistorical = true;
+                    applicant.UpdatedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             return CreatedAtAction(nameof(GetDriver), new { id = driver.Id }, new { data = driver });
         }
         catch (Exception ex)
@@ -1447,7 +1463,8 @@ public record CreateDriverRequest(
     decimal? PayRate,
     string? PayType,
     string? PhotoUrl,
-    string? Notes
+    string? Notes,
+    int? SourceApplicantId
 );
 
 public record UpdateDriverRequest(

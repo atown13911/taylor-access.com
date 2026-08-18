@@ -33,6 +33,14 @@ public class ApplicantRecord
 
     public bool IsHistorical { get; set; } = false;
 
+    /// <summary>
+    /// Permanent link to the Driver record created from this applicant (set once, at driver-creation
+    /// time). Prevents the Driver Compliance Database from re-deriving this relationship by name
+    /// matching on every load — which silently breaks whenever the driver's name differs from the
+    /// name the applicant applied under (nicknames, punctuation, middle names, etc.).
+    /// </summary>
+    public int? LinkedDriverId { get; set; }
+
     public DateTime? AppliedDate { get; set; }
 
     public string? Notes { get; set; }

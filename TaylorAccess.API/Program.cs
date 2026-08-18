@@ -352,6 +352,8 @@ using (var scope = app.Services.CreateScope())
         ADD COLUMN IF NOT EXISTS ""IsHistorical"" BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE IF EXISTS ""ApplicantRecords""
         ADD COLUMN IF NOT EXISTS ""State"" VARCHAR(50);
+        ALTER TABLE IF EXISTS ""ApplicantRecords""
+        ADD COLUMN IF NOT EXISTS ""LinkedDriverId"" INTEGER;
 
         ALTER TABLE IF EXISTS ""Drivers""
         ADD COLUMN IF NOT EXISTS ""SmsOptIn"" BOOLEAN NOT NULL DEFAULT TRUE;
