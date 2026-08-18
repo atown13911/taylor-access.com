@@ -88,7 +88,15 @@ import { AuthService } from '../../core/services/auth.service';
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: #050508;
+      background-color: #050810;
+      background-image:
+        linear-gradient(rgba(56, 152, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 152, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(rgba(5, 8, 16, 0.42) 0%, rgba(5, 8, 16, 0.26) 50%, rgba(5, 8, 16, 0.52) 100%),
+        url('/assets/access-world-backdrop.png');
+      background-size: 40px 40px, 40px 40px, cover, cover;
+      background-position: top left, top left, center, center;
+      background-repeat: repeat, repeat, no-repeat, no-repeat;
       padding: 20px;
     }
     .oauth-card {

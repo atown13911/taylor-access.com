@@ -396,8 +396,9 @@ export class ShellComponent implements OnInit, OnDestroy {
           mainContent.style.backgroundSize = 'cover';
           mainContent.style.backgroundPosition = 'center';
         }
-      } else if (bg === 'tss-portal') {
-        mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${bgOpacity}), rgba(5,5,8,${Math.min(bgOpacity+0.1,1)})), url('/assets/tss-backdrop.png')`;
+      } else if (bg === 'access-world' || bg === 'tss-portal') {
+        const bgUrl = bg === 'tss-portal' ? '/assets/tss-backdrop.png' : '/assets/access-world-backdrop.png';
+        mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${bgOpacity}), rgba(5,5,8,${Math.min(bgOpacity+0.1,1)})), url('${bgUrl}')`;
         mainContent.style.backgroundSize = 'cover';
         mainContent.style.backgroundPosition = 'center';
       } else {
