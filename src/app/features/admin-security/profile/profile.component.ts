@@ -541,7 +541,7 @@ export class ProfileComponent implements OnInit {
       { id: 'highway-bg', name: 'Highway', url: 'https://picsum.photos/id/1062/400/300' },
     ],
     abstract: [
-      { id: 'access-world', name: 'World Map', url: '/assets/access-world-backdrop.png' },
+      { id: 'access-world', name: 'World Map', url: '/assets/access-world-backdrop-v2.png' },
       { id: 'tss-portal', name: 'TSS Portal', url: '/assets/tss-backdrop.png' },
       { id: 'abstract-bg', name: 'Abstract', url: 'https://picsum.photos/id/1069/400/300' },
       { id: 'texture-bg', name: 'Texture', url: 'https://picsum.photos/id/984/400/300' },
