@@ -230,21 +230,23 @@
 
   @if (!chartFullscreen()) {
   <div class="toolbar">
-    <div class="search-wrap">
-      <i class="bx bx-search"></i>
-      <input
-        type="search"
-        [ngModel]="searchQuery()"
-        (ngModelChange)="searchQuery.set($event)"
-        placeholder="Search position, person, domain, KPI, notes…"
-      />
+    <div class="toolbar-main">
+      <div class="search-wrap">
+        <i class="bx bx-search"></i>
+        <input
+          type="search"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="searchQuery.set($event)"
+          placeholder="Search position, person, domain, KPI, notes…"
+        />
+      </div>
+      <select class="filter-select" [ngModel]="domainFilter()" (ngModelChange)="domainFilter.set($event)">
+        <option value="">All domains</option>
+        @for (tag of domainNames(); track tag) {
+          <option [value]="tag">{{ tag }}</option>
+        }
+      </select>
     </div>
-    <select class="filter-select" [ngModel]="domainFilter()" (ngModelChange)="domainFilter.set($event)">
-      <option value="">All domains</option>
-      @for (tag of domainNames(); track tag) {
-        <option [value]="tag">{{ tag }}</option>
-      }
-    </select>
     <div class="view-toggle">
       <button type="button" [class.active]="viewMode() === 'list'" (click)="setView('list')">
         <i class="bx bx-list-ul"></i> List

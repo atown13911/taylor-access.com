@@ -330,11 +330,20 @@
 
 .toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
-  flex-wrap: wrap;
+  padding: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.toolbar-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 .filter-select {
   background: #1a1a2e;
@@ -343,10 +352,13 @@
   color: #fff;
   padding: 10px 12px;
   font: inherit;
-  min-width: 220px;
+  flex: 0 0 200px;
+  min-width: 160px;
+  max-width: 240px;
 }
 .view-toggle {
   display: flex;
+  flex: 0 0 auto;
   background: #1a1a2e;
   border: 1px solid #2d2d46;
   border-radius: 8px;
@@ -366,9 +378,9 @@
 
 .search-wrap {
   position: relative;
-  flex: 1;
-  min-width: 220px;
-  max-width: 420px;
+  flex: 1 1 auto;
+  min-width: 180px;
+  max-width: none;
 }
 .search-wrap i {
   position: absolute;
@@ -714,6 +726,9 @@
   .form-grid { grid-template-columns: 1fr; }
   .profile-grid,
   .detail-grid { grid-template-columns: 1fr; }
+  .toolbar { flex-wrap: wrap; }
+  .toolbar-main { flex: 1 1 100%; }
+  .filter-select { flex: 1 1 160px; max-width: none; }
   .search-wrap { max-width: none; }
   .role-pills { grid-template-columns: 1fr; }
 }
