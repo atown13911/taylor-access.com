@@ -661,24 +661,15 @@ export class ProfileComponent implements OnInit {
     this.applyMaterial(this.selectedMaterial(), val);
   }
 
-  private applyMaterial(id: string, opacity: number) {
+  private applyMaterial(_id: string, _opacity: number) {
     const sidebar = document.querySelector('.sidebar') as HTMLElement;
     if (!sidebar) return;
 
-    if (id === 'none') {
-      sidebar.style.removeProperty('background-image');
-      sidebar.style.removeProperty('background-size');
-      return;
-    }
-
-    const mat = this.materials.find(m => m.id === id);
-    if (mat) {
-      const hiRes = mat.url.replace('400/600', '800/1200');
-      const o = 1 - (opacity / 100);
-      sidebar.style.backgroundImage = `linear-gradient(rgba(13,13,26,${o}), rgba(13,13,26,${o})), url(${hiRes})`;
-      sidebar.style.backgroundSize = 'cover';
-      sidebar.style.backgroundPosition = 'center';
-    }
+    sidebar.style.removeProperty('background');
+    sidebar.style.removeProperty('background-image');
+    sidebar.style.removeProperty('background-size');
+    sidebar.style.removeProperty('background-position');
+    sidebar.style.removeProperty('background-color');
   }
 
   adjustOpacity(event: any) {

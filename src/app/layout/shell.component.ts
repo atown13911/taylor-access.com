@@ -426,9 +426,11 @@ export class ShellComponent implements OnInit, OnDestroy {
 
       const sidebar = document.querySelector('.sidebar') as HTMLElement;
       if (sidebar) {
+        sidebar.style.removeProperty('background');
         sidebar.style.removeProperty('background-image');
         sidebar.style.removeProperty('background-size');
         sidebar.style.removeProperty('background-position');
+        sidebar.style.removeProperty('background-color');
       }
     }, 100);
   }
