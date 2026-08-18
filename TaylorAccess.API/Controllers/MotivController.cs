@@ -461,6 +461,51 @@ public class MotivController : ControllerBase
         });
     }
 
+    /// <summary>Internal (X-Service-Key) mirror of daily-logs for DrayTac's stuck-driving detector.</summary>
+    [HttpGet("/internal/motiv/daily-logs")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetDailyLogsInternal([FromQuery] string? date = null)
+    {
+        if (!IsAuthorizedInternalCall())
+            return Unauthorized(new { error = "Invalid gateway or service key" });
+        return await GetDailyLogs(date);
+    }
+
+    /// <summary>
+    /// Motive daily RODS logs (one per driver/day) — carries total_miles and duty-status
+    /// events, which the HOS available_time clock does not expose.
+    /// </summary>
+    [HttpGet("daily-logs")]
+    public async Task<IActionResult> GetDailyLogs([FromQuery] string? date = null)
+    {
+        var day = string.IsNullOrWhiteSpace(date) ? DateTime.UtcNow.ToString("yyyy-MM-dd") : date!.Trim();
+
+        var basePath = _config["MOTIV_DAILY_LOGS_PATH"]
+            ?? Environment.GetEnvironmentVariable("MOTIV_DAILY_LOGS_PATH")
+            ?? "/v1/logs";
+        var path = UpsertQueryParam(UpsertQueryParam(basePath, "start_date", day), "end_date", day);
+        var fetch = await FetchAllMotivRows(path, "daily-logs");
+        if (!fetch.Success)
+        {
+            return StatusCode(fetch.StatusCode, new
+            {
+                error = "MOTIV daily-logs request failed.",
+                status = fetch.StatusCode,
+                details = fetch.Error
+            });
+        }
+
+        return Ok(new
+        {
+            source = "motiv",
+            endpoint = "daily-logs",
+            path,
+            date = day,
+            rows = fetch.Rows.Count,
+            data = JsonSerializer.SerializeToElement(fetch.Rows)
+        });
+    }
+
     [HttpGet("hos-violations")]
     public async Task<IActionResult> GetHosViolations([FromQuery] int days = 30, [FromQuery] int limit = 2000)
     {
