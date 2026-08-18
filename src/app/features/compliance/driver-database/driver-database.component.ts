@@ -219,9 +219,11 @@ export class DriverDatabaseComponent implements OnInit {
     this.loadComplianceBoard()
       .then(async () => {
         this.rebuildComplianceCaches();
-        if (this.activeStatusTab() === 'onboarding') {
-          await this.loadOnboardingApplicantsLazy();
-        }
+        // Always merge onboarding applicants (not just when the Onboarding tab is active) so
+        // status-tab counts are correct and stable from the first render — the Current tab
+        // includes onboarding-status drivers, so undercounting here made totals appear to
+        // change depending on which tab had been clicked previously.
+        await this.loadOnboardingApplicantsLazy();
       })
       .finally(() => {
         this.loading.set(false);
