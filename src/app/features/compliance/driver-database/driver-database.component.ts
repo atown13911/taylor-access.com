@@ -71,8 +71,10 @@ export class DriverDatabaseComponent implements OnInit {
   statusFilter = 'all';
   complianceFilter = 'all';
   activeStatusTab = signal<'current' | 'onboarding' | 'closeout' | 'archived'>('current');
+  activeFleetTab = signal<'all' | 'otr' | 'drayage'>('all');
 
-  filteredDrivers = computed(() => {
+  /** Drivers scoped by the status tab only (before fleet/search filters), used to drive fleet tab counts. */
+  private statusScopedDrivers = computed(() => {
     let list = this.drivers();
     const tab = this.activeStatusTab();
     // Match Drivers roster Active tab: include onboarding Drivers on Current so
@@ -86,6 +88,26 @@ export class DriverDatabaseComponent implements OnInit {
     } else if (tab === 'archived') {
       list = list.filter((d: any) => this.isArchivedStatus(d.status));
     }
+    return list;
+  });
+
+  fleetTabCounts = computed(() => {
+    const list = this.statusScopedDrivers();
+    return {
+      all: list.length,
+      otr: list.filter((d: any) => this.isOtrFleet(d.fleetName)).length,
+      drayage: list.filter((d: any) => this.isDrayageFleet(d.fleetName)).length
+    };
+  });
+
+  filteredDrivers = computed(() => {
+    let list = this.statusScopedDrivers();
+    const fleetTab = this.activeFleetTab();
+    if (fleetTab === 'otr') {
+      list = list.filter((d: any) => this.isOtrFleet(d.fleetName));
+    } else if (fleetTab === 'drayage') {
+      list = list.filter((d: any) => this.isDrayageFleet(d.fleetName));
+    }
 
     const s = this.searchTerm().trim().toLowerCase();
     if (s) {
@@ -98,6 +120,18 @@ export class DriverDatabaseComponent implements OnInit {
     }
     return list;
   });
+
+  private isOtrFleet(fleetName: any): boolean {
+    return String(fleetName ?? '').trim().toLowerCase().includes('otr');
+  }
+
+  private isDrayageFleet(fleetName: any): boolean {
+    return String(fleetName ?? '').trim().toLowerCase().includes('drayage');
+  }
+
+  setFleetTab(tab: 'all' | 'otr' | 'drayage'): void {
+    this.activeFleetTab.set(tab);
+  }
 
   complianceStats = computed(() => {
     const drivers = this.filteredDrivers();

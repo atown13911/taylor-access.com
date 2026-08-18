@@ -64,11 +64,22 @@
     </div>
   </div>
 
-  <!-- Search -->
+  <!-- Search + Fleet Filter -->
   <div class="filters-bar">
     <div class="search-box">
       <i class='bx bx-search'></i>
       <input type="text" [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event || '')" placeholder="Search by name, phone, email, license...">
+    </div>
+    <div class="fleet-tabs">
+      <button type="button" class="fleet-tab" [class.active]="activeFleetTab() === 'all'" (click)="setFleetTab('all')">
+        All <span class="tab-count">{{ fleetTabCounts().all }}</span>
+      </button>
+      <button type="button" class="fleet-tab" [class.active]="activeFleetTab() === 'otr'" (click)="setFleetTab('otr')">
+        <i class='bx bxs-truck'></i> OTR <span class="tab-count">{{ fleetTabCounts().otr }}</span>
+      </button>
+      <button type="button" class="fleet-tab" [class.active]="activeFleetTab() === 'drayage'" (click)="setFleetTab('drayage')">
+        <i class='bx bxs-ship'></i> Drayage <span class="tab-count">{{ fleetTabCounts().drayage }}</span>
+      </button>
     </div>
   </div>
 

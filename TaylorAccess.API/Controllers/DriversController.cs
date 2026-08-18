@@ -177,6 +177,7 @@ public class DriversController : ControllerBase
                 HireDate = d.HireDate,
                 TwiccCardNumber = d.TwiccCardNumber,
                 TwiccExpiry = d.TwiccExpiry,
+                FleetId = d.FleetId,
                 CreatedAt = d.CreatedAt,
                 UpdatedAt = d.UpdatedAt,
                 IsDeleted = d.IsDeleted
@@ -231,6 +232,7 @@ public class DriversController : ControllerBase
                     HireDate = d.HireDate,
                     TwiccCardNumber = d.TwiccCardNumber,
                     TwiccExpiry = d.TwiccExpiry,
+                    FleetId = d.FleetId,
                     CreatedAt = d.CreatedAt,
                     UpdatedAt = d.UpdatedAt,
                     IsDeleted = d.IsDeleted
@@ -259,6 +261,18 @@ public class DriversController : ControllerBase
             }
         }
 
+        // Fleet name resolution (membership table first, direct FleetId fallback) so the
+        // compliance board can offer OTR / Drayage filter tabs the same way the
+        // Dispatchers roster does.
+        var fleetNameById = await _context.Fleets
+            .AsNoTracking()
+            .ToDictionaryAsync(f => f.Id, f => f.Name);
+        var fleetMembershipLookup = await _context.FleetDrivers
+            .AsNoTracking()
+            .Include(fd => fd.Fleet)
+            .Where(fd => fd.Fleet != null)
+            .ToDictionaryAsync(fd => fd.DriverId, fd => fd.Fleet!.Name);
+
         var payloadDrivers = activeDrivers
             .OrderBy(d => d.Name)
             .Select(d => new
@@ -280,6 +294,8 @@ public class DriversController : ControllerBase
                 d.HireDate,
                 d.TwiccCardNumber,
                 d.TwiccExpiry,
+                d.FleetId,
+                fleetName = ResolveFleetName(d.Id, d.FleetId, fleetMembershipLookup, fleetNameById),
                 d.CreatedAt,
                 d.UpdatedAt,
                 d.IsDeleted,
@@ -1042,6 +1058,30 @@ public class DriversController : ControllerBase
         };
     }
 
+    /// <summary>Resolve a driver's fleet name — membership table first, then direct FleetId. Mirrors the
+    /// same resolution used by the Dispatchers roster so OTR / Drayage filtering stays consistent.</summary>
+    private static string? ResolveFleetName(
+        int driverId,
+        int? fleetId,
+        IReadOnlyDictionary<int, string> fleetMembershipLookup,
+        IReadOnlyDictionary<int, string> fleetNameById)
+    {
+        if (fleetMembershipLookup.TryGetValue(driverId, out var membershipName)
+            && !string.IsNullOrWhiteSpace(membershipName))
+        {
+            return membershipName.Trim();
+        }
+
+        if (fleetId.HasValue
+            && fleetNameById.TryGetValue(fleetId.Value, out var fleetName)
+            && !string.IsNullOrWhiteSpace(fleetName))
+        {
+            return fleetName.Trim();
+        }
+
+        return null;
+    }
+
     private static string MergeNotes(string? current, string? extra)
     {
         var c = (current ?? "").Trim();
@@ -1490,6 +1530,7 @@ file sealed class ComplianceBoardDriverRow
     public DateOnly? HireDate { get; set; }
     public string? TwiccCardNumber { get; set; }
     public DateOnly? TwiccExpiry { get; set; }
+    public int? FleetId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool IsDeleted { get; set; }

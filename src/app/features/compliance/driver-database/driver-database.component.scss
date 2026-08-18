@@ -121,6 +121,11 @@
 }
 
 .filters-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
 
   .search-box {
@@ -132,6 +137,7 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     max-width: 400px;
+    flex: 1;
 
     i { color: var(--text-dim); font-size: 18px; }
 
@@ -143,6 +149,42 @@
       font-size: 13px;
       outline: none;
     }
+  }
+}
+
+.fleet-tabs {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.fleet-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--accent-05);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  i { font-size: 14px; }
+
+  .tab-count {
+    background: var(--accent-10);
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  &.active {
+    background: var(--accent-15);
+    border-color: var(--cyan);
+    color: var(--cyan);
   }
 }
 
