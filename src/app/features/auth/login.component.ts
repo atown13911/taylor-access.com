@@ -10,8 +10,7 @@ import { environment } from '../../../environments/environment';
     <div class="login-page">
       <div class="login-card">
         <div class="brand">
-          <img class="brand-logo" src="assets/brand/access-logo.png" alt="Access" width="96" height="96" />
-          <h1 class="app-name">Taylor Access</h1>
+          <img class="brand-logo" src="assets/brand/taylor-access-lockup.png" alt="Taylor Access" />
           <p class="tagline">Redirecting to TSS Portal...</p>
         </div>
         <div class="spinner-wrap">
@@ -56,23 +55,17 @@ import { environment } from '../../../environments/environment';
     }
     .brand { margin-bottom: 2rem; }
     .brand-logo {
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      object-fit: cover;
+      width: 100%;
+      max-width: 320px;
+      height: auto;
+      border-radius: 10px;
+      object-fit: contain;
       margin: 0 auto 1rem;
       display: block;
       box-shadow:
         0 0 0 1px rgba(0, 212, 255, 0.25),
         0 0 24px rgba(124, 58, 237, 0.4),
         0 0 40px rgba(0, 212, 255, 0.2);
-    }
-    .app-name {
-      font-size: 1.5rem;
-      font-weight: 600;
-      color: #e0f7ff;
-      margin: 0 0 0.5rem 0;
-      text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
     }
     .tagline {
       color: rgba(0, 212, 255, 0.6);

@@ -71,10 +71,11 @@
 
 .sidebar-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 14px 16px;
-  min-height: 96px;
+  gap: 8px;
+  padding: 10px 10px 10px 8px;
+  min-height: 0;
   border-bottom: 1px solid rgba(0, 212, 255, 0.14);
 }
 
@@ -82,17 +83,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 1;
   min-width: 0;
 
   .logo-img {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
+    width: 100%;
+    max-width: 196px;
+    height: auto;
+    border-radius: 8px;
     object-fit: contain;
     display: block;
     flex-shrink: 0;
-    filter: drop-shadow(0 4px 14px rgba(124, 58, 237, 0.35));
+    filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.35));
   }
 
   .logo-text {
@@ -144,8 +146,12 @@
   justify-content: center;
 
   .logo-img {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    max-width: 48px;
+    height: 48px;
+    object-fit: cover;
+    object-position: center 28%;
+    border-radius: 8px;
   }
 }
 
