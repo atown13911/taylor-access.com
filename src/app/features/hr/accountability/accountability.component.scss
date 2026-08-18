@@ -7,7 +7,15 @@
   z-index: 400;
   width: 100vw;
   height: 100dvh;
-  background: #05060a;
+  background-color: #050810;
+  background-image:
+    linear-gradient(rgba(56, 152, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 152, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(rgba(5, 8, 16, 0.58) 0%, rgba(5, 8, 16, 0.42) 50%, rgba(5, 8, 16, 0.68) 100%),
+    url('/assets/tss-backdrop.png');
+  background-size: 40px 40px, 40px 40px, cover, cover;
+  background-position: top left, top left, center, center;
+  background-repeat: repeat, repeat, no-repeat, no-repeat;
   overflow: hidden;
 }
 

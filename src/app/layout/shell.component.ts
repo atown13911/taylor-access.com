@@ -396,6 +396,10 @@ export class ShellComponent implements OnInit, OnDestroy {
           mainContent.style.backgroundSize = 'cover';
           mainContent.style.backgroundPosition = 'center';
         }
+      } else if (bg === 'tss-portal') {
+        mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${bgOpacity}), rgba(5,5,8,${Math.min(bgOpacity+0.1,1)})), url('/assets/tss-backdrop.png')`;
+        mainContent.style.backgroundSize = 'cover';
+        mainContent.style.backgroundPosition = 'center';
       } else {
         // picsum backgrounds - reconstruct URL from ID mappings
         const bgUrls: any = {

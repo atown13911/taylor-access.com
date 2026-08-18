@@ -28,12 +28,15 @@ import { environment } from '../../../environments/environment';
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: #050508;
+      background-color: #050810;
       background-image:
-        linear-gradient(rgba(5, 5, 8, 0.9), rgba(5, 5, 8, 0.85)),
-        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
-      background-size: 100% 100%, 40px 40px, 40px 40px;
+        linear-gradient(rgba(56, 152, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 152, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(rgba(5, 8, 16, 0.58) 0%, rgba(5, 8, 16, 0.42) 50%, rgba(5, 8, 16, 0.68) 100%),
+        url('/assets/tss-backdrop.png');
+      background-size: 40px 40px, 40px 40px, cover, cover;
+      background-position: top left, top left, center, center;
+      background-repeat: repeat, repeat, no-repeat, no-repeat;
       position: relative;
     }
     .login-card {

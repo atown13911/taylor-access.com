@@ -541,6 +541,7 @@ export class ProfileComponent implements OnInit {
       { id: 'highway-bg', name: 'Highway', url: 'https://picsum.photos/id/1062/400/300' },
     ],
     abstract: [
+      { id: 'tss-portal', name: 'TSS Portal', url: '/assets/tss-backdrop.png' },
       { id: 'abstract-bg', name: 'Abstract', url: 'https://picsum.photos/id/1069/400/300' },
       { id: 'texture-bg', name: 'Texture', url: 'https://picsum.photos/id/984/400/300' },
       { id: 'blur-bg', name: 'Blur', url: 'https://picsum.photos/id/631/400/300' },
@@ -621,7 +622,7 @@ export class ProfileComponent implements OnInit {
 
     const bg = this.backgrounds.find(b => b.id === id);
     if (bg) {
-      const hiRes = bg.url.replace('400/300', '1920/1080');
+      const hiRes = bg.url.includes('picsum.photos') ? bg.url.replace('400/300', '1920/1080') : bg.url;
       const o = this.bgOpacity() / 100;
       mainContent.style.backgroundImage = `linear-gradient(rgba(5,5,8,${o}), rgba(5,5,8,${Math.min(o + 0.1, 1)})), url(${hiRes})`;
       mainContent.style.backgroundSize = 'cover';
