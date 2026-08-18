@@ -14,7 +14,7 @@ import { AuthService } from '../../core/services/auth.service';
     <div class="oauth-page">
       <div class="oauth-card">
         <div class="oauth-header">
-          <img class="oauth-logo" src="assets/brand/taylor-access-lockup.png" alt="Taylor Access" />
+          <img class="oauth-logo" src="assets/brand/taylor-access-intelligence.png" alt="Taylor Access" />
           <p class="subtitle">Single Sign-On</p>
         </div>
 
@@ -112,8 +112,8 @@ import { AuthService } from '../../core/services/auth.service';
         margin: 0 auto;
         box-shadow:
           0 0 0 1px rgba(0, 212, 255, 0.25),
-          0 0 20px rgba(124, 58, 237, 0.4),
-          0 0 32px rgba(0, 212, 255, 0.2);
+          0 0 20px rgba(255, 40, 60, 0.28),
+          0 0 32px rgba(0, 212, 255, 0.22);
       }
       .subtitle { color: #7dd3fc; font-size: 13px; margin-top: 4px; }
     }

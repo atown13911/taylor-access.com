@@ -10,7 +10,7 @@ import { environment } from '../../../environments/environment';
     <div class="login-page">
       <div class="login-card">
         <div class="brand">
-          <img class="brand-logo" src="assets/brand/taylor-access-lockup.png" alt="Taylor Access" />
+          <img class="brand-logo" src="assets/brand/taylor-access-intelligence.png" alt="Taylor Access" />
           <p class="tagline">Redirecting to TSS Portal...</p>
         </div>
         <div class="spinner-wrap">
@@ -64,8 +64,8 @@ import { environment } from '../../../environments/environment';
       display: block;
       box-shadow:
         0 0 0 1px rgba(0, 212, 255, 0.25),
-        0 0 24px rgba(124, 58, 237, 0.4),
-        0 0 40px rgba(0, 212, 255, 0.2);
+        0 0 24px rgba(255, 40, 60, 0.28),
+        0 0 40px rgba(0, 212, 255, 0.22);
     }
     .tagline {
       color: rgba(0, 212, 255, 0.6);

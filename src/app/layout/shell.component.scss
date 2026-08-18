@@ -91,7 +91,7 @@
     object-fit: contain;
     display: block;
     flex-shrink: 0;
-    filter: drop-shadow(0 0 16px rgba(168, 85, 247, 0.35));
+    filter: drop-shadow(0 0 16px rgba(0, 180, 255, 0.35));
   }
 
   .logo-text {
@@ -147,7 +147,7 @@
     max-width: 48px;
     height: 48px;
     object-fit: cover;
-    object-position: center 28%;
+    object-position: center;
     border-radius: 8px;
   }
 }
