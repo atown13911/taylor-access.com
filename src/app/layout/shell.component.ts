@@ -423,32 +423,11 @@ export class ShellComponent implements OnInit, OnDestroy {
         document.documentElement.style.setProperty('--topbar-bg', `rgba(8, 8, 15, ${sidebarOpacity / 100})`);
       }
 
-      // Keep the designed nav backdrop unless the user picked a custom sidebar material.
       const sidebar = document.querySelector('.sidebar') as HTMLElement;
       if (sidebar) {
         sidebar.style.removeProperty('background-image');
         sidebar.style.removeProperty('background-size');
         sidebar.style.removeProperty('background-position');
-      }
-
-      // Restore sidebar material
-      const mat = localStorage.getItem('ta_material');
-      if (mat && mat !== 'none' && mat !== 'circuit') {
-        const matOpacity = parseInt(localStorage.getItem('ta_material_opacity') || '40');
-        const matUrls: any = {
-          'dark-wood':'395','stone':'1040','concrete':'1026','marble':'1050','metal':'262','leather':'351','fabric':'139','carbon':'201',
-          'forest-n':'15','moss':'145','leaves':'167','bamboo':'312','water-n':'1053','rocks':'188','snow':'1036','flowers':'152',
-          'skyline':'1044','neon':'399','bridge':'122','street':'258','subway':'256','rain-city':'1039','rooftop':'274','traffic':'1058',
-          'circuit':'60','code':'2','server':'180','keyboard':'119','fiber':'366','laptop':'0','hardware':'48','lens':'250',
-          'galaxy':'631','nebula-s':'984','stars':'733','aurora':'1057','moon':'683','earth':'985','cosmos':'1062','eclipse':'832',
-        };
-        const pId = matUrls[mat];
-        if (sidebar && pId) {
-          const o = 1 - (matOpacity / 100);
-          sidebar.style.backgroundImage = `linear-gradient(rgba(13,13,26,${o}), rgba(13,13,26,${o})), url(https://picsum.photos/id/${pId}/800/1200)`;
-          sidebar.style.backgroundSize = 'cover';
-          sidebar.style.backgroundPosition = 'center';
-        }
       }
     }, 100);
   }
