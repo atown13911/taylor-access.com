@@ -17,16 +17,23 @@
 
 .sidebar {
   width: 260px;
-  background: linear-gradient(180deg, rgba(10, 16, 32, 0.78), rgba(8, 12, 24, 0.7));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-right: 1px solid rgba(0, 212, 255, 0.22);
-  box-shadow: inset -1px 0 0 rgba(125, 211, 252, 0.1), 0 10px 30px rgba(0, 0, 0, 0.35);
+  background-color: #050810;
+  background-image:
+    linear-gradient(180deg, rgba(5, 8, 16, 0.78) 0%, rgba(5, 8, 16, 0.38) 28%, rgba(5, 8, 16, 0.22) 58%, rgba(5, 8, 16, 0.55) 100%),
+    url('/assets/nav-access-backdrop.png');
+  background-size: cover, cover;
+  background-position: center, 38% 22%;
+  background-repeat: no-repeat;
+  border-right: 1px solid rgba(0, 212, 255, 0.28);
+  box-shadow:
+    inset -1px 0 0 rgba(125, 211, 252, 0.12),
+    0 10px 30px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
   z-index: 100;
   position: relative;
+  overflow: hidden;
 }
 
 .sidebar::before {
@@ -35,19 +42,39 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(0, 212, 255, 0.05), transparent 28%),
+    linear-gradient(90deg, rgba(5, 8, 16, 0.2), transparent 45%),
     repeating-linear-gradient(
       180deg,
-      rgba(125, 211, 252, 0.03) 0px,
-      rgba(125, 211, 252, 0.03) 1px,
+      rgba(125, 211, 252, 0.035) 0px,
+      rgba(125, 211, 252, 0.035) 1px,
       transparent 1px,
       transparent 22px
     );
-  opacity: 0.45;
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 118px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(5, 8, 16, 0.88) 0%, rgba(5, 8, 16, 0.4) 72%, transparent 100%);
+  z-index: 0;
 }
 
 .sidebar-collapsed .sidebar {
   width: 64px;
+}
+
+.sidebar-header,
+.sidebar-nav,
+.sidebar-footer {
+  position: relative;
+  z-index: 1;
 }
 
 .sidebar-header {
@@ -168,12 +195,13 @@
   background: transparent;
   text-align: left;
   border-radius: 8px;
-  color: rgba(224, 247, 255, 0.8);
+  color: rgba(224, 247, 255, 0.88);
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s;
   text-decoration: none;
   margin-bottom: 4px;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
 
   i {
     font-size: 20px;
