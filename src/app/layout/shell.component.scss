@@ -17,13 +17,8 @@
 
 .sidebar {
   width: 260px;
-  background-color: #050810;
-  background-image:
-    linear-gradient(180deg, rgba(5, 8, 16, 0.28) 0%, rgba(5, 8, 16, 0.1) 42%, rgba(5, 8, 16, 0.2) 100%),
-    url('/assets/nav-hud-backdrop.png');
-  background-size: 100% 100%;
-  background-position: center;
-  background-repeat: no-repeat;
+  background-color: #020308;
+  background-image: none;
   border-right: 1px solid rgba(0, 212, 255, 0.28);
   box-shadow:
     inset -1px 0 0 rgba(125, 211, 252, 0.12),
@@ -37,11 +32,30 @@
 }
 
 .sidebar::before {
-  content: none;
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url('/assets/nav-hud-backdrop.png');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center 42%;
 }
 
 .sidebar::after {
-  content: none;
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(2, 3, 8, 0.42) 0%,
+    rgba(2, 3, 8, 0.16) 34%,
+    rgba(2, 3, 8, 0.1) 58%,
+    rgba(2, 3, 8, 0.38) 100%
+  );
 }
 
 .sidebar-collapsed .sidebar {
