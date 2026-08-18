@@ -77,10 +77,9 @@ export class DriverDatabaseComponent implements OnInit {
   private statusScopedDrivers = computed(() => {
     let list = this.drivers();
     const tab = this.activeStatusTab();
-    // Match Drivers roster Active tab: include onboarding Drivers on Current so
-    // newly created roster drivers are visible without switching tabs.
+    // Onboarding is its own exclusive tab — Current only shows active/current drivers.
     if (tab === 'current') {
-      list = list.filter((d: any) => this.isCurrentStatus(d.status) || this.isOnboardingStatus(d.status));
+      list = list.filter((d: any) => this.isCurrentStatus(d.status));
     } else if (tab === 'onboarding') {
       list = list.filter((d: any) => this.isOnboardingStatus(d.status));
     } else if (tab === 'closeout') {
@@ -160,7 +159,7 @@ export class DriverDatabaseComponent implements OnInit {
   tabCounts = computed(() => {
     const all = this.drivers();
     return {
-      current: all.filter((d: any) => this.isCurrentStatus(d.status) || this.isOnboardingStatus(d.status)).length,
+      current: all.filter((d: any) => this.isCurrentStatus(d.status)).length,
       onboarding: all.filter((d: any) => this.isOnboardingStatus(d.status)).length,
       closeout: all.filter((d: any) => this.isCloseoutStatus(d.status)).length,
       archived: all.filter((d: any) => this.isArchivedStatus(d.status)).length
