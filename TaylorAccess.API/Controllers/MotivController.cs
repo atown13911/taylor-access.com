@@ -2498,6 +2498,7 @@ public class MotivController : ControllerBase
             "inspectionReports",
             "safety_events",
             "safetyEvents",
+            "logs",
             "events",
             "driver_locations",
             "vehicle_locations",
